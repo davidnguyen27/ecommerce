@@ -10,6 +10,7 @@ import { signAccessToken } from './access-token.ts'
 import { hashPassword, verifyPassword } from './password.ts'
 import {
   issueRefreshToken,
+  revokeAllRefreshTokens,
   revokeRefreshToken,
   rotateRefreshToken,
   type IssuedRefreshToken,
@@ -23,7 +24,10 @@ export type SessionOptions = {
   sessionTtlMs: number
   /** Đường dẫn đầy đủ của endpoint refresh; cookie chỉ được gửi tới đây. */
   refreshPath: string
+  /** Chỉ trả tài khoản được phép đăng nhập; tài khoản bị khóa trả `null`. */
   findCredentials(email: string): Promise<{ id: string; passwordHash: string } | null>
+  /** Kiểm lại lúc refresh, phòng khi tài khoản bị khóa giữa chừng một lần rotation. */
+  isActive(subjectId: string): Promise<boolean>
 }
 
 const ClientHeader = z.object({ 'x-client': AuthClient })
@@ -83,7 +87,12 @@ export function sessionRoutes(options: SessionOptions) {
       const client = clientOf(req)
       const token = readRefreshToken(req, client)
       const issued = token && (await rotateRefreshToken(prisma, audience, token))
-      if (!issued) throw new AppError(401, ErrorCode.UNAUTHORIZED, 'Phiên đăng nhập đã hết hạn')
+      const expired = new AppError(401, ErrorCode.UNAUTHORIZED, 'Phiên đăng nhập đã hết hạn')
+      if (!issued) throw expired
+      if (!(await options.isActive(issued.subjectId))) {
+        await revokeAllRefreshTokens(prisma, audience, issued.subjectId)
+        throw expired
+      }
 
       await sendTokens(res, client, issued)
     })

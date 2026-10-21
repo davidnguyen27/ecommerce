@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import type { Db } from '../db.ts'
+import type { Db, DbClient } from '../db.ts'
 import type { AuthAudience } from '../generated/prisma/client.ts'
 
 export type IssuedRefreshToken = { subjectId: string; refreshToken: string; expiresAt: Date }
@@ -69,6 +69,14 @@ export async function rotateRefreshToken(
     return null
   }
   return { subjectId: current.subjectId, refreshToken: next, expiresAt: current.expiresAt }
+}
+
+/** Thu hồi mọi phiên của một người, ví dụ khi khóa tài khoản hoặc đổi role. */
+export async function revokeAllRefreshTokens(db: DbClient, audience: AuthAudience, subjectId: string) {
+  await db.refreshToken.updateMany({
+    where: { audience, subjectId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  })
 }
 
 /** Thu hồi một token; token lạ hoặc đã thu hồi thì bỏ qua. */

@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { ApiErrorBody } from '@ecommerce/shared'
-
 const session = useAdminSession()
 const email = ref('')
 const password = ref('')
@@ -14,8 +12,7 @@ async function submit() {
     await session.login(email.value, password.value)
     await navigateTo('/admin')
   } catch (err) {
-    const body = ApiErrorBody.safeParse((err as { data?: unknown }).data)
-    error.value = body.success ? body.data.error.message : 'Không kết nối được máy chủ'
+    error.value = apiErrorMessage(err)
   } finally {
     submitting.value = false
   }

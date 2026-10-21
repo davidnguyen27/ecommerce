@@ -1,19 +1,9 @@
 import { SignJWT, decodeJwt } from 'jose'
 import type { Response } from 'supertest'
 import { describe, expect, it } from 'vitest'
-import { seedOwner } from '../src/auth/staff.ts'
-import { createTestApp } from './support/test-app.ts'
+import { OWNER, appWithOwner, type Request } from './support/staff.ts'
 
-const OWNER = { email: 'chu@example.com', password: 'mat-khau-dai-du-manh', name: 'Chủ Cửa Hàng' }
 const REFRESH_COOKIE = 'staff_refresh'
-
-async function appWithOwner() {
-  const app = await createTestApp()
-  await seedOwner(app.prisma, OWNER)
-  return app
-}
-
-type Request = Awaited<ReturnType<typeof createTestApp>>['request']
 
 function loginWeb(request: Request, credentials: Partial<typeof OWNER> = {}) {
   return request
@@ -62,7 +52,7 @@ describe('nhân viên đăng nhập', () => {
     const me = await request.get('/api/admin/me').set('Authorization', `Bearer ${login.body.accessToken}`)
 
     expect(me.status).toBe(200)
-    expect(me.body).toEqual({ id: expect.any(String), email: OWNER.email, name: OWNER.name })
+    expect(me.body).toMatchObject({ email: OWNER.email, name: OWNER.name, roles: ['owner'] })
   })
 
   it('kênh web: cookie refresh là httpOnly, Secure, SameSite=Strict, chỉ gửi tới endpoint refresh', async () => {
