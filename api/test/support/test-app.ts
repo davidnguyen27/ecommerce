@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { Writable } from 'node:stream'
-import type { Router } from 'express'
 import pino from 'pino'
 import supertest from 'supertest'
 import { inject, onTestFinished } from 'vitest'
@@ -12,8 +11,6 @@ import { InMemoryStorage } from '../../src/adapters/storage.ts'
 type Options = {
   /** Ghi đè URL DB, ví dụ để giả lập mất kết nối. */
   databaseUrl?: string
-  /** Router gắn thêm dưới `/api`, cho các test cần một endpoint thử. */
-  extraRoutes?: Router
 }
 
 /**
@@ -36,12 +33,17 @@ export async function createTestApp(options: Options = {}) {
 
   const mailer = new InMemoryMailer()
   const storage = new InMemoryStorage()
-  const app = createApp({ prisma, logger, mailer, storage }, options.extraRoutes)
+  const jwtSecret = randomBytes(32).toString('base64url')
+  const app = createApp({ prisma, logger, mailer, storage, jwtSecret })
 
   onTestFinished(() => prisma.$disconnect())
 
   return {
     request: supertest(app),
+    /** Chỉ để dựng dữ liệu ban đầu; hành vi thì kiểm tra qua HTTP. */
+    prisma,
+    /** Để test tự ký token sai audience hoặc đã hết hạn. */
+    jwtSecret,
     mailer,
     storage,
     logs: () => lines.map((line) => JSON.parse(line) as Record<string, unknown>),

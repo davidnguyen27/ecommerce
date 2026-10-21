@@ -7,20 +7,25 @@
     "build": "prisma generate && tsup",
     "start": "node dist/server.js",
     "migrate": "prisma migrate deploy",
+    "seed:owner": "tsx src/cli/seed-owner.ts",
     "typecheck": "prisma generate && tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@ecommerce/shared": "workspace:*",
+    "@node-rs/argon2": "^2.2.2",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
+    "cookie-parser": "^1.4.7",
     "express": "^5.3.0",
+    "jose": "^6.2.13",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",
+    "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/node": "^24.19.2",
     "@types/supertest": "^7.2.1",
