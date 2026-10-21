@@ -13,7 +13,7 @@ export async function seedOwner(prisma: Db, owner: NewStaff): Promise<{ created:
   if (await prisma.staff.findUnique({ where: { email } })) return { created: false }
 
   await prisma.staff.create({
-    data: { email, name: owner.name, passwordHash: await hashPassword(owner.password) },
+    data: { email, name: owner.name, passwordHash: await hashPassword(owner.password), roles: ['owner'] },
   })
   return { created: true }
 }

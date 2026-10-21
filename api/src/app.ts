@@ -5,6 +5,7 @@ import { pinoHttp } from 'pino-http'
 import type { Mailer } from './adapters/mailer.ts'
 import type { Storage } from './adapters/storage.ts'
 import { requireAuth } from './auth/require-auth.ts'
+import { loadStaff } from './auth/staff-context.ts'
 import type { Db } from './db.ts'
 import { errorHandler, notFound } from './http/errors.ts'
 import { adminRoutes } from './routes/admin.ts'
@@ -48,7 +49,7 @@ export function createApp(deps: AppDeps) {
   const secret = new TextEncoder().encode(deps.jwtSecret)
   const api = express.Router()
   api.use('/admin/auth', adminAuthRoutes(deps.prisma, secret, '/api/admin/auth'))
-  api.use('/admin', requireAuth(secret, 'staff'), adminRoutes(deps.prisma))
+  api.use('/admin', requireAuth(secret, 'staff'), loadStaff(deps.prisma), adminRoutes(deps.prisma))
   app.use('/api', api)
 
   app.use(notFound)

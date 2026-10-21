@@ -14,8 +14,9 @@ export function adminAuthRoutes(prisma: Db, secret: Uint8Array, mountPath: strin
     refreshPath: `${mountPath}/refresh`,
     findCredentials: (email) =>
       prisma.staff.findUnique({
-        where: { email: normalizeEmail(email) },
+        where: { email: normalizeEmail(email), lockedAt: null },
         select: { id: true, passwordHash: true },
       }),
+    isActive: async (id) => (await prisma.staff.count({ where: { id, lockedAt: null } })) > 0,
   })
 }

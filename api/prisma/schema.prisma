@@ -14,21 +14,59 @@ enum AuthAudience {
   @@map("auth_audience")
 }
 
+/// Role cố định; tập permission của mỗi role định nghĩa trong code.
+enum StaffRole {
+  owner
+  sales
+  warehouse
+  accountant
+
+  @@map("staff_role")
+}
+
 /// Nhân viên. Không có đăng ký; owner đầu tiên tạo bằng lệnh seed.
 model Staff {
-  id           String   @id @default(uuid()) @db.Uuid
+  id           String      @id @default(uuid()) @db.Uuid
   /// Luôn lưu dạng chữ thường.
-  email        String   @unique
+  email        String      @unique
   name         String
   /// argon2id, dạng chuỗi PHC.
-  passwordHash String   @map("password_hash")
+  passwordHash String      @map("password_hash")
+  roles        StaffRole[] @default([])
+  /// Có giá trị nghĩa là tài khoản bị khóa.
+  lockedAt     DateTime?   @map("locked_at")
   /// Chỗ sẵn cho 2FA (TOTP), chưa bật.
-  totpSecret   String?  @map("totp_secret")
-  totpEnabled  Boolean  @default(false) @map("totp_enabled")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  totpSecret   String?     @map("totp_secret")
+  totpEnabled  Boolean     @default(false) @map("totp_enabled")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  auditLogs AuditLog[]
 
   @@map("staff")
+}
+
+/// Append-only: trigger trong migration chặn UPDATE, DELETE và TRUNCATE.
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  /// Thứ tự ghi, để sắp xếp ổn định khi nhiều bản ghi trùng thời điểm.
+  seq        BigInt   @unique @default(autoincrement())
+  actorId    String   @map("actor_id") @db.Uuid
+  actor      Staff    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  /// Ví dụ `staff.create`, `staff.roles.change`.
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  before     Json?
+  after      Json?
+  ip         String?
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([entityType, createdAt])
+  @@map("audit_log")
 }
 
 /// Refresh token của mọi miền. Chỉ lưu hash; các token sinh ra từ một lần đăng nhập chung một family.

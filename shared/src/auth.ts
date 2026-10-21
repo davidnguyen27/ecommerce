@@ -22,10 +22,3 @@ export const AuthTokens = z.object({
   refreshToken: z.string().optional(),
 })
 export type AuthTokens = z.infer<typeof AuthTokens>
-
-export const StaffProfile = z.object({
-  id: z.string(),
-  email: z.string(),
-  name: z.string(),
-})
-export type StaffProfile = z.infer<typeof StaffProfile>
