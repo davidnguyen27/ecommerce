@@ -1,0 +1,62 @@
+# Môi trường local: docker compose up --build, rồi mở http://localhost
+x-database-url: &database-url postgresql://${POSTGRES_USER:-ecommerce}:${POSTGRES_PASSWORD:-ecommerce}@postgres:5432/${POSTGRES_DB:-ecommerce}
+
+services:
+  postgres:
+    # Image chính thức đã kèm contrib (unaccent, pg_trgm); migration đầu tiên bật chúng.
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ecommerce}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecommerce}
+      POSTGRES_DB: ${POSTGRES_DB:-ecommerce}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Migration chạy thành một bước riêng trước khi API khởi động.
+  migrate:
+    build: { context: ., dockerfile: api/Dockerfile }
+    command: ["pnpm", "migrate"]
+    environment:
+      DATABASE_URL: *database-url
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    build: { context: ., dockerfile: api/Dockerfile }
+    environment:
+      DATABASE_URL: *database-url
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    build: { context: ., dockerfile: web/Dockerfile }
+    environment:
+      NUXT_API_BASE: http://api:3001
+    depends_on:
+      - api
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - api
+      - web
+
+volumes:
+  pgdata:
+  caddy_data:

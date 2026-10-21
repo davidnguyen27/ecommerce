@@ -1,0 +1,16 @@
+# Local: SITE_ADDRESS mặc định là :80 (HTTP thuần). Staging/production đặt tên miền thật để Caddy tự lấy HTTPS.
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	@api path /api/* /healthz
+	handle @api {
+		reverse_proxy api:3001 {
+			# Ghi đè id do client gửi; API dùng id này cho log và header phản hồi.
+			header_up X-Request-Id {http.request.uuid}
+		}
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
