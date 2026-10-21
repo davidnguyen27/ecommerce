@@ -1,0 +1,21 @@
+{
+  "name": "@ecommerce/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@ecommerce/shared": "workspace:*",
+    "nuxt": "^4.6.2",
+    "vue": "^3.5.44",
+    "vue-router": "^5.4.0"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vue-tsc": "^3.3.13"
+  }
+}

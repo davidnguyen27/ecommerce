@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/.output
+**/.nuxt
+**/src/generated
+.git
+.scratch
+.env
+.env.*

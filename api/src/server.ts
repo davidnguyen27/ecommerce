@@ -1,0 +1,26 @@
+import pino from 'pino'
+import { createApp } from './app.ts'
+import { InMemoryMailer } from './adapters/mailer.ts'
+import { InMemoryStorage } from './adapters/storage.ts'
+import { createPrisma } from './db.ts'
+
+const databaseUrl = process.env.DATABASE_URL
+if (!databaseUrl) throw new Error('Thiếu biến môi trường DATABASE_URL')
+const port = Number(process.env.PORT ?? 3001)
+
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? 'info',
+  redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
+})
+const prisma = createPrisma(databaseUrl)
+
+// Bản R2 và nhà cung cấp email thật được cắm vào ở các ticket media và đăng ký.
+const app = createApp({ prisma, logger, storage: new InMemoryStorage(), mailer: new InMemoryMailer() })
+
+const server = app.listen(port, () => logger.info({ port }, 'API đang chạy'))
+
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => {
+    server.close(() => void prisma.$disconnect().then(() => process.exit(0)))
+  })
+}
