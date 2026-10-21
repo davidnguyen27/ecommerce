@@ -33,6 +33,8 @@ services:
     environment:
       DATABASE_URL: *database-url
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Giá trị mặc định chỉ dùng cho local; staging/production phải đặt khóa riêng.
+      JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-khong-dung-cho-production}
     depends_on:
       migrate: { condition: service_completed_successfully }
 

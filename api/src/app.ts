@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto'
-import express, { type Router } from 'express'
+import express from 'express'
 import type { Logger } from 'pino'
 import { pinoHttp } from 'pino-http'
 import type { Mailer } from './adapters/mailer.ts'
 import type { Storage } from './adapters/storage.ts'
+import { requireAuth } from './auth/require-auth.ts'
 import type { Db } from './db.ts'
 import { errorHandler, notFound } from './http/errors.ts'
+import { adminRoutes } from './routes/admin.ts'
+import { adminAuthRoutes } from './routes/admin-auth.ts'
 import { healthRoutes } from './routes/health.ts'
 
 /** Mọi phụ thuộc bên ngoài đi vào app qua đây, để test thay bằng bản giả. */
@@ -14,13 +17,13 @@ export type AppDeps = {
   logger: Logger
   storage: Storage
   mailer: Mailer
+  /** Khóa ký JWT (HS256). */
+  jwtSecret: string
 }
 
 const REQUEST_ID = /^[\w.-]{1,128}$/
 
-// TODO: `extraRoutes` hiện chỉ để test gắn endpoint thử cho lỗi kiểm tra dữ liệu.
-// Khi có endpoint thật nhận dữ liệu vào (đăng nhập/đăng ký), chuyển test sang đó và bỏ tham số này.
-export function createApp(deps: AppDeps, extraRoutes?: Router) {
+export function createApp(deps: AppDeps) {
   const app = express()
   app.disable('x-powered-by')
   app.set('trust proxy', 'loopback, uniquelocal')
@@ -42,8 +45,10 @@ export function createApp(deps: AppDeps, extraRoutes?: Router) {
 
   app.use(healthRoutes(deps.prisma))
 
+  const secret = new TextEncoder().encode(deps.jwtSecret)
   const api = express.Router()
-  if (extraRoutes) api.use(extraRoutes)
+  api.use('/admin/auth', adminAuthRoutes(deps.prisma, secret, '/api/admin/auth'))
+  api.use('/admin', requireAuth(secret, 'staff'), adminRoutes(deps.prisma))
   app.use('/api', api)
 
   app.use(notFound)

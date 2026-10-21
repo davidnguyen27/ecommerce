@@ -3,6 +3,7 @@ import { z } from 'zod'
 /** Mã lỗi thống nhất mà mọi endpoint trả về trong `error.code`. */
 export const ErrorCode = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
+  UNAUTHORIZED: 'UNAUTHORIZED',
   NOT_FOUND: 'NOT_FOUND',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   INTERNAL_ERROR: 'INTERNAL_ERROR',

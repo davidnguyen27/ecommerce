@@ -6,6 +6,8 @@ import { createPrisma } from './db.ts'
 
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) throw new Error('Thiếu biến môi trường DATABASE_URL')
+const jwtSecret = process.env.JWT_SECRET
+if (!jwtSecret || jwtSecret.length < 32) throw new Error('Thiếu JWT_SECRET hoặc ngắn hơn 32 ký tự')
 const port = Number(process.env.PORT ?? 3001)
 
 const logger = pino({
@@ -15,7 +17,13 @@ const logger = pino({
 const prisma = createPrisma(databaseUrl)
 
 // Bản R2 và nhà cung cấp email thật được cắm vào ở các ticket media và đăng ký.
-const app = createApp({ prisma, logger, storage: new InMemoryStorage(), mailer: new InMemoryMailer() })
+const app = createApp({
+  prisma,
+  logger,
+  storage: new InMemoryStorage(),
+  mailer: new InMemoryMailer(),
+  jwtSecret,
+})
 
 const server = app.listen(port, () => logger.info({ port }, 'API đang chạy'))
 
