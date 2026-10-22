@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { OWNER, appWithOwner, bearer, createStaff, login, type Request } from './support/staff.ts'
+import { OWNER, STAFF_PASSWORD, appWithOwner, bearer, createStaff, login, type Request } from './support/staff.ts'
 
 function readAudit(request: Request, token: string, query: Record<string, string | number> = {}) {
   return request.get('/api/admin/audit').query(query).set(bearer(token))
@@ -88,6 +88,22 @@ describe('rollback', () => {
     const after = await request.get('/api/admin/me').set(bearer(owner.accessToken))
     expect(after.body.roles).toEqual(['owner'])
     expect((await readAudit(request, owner.accessToken)).body.items).toEqual([])
+  })
+
+  it('tạo nhân viên trùng email bị từ chối và không để lại bản ghi audit', async () => {
+    const { request } = await appWithOwner()
+    const owner = await login(request, OWNER.email, OWNER.password)
+    await createStaff(request, owner.accessToken, ['sales'])
+
+    const duplicate = await request
+      .post('/api/admin/staff')
+      .set(bearer(owner.accessToken))
+      .send({ email: 'NV@example.com', name: 'Người Khác', password: STAFF_PASSWORD, roles: ['warehouse'] })
+
+    expect(duplicate.status).toBe(409)
+    expect(duplicate.body.error.code).toBe('CONFLICT')
+    const audit = await readAudit(request, owner.accessToken)
+    expect(audit.body.items.map((e: { action: string }) => e.action)).toEqual(['staff.create'])
   })
 
   it('vẫn gỡ được role owner khi còn owner khác đang hoạt động', async () => {

@@ -159,7 +159,7 @@ Mốc này **chưa có tồn kho, chưa có mua hàng**. Trang sản phẩm hi�
 - Bảng append-only, mỗi dòng gồm: người thực hiện (staff), hành động, loại và id đối tượng, dữ liệu trước/sau (hoặc diff), IP, user agent, thời điểm.
 - Bản ghi audit được ghi **trong cùng transaction** với thay đổi nghiệp vụ.
 - Không có endpoint sửa hay xóa audit log. Endpoint đọc yêu cầu `audit.view`, lọc được theo người, loại đối tượng và khoảng thời gian.
-- Hành động bắt buộc ghi ở mốc này: tạo/sửa/xóa staff, đổi role, khóa staff, thay đổi giá (ghi riêng hành động `price.change` gồm biến thể, giá cũ, giá mới), tạo/sửa/xuất bản/lưu trữ sản phẩm và biến thể, sửa schema thuộc tính, sửa và xuất bản trang nội dung, xem chứng từ private.
+- Hành động bắt buộc ghi ở mốc này: tạo/sửa staff, đổi role, khóa/mở khóa staff (nhân viên không bao giờ bị xóa, chỉ bị khóa), thay đổi giá (ghi riêng hành động `price.change` gồm biến thể, giá cũ, giá mới), tạo/sửa/xuất bản/lưu trữ sản phẩm và biến thể, sửa schema thuộc tính, sửa và xuất bản trang nội dung, xem chứng từ private.
 
 ### Module danh mục
 
