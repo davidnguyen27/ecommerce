@@ -9,7 +9,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] Có sẵn 5 nhóm hàng cố định. Mỗi danh mục gắn với một nhóm hàng; danh mục con phải cùng nhóm hàng với danh mục cha
+- [ ] Có sẵn 5 nhóm hàng cố định, là gốc của cây danh mục. Mỗi danh mục gắn với một nhóm hàng; danh mục con phải cùng nhóm hàng với danh mục cha (ADR 0004). Không có danh mục kiểu "Nam/Nữ" trải nhiều nhóm hàng
+- [ ] Ẩn thương hiệu hoặc danh mục chỉ gỡ khỏi menu, danh sách công khai và trang riêng của nó; không làm ẩn sản phẩm bên trong (sản phẩm chỉ phụ thuộc trạng thái của chính nó)
 - [ ] Slug của thương hiệu và danh mục là duy nhất. Không tạo được vòng lặp trong cây danh mục
 - [ ] Không xóa được danh mục còn danh mục con (ở các ticket sau là: còn sản phẩm); chỉ ẩn được
 - [ ] Mọi thao tác tạo, sửa, ẩn đều ghi audit; thiếu `catalog.edit` thì 403

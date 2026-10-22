@@ -14,8 +14,9 @@
   - có index GIN tương ứng;
   - dữ liệu tìm kiếm được cập nhật khi sản phẩm hoặc biến thể thay đổi
 - [ ] SKU khớp chính xác hoặc khớp tiền tố được xếp lên đầu kết quả
-- [ ] Lọc theo thương hiệu, theo danh mục (gồm cả danh mục con) và theo khoảng giá. Khoảng giá so trên giá của các biến thể đang hoạt động
-- [ ] Lọc theo các thuộc tính có `filterable` trong schema của nhóm hàng đang xem; thuộc tính cấp sản phẩm và cấp biến thể đều lọc được
+- [ ] Lọc theo thương hiệu, theo danh mục (gồm cả danh mục con) và theo khoảng giá. Khoảng giá so trên giá của các biến thể đang bán
+- [ ] Lọc theo các thuộc tính có `filterable` trong schema của nhóm hàng đang xem; thuộc tính cấp sản phẩm và cấp biến thể đều lọc được. Lọc giới tính Nam hoặc Nữ thì kết quả gồm cả sản phẩm Unisex; facets vẫn đếm riêng từng giá trị Nam / Nữ / Unisex
+- [ ] Menu Nam / Nữ trên website dẫn tới trang kết quả có lọc giới tính tương ứng (ADR 0004)
 - [ ] Kết quả trả kèm facets: các giá trị chọn được và số lượng của từng giá trị, theo nhóm hàng đang xem, cùng giá thấp nhất và cao nhất
 - [ ] Sắp xếp `newest | price_asc | price_desc`; có phân trang. Chỉ trả sản phẩm `published`
 - [ ] Website có ô tìm kiếm, trang kết quả, bộ lọc dạng ngăn kéo trên điện thoại, và bộ lọc + sắp xếp phản ánh trên URL để chia sẻ được
@@ -25,5 +26,6 @@
   - SKU lên đầu;
   - lọc giá theo giá biến thể;
   - facets đúng với nhóm hàng đang xem;
+  - lọc giới tính Nam ra cả sản phẩm Unisex, không ra sản phẩm Nữ;
   - sản phẩm draft hoặc archived không xuất hiện;
   - các kiểu sắp xếp và phân trang đúng

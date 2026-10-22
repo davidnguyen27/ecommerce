@@ -17,4 +17,4 @@
 - [ ] Trang sản phẩm có dữ liệu cấu trúc Product/Offer với giá VND (khoảng giá nếu có nhiều biến thể), thương hiệu và ảnh. Chưa khai báo `availability` (sẽ thêm ở M2)
 - [ ] Có test qua HTTP cho các trường hợp:
   - sitemap chỉ chứa nội dung đã xuất bản;
-  - dữ liệu cấu trúc lấy đúng giá của biến thể đang hoạt động, nếu dữ liệu này được dựng phía API
+  - dữ liệu cấu trúc lấy đúng giá của biến thể đang bán, nếu dữ liệu này được dựng phía API
