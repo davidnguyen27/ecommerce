@@ -34,8 +34,8 @@ export default tseslint.config(
     rules: { 'no-undef': 'off' },
   },
   {
-    // Tên file trong pages/ và layouts/ là route, không phải tên component.
-    files: ['web/app/{pages,layouts}/**/*.vue', 'web/app/app.vue'],
+    // Tên file trong pages/ và layouts/ là route; app.vue, error.vue là tên Nuxt quy định, không phải tên component.
+    files: ['web/app/{pages,layouts}/**/*.vue', 'web/app/{app,error}.vue'],
     rules: { 'vue/multi-word-component-names': 'off' },
   },
 )

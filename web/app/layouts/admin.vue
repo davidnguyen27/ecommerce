@@ -6,6 +6,8 @@ const session = useAdminSession()
 const MENU: { to: string; label: string; permission?: Permission }[] = [
   { to: '/admin', label: 'Tổng quan' },
   { to: '/admin/staff', label: 'Nhân viên', permission: 'staff.manage' },
+  { to: '/admin/pages', label: 'Trang nội dung', permission: 'content.edit' },
+  { to: '/admin/legal-info', label: 'Thông tin pháp lý', permission: 'content.edit' },
   { to: '/admin/audit', label: 'Audit log', permission: 'audit.view' },
 ]
 // Menu chỉ để dễ dùng; quyền thật vẫn do API kiểm ở mỗi request.

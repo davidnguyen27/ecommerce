@@ -10,6 +10,8 @@ import type { Db } from './db.ts'
 import { errorHandler, notFound } from './http/errors.ts'
 import { adminRoutes } from './routes/admin.ts'
 import { adminAuthRoutes } from './routes/admin-auth.ts'
+import { publicLegalInfoRoutes } from './routes/legal-info.ts'
+import { publicPageRoutes } from './routes/public-pages.ts'
 import { healthRoutes } from './routes/health.ts'
 
 /** Mọi phụ thuộc bên ngoài đi vào app qua đây, để test thay bằng bản giả. */
@@ -48,6 +50,8 @@ export function createApp(deps: AppDeps) {
 
   const secret = new TextEncoder().encode(deps.jwtSecret)
   const api = express.Router()
+  api.use('/pages', publicPageRoutes(deps.prisma))
+  api.use('/legal-info', publicLegalInfoRoutes(deps.prisma))
   api.use('/admin/auth', adminAuthRoutes(deps.prisma, secret, '/api/admin/auth'))
   api.use('/admin', requireAuth(secret, 'staff'), loadStaff(deps.prisma), adminRoutes(deps.prisma))
   app.use('/api', api)

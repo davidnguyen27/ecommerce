@@ -41,7 +41,8 @@ model Staff {
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
 
-  auditLogs AuditLog[]
+  auditLogs         AuditLog[]
+  publishedVersions ContentPageVersion[]
 
   @@map("staff")
 }
@@ -86,4 +87,55 @@ model RefreshToken {
   @@index([audience, subjectId])
   @@index([familyId])
   @@map("refresh_token")
+}
+
+enum ContentPageKind {
+  about
+  process
+  policy
+
+  @@map("content_page_kind")
+}
+
+/// Trang nội dung. `title`, `body` là bản đang soạn; khách chỉ thấy phiên bản đã xuất bản mới nhất.
+model ContentPage {
+  id        String          @id @default(uuid()) @db.Uuid
+  /// Không đổi sau khi tạo, vì URL công khai và module khác tham chiếu theo slug.
+  slug      String          @unique
+  kind      ContentPageKind
+  title     String
+  /// Markdown.
+  body      String
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  versions ContentPageVersion[]
+
+  @@map("content_page")
+}
+
+/// Nội dung trang tại một lần xuất bản; không sửa, không xóa, để lời đồng ý và đơn hàng tham chiếu đúng nội dung lúc đó.
+model ContentPageVersion {
+  id            String      @id @default(uuid()) @db.Uuid
+  pageId        String      @map("page_id") @db.Uuid
+  page          ContentPage @relation(fields: [pageId], references: [id], onDelete: Restrict)
+  /// Đánh số từ 1 trong từng trang.
+  version       Int
+  title         String
+  body          String
+  publishedAt   DateTime    @default(now()) @map("published_at")
+  publishedById String      @map("published_by_id") @db.Uuid
+  publishedBy   Staff       @relation(fields: [publishedById], references: [id], onDelete: Restrict)
+
+  @@unique([pageId, version])
+  @@map("content_page_version")
+}
+
+/// Cấu hình hệ thống dạng khóa → giá trị JSON; schema của từng khóa định nghĩa trong `@ecommerce/shared`.
+model SystemConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
 }
