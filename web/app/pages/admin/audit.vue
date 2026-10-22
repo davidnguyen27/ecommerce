@@ -4,7 +4,7 @@ import { AuditActors, AuditPage, type AuditActor } from '@ecommerce/shared'
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'audit.view' })
 
 const PAGE_SIZE = 50
-const ENTITY_TYPES = ['staff']
+const ENTITY_TYPES = ['staff', 'content_page', 'system_config']
 
 const session = useAdminSession()
 const actors = ref<AuditActor[]>([])
