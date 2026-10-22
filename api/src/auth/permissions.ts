@@ -2,7 +2,7 @@ import { Permission, type StaffRole } from '@ecommerce/shared'
 
 const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
   owner: Permission.options,
-  sales: ['catalog.edit', 'price.edit', 'media.upload', 'content.edit'],
+  sales: ['catalog.edit', 'media.upload', 'content.edit'],
   warehouse: ['catalog.edit', 'media.upload', 'document.view'],
   accountant: ['price.edit', 'document.view', 'audit.view'],
 }
