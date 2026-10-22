@@ -186,7 +186,8 @@ Mốc này **chưa có tồn kho, chưa có mua hàng**. Trang sản phẩm hi�
   - SKU duy nhất toàn hệ thống. Thuộc tính cấp biến thể lưu dạng JSONB, được kiểm theo schema, và tổ hợp này là duy nhất trong cùng sản phẩm.
   - `price` và `compare_at_price` lưu số nguyên VND, đã gồm VAT. Ràng buộc: `price > 0`; `compare_at_price` để trống hoặc `>= price`.
   - Thứ tự hiển thị, trạng thái đang bán / ngừng bán.
-- Sản phẩm `published` phải có ít nhất một biến thể đang bán và ít nhất một ảnh. Không được chuyển biến thể đang bán cuối cùng của sản phẩm `published` sang ngừng bán; muốn thôi bán thì lưu trữ sản phẩm.
+- Sản phẩm `published` phải có ít nhất một biến thể đang bán và ít nhất một ảnh. Không được chuyển biến thể đang bán cuối cùng của sản phẩm `published` sang ngừng bán; muốn thôi bán thì lưu trữ sản phẩm. Tương tự, không gỡ được ảnh cuối cùng của sản phẩm `published`.
+- Chuyển trạng thái sản phẩm: Nháp → Đã xuất bản, Nháp → Lưu trữ, Đã xuất bản → Lưu trữ, Lưu trữ → Nháp. Không gỡ xuất bản thẳng về Nháp; lưu trữ là cách duy nhất để gỡ sản phẩm khỏi website.
 - Thay đổi `price` hoặc `compare_at_price` yêu cầu `price.edit`, tách khỏi `catalog.edit`. Người chỉ có `catalog.edit` gửi kèm thay đổi giá thì bị 403.
 
 ### Module media
