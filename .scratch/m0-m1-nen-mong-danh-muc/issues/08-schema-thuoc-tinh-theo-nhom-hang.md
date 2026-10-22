@@ -16,6 +16,8 @@
   - cấp áp dụng `product | variant`;
   - có dùng làm bộ lọc không, thứ tự hiển thị
 - [ ] Seed sẵn schema cho cả 5 nhóm hàng; chạy seed lại không tạo trùng
+- [ ] Schema của cả 5 nhóm hàng đều có thuộc tính cấp sản phẩm `gioi_tinh`, kiểu `enum` với giá trị Nam / Nữ / Unisex, có `filterable` (ADR 0004)
+- [ ] Mã mẫu là trường chung của sản phẩm (ticket 09), không nằm trong schema thuộc tính của nhóm đồng hồ hay nhóm nào khác
 - [ ] Bộ kiểm dữ liệu từ chối các trường hợp: thiếu trường bắt buộc, sai kiểu, giá trị enum không nằm trong danh sách, key không có trong schema. Lỗi trả theo cấu trúc lỗi từng trường
 - [ ] Sửa schema yêu cầu `catalog.edit` và ghi audit kèm schema trước và sau khi sửa
 - [ ] Quy tắc đổi schema đã cài sẵn: thêm thuộc tính bắt buộc, xóa thuộc tính hoặc bớt giá trị enum đều phải đi qua bước kiểm tra sản phẩm vi phạm. Ở ticket này chưa có sản phẩm nên bước kiểm luôn qua; ticket 09 bổ sung test cho trường hợp có sản phẩm vi phạm

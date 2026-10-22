@@ -47,19 +47,19 @@ Mốc này **chưa có tồn kho, chưa có mua hàng**. Trang sản phẩm hi�
 9. Là khách, tôi muốn bộ lọc chỉ hiển thị những thuộc tính áp dụng cho nhóm hàng đang xem, để không bị rối bởi các lựa chọn vô nghĩa.
 10. Là khách, tôi muốn sắp xếp kết quả theo mới nhất hoặc theo giá tăng/giảm, để dễ so sánh.
 11. Là khách, tôi muốn danh sách được phân trang và tải nhanh trên điện thoại, để duyệt thoải mái bằng 4G.
-12. Là khách, tôi muốn thấy trên thẻ sản phẩm giá thấp nhất trong các biến thể ("từ 2.500.000 ₫") và giá gốc gạch ngang nếu đang giảm, để đánh giá nhanh.
+12. Là khách, tôi muốn thấy trên thẻ sản phẩm giá thấp nhất trong các biến thể ("từ 2.500.000 ₫") và giá hãng gạch ngang nếu có, để đánh giá nhanh.
 
 ### Khách hàng: chi tiết sản phẩm
 
 13. Là khách, tôi muốn xem nhiều ảnh lớn của sản phẩm, để quan sát kỹ trước khi mua.
-14. Là khách, tôi muốn chọn biến thể (màu, size, dung tích) và thấy giá, mã hàng, ảnh của đúng biến thể đó, để biết chính xác mình đang xem gì.
+14. Là khách, tôi muốn chọn biến thể (màu, size, dung tích) và thấy giá, SKU, ảnh của đúng biến thể đó, để biết chính xác mình đang xem gì.
 15. Là khách, tôi muốn biến thể chỉ cho chọn những tổ hợp có thật (ví dụ size 40 chỉ có màu đen), để không chọn phải tổ hợp không tồn tại.
-16. Là khách, tôi muốn thấy giá gốc và giá bán của từng biến thể, để biết mức giảm.
+16. Là khách, tôi muốn thấy giá hãng và giá bán của từng biến thể, để biết mình mua rẻ hơn giá hãng bao nhiêu.
 17. Là khách, tôi muốn xem các thông số đặc trưng của nhóm hàng (mặt đồng hồ, bộ máy, nồng độ nước hoa, nhóm hương, kích thước túi, phụ kiện đi kèm), để so sánh.
 18. Là khách, tôi muốn xem bảng size và hướng dẫn chọn size của sản phẩm giày và quần áo, để chọn vừa.
 19. Là khách, tôi muốn xem hướng dẫn sử dụng và bảo quản, để dùng sản phẩm đúng cách.
 20. Là khách, tôi muốn xem thông tin nguồn gốc do doanh nghiệp công bố, có phân biệt rõ với những cam kết đã có bằng chứng xác nhận, để biết mức độ tin cậy.
-21. Là khách, tôi muốn thấy thông tin bảo hành chỉ khi sản phẩm đó thật sự có bảo hành được xác nhận, để không bị hiểu nhầm là mọi sản phẩm đều có bảo hành chính hãng.
+21. Là khách, tôi muốn thấy bảo hành chỉ khi sản phẩm đó có cam kết bảo hành dựa trên chứng từ, để không bị hiểu nhầm là mọi sản phẩm đều có bảo hành chính hãng.
 22. Là khách, tôi muốn có liên kết tới chính sách đổi trả và bảo hành áp dụng cho sản phẩm, để hiểu điều kiện trước khi mua.
 23. Là khách, tôi muốn mỗi biến thể có đường dẫn riêng chia sẻ được, để gửi đúng mẫu cho bạn bè.
 
@@ -99,9 +99,9 @@ Mốc này **chưa có tồn kho, chưa có mua hàng**. Trang sản phẩm hi�
 49. Là nhân viên, tôi muốn ẩn hoặc lưu trữ một sản phẩm mà không mất lịch sử, để ngừng hiển thị hàng không còn kinh doanh.
 50. Là nhân viên, tôi muốn tạo các biến thể cho một sản phẩm từ các thuộc tính cấp biến thể (màu × size), mỗi biến thể có SKU duy nhất, để quản lý đúng mặt hàng cụ thể khách mua.
 51. Là nhân viên, tôi muốn hệ thống từ chối hai biến thể trùng tổ hợp thuộc tính hoặc trùng SKU, để không có hàng trùng.
-52. Là nhân viên được cấp quyền sửa giá, tôi muốn đặt giá bán và giá gốc cho từng biến thể, để phản ánh khuyến mãi thủ công.
-53. Là chủ doanh nghiệp, tôi muốn chỉ người có quyền sửa giá mới đổi được giá, và giá bán không bao giờ lớn hơn giá gốc, để tránh sai sót.
-54. Là nhân viên, tôi muốn soạn mô tả, hướng dẫn sử dụng/bảo quản, bảng size, thông tin nguồn gốc công bố và thông tin bảo hành đã xác nhận cho từng sản phẩm, để trang sản phẩm đầy đủ.
+52. Là nhân viên được cấp quyền sửa giá, tôi muốn đặt giá bán và giá hãng cho từng biến thể, để khách thấy chênh lệch so với giá bán lẻ chính thức của hãng.
+53. Là chủ doanh nghiệp, tôi muốn chỉ người có quyền sửa giá mới đổi được giá, và giá bán không bao giờ lớn hơn giá hãng, để tránh sai sót.
+54. Là nhân viên, tôi muốn soạn mô tả, hướng dẫn sử dụng/bảo quản, bảng size, và thông tin nguồn gốc công bố cho từng sản phẩm, để trang sản phẩm đầy đủ.
 55. Là nhân viên, tôi muốn gắn các chính sách áp dụng (đổi trả, bảo hành) vào sản phẩm, để khách đọc đúng chính sách cho mặt hàng đó.
 56. Là nhân viên, tôi muốn đánh dấu sản phẩm "chỉ giao đường bộ" (nước hoa), để các mốc vận chuyển sau dùng được.
 57. Là nhân viên, tôi muốn tải nhiều ảnh lên một sản phẩm, sắp xếp thứ tự và gắn ảnh vào biến thể cụ thể, để khách đổi màu thì đổi ảnh.
@@ -150,7 +150,7 @@ Mốc này **chưa có tồn kho, chưa có mua hàng**. Trang sản phẩm hi�
 ### Module phân quyền (RBAC)
 
 - Bốn role cố định: `owner`, `sales`, `warehouse`, `accountant`. Mỗi role là một tập permission định nghĩa trong code. Một nhân viên có thể có nhiều role.
-- Permission của M0/M1: `staff.manage`, `catalog.edit`, `price.edit`, `media.upload`, `document.view`, `content.edit`, `audit.view`. Owner có tất cả. Các mốc sau thêm permission mới như `stock.adjust` hay `refund.approve`.
+- Permission của M0/M1: `staff.manage`, `catalog.edit`, `price.edit`, `media.upload`, `document.view`, `content.edit`, `audit.view`, `commitment.edit` (tạo cam kết có bằng chứng và quản lý loại cam kết; mặc định chỉ owner). Owner có tất cả. Các mốc sau thêm permission mới như `stock.adjust` hay `refund.approve`.
 - Ở mỗi request, permission được tính từ role hiện tại đọc trong DB, nên thay đổi có hiệu lực ngay.
 - Endpoint quản trị khai báo permission cần có. Thiếu quyền trả 403 kèm mã lỗi thống nhất.
 
@@ -178,15 +178,15 @@ Mốc này **chưa có tồn kho, chưa có mua hàng**. Trang sản phẩm hi�
 - **Sản phẩm**:
   - Thông tin chung: thương hiệu, danh mục, tên, slug, mã mẫu, mô tả, hướng dẫn sử dụng/bảo quản, bảng size (nội dung có cấu trúc dạng bảng).
   - **Thông tin nguồn gốc công bố** và **cam kết có bằng chứng** là hai trường tách riêng. Cam kết có bằng chứng ghi kèm loại cam kết (ví dụ "bảo hành chính hãng") và tham chiếu tới chứng từ nội bộ.
-  - Thông tin bảo hành chỉ hiển thị khi có xác nhận.
+  - Không có trường bảo hành riêng: bảo hành chỉ hiển thị dưới dạng cam kết có bằng chứng thuộc loại bảo hành (ADR 0005). Loại cam kết là danh sách đóng, seed sẵn, quản lý bằng `commitment.edit`. Cam kết gắn ở cấp sản phẩm. Chứng từ đang được cam kết tham chiếu thì không xóa được.
   - Thuộc tính cấp sản phẩm lưu dạng JSONB, được kiểm theo schema.
   - Cờ `ground_shipping_only`. Liên kết tới các trang chính sách áp dụng.
   - Trạng thái `draft | published | archived`.
 - **Biến thể**:
   - SKU duy nhất toàn hệ thống. Thuộc tính cấp biến thể lưu dạng JSONB, được kiểm theo schema, và tổ hợp này là duy nhất trong cùng sản phẩm.
   - `price` và `compare_at_price` lưu số nguyên VND, đã gồm VAT. Ràng buộc: `price > 0`; `compare_at_price` để trống hoặc `>= price`.
-  - Thứ tự hiển thị, trạng thái hoạt động.
-- Sản phẩm `published` phải có ít nhất một biến thể đang hoạt động và ít nhất một ảnh.
+  - Thứ tự hiển thị, trạng thái đang bán / ngừng bán.
+- Sản phẩm `published` phải có ít nhất một biến thể đang bán và ít nhất một ảnh. Không được chuyển biến thể đang bán cuối cùng của sản phẩm `published` sang ngừng bán; muốn thôi bán thì lưu trữ sản phẩm.
 - Thay đổi `price` hoặc `compare_at_price` yêu cầu `price.edit`, tách khỏi `catalog.edit`. Người chỉ có `catalog.edit` gửi kèm thay đổi giá thì bị 403.
 
 ### Module media
@@ -209,7 +209,7 @@ Mốc này **chưa có tồn kho, chưa có mua hàng**. Trang sản phẩm hi�
 - Endpoint danh sách sản phẩm công khai nhận các tham số:
   - từ khóa;
   - thương hiệu, danh mục (gồm cả danh mục con);
-  - khoảng giá, so trên giá biến thể đang hoạt động;
+  - khoảng giá, so trên giá biến thể đang bán;
   - các bộ lọc thuộc tính có `filterable` trong schema;
   - sắp xếp `newest | price_asc | price_desc`;
   - phân trang.
@@ -271,7 +271,10 @@ Mốc này **chưa có tồn kho, chưa có mua hàng**. Trang sản phẩm hi�
 ## Further Notes
 
 - Thư mục dự án **chưa phải git repo** và chưa có remote. Bước CI/CD cần một repo GitHub (dùng cho Actions và GHCR), dù ticket vẫn lưu dạng local markdown. Cần `git init` và tạo remote trước ticket hạ tầng.
-- Chưa có `GLOSSARY.md` hay ADR. Các thuật ngữ dùng trong spec này nên được đưa vào glossary qua `/domain-modeling`: nhóm hàng, schema thuộc tính, biến thể, SKU, giá gốc/giá bán, thông tin công bố và cam kết có bằng chứng, chứng từ, trang nội dung, phiên bản chính sách. Các quyết định khó đảo ngược nên ghi thành ADR: Express + Nuxt monorepo, JWT rotation hai miền, permission đọc từ DB mỗi request, audit log append-only cùng transaction.
+- Thuật ngữ dùng trong spec này theo `GLOSSARY.md` ở gốc repo; các quyết định khó đảo ngược ghi ở `docs/adr/` (2026-10-22).
+- Cây danh mục có gốc là 5 nhóm hàng; giới tính (Nam / Nữ / Unisex) là thuộc tính cấp sản phẩm có trong schema của mọi nhóm hàng, menu Nam/Nữ là trang tìm kiếm có lọc giới tính (ADR 0004). Bộ sưu tập (gom sản phẩm nhiều nhóm hàng) để sau.
+- Ẩn thương hiệu hoặc danh mục chỉ gỡ khỏi menu và trang riêng của nó; sản phẩm đã xuất bản bên trong vẫn hiện ở tìm kiếm và nơi khác.
+- Giá hãng là giá bán lẻ chính thức của thương hiệu, không phải giá trước khuyến mại; giảm giá theo chương trình thuộc mốc khuyến mại. Cần chủ doanh nghiệp xác nhận cách thể hiện giá hãng có đúng quy định pháp luật về giá và khuyến mại.
 - Đã chốt (2026-10-21) cách xử lý ảnh khi upload: sinh sẵn các cỡ ảnh webp bằng sharp ngay lúc upload, giữ cả bản gốc. Không phụ thuộc tính năng biến đổi ảnh có tính phí của CDN.
 - Các nội dung do chủ doanh nghiệp cung cấp vẫn còn mở: chính sách nguồn gốc và bảo hành, nội dung các trang chính sách, thông tin pháp lý và việc thông báo website với Bộ Công Thương. Hệ thống chỉ cung cấp chỗ soạn và hiển thị, không tự điền nội dung.
 - Lựa chọn nhà cung cấp email transactional (Resend, SES, SMTP) nằm sau interface mailer và có thể chốt khi làm ticket email.
