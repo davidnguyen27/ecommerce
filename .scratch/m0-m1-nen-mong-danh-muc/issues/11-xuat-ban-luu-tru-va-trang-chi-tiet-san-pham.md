@@ -15,10 +15,14 @@
 
 **Blocked by:** 04 (Trang nội dung có phiên bản và footer pháp lý), 10 (Ảnh sản phẩm và logo thương hiệu)
 
+**Prototype:** nhánh `prototype/vong-doi-san-pham`, file `api/src/catalog/PROTOTYPE-vong-doi-san-pham.html`. Module `Catalog` trong file (hàm `apply`, `customerView`, `invariants`) đã được chạy thử với các quy tắc vòng đời ở ticket 09 và 11; có thể lấy làm điểm xuất phát.
+
 **Status:** ready-for-agent
 
 - [ ] Chỉ xuất bản được sản phẩm có ít nhất 1 biến thể đang bán và ít nhất 1 ảnh. Không đủ thì bị từ chối kèm lý do
 - [ ] Lưu trữ thì sản phẩm biến mất khỏi API công khai nhưng vẫn còn trong admin cùng toàn bộ audit. Có thể đưa về nháp
+- [ ] Chuyển trạng thái hợp lệ: Nháp → Đã xuất bản; Nháp → Lưu trữ; Đã xuất bản → Lưu trữ; Lưu trữ → Nháp. Không gỡ xuất bản thẳng về Nháp: lưu trữ là cách duy nhất để gỡ sản phẩm khỏi website
+- [ ] Không gỡ được ảnh cuối cùng của sản phẩm `published` (giống quy tắc biến thể đang bán cuối cùng ở ticket 09); lỗi gợi ý lưu trữ sản phẩm
 - [ ] Gắn được chính sách vào sản phẩm (tham chiếu trang nội dung loại chính sách ở ticket 04)
 - [ ] API công khai lấy chi tiết sản phẩm theo slug, trả về: thông tin sản phẩm, schema để hiển thị nhãn, các biến thể đang bán kèm tổ hợp thuộc tính, giá và ảnh, và các chính sách. Sản phẩm draft hoặc archived trả 404
 - [ ] API danh sách theo danh mục (gồm cả danh mục con) và theo thương hiệu trả về thẻ sản phẩm: giá thấp nhất trong các biến thể đang bán, giá hãng tương ứng, ảnh đại diện
@@ -26,6 +30,8 @@
 - [ ] Xuất bản và lưu trữ đều ghi audit
 - [ ] Có test qua HTTP cho các trường hợp:
   - xuất bản thiếu biến thể hoặc thiếu ảnh bị từ chối;
+  - gỡ ảnh cuối cùng của sản phẩm `published` bị từ chối;
+  - đưa sản phẩm `published` thẳng về nháp bị từ chối; lưu trữ từ nháp được chấp nhận;
   - sản phẩm draft hoặc archived không xuất hiện ở API công khai;
   - giá "từ X" đúng là giá thấp nhất của biến thể đang bán;
   - biến thể ngừng bán không được trả về

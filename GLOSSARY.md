@@ -63,7 +63,7 @@ _Avoid_: giá gốc, giá nhập
 Thương hiệu hoặc danh mục tạm không có trong menu và không có trang riêng; bỏ ẩn được bất cứ lúc nào. Ẩn không ảnh hưởng tới việc sản phẩm có hiện hay không.
 
 **Nháp** / **Đã xuất bản** / **Lưu trữ** (Draft / Published / Archived):
-Vòng đời của sản phẩm. Chỉ sản phẩm đã xuất bản mới hiện với khách; sản phẩm lưu trữ là hàng không còn kinh doanh nhưng giữ nguyên lịch sử.
+Vòng đời của sản phẩm. Chỉ sản phẩm đã xuất bản mới hiện với khách; sản phẩm lưu trữ là hàng không còn kinh doanh nhưng giữ nguyên lịch sử. Lưu trữ là cách duy nhất để gỡ một sản phẩm đã xuất bản khỏi website.
 _Avoid_: xóa, ẩn (khi nói về sản phẩm)
 
 **Ngừng bán** (Discontinued):
