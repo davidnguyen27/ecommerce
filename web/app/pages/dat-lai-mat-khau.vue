@@ -23,7 +23,8 @@ async function submit() {
   }
 }
 
-useHead({ title: 'Đặt lại mật khẩu' })
+// Trang riêng của từng khách, không có nội dung để index.
+useSeo({ title: 'Đặt lại mật khẩu', description: 'Đặt lại mật khẩu tài khoản khách hàng.', noindex: true })
 </script>
 
 <template>

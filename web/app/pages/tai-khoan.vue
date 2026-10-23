@@ -54,7 +54,8 @@ const consentedOn = computed(() =>
     : '',
 )
 
-useHead({ title: 'Tài khoản' })
+// Trang riêng của từng khách, không có nội dung để index.
+useSeo({ title: 'Tài khoản', description: 'Thông tin tài khoản khách hàng.', noindex: true })
 </script>
 
 <template>

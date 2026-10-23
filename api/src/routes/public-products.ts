@@ -94,10 +94,16 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
     })
     .get('/:slug', async (req, res) => {
       const { slug } = parse(SlugParams, req.params)
-      const product = await prisma.product.findFirst({
-        where: { liveVersion: { is: { slug } } },
-        include: { liveVersion: { include: { brand: true, category: true } } },
-      })
+      const include = { liveVersion: { include: { brand: true, category: true } } } as const
+      // Slug cũ (đã đổi rồi xuất bản lại) vẫn trả sản phẩm, kèm slug hiện tại để website chuyển hướng 301.
+      // Slug đang có sản phẩm dùng thì ưu tiên sản phẩm đó; nhiều sản phẩm từng dùng thì lấy lần xuất bản gần nhất.
+      const product =
+        (await prisma.product.findFirst({ where: { liveVersion: { is: { slug } } }, include })) ??
+        (await prisma.product.findFirst({
+          where: { status: 'published', versions: { some: { slug } } },
+          include,
+          orderBy: { liveVersion: { publishedAt: 'desc' } },
+        }))
       if (!product?.liveVersion) throw notFound()
       const version = product.liveVersion
       const snapshot = ProductSnapshot.parse(version.snapshot)

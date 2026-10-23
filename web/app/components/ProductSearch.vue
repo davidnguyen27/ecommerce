@@ -15,7 +15,6 @@ const props = defineProps<{
 const route = useRoute()
 const { apiBase } = useRuntimeConfig()
 
-const FILTER_PARAMS = ['q', 'type', 'minPrice', 'maxPrice', 'sort']
 const SORTS: { value: ProductSort | undefined; label: string }[] = [
   { value: undefined, label: 'Phù hợp' },
   { value: 'newest', label: 'Mới nhất' },
@@ -31,7 +30,7 @@ const first = (name: string) => values(name)[0] ?? ''
 const filters = computed(() => {
   const query: Record<string, string[]> = {}
   for (const name of Object.keys(route.query)) {
-    if (FILTER_PARAMS.includes(name) || name.startsWith(ATTRIBUTE_FILTER_PREFIX)) {
+    if (LISTING_FILTER_PARAMS.includes(name) || name.startsWith(ATTRIBUTE_FILTER_PREFIX)) {
       const list = values(name)
       if (list.length) query[name] = list
     }
