@@ -14,6 +14,8 @@ const session = useAdminSession()
 const staff = ref<StaffSummary[]>([])
 /** Role đang chỉnh của từng nhân viên, trước khi bấm lưu. */
 const draftRoles = ref<Record<string, StaffRole[]>>({})
+/** Tên, email đang sửa của từng nhân viên, trước khi bấm lưu. */
+const draftProfiles = ref<Record<string, { name: string; email: string }>>({})
 const error = ref<string | null>(null)
 
 const form = reactive({ email: '', name: '', password: '', roles: [] as StaffRole[] })
@@ -21,6 +23,7 @@ const form = reactive({ email: '', name: '', password: '', roles: [] as StaffRol
 async function load() {
   staff.value = StaffList.parse(await session.adminFetch('/api/admin/staff')).items
   draftRoles.value = Object.fromEntries(staff.value.map((s) => [s.id, [...s.roles]]))
+  draftProfiles.value = Object.fromEntries(staff.value.map((s) => [s.id, { name: s.name, email: s.email }]))
 }
 
 /** Chạy một thao tác rồi tải lại danh sách; lỗi thì hiện thông báo từ API. */
@@ -39,6 +42,10 @@ async function run(action: () => Promise<unknown>) {
 async function create() {
   const ok = await run(() => session.adminFetch('/api/admin/staff', { method: 'POST', body: form }))
   if (ok) Object.assign(form, { email: '', name: '', password: '', roles: [] })
+}
+
+function saveProfile(id: string) {
+  return run(() => session.adminFetch(`/api/admin/staff/${id}`, { method: 'PUT', body: draftProfiles.value[id] }))
 }
 
 function saveRoles(id: string) {
@@ -70,8 +77,13 @@ await load()
       </thead>
       <tbody>
         <tr v-for="s in staff" :key="s.id">
-          <td>{{ s.name }}</td>
-          <td>{{ s.email }}</td>
+          <td colspan="2">
+            <form @submit.prevent="saveProfile(s.id)">
+              <input v-model="draftProfiles[s.id]!.name" aria-label="Tên" required />
+              <input v-model="draftProfiles[s.id]!.email" type="email" aria-label="Email" required />
+              <button type="submit">Lưu tên, email</button>
+            </form>
+          </td>
           <td>
             <label v-for="role in StaffRole.options" :key="role">
               <input v-model="draftRoles[s.id]" type="checkbox" :value="role" />
