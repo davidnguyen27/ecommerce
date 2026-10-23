@@ -19,6 +19,9 @@ declare module 'vitest' {
 export default async function setup(project: TestProject) {
   const container = await new PostgreSqlContainer('postgres:17-alpine')
     .withDatabase(TEMPLATE_DB)
+    // Mỗi test mở pool Prisma và pool pg-boss riêng, các file test chạy song song trên cùng container:
+    // mặc định 100 kết nối thì thỉnh thoảng hết ("too many clients already").
+    .withCommand(['postgres', '-c', 'max_connections=1000'])
     .start()
     .catch((err: Error) => {
       // In ra trước khi ném: vitest có thể làm mất thông điệp lỗi của globalSetup.
