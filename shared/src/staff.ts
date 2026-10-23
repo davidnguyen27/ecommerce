@@ -11,6 +11,8 @@ export const Permission = z.enum([
   'document.view',
   'content.edit',
   'audit.view',
+  /** Tạo cam kết có bằng chứng và quản lý loại cam kết; mặc định chỉ owner. */
+  'commitment.edit',
 ])
 export type Permission = z.infer<typeof Permission>
 
