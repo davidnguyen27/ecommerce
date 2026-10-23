@@ -7,6 +7,7 @@ import {
   AttributeSchema,
   VariantStatus,
   type AdminBrand,
+  type AdminProductDocument,
   type AdminCategory,
   type AttributeDefinition,
   type AttributeValue,
@@ -37,6 +38,9 @@ const session = useAdminSession()
 // Quyền thật do API kiểm; ở đây chỉ để khóa những ô người dùng không sửa được.
 const canEdit = session.can('catalog.edit')
 const canPrice = session.can('price.edit')
+const canViewDocuments = session.can('document.view')
+/** Chứng từ đã tải, để chọn làm bằng chứng cho cam kết. */
+const documents = ref<AdminProductDocument[]>([])
 
 const product = ref<AdminProduct | null>(null)
 const brands = ref<AdminBrand[]>([])
@@ -342,5 +346,7 @@ if (canEdit) {
     </table>
 
     <ProductImages :product-id="id" :variants="imageVariants" />
+    <ProductDocuments v-if="canViewDocuments" :product-id="id" @change="documents = $event" />
+    <ProductCommitments :product-id="id" :documents="documents" />
   </main>
 </template>
