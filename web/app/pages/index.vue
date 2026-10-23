@@ -10,6 +10,8 @@ const { data, error } = await useAsyncData('health', async () => {
   return HealthResponse.parse(body)
 })
 
+useSeo({ title: 'Trang chủ', description: 'Giày dép, quần áo, đồng hồ, túi xách và nước hoa.' })
+
 const errorCode = computed(() => {
   const body = ApiErrorBody.safeParse(error.value?.data)
   return body.success ? body.data.error.code : 'UNREACHABLE'

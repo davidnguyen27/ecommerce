@@ -72,7 +72,35 @@ const productAttributes = computed(() =>
     .map((d) => ({ label: d.label, value: formatAttribute(d, data.value!.attributes[d.key]!) })),
 )
 
-useHead({ title: () => data.value?.name ?? '' })
+// API nhận cả slug cũ (đã đổi rồi xuất bản lại) và trả slug hiện tại: chuyển hướng hẳn để link cũ không mất.
+if (data.value && data.value.slug !== slug.value) {
+  await navigateTo({ path: `/san-pham/${data.value.slug}`, query: route.query }, { redirectCode: 301 })
+}
+
+// Mọi biến thể (`?sku=`) dùng chung một canonical là trang sản phẩm.
+const canonicalPath = computed(() => `/san-pham/${data.value?.slug ?? slug.value}`)
+const absolute = useAbsoluteUrl()
+useSeo({
+  title: () => data.value?.name ?? '',
+  description: () => {
+    const product = data.value
+    if (!product) return ''
+    if (product.description) return excerpt(product.description)
+    const from = Math.min(...product.variants.map((v) => v.price))
+    return `${product.name} của ${product.brand.name}, giá từ ${formatVnd(from)}.`
+  },
+  canonicalPath,
+  image: () => data.value?.images[0]?.originalUrl,
+})
+useHead({
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: () =>
+        data.value ? jsonLdScript(productJsonLd(data.value, absolute(canonicalPath.value), absolute)) : '',
+    },
+  ],
+})
 </script>
 
 <template>
