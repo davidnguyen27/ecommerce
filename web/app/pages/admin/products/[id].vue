@@ -63,6 +63,13 @@ const fieldErrors = ref<{ target: string; fields: FieldError[] }>({ target: '', 
 
 const productDefinitions = computed(() => definitions.value.filter((d) => d.level === 'product'))
 const variantDefinitions = computed(() => definitions.value.filter((d) => d.level === 'variant'))
+/** Biến thể đã lưu, để gắn ảnh: nhãn là SKU kèm tổ hợp thuộc tính. */
+const imageVariants = computed(() =>
+  (product.value?.variants ?? []).map((v) => ({
+    id: v.id,
+    label: [v.sku, ...Object.values(v.attributes).map(String)].join(' · '),
+  })),
+)
 const sameTypeCategories = computed(() => categories.value.filter((c) => c.productType === product.value?.productType))
 
 const emptyVariant = (): VariantDraft => ({
@@ -333,5 +340,7 @@ if (canEdit) {
         </tr>
       </tbody>
     </table>
+
+    <ProductImages :product-id="id" :variants="imageVariants" />
   </main>
 </template>

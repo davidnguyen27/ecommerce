@@ -1,7 +1,7 @@
 import pino from 'pino'
 import { createApp } from './app.ts'
 import { mailerFromEnv } from './adapters/mailer.ts'
-import { InMemoryStorage } from './adapters/storage.ts'
+import { storageFromEnv } from './adapters/storage.ts'
 import { createPrisma } from './db.ts'
 import { Jobs } from './jobs/jobs.ts'
 
@@ -21,11 +21,10 @@ const prisma = createPrisma(databaseUrl)
 const jobs = new Jobs({ databaseUrl, mailer: mailerFromEnv(process.env, logger), logger })
 await jobs.start()
 
-// Bản R2 được cắm vào ở ticket media.
 const app = createApp({
   prisma,
   logger,
-  storage: new InMemoryStorage(),
+  storage: storageFromEnv(process.env, logger),
   emails: jobs,
   siteUrl,
   jwtSecret,
