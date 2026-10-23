@@ -10,11 +10,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecommerce}
       POSTGRES_DB: ${POSTGRES_DB:-ecommerce}
     ports:
-      - "5432:5432"
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
       interval: 2s
       timeout: 3s
       retries: 30
@@ -22,7 +22,7 @@ services:
   # Migration chạy thành một bước riêng trước khi API khởi động.
   migrate:
     build: { context: ., dockerfile: api/Dockerfile }
-    command: ["pnpm", "migrate"]
+    command: ['pnpm', 'migrate']
     environment:
       DATABASE_URL: *database-url
     depends_on:
@@ -50,8 +50,8 @@ services:
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}
     ports:
-      - "80:80"
-      - "443:443"
+      - '${HTTP_PORT:-80}:80'
+      - '${HTTPS_PORT:-443}:443'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
