@@ -13,7 +13,7 @@ import { adminRoutes } from './routes/admin.ts'
 import { adminAuthRoutes } from './routes/admin-auth.ts'
 import { customerAuthRoutes } from './routes/customer-auth.ts'
 import { publicLegalInfoRoutes } from './routes/legal-info.ts'
-import { publicBrandRoutes, publicCategoryRoutes } from './routes/public-catalog.ts'
+import { publicAttributeSchemaRoutes, publicBrandRoutes, publicCategoryRoutes } from './routes/public-catalog.ts'
 import { publicPageRoutes } from './routes/public-pages.ts'
 import { healthRoutes } from './routes/health.ts'
 
@@ -60,6 +60,7 @@ export function createApp(deps: AppDeps) {
   api.use('/legal-info', publicLegalInfoRoutes(deps.prisma))
   api.use('/brands', publicBrandRoutes(deps.prisma))
   api.use('/categories', publicCategoryRoutes(deps.prisma))
+  api.use('/attribute-schemas', publicAttributeSchemaRoutes(deps.prisma))
   const customerDeps = { prisma: deps.prisma, secret, emails: deps.emails, siteUrl: deps.siteUrl }
   api.use('/auth', customerAuthRoutes(customerDeps, '/api/auth'))
   api.use('/account', requireAuth(secret, 'customer'), accountRoutes(customerDeps))

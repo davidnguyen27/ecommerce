@@ -213,6 +213,16 @@ model Brand {
 }
 
 /// Nút trong cây danh mục, nằm trọn trong một nhóm hàng (ADR 0004). `parentId` null là con trực tiếp của nhóm hàng.
+/// Schema thuộc tính của một nhóm hàng; mọi danh mục trong nhóm hàng dùng chung.
+model AttributeSchema {
+  productType ProductType @id @map("product_type")
+  /// Mảng `AttributeDefinition` (@ecommerce/shared), xếp theo thứ tự hiển thị.
+  attributes  Json
+  updatedAt   DateTime    @default(now()) @updatedAt @map("updated_at")
+
+  @@map("attribute_schema")
+}
+
 model Category {
   id          String      @id @default(uuid()) @db.Uuid
   /// Cố định từ lúc tạo; danh mục con luôn cùng nhóm hàng với cha.
