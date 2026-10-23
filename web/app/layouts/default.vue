@@ -1,7 +1,17 @@
 <script setup lang="ts">
-import { CategoryTree, LegalInfo, PublishedPageList } from '@ecommerce/shared'
+import { ATTRIBUTE_FILTER_PREFIX, CategoryTree, GENDER_KEY, LegalInfo, PublishedPageList } from '@ecommerce/shared'
 
 const { apiBase } = useRuntimeConfig()
+const route = useRoute()
+
+/** Lọc Nam hoặc Nữ thì API gồm cả sản phẩm Unisex. */
+const GENDERS = ['Nam', 'Nữ'] as const
+const genderQuery = (gender: string) => ({ [ATTRIBUTE_FILTER_PREFIX + GENDER_KEY]: gender })
+
+function search(event: Event) {
+  const q = String(new FormData(event.target as HTMLFormElement).get('q') ?? '').trim()
+  return navigateTo({ path: '/tim-kiem', query: q ? { q } : {} })
+}
 
 // Chân trang có trên mọi trang khách; lỗi API thì chỉ thiếu chân trang, trang vẫn hiện.
 const { data } = await useAsyncData('site-footer', async () => {
@@ -30,6 +40,24 @@ const issuedOn = computed(() => {
       <NuxtLink to="/">Trang chủ</NuxtLink>
       <!-- Server không biết khách đã đăng nhập chưa; trang tài khoản tự chuyển sang đăng nhập khi cần. -->
       <NuxtLink to="/tai-khoan">Tài khoản</NuxtLink>
+      <!-- Form GET tìm được cả khi chưa có JavaScript; có JavaScript thì chuyển trang tại chỗ. -->
+      <form action="/tim-kiem" method="get" role="search" @submit.prevent="search">
+        <input
+          type="search"
+          name="q"
+          :value="route.path === '/tim-kiem' ? route.query.q : ''"
+          placeholder="Tên, thương hiệu, mã mẫu, SKU"
+          aria-label="Tìm sản phẩm"
+          enterkeyhint="search"
+        />
+        <button type="submit">Tìm</button>
+      </form>
+      <!-- Giới tính là bộ lọc, không phải nhánh danh mục (ADR 0004). -->
+      <nav aria-label="Giới tính">
+        <NuxtLink v-for="gender in GENDERS" :key="gender" :to="{ path: '/tim-kiem', query: genderQuery(gender) }">{{
+          gender
+        }}</NuxtLink>
+      </nav>
       <!-- <details> mở được menu trên điện thoại mà không cần chờ JavaScript -->
       <details>
         <summary>Danh mục</summary>
