@@ -126,7 +126,7 @@ describe('API công khai', () => {
     expect(list.status).toBe(200)
     expect(list.body.items).toEqual([{ slug: 'seiko', name: 'Seiko' }])
     expect(page.status).toBe(200)
-    expect(page.body).toEqual(BRAND)
+    expect(page.body).toEqual({ ...BRAND, logo: null })
   })
 
   it('thương hiệu bị ẩn không có trong danh sách và trang riêng trả 404; bỏ ẩn thì hiện lại', async () => {

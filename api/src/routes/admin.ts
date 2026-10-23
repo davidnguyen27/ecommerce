@@ -9,6 +9,7 @@ import { adminBrandRoutes } from './admin-brands.ts'
 import { adminCategoryRoutes } from './admin-categories.ts'
 import { adminPageRoutes } from './admin-pages.ts'
 import { adminProductImageRoutes } from './admin-product-images.ts'
+import { adminProductPublishingRoutes } from './admin-product-publishing.ts'
 import { adminProductRoutes } from './admin-products.ts'
 import { adminLegalInfoRoutes } from './legal-info.ts'
 import { adminStaffRoutes } from './admin-staff.ts'
@@ -30,6 +31,7 @@ export function adminRoutes(prisma: Db, storage: Storage) {
       .use('/attribute-schemas', adminAttributeSchemaRoutes(prisma))
       // Trước `/products`: ảnh có quyền riêng (`media.upload`), không đi qua quyền chung của router sản phẩm.
       .use('/products/:id/images', adminProductImageRoutes(prisma, storage))
+      .use('/products/:id', adminProductPublishingRoutes(prisma, storage))
       .use('/products', adminProductRoutes(prisma))
   )
 }

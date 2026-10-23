@@ -15,6 +15,7 @@ import { customerAuthRoutes, customerSessions } from './routes/customer-auth.ts'
 import { publicLegalInfoRoutes } from './routes/legal-info.ts'
 import { publicAttributeSchemaRoutes, publicBrandRoutes, publicCategoryRoutes } from './routes/public-catalog.ts'
 import { publicPageRoutes } from './routes/public-pages.ts'
+import { publicProductRoutes } from './routes/public-products.ts'
 import { healthRoutes } from './routes/health.ts'
 
 /** Mọi phụ thuộc bên ngoài đi vào app qua đây, để test thay bằng bản giả. */
@@ -58,7 +59,8 @@ export function createApp(deps: AppDeps) {
   const api = express.Router()
   api.use('/pages', publicPageRoutes(deps.prisma))
   api.use('/legal-info', publicLegalInfoRoutes(deps.prisma))
-  api.use('/brands', publicBrandRoutes(deps.prisma))
+  api.use('/brands', publicBrandRoutes(deps.prisma, deps.storage))
+  api.use('/products', publicProductRoutes(deps.prisma, deps.storage))
   api.use('/categories', publicCategoryRoutes(deps.prisma))
   api.use('/attribute-schemas', publicAttributeSchemaRoutes(deps.prisma))
   const customerDeps = {
