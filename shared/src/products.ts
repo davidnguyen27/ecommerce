@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { AttributeDefinition } from './attributes.ts'
 import { ProductType } from './catalog.ts'
+import { PublicCommitment } from './commitments.ts'
 import { ImageRenditions } from './media.ts'
 import { Slug } from './slug.ts'
 
@@ -228,6 +229,11 @@ export const PublicProduct = z.object({
   images: z.array(PublicImage.extend({ skus: z.array(z.string()) })),
   /** Trang chính sách áp dụng đã xuất bản. */
   policies: z.array(z.object({ slug: z.string(), title: z.string() })),
+  /**
+   * Cam kết có bằng chứng, tách khỏi thông tin nguồn gốc công bố; bảo hành chỉ có ở đây (ADR 0005).
+   * Đọc trực tiếp, không qua phiên bản xuất bản: cam kết có quyền riêng và chứng từ làm căn cứ.
+   */
+  commitments: z.array(PublicCommitment),
   publishedAt: z.string(),
 })
 export type PublicProduct = z.infer<typeof PublicProduct>

@@ -175,6 +175,8 @@ useHead({ title: () => data.value?.name ?? '' })
       <p><small>Thông tin do doanh nghiệp công bố.</small></p>
     </section>
 
+    <EvidencedCommitments :commitments="data.commitments" />
+
     <section v-if="data.policies.length">
       <h2>Chính sách áp dụng</h2>
       <ul>

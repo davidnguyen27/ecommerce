@@ -149,6 +149,24 @@ async function seedPublishedProduct(token: string, categoryId: string, policyPag
   })
   if (!upload.ok) throw new Error(`Tải ảnh trả ${upload.status}: ${await upload.text()}`)
   await api(`${base}/policies`, { method: 'PUT', token, body: { pageIds: [policyPageId] } })
+
+  // Cam kết bảo hành dựa trên một chứng từ (ticket 13), hiện tách khỏi thông tin nguồn gốc công bố.
+  const pdf = new FormData()
+  pdf.append('file', new Blob([Buffer.from('%PDF-1.7\n%%EOF\n')], { type: 'application/pdf' }), 'hoa-don.pdf')
+  const document = await fetch(`${BASE}${base}/documents`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: pdf,
+  })
+  if (!document.ok) throw new Error(`Tải chứng từ trả ${document.status}: ${await document.text()}`)
+  const { id: documentId } = (await document.json()) as { id: string }
+  const types = (await api('/api/admin/commitment-types', { token })).items as { id: string; name: string }[]
+  const warranty = types.find((type) => type.name === 'Bảo hành chính hãng')!
+  await api(`${base}/commitments`, {
+    method: 'POST',
+    token,
+    body: { typeId: warranty.id, statement: 'Bảo hành chính hãng Nike 12 tháng', documentIds: [documentId] },
+  })
   await api(`${base}/status`, { method: 'PUT', token, body: { status: 'published' } })
 }
 
@@ -185,6 +203,8 @@ const CHECKS: Check[] = [
       'href="/san-pham/air-max-90?sku=AM90-TRANG-41"',
       'Nhập khẩu chính ngạch từ Nike Mỹ.',
       'href="/trang/chinh-sach-doi-tra"',
+      'Cam kết có chứng từ',
+      'Bảo hành chính hãng Nike 12 tháng',
       '<footer',
     ],
   },

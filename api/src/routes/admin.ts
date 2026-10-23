@@ -7,7 +7,10 @@ import { adminAttributeSchemaRoutes } from './admin-attribute-schemas.ts'
 import { adminAuditRoutes } from './admin-audit.ts'
 import { adminBrandRoutes } from './admin-brands.ts'
 import { adminCategoryRoutes } from './admin-categories.ts'
+import { adminCommitmentTypeRoutes } from './admin-commitment-types.ts'
 import { adminPageRoutes } from './admin-pages.ts'
+import { adminProductCommitmentRoutes } from './admin-product-commitments.ts'
+import { adminProductDocumentRoutes } from './admin-product-documents.ts'
 import { adminProductImageRoutes } from './admin-product-images.ts'
 import { adminProductPublishingRoutes } from './admin-product-publishing.ts'
 import { adminProductRoutes } from './admin-products.ts'
@@ -29,9 +32,12 @@ export function adminRoutes(prisma: Db, storage: Storage) {
       .use('/brands', adminBrandRoutes(prisma, storage))
       .use('/categories', adminCategoryRoutes(prisma))
       .use('/attribute-schemas', adminAttributeSchemaRoutes(prisma))
-      // Trước `/products`: ảnh có quyền riêng (`media.upload`), không đi qua quyền chung của router sản phẩm.
+      .use('/commitment-types', adminCommitmentTypeRoutes(prisma))
+      // Trước `/products`: ảnh, chứng từ và cam kết có quyền riêng (`media.upload`), không đi qua quyền chung của router sản phẩm.
       .use('/products/:id/images', adminProductImageRoutes(prisma, storage))
       .use('/products/:id', adminProductPublishingRoutes(prisma, storage))
+      .use('/products/:id/documents', adminProductDocumentRoutes(prisma, storage))
+      .use('/products/:id/commitments', adminProductCommitmentRoutes(prisma))
       .use('/products', adminProductRoutes(prisma))
   )
 }
