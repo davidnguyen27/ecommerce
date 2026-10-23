@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PublicBrand } from '@ecommerce/shared'
+import { ProductCardList, PublicBrand } from '@ecommerce/shared'
 
 const route = useRoute()
 const { apiBase } = useRuntimeConfig()
@@ -19,14 +19,38 @@ if (error.value) {
   })
 }
 
+const page = computed(() => Number(route.query.trang) || 1)
+const { data: products, error: productsError } = await useAsyncData(
+  () => `brand-products-${slug.value}-${page.value}`,
+  async () => {
+    const body = await $fetch('/api/products', { baseURL: apiBase, query: { brand: slug.value, page: page.value } })
+    return ProductCardList.parse(body)
+  },
+)
+
 useHead({ title: () => data.value?.name ?? '' })
 </script>
 
 <template>
   <main v-if="data">
+    <img
+      v-if="data.logo"
+      :src="imageSrc(data.logo, 160)"
+      :srcset="srcset(data.logo)"
+      sizes="160px"
+      :alt="`Logo ${data.name}`"
+      class="logo"
+    />
     <h1>{{ data.name }}</h1>
     <p v-if="data.description">{{ data.description }}</p>
-    <!-- Sản phẩm có từ ticket 09; tới lúc đó thương hiệu nào cũng trống. -->
-    <p>Chưa có sản phẩm của thương hiệu này.</p>
+    <ProductCardGrid v-if="products" :list="products" empty="Chưa có sản phẩm của thương hiệu này." />
+    <p v-else-if="productsError" role="alert">Không tải được sản phẩm.</p>
   </main>
 </template>
+
+<style scoped>
+.logo {
+  width: 160px;
+  height: auto;
+}
+</style>

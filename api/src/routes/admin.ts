@@ -12,6 +12,7 @@ import { adminPageRoutes } from './admin-pages.ts'
 import { adminProductCommitmentRoutes } from './admin-product-commitments.ts'
 import { adminProductDocumentRoutes } from './admin-product-documents.ts'
 import { adminProductImageRoutes } from './admin-product-images.ts'
+import { adminProductPublishingRoutes } from './admin-product-publishing.ts'
 import { adminProductRoutes } from './admin-products.ts'
 import { adminLegalInfoRoutes } from './legal-info.ts'
 import { adminStaffRoutes } from './admin-staff.ts'
@@ -34,6 +35,7 @@ export function adminRoutes(prisma: Db, storage: Storage) {
       .use('/commitment-types', adminCommitmentTypeRoutes(prisma))
       // Trước `/products`: ảnh, chứng từ và cam kết có quyền riêng (`media.upload`), không đi qua quyền chung của router sản phẩm.
       .use('/products/:id/images', adminProductImageRoutes(prisma, storage))
+      .use('/products/:id', adminProductPublishingRoutes(prisma, storage))
       .use('/products/:id/documents', adminProductDocumentRoutes(prisma, storage))
       .use('/products/:id/commitments', adminProductCommitmentRoutes(prisma))
       .use('/products', adminProductRoutes(prisma))

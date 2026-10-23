@@ -14,6 +14,7 @@ import type { Storage } from '../adapters/storage.ts'
 import { audited } from '../audit/audited.ts'
 import { requirePermission } from '../auth/staff-context.ts'
 import { loadProduct, lockProduct } from '../catalog/products.ts'
+import { liveImages, loadDraft } from '../catalog/publication.ts'
 import type { Db, DbClient } from '../db.ts'
 import type { ProductImage } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
@@ -189,9 +190,14 @@ export function adminProductImageRoutes(prisma: Db, storage: Storage) {
       })
       .delete('/:imageId', requirePermission('media.upload'), async (req, res) => {
         const { id, imageId } = parse(ImageParams, req.params)
-        const deleted = await audited(prisma, req, async (tx, audit) => {
+        const { deleted, live } = await audited(prisma, req, async (tx, audit) => {
           await lockProduct(tx, id)
+          const draft = await loadDraft(tx, id)
           const image = await findImage(tx, id, imageId)
+          if (draft.status === 'published' && draft.images.length === 1) {
+            const message = 'Đây là ảnh cuối cùng của sản phẩm đã xuất bản; muốn thôi bán thì lưu trữ sản phẩm'
+            throw new AppError(409, ErrorCode.CONFLICT, message, [{ path: 'imageId', message }])
+          }
           await tx.productImage.delete({ where: { id: imageId } })
           await audit({
             action: 'media.product_image.delete',
@@ -199,10 +205,11 @@ export function adminProductImageRoutes(prisma: Db, storage: Storage) {
             entityId: imageId,
             before: auditFields(image),
           })
-          return image
+          return { deleted: image, live: liveImages(draft).some((i) => i.key === image.storageKey) }
         })
-        // Xóa file sau khi commit: rollback thì ảnh vẫn còn đủ file.
-        await deleteImageFilesQuietly(storage, req, stored(deleted))
+        // Xóa file sau khi commit: rollback thì ảnh vẫn còn đủ file. Ảnh khách còn thấy ở phiên bản đang xuất bản
+        // thì giữ file; lần xuất bản lại hoặc lưu trữ sau đó mới xóa.
+        if (!live) await deleteImageFilesQuietly(storage, req, stored(deleted))
         res.status(204).end()
       })
   )

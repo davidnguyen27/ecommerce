@@ -67,6 +67,3 @@ export const PublicCommitment = z.object({
   statement: z.string(),
 })
 export type PublicCommitment = z.infer<typeof PublicCommitment>
-
-export const PublicCommitmentList = z.object({ items: z.array(PublicCommitment) })
-export type PublicCommitmentList = z.infer<typeof PublicCommitmentList>

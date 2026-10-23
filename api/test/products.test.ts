@@ -1,3 +1,4 @@
+import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
 import { OWNER, appWithOwner, bearer, createStaff, login, type Request } from './support/staff.ts'
 
@@ -68,6 +69,9 @@ describe('tạo và sửa sản phẩm', () => {
       status: 'draft',
       updatedAt: expect.any(String),
       variants: [],
+      policyPageIds: [],
+      liveVersion: null,
+      hasUnpublishedChanges: false,
     })
     expect(detail.body).not.toHaveProperty('warranty')
   })
@@ -391,12 +395,23 @@ describe('biến thể', () => {
 })
 
 describe('ngừng bán biến thể', () => {
-  /** Xuất bản thuộc ticket 11, nên dựng trạng thái `published` thẳng trong DB. */
   async function publishedWithVariants() {
     const app = await sneakerCatalog()
-    const first = await addVariant(app.request, app.token, app.product.id, BLACK_40)
-    const second = await addVariant(app.request, app.token, app.product.id, BLACK_41)
-    await app.prisma.product.update({ where: { id: app.product.id }, data: { status: 'published' } })
+    const first = await addVariant(app.request, app.token, app.product.id, { ...BLACK_40, price: 3_500_000 })
+    const second = await addVariant(app.request, app.token, app.product.id, { ...BLACK_41, price: 3_500_000 })
+    const photo = await sharp({ create: { width: 10, height: 10, channels: 3, background: '#000' } })
+      .jpeg()
+      .toBuffer()
+    const image = await app.request
+      .post(`/api/admin/products/${app.product.id}/images`)
+      .set(bearer(app.token))
+      .attach('file', photo, 'anh.jpg')
+    expect(image.status).toBe(201)
+    const published = await app.request
+      .put(`/api/admin/products/${app.product.id}/status`)
+      .set(bearer(app.token))
+      .send({ status: 'published' })
+    expect(published.status).toBe(200)
     return { ...app, first: first.body.id as string, second: second.body.id as string }
   }
 

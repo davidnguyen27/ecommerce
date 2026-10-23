@@ -1,6 +1,5 @@
 import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
-import type { Db } from '../src/db.ts'
 import { OWNER, appWithOwner, bearer, createStaff, login, type Request } from './support/staff.ts'
 
 async function post(request: Request, token: string, path: string, body: Record<string, unknown>) {
@@ -271,9 +270,27 @@ async function sneakerWithWarranty() {
   return { ...app, invoice, warranty, commitment: res.body as { id: string } }
 }
 
-const publish = (app: { prisma: Db }, id: string) =>
-  // Chuyển trạng thái thuộc ticket 11; ở đây chỉ dựng trạng thái ban đầu.
-  app.prisma.product.update({ where: { id }, data: { status: 'published' } })
+/** Xuất bản qua API: thêm một biến thể có giá và một ảnh cho đủ điều kiện. */
+async function publish(app: { request: Request; token: string }, id: string) {
+  await post(app.request, app.token, `/api/admin/products/${id}/variants`, {
+    sku: 'AM90-DEN-40',
+    attributes: { mau: 'Đen', size: '40' },
+    price: 3_500_000,
+  })
+  const photo = await sharp({ create: { width: 10, height: 10, channels: 3, background: '#000' } })
+    .jpeg()
+    .toBuffer()
+  const image = await app.request
+    .post(`/api/admin/products/${id}/images`)
+    .set(bearer(app.token))
+    .attach('file', photo, 'anh.jpg')
+  expect(image.status).toBe(201)
+  const res = await app.request
+    .put(`/api/admin/products/${id}/status`)
+    .set(bearer(app.token))
+    .send({ status: 'published' })
+  expect(res.status).toBe(200)
+}
 
 describe('cam kết có bằng chứng', () => {
   it('owner ghi cam kết tham chiếu chứng từ của sản phẩm; tạo, sửa, gỡ đều ghi audit', async () => {
@@ -450,20 +467,20 @@ describe('cam kết có bằng chứng', () => {
 })
 
 describe('cam kết trên API công khai', () => {
-  it('trả loại và nội dung cam kết, không có chứng từ hay URL của chứng từ', async () => {
+  it('chi tiết sản phẩm trả loại và nội dung cam kết, không có chứng từ hay URL của chứng từ', async () => {
     const app = await sneakerWithWarranty()
     await publish(app, app.product.id)
 
-    const res = await app.request.get('/api/products/air-max-90/commitments')
+    const res = await app.request.get('/api/products/air-max-90')
 
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({
-      items: [{ type: 'Bảo hành chính hãng', kind: 'warranty', statement: 'Bảo hành chính hãng Nike 12 tháng' }],
-    })
+    expect(res.body.commitments).toEqual([
+      { type: 'Bảo hành chính hãng', kind: 'warranty', statement: 'Bảo hành chính hãng Nike 12 tháng' },
+    ])
     const raw = JSON.stringify(res.body)
     expect(raw).not.toContain(app.invoice.id)
     expect(raw).not.toContain('hoa-don-nhap')
-    expect(raw).not.toContain('memory://')
+    expect(raw).not.toContain('memory://private')
   })
 
   it('sản phẩm không có cam kết bảo hành thì API công khai không trả về bảo hành nào', async () => {
@@ -477,19 +494,19 @@ describe('cam kết trên API công khai', () => {
     })
     await publish(app, app.product.id)
 
-    const res = await app.request.get('/api/products/air-max-90/commitments')
+    const res = await app.request.get('/api/products/air-max-90')
 
     expect(res.status).toBe(200)
-    expect(res.body.items).toEqual([
+    expect(res.body.commitments).toEqual([
       { type: 'Có hóa đơn nhập khẩu', kind: 'other', statement: 'Hàng nhập khẩu có hóa đơn' },
     ])
-    expect(JSON.stringify(res.body)).not.toMatch(/bảo hành|warranty/i)
+    expect(JSON.stringify(res.body.commitments)).not.toMatch(/bảo hành|warranty/i)
   })
 
   it('sản phẩm nháp không có trên API công khai', async () => {
     const { request } = await sneakerWithWarranty()
 
-    const res = await request.get('/api/products/air-max-90/commitments')
+    const res = await request.get('/api/products/air-max-90')
 
     expect(res.status).toBe(404)
   })

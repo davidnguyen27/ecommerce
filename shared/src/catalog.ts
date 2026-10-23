@@ -33,7 +33,12 @@ export const AdminBrandList = z.object({ items: z.array(AdminBrand) })
 export type AdminBrandList = z.infer<typeof AdminBrandList>
 
 /** Thương hiệu đang hiển thị, như khách thấy. */
-export const PublicBrand = z.object({ slug: z.string(), name: z.string(), description: z.string() })
+export const PublicBrand = z.object({
+  slug: z.string(),
+  name: z.string(),
+  description: z.string(),
+  logo: ImageRenditions.nullable(),
+})
 export type PublicBrand = z.infer<typeof PublicBrand>
 
 export const PublicBrandList = z.object({ items: z.array(PublicBrand.pick({ slug: true, name: true })) })
