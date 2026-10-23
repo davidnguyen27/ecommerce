@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LegalInfo, PublishedPageList } from '@ecommerce/shared'
+import { CategoryTree, LegalInfo, PublishedPageList } from '@ecommerce/shared'
 
 const { apiBase } = useRuntimeConfig()
 
@@ -12,6 +12,12 @@ const { data } = await useAsyncData('site-footer', async () => {
   return { legal: LegalInfo.parse(legal), pages: PublishedPageList.parse(pages).items }
 })
 
+// Menu tách khỏi chân trang để lỗi của bên này không làm mất bên kia.
+const { data: menu } = await useAsyncData('site-menu', async () => {
+  const tree = CategoryTree.parse(await $fetch('/api/categories', { baseURL: apiBase }))
+  return tree.items.filter((root) => root.children.length)
+})
+
 const issuedOn = computed(() => {
   const date = data.value?.legal.businessRegistrationIssuedOn
   return date ? date.split('-').reverse().join('/') : ''
@@ -20,6 +26,20 @@ const issuedOn = computed(() => {
 
 <template>
   <div>
+    <header>
+      <NuxtLink to="/">Trang chủ</NuxtLink>
+      <!-- <details> mở được menu trên điện thoại mà không cần chờ JavaScript -->
+      <details>
+        <summary>Danh mục</summary>
+        <nav aria-label="Danh mục">
+          <section v-for="root in menu" :key="root.productType">
+            <h2>{{ PRODUCT_TYPE_LABELS[root.productType] }}</h2>
+            <CategoryMenu :categories="root.children" />
+          </section>
+          <NuxtLink to="/thuong-hieu">Thương hiệu</NuxtLink>
+        </nav>
+      </details>
+    </header>
     <slot />
     <footer v-if="data">
       <nav v-if="data.pages.length">

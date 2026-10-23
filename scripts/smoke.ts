@@ -76,6 +76,27 @@ async function seed() {
     token,
     body: { slug: 'trang-nhap', kind: 'about', title: 'Trang nháp', body: 'Chưa duyệt' },
   })
+  await api('/api/admin/brands', {
+    method: 'POST',
+    token,
+    body: { name: 'Seiko', slug: 'seiko', description: 'Đồng hồ Nhật' },
+  })
+  const hiddenBrand = await api('/api/admin/brands', {
+    method: 'POST',
+    token,
+    body: { name: 'Hãng Ẩn', slug: 'hang-an' },
+  })
+  await api(`/api/admin/brands/${hiddenBrand.id}/hide`, { method: 'POST', token })
+  const sneaker = await api('/api/admin/categories', {
+    method: 'POST',
+    token,
+    body: { name: 'Sneaker', slug: 'sneaker', productType: 'footwear' },
+  })
+  await api('/api/admin/categories', {
+    method: 'POST',
+    token,
+    body: { name: 'Sneaker cổ thấp', slug: 'sneaker-co-thap', productType: 'footwear', parentId: sneaker.id },
+  })
   await api('/api/admin/legal-info', {
     method: 'PUT',
     token,
@@ -97,7 +118,27 @@ type Check = { path: string; status: number; contains: string[] }
 
 // HTML khách nhận khi render SSR. Trang quản trị là SPA nên chỉ kiểm được shell, nội dung cần trình duyệt.
 const CHECKS: Check[] = [
-  { path: '/', status: 200, contains: ['<footer', 'Công ty Smoke Test', 'alt="Đã thông báo Bộ Công Thương"'] },
+  {
+    path: '/',
+    status: 200,
+    contains: [
+      '<footer',
+      'Công ty Smoke Test',
+      'alt="Đã thông báo Bộ Công Thương"',
+      '<summary>Danh mục</summary>',
+      'Giày dép',
+      'href="/danh-muc/sneaker-co-thap"',
+    ],
+  },
+  {
+    path: '/danh-muc/sneaker',
+    status: 200,
+    contains: ['<h1>Sneaker</h1>', 'href="/danh-muc/sneaker-co-thap"', 'Chưa có sản phẩm', '<footer'],
+  },
+  { path: '/danh-muc/khong-co', status: 404, contains: ['Không tìm thấy danh mục'] },
+  { path: '/thuong-hieu', status: 200, contains: ['href="/thuong-hieu/seiko"'] },
+  { path: '/thuong-hieu/seiko', status: 200, contains: ['<h1>Seiko</h1>', 'Đồng hồ Nhật', 'Chưa có sản phẩm'] },
+  { path: '/thuong-hieu/hang-an', status: 404, contains: ['Không tìm thấy thương hiệu'] },
   {
     path: '/trang/chinh-sach-doi-tra',
     status: 200,

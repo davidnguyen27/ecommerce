@@ -131,6 +131,49 @@ model ContentPageVersion {
   @@map("content_page_version")
 }
 
+/// Năm nhóm hàng cố định, là gốc của cây danh mục; quyết định schema thuộc tính của sản phẩm.
+enum ProductType {
+  footwear
+  apparel
+  watch
+  bag
+  fragrance
+
+  @@map("product_type")
+}
+
+/// Thương hiệu. Ẩn chỉ gỡ khỏi danh sách công khai và trang riêng, không ảnh hưởng sản phẩm.
+model Brand {
+  id          String   @id @default(uuid()) @db.Uuid
+  slug        String   @unique
+  name        String
+  description String   @default("")
+  hidden      Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("brand")
+}
+
+/// Nút trong cây danh mục, nằm trọn trong một nhóm hàng (ADR 0004). `parentId` null là con trực tiếp của nhóm hàng.
+model Category {
+  id          String      @id @default(uuid()) @db.Uuid
+  /// Cố định từ lúc tạo; danh mục con luôn cùng nhóm hàng với cha.
+  productType ProductType @map("product_type")
+  parentId    String?     @map("parent_id") @db.Uuid
+  parent      Category?   @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children    Category[]  @relation("CategoryTree")
+  slug        String      @unique
+  name        String
+  /// Ẩn danh mục thì cả nhánh con cũng không còn trong menu.
+  hidden      Boolean     @default(false)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@index([parentId])
+  @@map("category")
+}
+
 /// Cấu hình hệ thống dạng khóa → giá trị JSON; schema của từng khóa định nghĩa trong `@ecommerce/shared`.
 model SystemConfig {
   key       String   @id
