@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PublicCategory } from '@ecommerce/shared'
+import { ProductCardList, PublicCategory } from '@ecommerce/shared'
 
 const route = useRoute()
 const { apiBase } = useRuntimeConfig()
@@ -19,6 +19,18 @@ if (error.value) {
   })
 }
 
+const page = computed(() => Number(route.query.trang) || 1)
+const { data: products, error: productsError } = await useAsyncData(
+  () => `category-products-${slug.value}-${page.value}`,
+  async () => {
+    const body = await $fetch('/api/products', {
+      baseURL: apiBase,
+      query: { category: slug.value, page: page.value },
+    })
+    return ProductCardList.parse(body)
+  },
+)
+
 useHead({ title: () => data.value?.name ?? '' })
 </script>
 
@@ -36,7 +48,7 @@ useHead({ title: () => data.value?.name ?? '' })
         <NuxtLink :to="`/danh-muc/${child.slug}`">{{ child.name }}</NuxtLink>
       </li>
     </ul>
-    <!-- Sản phẩm có từ ticket 09; tới lúc đó danh mục nào cũng trống. -->
-    <p>Chưa có sản phẩm trong danh mục này.</p>
+    <ProductCardGrid v-if="products" :list="products" empty="Chưa có sản phẩm trong danh mục này." />
+    <p v-else-if="productsError" role="alert">Không tải được sản phẩm.</p>
   </main>
 </template>

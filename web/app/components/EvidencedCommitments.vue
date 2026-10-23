@@ -3,8 +3,8 @@ import type { PublicCommitment } from '@ecommerce/shared'
 
 /**
  * Cam kết có bằng chứng trên trang chi tiết sản phẩm, đặt tách khỏi thông tin nguồn gốc công bố để khách biết
- * mức độ tin cậy. Dữ liệu lấy từ `GET /api/products/:slug/commitments` (hoặc phần `commitments` của API chi tiết
- * sản phẩm khi ticket 11 gộp vào). Không có cam kết thì không hiện gì, nên không bao giờ hiện bảo hành không căn cứ.
+ * mức độ tin cậy. Dữ liệu là phần `commitments` của `GET /api/products/:slug`.
+ * Không có cam kết thì không hiện gì, nên không bao giờ hiện bảo hành không căn cứ.
  */
 defineProps<{ commitments: PublicCommitment[] }>()
 </script>

@@ -2,8 +2,9 @@
 import {
   AdminBrandList,
   AdminCategoryList,
-  AdminProduct,
+  AdminProductDetail,
   AdminVariant,
+  PolicyPageOptionList,
   AttributeSchema,
   VariantStatus,
   type AdminBrand,
@@ -42,7 +43,7 @@ const canViewDocuments = session.can('document.view')
 /** Chứng từ đã tải, để chọn làm bằng chứng cho cam kết. */
 const documents = ref<AdminProductDocument[]>([])
 
-const product = ref<AdminProduct | null>(null)
+const product = ref<AdminProductDetail | null>(null)
 const brands = ref<AdminBrand[]>([])
 const categories = ref<AdminCategory[]>([])
 const definitions = ref<AttributeDefinition[]>([])
@@ -87,7 +88,7 @@ const emptyVariant = (): VariantDraft => ({
 })
 const newVariant = ref<VariantDraft>(emptyVariant())
 
-function show(detail: AdminProduct) {
+function show(detail: AdminProductDetail) {
   product.value = detail
   const { brandId, categoryId, name, slug, modelCode, description, usageCare, originStatement } = detail
   draft.value = {
@@ -105,10 +106,36 @@ function show(detail: AdminProduct) {
   }
   variants.value = detail.variants.map((v) => ({ ...v, attributes: { ...v.attributes } }))
   newVariant.value = emptyVariant()
+  policyPageIds.value = [...detail.policyPageIds]
+}
+
+// Vòng đời và chính sách
+
+const policyPages = ref<PolicyPageOptionList['items']>([])
+const policyPageIds = ref<string[]>([])
+
+function changeStatus(status: 'published' | 'archived' | 'draft', message: string) {
+  return run(
+    'status',
+    () => session.adminFetch(`/api/admin/products/${id}/status`, { method: 'PUT', body: { status } }),
+    message,
+  )
+}
+
+function savePolicies() {
+  return run(
+    'policies',
+    () =>
+      session.adminFetch(`/api/admin/products/${id}/policies`, {
+        method: 'PUT',
+        body: { pageIds: policyPageIds.value },
+      }),
+    'Đã lưu chính sách áp dụng',
+  )
 }
 
 async function load() {
-  show(AdminProduct.parse(await session.adminFetch(`/api/admin/products/${id}`)))
+  show(AdminProductDetail.parse(await session.adminFetch(`/api/admin/products/${id}`)))
 }
 
 const errorAt = (target: string, path: string) =>
@@ -189,6 +216,7 @@ if (canEdit) {
   brands.value = AdminBrandList.parse(await session.adminFetch('/api/admin/brands')).items
   categories.value = AdminCategoryList.parse(await session.adminFetch('/api/admin/categories')).items
 }
+policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/admin/products/policy-pages')).items
 </script>
 
 <template>
@@ -198,6 +226,44 @@ if (canEdit) {
     <p>{{ PRODUCT_TYPE_LABELS[product.productType] }} · {{ STATUS_LABELS[product.status] }}</p>
     <p v-if="error" role="alert">{{ error }}</p>
     <p v-if="notice" role="status">{{ notice }}</p>
+
+    <section aria-labelledby="lifecycle">
+      <h2 id="lifecycle">Xuất bản</h2>
+      <p v-if="product.liveVersion">
+        Khách đang thấy phiên bản {{ product.liveVersion.version }} (<NuxtLink
+          :to="`/san-pham/${product.slug}`"
+          target="_blank"
+          >xem trang</NuxtLink
+        >).
+        <strong v-if="product.hasUnpublishedChanges">Có thay đổi chưa xuất bản.</strong>
+      </p>
+      <p v-else>Sản phẩm chưa hiện với khách.</p>
+      <p v-if="product.status === 'published'">
+        <small>Sửa thông tin, biến thể, giá, ảnh hay chính sách chỉ hiện với khách sau khi xuất bản lại.</small>
+      </p>
+      <ul v-if="fieldErrors.target === 'status' && fieldErrors.fields.length" role="alert">
+        <li v-for="field in fieldErrors.fields" :key="field.path">{{ field.message }}</li>
+      </ul>
+      <template v-if="canEdit">
+        <button v-if="product.status === 'draft'" type="button" @click="changeStatus('published', 'Đã xuất bản')">
+          Xuất bản
+        </button>
+        <button
+          v-if="product.status === 'published'"
+          type="button"
+          :disabled="!product.hasUnpublishedChanges"
+          @click="changeStatus('published', 'Đã xuất bản thay đổi')"
+        >
+          Xuất bản thay đổi
+        </button>
+        <button v-if="product.status !== 'archived'" type="button" @click="changeStatus('archived', 'Đã lưu trữ')">
+          Lưu trữ
+        </button>
+        <button v-if="product.status === 'archived'" type="button" @click="changeStatus('draft', 'Đã đưa về nháp')">
+          Đưa về nháp
+        </button>
+      </template>
+    </section>
 
     <form @submit.prevent="saveProduct">
       <fieldset :disabled="!canEdit">
@@ -346,6 +412,19 @@ if (canEdit) {
     </table>
 
     <ProductImages :product-id="id" :variants="imageVariants" />
+
+    <form @submit.prevent="savePolicies">
+      <fieldset :disabled="!canEdit">
+        <legend>Chính sách áp dụng</legend>
+        <p v-if="!policyPages.length">Chưa có trang nội dung loại chính sách nào.</p>
+        <label v-for="page in policyPages" :key="page.id">
+          <input v-model="policyPageIds" type="checkbox" :value="page.id" />
+          {{ page.title }}
+          <small v-if="!page.published">(chưa xuất bản, khách chưa thấy)</small>
+        </label>
+      </fieldset>
+      <button v-if="canEdit" type="submit">Lưu chính sách</button>
+    </form>
     <ProductDocuments v-if="canViewDocuments" :product-id="id" @change="documents = $event" />
     <ProductCommitments :product-id="id" :documents="documents" />
   </main>

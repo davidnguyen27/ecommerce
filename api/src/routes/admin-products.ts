@@ -1,12 +1,18 @@
 import { isDeepStrictEqual } from 'node:util'
 import { Router, type Request } from 'express'
 import { z } from 'zod'
-import { ErrorCode, ProductRequest, VariantRequest, type AdminProductList, type AdminVariant } from '@ecommerce/shared'
+import {
+  ErrorCode,
+  ProductRequest,
+  VariantRequest,
+  type AdminProductList,
+  type AdminVariant,
+  type PolicyPageOptionList,
+} from '@ecommerce/shared'
 import { audited, type Audit } from '../audit/audited.ts'
 import { forbidden, hasPermission, requirePermission } from '../auth/staff-context.ts'
 import { assertAttributes, lockAttributeSchema } from '../catalog/attribute-schemas.ts'
 import {
-  loadProduct,
   lockProduct,
   priceAuditFields,
   productAuditFields,
@@ -15,6 +21,7 @@ import {
   toNumber,
   variantAuditFields,
 } from '../catalog/products.ts'
+import { loadDraft, toAdminProductDetail } from '../catalog/publication.ts'
 import type { Db } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
@@ -68,9 +75,21 @@ export function adminProductRoutes(prisma: Db) {
         }
         res.json(body)
       })
+      // Khai báo trước `/:id`. Tiêu đề là bản đang soạn: đây là màn hình nhân viên, không phải khách.
+      .get('/policy-pages', async (_req, res) => {
+        const pages = await prisma.contentPage.findMany({
+          where: { kind: 'policy' },
+          include: { _count: { select: { versions: true } } },
+          orderBy: { createdAt: 'asc' },
+        })
+        const body: PolicyPageOptionList = {
+          items: pages.map((p) => ({ id: p.id, slug: p.slug, title: p.title, published: p._count.versions > 0 })),
+        }
+        res.json(body)
+      })
       .get('/:id', async (req, res) => {
         const { id } = parse(ProductParams, req.params)
-        res.json(toAdminProduct(await loadProduct(prisma, id)))
+        res.json(toAdminProductDetail(await loadDraft(prisma, id)))
       })
       .post('/', requirePermission('catalog.edit'), async (req, res) => {
         const input = parse(ProductRequest, req.body)

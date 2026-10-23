@@ -92,11 +92,12 @@ async function seed() {
     token,
     body: { name: 'Sneaker', slug: 'sneaker', productType: 'footwear' },
   })
-  await api('/api/admin/categories', {
+  const lowTop = await api('/api/admin/categories', {
     method: 'POST',
     token,
     body: { name: 'Sneaker cổ thấp', slug: 'sneaker-co-thap', productType: 'footwear', parentId: sneaker.id },
   })
+  await seedPublishedProduct(token, String(lowTop.id), String(published.id))
   await api('/api/admin/legal-info', {
     method: 'PUT',
     token,
@@ -112,6 +113,61 @@ async function seed() {
       moitNoticeUrl: 'http://online.gov.vn/x',
     },
   })
+}
+
+/** Ảnh PNG 1×1, đủ để API sinh các cỡ ảnh. */
+const PIXEL_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+
+/** Sản phẩm đã xuất bản ở danh mục con, hai biến thể, một ảnh, gắn chính sách đổi trả. */
+async function seedPublishedProduct(token: string, categoryId: string, policyPageId: string) {
+  const brand = await api('/api/admin/brands', { method: 'POST', token, body: { name: 'Nike', slug: 'nike' } })
+  const product = await api('/api/admin/products', {
+    method: 'POST',
+    token,
+    body: {
+      brandId: brand.id,
+      categoryId,
+      name: 'Air Max 90',
+      slug: 'air-max-90',
+      originStatement: 'Nhập khẩu chính ngạch từ Nike Mỹ.',
+      attributes: { gioi_tinh: 'Nam', he_size: 'EU' },
+    },
+  })
+  const base = `/api/admin/products/${product.id}`
+  for (const variant of [
+    { sku: 'AM90-DEN-40', attributes: { mau: 'Đen', size: '40' }, price: 3_500_000, compareAtPrice: 4_000_000 },
+    { sku: 'AM90-TRANG-41', attributes: { mau: 'Trắng', size: '41' }, price: 3_200_000 },
+  ]) {
+    await api(`${base}/variants`, { method: 'POST', token, body: variant })
+  }
+  const form = new FormData()
+  form.append('file', new Blob([Buffer.from(PIXEL_PNG, 'base64')], { type: 'image/png' }), 'anh.png')
+  const upload = await fetch(`${BASE}${base}/images`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  })
+  if (!upload.ok) throw new Error(`Tải ảnh trả ${upload.status}: ${await upload.text()}`)
+  await api(`${base}/policies`, { method: 'PUT', token, body: { pageIds: [policyPageId] } })
+
+  // Cam kết bảo hành dựa trên một chứng từ (ticket 13), hiện tách khỏi thông tin nguồn gốc công bố.
+  const pdf = new FormData()
+  pdf.append('file', new Blob([Buffer.from('%PDF-1.7\n%%EOF\n')], { type: 'application/pdf' }), 'hoa-don.pdf')
+  const document = await fetch(`${BASE}${base}/documents`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: pdf,
+  })
+  if (!document.ok) throw new Error(`Tải chứng từ trả ${document.status}: ${await document.text()}`)
+  const { id: documentId } = (await document.json()) as { id: string }
+  const types = (await api('/api/admin/commitment-types', { token })).items as { id: string; name: string }[]
+  const warranty = types.find((type) => type.name === 'Bảo hành chính hãng')!
+  await api(`${base}/commitments`, {
+    method: 'POST',
+    token,
+    body: { typeId: warranty.id, statement: 'Bảo hành chính hãng Nike 12 tháng', documentIds: [documentId] },
+  })
+  await api(`${base}/status`, { method: 'PUT', token, body: { status: 'published' } })
 }
 
 type Check = { path: string; status: number; contains: string[] }
@@ -134,8 +190,27 @@ const CHECKS: Check[] = [
   {
     path: '/danh-muc/sneaker',
     status: 200,
-    contains: ['<h1>Sneaker</h1>', 'href="/danh-muc/sneaker-co-thap"', 'Chưa có sản phẩm', '<footer'],
+    // Sản phẩm ở danh mục con cũng hiện ở danh mục cha; giá "từ" là giá thấp nhất.
+    contains: ['<h1>Sneaker</h1>', 'href="/danh-muc/sneaker-co-thap"', 'href="/san-pham/air-max-90"', 'từ 3.200.000 ₫'],
   },
+  {
+    path: '/san-pham/air-max-90',
+    status: 200,
+    contains: [
+      '<h1>Air Max 90</h1>',
+      '>AM90-DEN-40<',
+      'Giá hãng',
+      'href="/san-pham/air-max-90?sku=AM90-TRANG-41"',
+      'Nhập khẩu chính ngạch từ Nike Mỹ.',
+      'href="/trang/chinh-sach-doi-tra"',
+      'Cam kết có chứng từ',
+      'Bảo hành chính hãng Nike 12 tháng',
+      '<footer',
+    ],
+  },
+  { path: '/san-pham/air-max-90?sku=AM90-TRANG-41', status: 200, contains: ['>AM90-TRANG-41<', '3.200.000 ₫'] },
+  { path: '/san-pham/khong-co', status: 404, contains: ['Không tìm thấy sản phẩm'] },
+  { path: '/thuong-hieu/nike', status: 200, contains: ['<h1>Nike</h1>', 'href="/san-pham/air-max-90"'] },
   { path: '/danh-muc/khong-co', status: 404, contains: ['Không tìm thấy danh mục'] },
   { path: '/thuong-hieu', status: 200, contains: ['href="/thuong-hieu/seiko"'] },
   { path: '/thuong-hieu/seiko', status: 200, contains: ['<h1>Seiko</h1>', 'Đồng hồ Nhật', 'Chưa có sản phẩm'] },

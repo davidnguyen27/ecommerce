@@ -94,7 +94,11 @@ export function adminCategoryRoutes(prisma: Db) {
         if (await tx.category.count({ where: { parentId: id } })) {
           throw new AppError(409, ErrorCode.CONFLICT, 'Danh mục còn danh mục con nên không xóa được; hãy ẩn nó')
         }
-        if (await tx.product.count({ where: { categoryId: id } })) {
+        // Phiên bản đã xuất bản (kể cả phiên bản cũ) cũng tham chiếu danh mục, và không sửa được.
+        if (
+          (await tx.product.count({ where: { categoryId: id } })) ||
+          (await tx.productVersion.count({ where: { categoryId: id } }))
+        ) {
           throw new AppError(409, ErrorCode.CONFLICT, 'Danh mục còn sản phẩm nên không xóa được; hãy ẩn nó')
         }
         await tx.category.delete({ where: { id } })
