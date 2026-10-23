@@ -28,6 +28,8 @@ const issuedOn = computed(() => {
   <div>
     <header>
       <NuxtLink to="/">Trang chủ</NuxtLink>
+      <!-- Server không biết khách đã đăng nhập chưa; trang tài khoản tự chuyển sang đăng nhập khi cần. -->
+      <NuxtLink to="/tai-khoan">Tài khoản</NuxtLink>
       <!-- <details> mở được menu trên điện thoại mà không cần chờ JavaScript -->
       <details>
         <summary>Danh mục</summary>
