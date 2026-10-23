@@ -48,14 +48,24 @@ export function assertAttributes(
 }
 
 /**
- * Sản phẩm và biến thể của nhóm hàng không còn hợp lệ với schema mới. Mọi lần đổi schema đều đi qua đây,
- * nên thêm thuộc tính bắt buộc, xóa thuộc tính hay bớt giá trị enum đều bị chặn khi có dữ liệu vi phạm.
- * Chưa có sản phẩm nên luôn rỗng; ticket 09 kiểm từng sản phẩm và biến thể bằng `checkAttributes`.
+ * Sản phẩm (kể cả nháp, đã lưu trữ) có thuộc tính của chính nó hoặc của một biến thể không còn hợp lệ với schema mới.
+ * Mọi lần đổi schema đều đi qua đây, nên thêm thuộc tính bắt buộc, xóa thuộc tính hay bớt giá trị enum đều bị chặn
+ * khi có dữ liệu vi phạm.
+ * Gọi khi đang giữ khóa `FOR UPDATE` trên dòng schema, nên không sản phẩm nào được ghi chen vào.
  */
 export async function findViolatingProducts(
-  _tx: Prisma.TransactionClient,
-  _productType: ProductType,
-  _definitions: readonly AttributeDefinition[],
+  tx: Prisma.TransactionClient,
+  productType: ProductType,
+  definitions: readonly AttributeDefinition[],
 ): Promise<{ id: string; name: string }[]> {
-  return []
+  const products = await tx.product.findMany({
+    where: { productType },
+    select: { id: true, name: true, attributes: true, variants: { select: { attributes: true } } },
+    orderBy: { name: 'asc' },
+  })
+  const valid = (level: AttributeLevel, attributes: Prisma.JsonValue) =>
+    checkAttributes(definitions, level, attributes as Record<string, unknown>).ok
+  return products
+    .filter((p) => !valid('product', p.attributes) || p.variants.some((v) => !valid('variant', v.attributes)))
+    .map(({ id, name }) => ({ id, name }))
 }

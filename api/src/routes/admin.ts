@@ -7,6 +7,7 @@ import { adminAuditRoutes } from './admin-audit.ts'
 import { adminBrandRoutes } from './admin-brands.ts'
 import { adminCategoryRoutes } from './admin-categories.ts'
 import { adminPageRoutes } from './admin-pages.ts'
+import { adminProductRoutes } from './admin-products.ts'
 import { adminLegalInfoRoutes } from './legal-info.ts'
 import { adminStaffRoutes } from './admin-staff.ts'
 
@@ -24,4 +25,5 @@ export function adminRoutes(prisma: Db) {
     .use('/brands', adminBrandRoutes(prisma))
     .use('/categories', adminCategoryRoutes(prisma))
     .use('/attribute-schemas', adminAttributeSchemaRoutes(prisma))
+    .use('/products', adminProductRoutes(prisma))
 }

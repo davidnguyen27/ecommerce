@@ -32,14 +32,23 @@ export function loadStaff(prisma: Db): RequestHandler {
   }
 }
 
-/** Khai báo permission endpoint cần; quyền tính từ role đọc trong DB ở request này. */
-export function requirePermission(permission: Permission): RequestHandler {
+/**
+ * Khai báo permission endpoint cần, có ít nhất một trong các quyền được liệt kê;
+ * quyền tính từ role đọc trong DB ở request này.
+ */
+export function requirePermission(...anyOf: [Permission, ...Permission[]]): RequestHandler {
   return (req, _res, next) => {
-    if (!currentStaff(req).permissions.includes(permission)) {
-      throw new AppError(403, ErrorCode.FORBIDDEN, 'Bạn không có quyền thực hiện thao tác này')
+    for (const permission of anyOf) {
+      if (hasPermission(req, permission)) return next()
     }
-    next()
+    throw forbidden()
   }
+}
+
+export const forbidden = () => new AppError(403, ErrorCode.FORBIDDEN, 'Bạn không có quyền thực hiện thao tác này')
+
+export function hasPermission(req: Request, permission: Permission): boolean {
+  return currentStaff(req).permissions.includes(permission)
 }
 
 /** Nhân viên của request; chỉ gọi sau `loadStaff`. */
