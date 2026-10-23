@@ -70,7 +70,7 @@ export function createApp(deps: AppDeps) {
   api.use('/auth', customerAuthRoutes(customerDeps))
   api.use('/account', requireAuth(secret, 'customer'), accountRoutes(customerDeps))
   api.use('/admin/auth', adminAuthRoutes(deps.prisma, secret, '/api/admin/auth'))
-  api.use('/admin', requireAuth(secret, 'staff'), loadStaff(deps.prisma), adminRoutes(deps.prisma))
+  api.use('/admin', requireAuth(secret, 'staff'), loadStaff(deps.prisma), adminRoutes(deps.prisma, deps.storage))
   app.use('/api', api)
 
   app.use(notFound)

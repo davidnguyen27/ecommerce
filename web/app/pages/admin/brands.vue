@@ -45,6 +45,22 @@ function setHidden(id: string, hidden: boolean) {
   return run(() => session.adminFetch(`/api/admin/brands/${id}/${hidden ? 'hide' : 'unhide'}`, { method: 'POST' }))
 }
 
+const canUpload = session.can('media.upload')
+
+async function uploadLogo(id: string, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  const body = new FormData()
+  body.append('file', file)
+  await run(() => session.adminFetch(`/api/admin/brands/${id}/logo`, { method: 'PUT', body }))
+  input.value = ''
+}
+
+function removeLogo(id: string) {
+  return run(() => session.adminFetch(`/api/admin/brands/${id}/logo`, { method: 'DELETE' }))
+}
+
 await load()
 </script>
 
@@ -61,6 +77,7 @@ await load()
           <th>Slug</th>
           <th>Mô tả</th>
           <th>Trạng thái</th>
+          <th>Logo</th>
           <th />
         </tr>
       </thead>
@@ -71,6 +88,7 @@ await load()
             <td><input v-model="editing.slug" aria-label="Slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" /></td>
             <td><textarea v-model="editing.description" aria-label="Mô tả" /></td>
             <td>{{ brand.hidden ? 'Đang ẩn' : 'Đang hiển thị' }}</td>
+            <td />
             <td>
               <button type="button" @click="save">Lưu</button>
               <button type="button" @click="editing = null">Hủy</button>
@@ -85,6 +103,16 @@ await load()
               <button type="button" @click="setHidden(brand.id, !brand.hidden)">
                 {{ brand.hidden ? 'Bỏ ẩn' : 'Ẩn' }}
               </button>
+            </td>
+            <td>
+              <img v-if="brand.logo" :src="brand.logo.sizes[0]?.url" :alt="`Logo ${brand.name}`" height="40" />
+              <template v-if="canUpload">
+                <label>
+                  {{ brand.logo ? 'Đổi logo' : 'Tải logo' }}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" @change="uploadLogo(brand.id, $event)" />
+                </label>
+                <button v-if="brand.logo" type="button" @click="removeLogo(brand.id)">Gỡ logo</button>
+              </template>
             </td>
             <td><button type="button" @click="edit(brand)">Sửa</button></td>
           </template>

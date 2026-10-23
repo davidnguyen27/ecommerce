@@ -41,6 +41,14 @@ services:
       MAIL_PROVIDER: ${MAIL_PROVIDER:-log}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-}
+      # Local giữ file trong bộ nhớ; staging/production đặt STORAGE_PROVIDER=r2 kèm các biến R2_*, MEDIA_PUBLIC_URL.
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-memory}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_PUBLIC_BUCKET: ${R2_PUBLIC_BUCKET:-}
+      R2_PRIVATE_BUCKET: ${R2_PRIVATE_BUCKET:-}
+      MEDIA_PUBLIC_URL: ${MEDIA_PUBLIC_URL:-}
     depends_on:
       migrate: { condition: service_completed_successfully }
 
