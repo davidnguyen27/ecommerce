@@ -1,15 +1,11 @@
 import { z } from 'zod'
+import { Slug } from './slug.ts'
 
 export const ContentPageKind = z.enum(['about', 'process', 'policy'])
 export type ContentPageKind = z.infer<typeof ContentPageKind>
 
 /** Slug của trang chính sách bảo mật; lời đồng ý của khách tham chiếu phiên bản hiện hành của trang này. */
 export const PRIVACY_POLICY_SLUG = 'chinh-sach-bao-mat'
-
-const Slug = z
-  .string()
-  .max(100)
-  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug chỉ gồm chữ thường không dấu, số và dấu gạch ngang')
 
 /** Phần sửa được của trang. Slug và loại cố định từ lúc tạo, nên khách luôn thấy chúng khớp phiên bản đang xuất bản. */
 export const UpdateContentPageRequest = z.object({
