@@ -1,13 +1,21 @@
 import { Router } from 'express'
-import { ErrorCode, RegisterRequest, VerifyEmailRequest } from '@ecommerce/shared'
+import {
+  ErrorCode,
+  ForgotPasswordRequest,
+  RegisterRequest,
+  ResetPasswordRequest,
+  VerifyEmailRequest,
+} from '@ecommerce/shared'
 import { createSessions } from '../auth/session-routes.ts'
 import { hashPassword } from '../auth/password.ts'
 import { normalizeEmail } from '../auth/staff.ts'
 import { findCurrentPrivacyPolicy } from '../content/pages.ts'
 import { sendVerificationEmail, verifyEmail } from '../customers/email-verification.ts'
+import { resetPassword, sendPasswordResetEmail } from '../customers/password-reset.ts'
 import type { Db } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
+import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { parse } from '../http/validation.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
 
@@ -15,18 +23,19 @@ const CUSTOMER_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 export type CustomerAuthDeps = {
   prisma: Db
-  secret: Uint8Array
   emails: EmailQueue
   /** Gốc URL của website, dùng để dựng link trong email. */
   siteUrl: string
+  sessions: CustomerSessions
 }
 
-/** Đăng ký, xác minh email, đăng nhập, refresh, đăng xuất của khách, gắn tại `mountPath`. Không đòi access token. */
-export function customerAuthRoutes(deps: CustomerAuthDeps, mountPath: string) {
-  const { prisma } = deps
-  const sessions = createSessions({
+export type CustomerSessions = ReturnType<typeof customerSessions>
+
+/** Phiên của miền khách; refresh token nằm ở `${mountPath}/refresh`. Dùng chung cho mọi route cần mở phiên. */
+export function customerSessions(prisma: Db, secret: Uint8Array, mountPath: string) {
+  return createSessions({
     prisma,
-    secret: deps.secret,
+    secret,
     audience: 'customer',
     sessionTtlMs: CUSTOMER_SESSION_TTL_MS,
     refreshPath: `${mountPath}/refresh`,
@@ -34,6 +43,11 @@ export function customerAuthRoutes(deps: CustomerAuthDeps, mountPath: string) {
       prisma.customer.findUnique({ where: { email: normalizeEmail(email) }, select: { id: true, passwordHash: true } }),
     isActive: async (id) => (await prisma.customer.count({ where: { id } })) > 0,
   })
+}
+
+/** Đăng ký, xác minh email, quên mật khẩu, đăng nhập, refresh, đăng xuất của khách. Không đòi access token. */
+export function customerAuthRoutes(deps: CustomerAuthDeps) {
+  const { prisma, sessions } = deps
 
   return Router()
     .post('/register', async (req, res) => {
@@ -71,6 +85,26 @@ export function customerAuthRoutes(deps: CustomerAuthDeps, mountPath: string) {
       const { token } = parse(VerifyEmailRequest, req.body)
       if (!(await verifyEmail(prisma, token))) {
         throw new AppError(400, ErrorCode.VALIDATION_ERROR, 'Link xác minh không hợp lệ hoặc đã hết hạn')
+      }
+      res.status(204).end()
+    })
+    .post('/forgot-password', async (req, res) => {
+      const email = normalizeEmail(parse(ForgotPasswordRequest, req.body).email)
+      await enforceRateLimits(prisma, res, [
+        { limit: RATE_LIMITS.forgotPasswordPerEmail, subject: email },
+        { limit: RATE_LIMITS.forgotPasswordPerIp, subject: String(req.ip) },
+      ])
+      const customer = await prisma.customer.findUnique({ where: { email } })
+      if (customer) {
+        await prisma.$transaction((tx) => sendPasswordResetEmail(tx, deps.emails, deps.siteUrl, customer))
+      }
+      // Cùng một phản hồi dù email có tài khoản hay không.
+      res.status(202).end()
+    })
+    .post('/reset-password', async (req, res) => {
+      const { token, password } = parse(ResetPasswordRequest, req.body)
+      if (!(await resetPassword(prisma, token, password))) {
+        throw new AppError(400, ErrorCode.VALIDATION_ERROR, 'Link đặt lại mật khẩu không hợp lệ hoặc đã hết hạn')
       }
       res.status(204).end()
     })

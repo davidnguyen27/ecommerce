@@ -5,6 +5,7 @@ import { AuthClient, ErrorCode, LoginRequest, RefreshRequest, type AuthTokens } 
 import type { Db } from '../db.ts'
 import type { AuthAudience } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
+import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { parse } from '../http/validation.ts'
 import { signAccessToken } from './access-token.ts'
 import { hashPassword, verifyPassword } from './password.ts'
@@ -15,6 +16,7 @@ import {
   rotateRefreshToken,
   type IssuedRefreshToken,
 } from './refresh-tokens.ts'
+import { normalizeEmail } from './staff.ts'
 
 export type SessionOptions = {
   prisma: Db
@@ -36,7 +38,8 @@ const ClientHeader = z.object({ 'x-client': AuthClient })
 // Băm sẵn lúc nạp module, để cả request đầu tiên cũng chỉ tốn đúng một lần verify.
 const dummyHash = hashPassword('khong-co-tai-khoan')
 
-function clientOf(req: Request): AuthClient {
+/** Kênh của request theo header `X-Client`; thiếu hoặc sai thì 400. */
+export function clientOf(req: Request): AuthClient {
   return parse(ClientHeader, req.headers)['x-client']
 }
 
@@ -83,6 +86,11 @@ export function createSessions(options: SessionOptions) {
       // Kiểm header kênh trước khi tốn một lần verify mật khẩu.
       clientOf(req)
       const { email, password } = parse(LoginRequest, req.body)
+      // Đếm cả lần đăng nhập đúng, và đếm trước khi verify để kẻ dò mật khẩu không tốn thêm CPU của mình.
+      await enforceRateLimits(prisma, res, [
+        { limit: RATE_LIMITS.loginPerEmail, subject: `${audience}:${normalizeEmail(email)}` },
+        { limit: RATE_LIMITS.loginPerIp, subject: `${audience}:${String(req.ip)}` },
+      ])
       const account = await options.findCredentials(email)
       if (!account) await verifyPassword(await dummyHash, password)
       if (!account || !(await verifyPassword(account.passwordHash, password))) {

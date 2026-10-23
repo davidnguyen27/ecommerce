@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CustomerProfile } from '@ecommerce/shared'
+import { CUSTOMER_PASSWORD_MIN_LENGTH, type CustomerProfile } from '@ecommerce/shared'
 
 // Phiên khách chỉ có ở trình duyệt nên trang này nạp dữ liệu sau khi mount, không qua SSR.
 const session = useCustomerSession()
@@ -25,6 +25,26 @@ async function resendVerification() {
     notice.value = apiErrorMessage(err)
   } finally {
     sending.value = false
+  }
+}
+
+const currentPassword = ref('')
+const newPassword = ref('')
+const passwordNotice = ref<string | null>(null)
+const changing = ref(false)
+
+async function changePassword() {
+  changing.value = true
+  passwordNotice.value = null
+  try {
+    await session.changePassword({ currentPassword: currentPassword.value, newPassword: newPassword.value })
+    currentPassword.value = ''
+    newPassword.value = ''
+    passwordNotice.value = 'Đã đổi mật khẩu. Các thiết bị khác đã bị đăng xuất.'
+  } catch (err) {
+    passwordNotice.value = apiErrorMessage(err)
+  } finally {
+    changing.value = false
   }
 }
 
@@ -55,6 +75,32 @@ useHead({ title: 'Tài khoản' })
           {{ consentedOn }}.
         </small>
       </p>
+      <form @submit.prevent="changePassword">
+        <h2>Đổi mật khẩu</h2>
+        <label>
+          Mật khẩu hiện tại
+          <input
+            v-model="currentPassword"
+            type="password"
+            name="currentPassword"
+            autocomplete="current-password"
+            required
+          />
+        </label>
+        <label>
+          Mật khẩu mới (ít nhất {{ CUSTOMER_PASSWORD_MIN_LENGTH }} ký tự)
+          <input
+            v-model="newPassword"
+            type="password"
+            name="newPassword"
+            autocomplete="new-password"
+            :minlength="CUSTOMER_PASSWORD_MIN_LENGTH"
+            required
+          />
+        </label>
+        <p v-if="passwordNotice" role="status">{{ passwordNotice }}</p>
+        <button type="submit" :disabled="changing">Đổi mật khẩu</button>
+      </form>
       <button type="button" @click="session.logout()">Đăng xuất</button>
     </template>
   </main>
