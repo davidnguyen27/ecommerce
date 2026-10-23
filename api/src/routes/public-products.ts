@@ -2,10 +2,13 @@ import { Router } from 'express'
 import { z } from 'zod'
 import {
   ErrorCode,
+  GENDER_KEY,
   PRODUCT_PAGE_SIZE,
   ProductListQuery,
+  ProductType,
+  attributeFiltersOf,
   type ProductCard,
-  type ProductCardList,
+  type ProductSearchResult,
   type PublicProduct,
 } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
@@ -13,9 +16,10 @@ import { loadAttributeSchema } from '../catalog/attribute-schemas.ts'
 import { publicCommitments } from '../catalog/commitments.ts'
 import { findVisible, loadVisibleTree } from '../catalog/categories.ts'
 import { ProductSnapshot, cheapestVariant } from '../catalog/publication.ts'
+import { searchFacets, searchPage, type SearchCriteria } from '../catalog/search.ts'
 import { LATEST_VERSION } from '../content/pages.ts'
 import type { Db } from '../db.ts'
-import type { Brand, Prisma, ProductVersion } from '../generated/prisma/client.ts'
+import type { Brand, ProductVersion } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 import { imageRenditions } from '../media/images.ts'
@@ -45,27 +49,46 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
 
   return Router()
     .get('/', async (req, res) => {
-      const query = parse(ProductListQuery, req.query)
-      const where: Prisma.ProductVersionWhereInput = {}
-      if (query.category !== undefined) where.categoryId = { in: await subtreeIds(prisma, query.category) }
-      if (query.brand !== undefined) where.brand = { slug: query.brand }
+      const query = parse(ProductListQuery, { ...req.query, attributes: attributeFiltersOf(req.query) })
+      const category =
+        query.category === undefined
+          ? undefined
+          : await prisma.category.findUnique({ where: { slug: query.category }, select: { productType: true } })
+      // Nhóm hàng đang xem quyết định bộ lọc và facets; chưa xác định thì chỉ có giới tính, chung mọi nhóm hàng.
+      const productType = category?.productType ?? query.type ?? null
+      const schema = await loadAttributeSchema(prisma, productType ?? ProductType.enum.footwear)
+      const filterable = schema.attributes.filter((a) => a.filterable && (productType || a.key === GENDER_KEY))
 
-      const live = { liveVersionId: { not: null }, liveVersion: { is: where } }
-      const [total, products] = await Promise.all([
-        prisma.product.count({ where: live }),
-        prisma.product.findMany({
-          where: live,
-          include: { liveVersion: { include: { brand: true } } },
-          orderBy: [{ liveVersion: { publishedAt: 'desc' } }, { id: 'asc' }],
-          skip: (query.page - 1) * PRODUCT_PAGE_SIZE,
-          take: PRODUCT_PAGE_SIZE,
+      const criteria: SearchCriteria = {
+        text: query.q,
+        categoryIds: query.category === undefined ? undefined : await subtreeIds(prisma, query.category),
+        brandSlug: query.brand,
+        productType: query.type,
+        minPrice: query.minPrice,
+        maxPrice: query.maxPrice,
+        // Key không lọc được ở nhóm hàng đang xem (URL cũ, schema đã đổi) thì bỏ qua thay vì báo lỗi.
+        attributes: filterable.flatMap((definition) => {
+          const values = query.attributes[definition.key] ?? []
+          return values.length ? [{ definition, values }] : []
         }),
+      }
+      const [{ versionIds, total }, facets] = await Promise.all([
+        searchPage(prisma, criteria, query.sort, query.page),
+        searchFacets(prisma, criteria, filterable),
       ])
-      const body: ProductCardList = {
-        items: products.map((p) => toCard(p.liveVersion!)),
+      const versions = await prisma.productVersion.findMany({
+        where: { id: { in: versionIds } },
+        include: { brand: true },
+      })
+      const byId = new Map(versions.map((v) => [v.id, v]))
+
+      const body: ProductSearchResult = {
+        items: versionIds.map((id) => toCard(byId.get(id)!)),
         page: query.page,
         pageSize: PRODUCT_PAGE_SIZE,
         total,
+        productType,
+        facets,
       }
       res.json(body)
     })

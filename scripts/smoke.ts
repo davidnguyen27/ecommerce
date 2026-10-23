@@ -185,7 +185,28 @@ const CHECKS: Check[] = [
       'href="/tai-khoan"',
       'Giày dép',
       'href="/danh-muc/sneaker-co-thap"',
+      'role="search"',
+      // Menu Nam / Nữ là trang tìm kiếm có lọc giới tính (ADR 0004).
+      'href="/tim-kiem?attr.gioi_tinh=Nam"',
     ],
+  },
+  // Tìm không dấu, tìm theo SKU, lọc giới tính (Nam gồm cả Unisex, sản phẩm smoke là Nam), facets theo nhóm hàng.
+  {
+    path: '/tim-kiem?q=air+max',
+    status: 200,
+    contains: ['>Kết quả cho “air max”</h1>', 'href="/san-pham/air-max-90"', '1 sản phẩm', '<footer'],
+  },
+  { path: '/tim-kiem?q=am90-trang', status: 200, contains: ['href="/san-pham/air-max-90"'] },
+  {
+    path: '/tim-kiem?attr.gioi_tinh=Nam',
+    status: 200,
+    contains: ['>Sản phẩm Nam</h1>', 'href="/san-pham/air-max-90"', 'Bộ lọc (1)', 'name="attr.gioi_tinh"'],
+  },
+  { path: '/tim-kiem?attr.gioi_tinh=N%E1%BB%AF', status: 200, contains: ['Không tìm thấy sản phẩm phù hợp'] },
+  {
+    path: '/danh-muc/sneaker?attr.size=41&sort=price_asc',
+    status: 200,
+    contains: ['href="/san-pham/air-max-90"', 'name="attr.size"', 'name="attr.mau"', 'name="minPrice"'],
   },
   {
     path: '/danh-muc/sneaker',
