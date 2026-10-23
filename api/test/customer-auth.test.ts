@@ -1,47 +1,8 @@
-import { PRIVACY_POLICY_SLUG } from '@ecommerce/shared'
 import type { Response } from 'supertest'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { InMemoryMailer } from '../src/adapters/mailer.ts'
+import { CUSTOMER, appReadyForSignUp, publishPrivacyPolicy, register, tokenFromMail } from './support/customer.ts'
 import { OWNER, appWithOwner, bearer, login, type Request } from './support/staff.ts'
-
-const CUSTOMER = { email: 'khach@example.com', password: 'mat-khau-cua-khach' }
-
-/** Owner tạo và xuất bản chính sách bảo mật; trả số phiên bản vừa xuất bản. */
-async function publishPrivacyPolicy(request: Request, body = 'Chúng tôi chỉ dùng email để giao dịch.') {
-  const owner = await login(request, OWNER.email, OWNER.password)
-  const pages = await request.get('/api/admin/pages').set(bearer(owner.accessToken))
-  let page = (pages.body.items as { id: string; slug: string }[]).find((p) => p.slug === PRIVACY_POLICY_SLUG)
-  if (!page) {
-    const created = await request
-      .post('/api/admin/pages')
-      .set(bearer(owner.accessToken))
-      .send({ slug: PRIVACY_POLICY_SLUG, kind: 'policy', title: 'Chính sách bảo mật', body })
-    expect(created.status).toBe(201)
-    page = created.body as { id: string; slug: string }
-  } else {
-    await request
-      .put(`/api/admin/pages/${page.id}`)
-      .set(bearer(owner.accessToken))
-      .send({ title: 'Chính sách bảo mật', body })
-  }
-  const published = await request.post(`/api/admin/pages/${page.id}/publish`).set(bearer(owner.accessToken))
-  expect(published.status).toBe(200)
-  return published.body.version as number
-}
-
-/** App sạch, đã có owner và chính sách bảo mật phiên bản 1. */
-async function appReadyForSignUp() {
-  const app = await appWithOwner()
-  await publishPrivacyPolicy(app.request)
-  return app
-}
-
-function register(request: Request, body: Record<string, unknown> = {}) {
-  return request
-    .post('/api/auth/register')
-    .set('X-Client', 'mobile')
-    .send({ ...CUSTOMER, acceptPrivacyPolicy: true, ...body })
-}
 
 describe('khách đăng ký', () => {
   it('đăng ký có tick đồng ý thì được đăng nhập luôn, và lưu lời đồng ý với phiên bản chính sách hiện hành', async () => {
@@ -108,18 +69,8 @@ describe('khách đăng ký', () => {
 })
 
 /** Chờ thư xác minh gửi tới `to` qua hàng đợi job, rồi lấy token từ link trong thư. */
-async function verificationToken(mailer: InMemoryMailer, to = CUSTOMER.email, nth = 0) {
-  const mail = await vi.waitFor(
-    () => {
-      const mails = mailer.sent.filter((m) => m.to === to)
-      if (mails.length <= nth) throw new Error('Chưa có thư')
-      return mails[nth]!
-    },
-    { timeout: 10_000, interval: 100 },
-  )
-  const link = /https:\/\/shop\.test\/xac-minh-email\?token=([\w-]+)/.exec(mail.text)
-  if (!link) throw new Error(`Thư không có link xác minh: ${mail.text}`)
-  return link[1]!
+function verificationToken(mailer: InMemoryMailer, to = CUSTOMER.email, nth = 0) {
+  return tokenFromMail(mailer, '/xac-minh-email', to, nth)
 }
 
 function verify(request: Request, token: string) {

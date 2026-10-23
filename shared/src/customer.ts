@@ -23,3 +23,21 @@ export const CustomerProfile = z.object({
   privacyConsent: z.object({ policyVersion: z.number().int(), consentedAt: z.string() }),
 })
 export type CustomerProfile = z.infer<typeof CustomerProfile>
+
+/** Yêu cầu link đặt lại mật khẩu; phản hồi luôn như nhau dù email có tài khoản hay không. */
+export const ForgotPasswordRequest = z.object({ email: z.email() })
+export type ForgotPasswordRequest = z.infer<typeof ForgotPasswordRequest>
+
+/** Token lấy từ link trong email đặt lại mật khẩu, kèm mật khẩu mới. */
+export const ResetPasswordRequest = z.object({
+  token: z.string().min(1),
+  password: z.string().min(CUSTOMER_PASSWORD_MIN_LENGTH).max(200),
+})
+export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequest>
+
+/** Khách đang đăng nhập đổi mật khẩu trong trang tài khoản. */
+export const ChangePasswordRequest = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(CUSTOMER_PASSWORD_MIN_LENGTH).max(200),
+})
+export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequest>
