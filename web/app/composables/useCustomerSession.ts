@@ -1,4 +1,4 @@
-import { AuthTokens, CustomerProfile, type RegisterRequest } from '@ecommerce/shared'
+import { AuthTokens, CustomerProfile, type ChangePasswordRequest, type RegisterRequest } from '@ecommerce/shared'
 
 // Phiên khách chỉ sống ở trình duyệt: cookie refresh chỉ gửi tới `/api/auth/refresh`, nên server Nuxt
 // không bao giờ biết khách là ai. Biến module này chỉ được ghi trong handler chạy ở trình duyệt,
@@ -61,6 +61,12 @@ async function loadProfile(): Promise<CustomerProfile> {
   return CustomerProfile.parse(await accountFetch('/api/account/me'))
 }
 
+/** Đổi mật khẩu; mọi thiết bị khác bị đăng xuất, trình duyệt này nhận phiên mới. */
+async function changePassword(input: ChangePasswordRequest) {
+  const body = await accountFetch('/api/account/password', { method: 'POST', headers: WEB_CLIENT, body: input })
+  accessToken.value = AuthTokens.parse(body).accessToken
+}
+
 export function useCustomerSession() {
-  return { refresh, login, register, logout, accountFetch, loadProfile }
+  return { refresh, login, register, logout, accountFetch, loadProfile, changePassword }
 }

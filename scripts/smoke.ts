@@ -156,7 +156,18 @@ const CHECKS: Check[] = [
       '<footer',
     ],
   },
-  { path: '/dang-nhap', status: 200, contains: ['<h1>Đăng nhập</h1>', 'autocomplete="current-password"'] },
+  {
+    path: '/dang-nhap',
+    status: 200,
+    contains: ['<h1>Đăng nhập</h1>', 'autocomplete="current-password"', 'href="/quen-mat-khau"'],
+  },
+  { path: '/quen-mat-khau', status: 200, contains: ['<h1>Quên mật khẩu</h1>', 'name="email"'] },
+  // Token chỉ được dùng khi gửi form, nên mở link với token bất kỳ vẫn thấy form.
+  {
+    path: '/dat-lai-mat-khau?token=bat-ky',
+    status: 200,
+    contains: ['<h1>Đặt lại mật khẩu</h1>', 'autocomplete="new-password"'],
+  },
   // Phiên khách chỉ có ở trình duyệt, nên HTML từ server chỉ có khung trang.
   { path: '/tai-khoan', status: 200, contains: ['<h1>Tài khoản</h1>', 'Đang tải'] },
   { path: '/xac-minh-email?token=sai', status: 200, contains: ['Link xác minh không hợp lệ hoặc đã hết hạn'] },

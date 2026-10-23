@@ -11,7 +11,7 @@ import { errorHandler, notFound } from './http/errors.ts'
 import { accountRoutes } from './routes/account.ts'
 import { adminRoutes } from './routes/admin.ts'
 import { adminAuthRoutes } from './routes/admin-auth.ts'
-import { customerAuthRoutes } from './routes/customer-auth.ts'
+import { customerAuthRoutes, customerSessions } from './routes/customer-auth.ts'
 import { publicLegalInfoRoutes } from './routes/legal-info.ts'
 import { publicAttributeSchemaRoutes, publicBrandRoutes, publicCategoryRoutes } from './routes/public-catalog.ts'
 import { publicPageRoutes } from './routes/public-pages.ts'
@@ -61,8 +61,13 @@ export function createApp(deps: AppDeps) {
   api.use('/brands', publicBrandRoutes(deps.prisma))
   api.use('/categories', publicCategoryRoutes(deps.prisma))
   api.use('/attribute-schemas', publicAttributeSchemaRoutes(deps.prisma))
-  const customerDeps = { prisma: deps.prisma, secret, emails: deps.emails, siteUrl: deps.siteUrl }
-  api.use('/auth', customerAuthRoutes(customerDeps, '/api/auth'))
+  const customerDeps = {
+    prisma: deps.prisma,
+    emails: deps.emails,
+    siteUrl: deps.siteUrl,
+    sessions: customerSessions(deps.prisma, secret, '/api/auth'),
+  }
+  api.use('/auth', customerAuthRoutes(customerDeps))
   api.use('/account', requireAuth(secret, 'customer'), accountRoutes(customerDeps))
   api.use('/admin/auth', adminAuthRoutes(deps.prisma, secret, '/api/admin/auth'))
   api.use('/admin', requireAuth(secret, 'staff'), loadStaff(deps.prisma), adminRoutes(deps.prisma))
