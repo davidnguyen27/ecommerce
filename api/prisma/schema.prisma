@@ -301,7 +301,9 @@ model Product {
   updatedAt          DateTime        @updatedAt @map("updated_at")
 
   variants ProductVariant[]
-  images   ProductImage[]
+  images      ProductImage[]
+  documents   ProductDocument[]
+  commitments ProductCommitment[]
 
   @@index([productType])
   @@index([brandId])
@@ -364,6 +366,73 @@ model ProductImageVariant {
   @@id([imageId, variantId])
   @@index([variantId])
   @@map("product_image_variant")
+}
+
+/// Chứng từ nguồn hàng nội bộ trên bucket private, key `products/<productId>/documents/<id>`. Không bao giờ công khai.
+model ProductDocument {
+  id          String                      @id @default(uuid()) @db.Uuid
+  productId   String                      @map("product_id") @db.Uuid
+  product     Product                     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  storageKey  String                      @unique @map("storage_key")
+  /// Tên file lúc tải lên, chỉ để nhân viên nhận ra chứng từ.
+  fileName    String                      @map("file_name")
+  /// MIME type thật, đọc từ nội dung file.
+  contentType String                      @map("content_type")
+  sizeBytes   Int                         @map("size_bytes")
+  createdAt   DateTime                    @default(now()) @map("created_at")
+  commitments ProductCommitmentDocument[]
+
+  @@index([productId])
+  @@map("product_document")
+}
+
+enum CommitmentKind {
+  warranty
+  other
+
+  @@map("commitment_kind")
+}
+
+/// Loại cam kết: danh sách đóng, seed trong migration, chỉ `commitment.edit` thêm và sửa.
+model CommitmentType {
+  id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String              @unique
+  /// `warranty` là bảo hành; bảo hành chỉ hiện với khách qua loại này (ADR 0005).
+  kind        CommitmentKind
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @default(now()) @updatedAt @map("updated_at")
+  commitments ProductCommitment[]
+
+  @@map("commitment_type")
+}
+
+/// Cam kết có bằng chứng ở cấp sản phẩm; mỗi loại tối đa một cam kết trên một sản phẩm.
+model ProductCommitment {
+  id        String                      @id @default(uuid()) @db.Uuid
+  productId String                      @map("product_id") @db.Uuid
+  product   Product                     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  typeId    String                      @map("type_id") @db.Uuid
+  type      CommitmentType              @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  /// Nội dung hiển thị cho khách.
+  statement String
+  createdAt DateTime                    @default(now()) @map("created_at")
+  updatedAt DateTime                    @updatedAt @map("updated_at")
+  documents ProductCommitmentDocument[]
+
+  @@unique([productId, typeId])
+  @@map("product_commitment")
+}
+
+/// Chứng từ làm bằng chứng cho cam kết; chứng từ đang được tham chiếu thì không xóa được.
+model ProductCommitmentDocument {
+  commitmentId String            @map("commitment_id") @db.Uuid
+  commitment   ProductCommitment @relation(fields: [commitmentId], references: [id], onDelete: Cascade)
+  documentId   String            @map("document_id") @db.Uuid
+  document     ProductDocument   @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@id([commitmentId, documentId])
+  @@index([documentId])
+  @@map("product_commitment_document")
 }
 
 /// Cấu hình hệ thống dạng khóa → giá trị JSON; schema của từng khóa định nghĩa trong `@ecommerce/shared`.

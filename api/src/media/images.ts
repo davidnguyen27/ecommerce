@@ -1,10 +1,9 @@
-import type { Request, RequestHandler } from 'express'
-import multer from 'multer'
+import type { Request } from 'express'
 import sharp from 'sharp'
 import { z } from 'zod'
-import { ErrorCode, IMAGE_CONTENT_TYPES, MAX_IMAGE_BYTES, type ImageRenditions } from '@ecommerce/shared'
+import { IMAGE_CONTENT_TYPES, MAX_IMAGE_BYTES, type ImageRenditions } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
-import { AppError } from '../http/errors.ts'
+import { fileError, receiveFile, requiredFile } from './upload.ts'
 
 /** Cỡ webp sinh sẵn cho ảnh sản phẩm: thẻ sản phẩm trên điện thoại tới ảnh lớn ở trang chi tiết. */
 export const PRODUCT_IMAGE_WIDTHS = [320, 640, 1024, 1600]
@@ -31,32 +30,12 @@ const originalKey = (image: Pick<StoredImage, 'key' | 'contentType'>) =>
   `${image.key}/original.${EXTENSIONS[image.contentType]}`
 const sizeKey = (key: string, width: number) => `${key}/w${width}.webp`
 
-const fileError = (status: number, message: string) =>
-  new AppError(status, ErrorCode.VALIDATION_ERROR, message, [{ path: 'file', message }])
-
-const parseSingleFile = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMAGE_BYTES, files: 1, fields: 10, fieldSize: 10_000 },
-}).single('file')
-
 /** Nhận một file multipart ở trường `file` vào bộ nhớ; quá dung lượng thì 413. */
-export const receiveImage: RequestHandler = (req, res, next) => {
-  parseSingleFile(req, res, (err: unknown) => {
-    if (err instanceof multer.MulterError) {
-      return next(
-        err.code === 'LIMIT_FILE_SIZE'
-          ? fileError(413, `Ảnh vượt quá ${MAX_IMAGE_BYTES / 1024 / 1024} MB`)
-          : fileError(400, 'Mỗi lần chỉ tải một file ở trường "file"'),
-      )
-    }
-    next(err)
-  })
-}
+export const receiveImage = receiveFile(MAX_IMAGE_BYTES, `Ảnh vượt quá ${MAX_IMAGE_BYTES / 1024 / 1024} MB`)
 
 /** File đã nhận qua `receiveImage`; thiếu thì 400. */
 export function uploadedFile(req: Request): Buffer {
-  if (!req.file) throw fileError(400, 'Chưa chọn file ảnh')
-  return req.file.buffer
+  return requiredFile(req, 'Chưa chọn file ảnh').buffer
 }
 
 /**
