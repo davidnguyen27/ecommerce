@@ -1,7 +1,10 @@
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { PostgreSqlContainer } from '@testcontainers/postgresql'
+import pino from 'pino'
 import type { TestProject } from 'vitest/node'
+import { InMemoryMailer } from '../../src/adapters/mailer.ts'
+import { Jobs } from '../../src/jobs/jobs.ts'
 
 const TEMPLATE_DB = 'app_template'
 
@@ -29,6 +32,11 @@ export default async function setup(project: TestProject) {
     env: { ...process.env, DATABASE_URL: url },
     stdio: 'pipe',
   })
+
+  // Cài sẵn schema pg-boss vào template, để mỗi test khởi động hàng đợi job không phải tạo lại.
+  const jobs = new Jobs({ databaseUrl: url, mailer: new InMemoryMailer(), logger: pino({ enabled: false }) })
+  await jobs.start()
+  await jobs.stop()
 
   project.provide('templateDatabaseUrl', url)
   return async () => {
