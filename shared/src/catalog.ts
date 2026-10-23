@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ImageRenditions } from './media.ts'
 import { Slug } from './slug.ts'
 
 /** Năm nhóm hàng cố định, là gốc của cây danh mục (ADR 0004). */
@@ -22,6 +23,8 @@ export const AdminBrand = z.object({
   name: z.string(),
   description: z.string(),
   hidden: z.boolean(),
+  /** `null` khi chưa có logo. */
+  logo: ImageRenditions.nullable(),
   updatedAt: z.string(),
 })
 export type AdminBrand = z.infer<typeof AdminBrand>
