@@ -71,6 +71,15 @@ model AuditLog {
   @@map("audit_log")
 }
 
+/// Bộ đếm giới hạn tần suất theo cửa sổ cố định. `key` là SHA-256 của tên giới hạn kèm IP hoặc email.
+model RateLimitBucket {
+  key         String   @id
+  windowStart DateTime @map("window_start")
+  hits        Int
+
+  @@map("rate_limit_bucket")
+}
+
 /// Refresh token của mọi miền. Chỉ lưu hash; các token sinh ra từ một lần đăng nhập chung một family.
 model RefreshToken {
   id        String       @id @default(uuid()) @db.Uuid
@@ -124,6 +133,7 @@ model CustomerConsent {
 /// Mục đích của token một lần gửi qua email. Ticket 06 thêm đặt lại mật khẩu.
 enum CustomerTokenPurpose {
   email_verification
+  password_reset
 
   @@map("customer_token_purpose")
 }

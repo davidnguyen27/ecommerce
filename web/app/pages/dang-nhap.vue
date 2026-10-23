@@ -36,6 +36,7 @@ useHead({ title: 'Đăng nhập' })
       <p v-if="error" role="alert">{{ error }}</p>
       <button type="submit" :disabled="submitting">Đăng nhập</button>
     </form>
+    <p><NuxtLink to="/quen-mat-khau">Quên mật khẩu?</NuxtLink></p>
     <p>Chưa có tài khoản? <NuxtLink to="/dang-ky">Đăng ký</NuxtLink></p>
   </main>
 </template>
