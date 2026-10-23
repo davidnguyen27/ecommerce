@@ -10,6 +10,7 @@ import {
 } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
 import { loadAttributeSchema } from '../catalog/attribute-schemas.ts'
+import { publicCommitments } from '../catalog/commitments.ts'
 import { findVisible, loadVisibleTree } from '../catalog/categories.ts'
 import { ProductSnapshot, cheapestVariant } from '../catalog/publication.ts'
 import { LATEST_VERSION } from '../content/pages.ts'
@@ -78,9 +79,10 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
       const version = product.liveVersion
       const snapshot = ProductSnapshot.parse(version.snapshot)
 
-      const [schema, tree, pages] = await Promise.all([
+      const [schema, tree, commitments, pages] = await Promise.all([
         loadAttributeSchema(prisma, snapshot.productType),
         loadVisibleTree(prisma),
+        publicCommitments(prisma, product.id),
         prisma.contentPage.findMany({
           where: { id: { in: snapshot.policyPageIds }, kind: 'policy', versions: { some: {} } },
           include: { versions: LATEST_VERSION },
@@ -116,6 +118,7 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
           skus: image.variantIds.map((id) => skuOf.get(id)!),
         })),
         policies: pages.map((page) => ({ slug: page.slug, title: page.versions[0]!.title })),
+        commitments,
         publishedAt: version.publishedAt.toISOString(),
       }
       res.json(body)
