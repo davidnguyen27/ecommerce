@@ -2,6 +2,7 @@ import { Router } from 'express'
 import type { StaffProfile } from '@ecommerce/shared'
 import { currentStaff } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
+import { adminAttributeSchemaRoutes } from './admin-attribute-schemas.ts'
 import { adminAuditRoutes } from './admin-audit.ts'
 import { adminBrandRoutes } from './admin-brands.ts'
 import { adminCategoryRoutes } from './admin-categories.ts'
@@ -22,4 +23,5 @@ export function adminRoutes(prisma: Db) {
     .use('/legal-info', adminLegalInfoRoutes(prisma))
     .use('/brands', adminBrandRoutes(prisma))
     .use('/categories', adminCategoryRoutes(prisma))
+    .use('/attribute-schemas', adminAttributeSchemaRoutes(prisma))
 }

@@ -2,12 +2,14 @@ import { Router } from 'express'
 import { z } from 'zod'
 import {
   ErrorCode,
+  type AttributeSchema,
   type CategoryNode,
   type CategoryTree,
   type PublicBrand,
   type PublicBrandList,
   type PublicCategory,
 } from '@ecommerce/shared'
+import { ProductTypeParams, loadAttributeSchema } from '../catalog/attribute-schemas.ts'
 import { findVisible, loadVisibleTree, type VisibleCategory } from '../catalog/categories.ts'
 import type { Db } from '../db.ts'
 import { AppError } from '../http/errors.ts'
@@ -43,6 +45,16 @@ export function publicCategoryRoutes(prisma: Db) {
       }
       res.json(body)
     })
+}
+
+/** Schema thuộc tính của một nhóm hàng, để website hiển thị nhãn và bộ lọc. */
+export function publicAttributeSchemaRoutes(prisma: Db) {
+  return Router().get('/:productType', async (req, res) => {
+    const { productType } = parse(ProductTypeParams, req.params)
+    const { attributes } = await loadAttributeSchema(prisma, productType)
+    const body: AttributeSchema = { productType, attributes }
+    res.json(body)
+  })
 }
 
 /** Khách duyệt thương hiệu; thương hiệu bị ẩn coi như không có. */
