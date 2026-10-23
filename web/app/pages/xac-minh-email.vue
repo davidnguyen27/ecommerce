@@ -10,7 +10,8 @@ const { error } = await useAsyncData('verify-email', async () => {
   return true
 })
 
-useHead({ title: 'Xác minh email' })
+// Trang riêng của từng khách, không có nội dung để index.
+useSeo({ title: 'Xác minh email', description: 'Xác minh email tài khoản khách hàng.', noindex: true })
 </script>
 
 <template>

@@ -16,6 +16,7 @@ import { publicLegalInfoRoutes } from './routes/legal-info.ts'
 import { publicAttributeSchemaRoutes, publicBrandRoutes, publicCategoryRoutes } from './routes/public-catalog.ts'
 import { publicPageRoutes } from './routes/public-pages.ts'
 import { publicProductRoutes } from './routes/public-products.ts'
+import { publicSitemapRoutes } from './routes/public-sitemap.ts'
 import { healthRoutes } from './routes/health.ts'
 
 /** Mọi phụ thuộc bên ngoài đi vào app qua đây, để test thay bằng bản giả. */
@@ -63,6 +64,7 @@ export function createApp(deps: AppDeps) {
   api.use('/products', publicProductRoutes(deps.prisma, deps.storage))
   api.use('/categories', publicCategoryRoutes(deps.prisma))
   api.use('/attribute-schemas', publicAttributeSchemaRoutes(deps.prisma))
+  api.use('/sitemap', publicSitemapRoutes(deps.prisma))
   const customerDeps = {
     prisma: deps.prisma,
     emails: deps.emails,

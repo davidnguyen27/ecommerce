@@ -20,7 +20,8 @@ async function submit() {
   }
 }
 
-useHead({ title: 'Quên mật khẩu' })
+// Trang riêng của từng khách, không có nội dung để index.
+useSeo({ title: 'Quên mật khẩu', description: 'Lấy lại mật khẩu tài khoản khách hàng.', noindex: true })
 </script>
 
 <template>
