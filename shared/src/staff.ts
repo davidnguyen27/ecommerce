@@ -37,6 +37,12 @@ export const CreateStaffRequest = z.object({
 })
 export type CreateStaffRequest = z.infer<typeof CreateStaffRequest>
 
+export const UpdateStaffRequest = z.object({
+  email: z.email(),
+  name: z.string().trim().min(1),
+})
+export type UpdateStaffRequest = z.infer<typeof UpdateStaffRequest>
+
 export const ChangeRolesRequest = z.object({ roles: Roles })
 export type ChangeRolesRequest = z.infer<typeof ChangeRolesRequest>
 
