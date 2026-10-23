@@ -10,6 +10,7 @@ const MENU: { to: string; label: string; permission?: Permission | Permission[] 
   { to: '/admin/categories', label: 'Danh mục', permission: 'catalog.edit' },
   { to: '/admin/attribute-schemas', label: 'Schema thuộc tính', permission: 'catalog.edit' },
   { to: '/admin/products', label: 'Sản phẩm', permission: ['catalog.edit', 'price.edit'] },
+  { to: '/admin/commitment-types', label: 'Loại cam kết', permission: 'commitment.edit' },
   { to: '/admin/pages', label: 'Trang nội dung', permission: 'content.edit' },
   { to: '/admin/legal-info', label: 'Thông tin pháp lý', permission: 'content.edit' },
   { to: '/admin/audit', label: 'Audit log', permission: 'audit.view' },
