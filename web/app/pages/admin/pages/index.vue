@@ -37,8 +37,7 @@ list.value = ContentPageList.parse(await session.adminFetch('/api/admin/pages'))
   <main>
     <h1>Trang nội dung</h1>
     <p v-if="!hasPrivacyPolicy">
-      Chưa có trang chính sách bảo mật. Khách đăng ký sẽ đồng ý với trang có slug
-      <code>{{ PRIVACY_POLICY_SLUG }}</code>.
+      Chưa có trang chính sách bảo mật: tạo trang loại Chính sách với slug <code>{{ PRIVACY_POLICY_SLUG }}</code>
     </p>
 
     <table>

@@ -33,7 +33,11 @@ export function adminLegalInfoRoutes(prisma: Db) {
         const before = await readLegalInfo(tx)
         // Cả hai đều qua cùng schema nên cùng thứ tự khóa.
         if (JSON.stringify(before) === JSON.stringify(input)) return before
-        await tx.systemConfig.upsert({ where: { key: KEY }, create: { key: KEY, value: input }, update: { value: input } })
+        await tx.systemConfig.upsert({
+          where: { key: KEY },
+          create: { key: KEY, value: input },
+          update: { value: input },
+        })
         await audit({ action: 'legal_info.change', entityType: 'system_config', entityId: KEY, before, after: input })
         return input
       })

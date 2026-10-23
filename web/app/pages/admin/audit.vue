@@ -61,7 +61,9 @@ await load()
         Người thực hiện
         <select v-model="filters.actorId">
           <option value="">Tất cả</option>
-          <option v-for="actor in actors" :key="actor.id" :value="actor.id">{{ actor.name }} ({{ actor.email }})</option>
+          <option v-for="actor in actors" :key="actor.id" :value="actor.id">
+            {{ actor.name }} ({{ actor.email }})
+          </option>
         </select>
       </label>
       <label>
@@ -96,8 +98,12 @@ await load()
           <td>{{ entry.actor.name }}</td>
           <td>{{ entry.action }}</td>
           <td>{{ entry.entityType }} {{ entry.entityId }}</td>
-          <td><pre>{{ entry.before ?? '' }}</pre></td>
-          <td><pre>{{ entry.after ?? '' }}</pre></td>
+          <td>
+            <pre>{{ entry.before ?? '' }}</pre>
+          </td>
+          <td>
+            <pre>{{ entry.after ?? '' }}</pre>
+          </td>
           <td>{{ entry.ip }}<br />{{ entry.userAgent }}</td>
         </tr>
       </tbody>
