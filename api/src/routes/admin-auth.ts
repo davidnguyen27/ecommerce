@@ -1,4 +1,4 @@
-import { sessionRoutes } from '../auth/session-routes.ts'
+import { createSessions } from '../auth/session-routes.ts'
 import { normalizeEmail } from '../auth/staff.ts'
 import type { Db } from '../db.ts'
 
@@ -6,7 +6,7 @@ const STAFF_SESSION_TTL_MS = 12 * 60 * 60 * 1000
 
 /** Đăng nhập, refresh, đăng xuất của nhân viên, gắn tại `mountPath`. Không đòi access token. */
 export function adminAuthRoutes(prisma: Db, secret: Uint8Array, mountPath: string) {
-  return sessionRoutes({
+  return createSessions({
     prisma,
     secret,
     audience: 'staff',
@@ -18,5 +18,5 @@ export function adminAuthRoutes(prisma: Db, secret: Uint8Array, mountPath: strin
         select: { id: true, passwordHash: true },
       }),
     isActive: async (id) => (await prisma.staff.count({ where: { id, lockedAt: null } })) > 0,
-  })
+  }).routes
 }
