@@ -11,7 +11,7 @@ import { errorHandler, notFound } from './http/errors.ts'
 import { adminRoutes } from './routes/admin.ts'
 import { adminAuthRoutes } from './routes/admin-auth.ts'
 import { publicLegalInfoRoutes } from './routes/legal-info.ts'
-import { publicBrandRoutes, publicCategoryRoutes } from './routes/public-catalog.ts'
+import { publicAttributeSchemaRoutes, publicBrandRoutes, publicCategoryRoutes } from './routes/public-catalog.ts'
 import { publicPageRoutes } from './routes/public-pages.ts'
 import { healthRoutes } from './routes/health.ts'
 
@@ -55,6 +55,7 @@ export function createApp(deps: AppDeps) {
   api.use('/legal-info', publicLegalInfoRoutes(deps.prisma))
   api.use('/brands', publicBrandRoutes(deps.prisma))
   api.use('/categories', publicCategoryRoutes(deps.prisma))
+  api.use('/attribute-schemas', publicAttributeSchemaRoutes(deps.prisma))
   api.use('/admin/auth', adminAuthRoutes(deps.prisma, secret, '/api/admin/auth'))
   api.use('/admin', requireAuth(secret, 'staff'), loadStaff(deps.prisma), adminRoutes(deps.prisma))
   app.use('/api', api)
