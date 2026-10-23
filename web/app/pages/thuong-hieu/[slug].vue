@@ -19,7 +19,14 @@ if (error.value) {
   })
 }
 
-useHead({ title: () => data.value?.name ?? '' })
+useSeo({
+  title: () => data.value?.name ?? '',
+  description: () =>
+    data.value ? excerpt(data.value.description || `Sản phẩm của thương hiệu ${data.value.name}.`) : '',
+  canonicalPath: () => listingCanonicalPath(`/thuong-hieu/${slug.value}`, route.query),
+  image: () => data.value?.logo?.originalUrl,
+  noindex: () => isFilteredListing(route.query),
+})
 </script>
 
 <template>

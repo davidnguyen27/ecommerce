@@ -19,7 +19,15 @@ if (error.value) {
   })
 }
 
-useHead({ title: () => data.value?.name ?? '' })
+useSeo({
+  title: () => data.value?.name ?? '',
+  description: () =>
+    data.value
+      ? `${data.value.name} trong nhóm ${PRODUCT_TYPE_LABELS[data.value.productType]}: xem và lọc sản phẩm.`
+      : '',
+  canonicalPath: () => listingCanonicalPath(`/danh-muc/${slug.value}`, route.query),
+  noindex: () => isFilteredListing(route.query),
+})
 </script>
 
 <template>

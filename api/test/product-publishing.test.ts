@@ -348,7 +348,8 @@ describe('chi tiết sản phẩm cho khách', () => {
 
     await setStatus(request, token, product.id, 'published')
 
-    expect((await request.get('/api/products/air-max-90')).status).toBe(404)
+    // Slug cũ trả slug hiện tại để website chuyển hướng (ticket 14).
+    expect((await request.get('/api/products/air-max-90')).body.slug).toBe('air-max-90-se')
     const after = await request.get('/api/products/air-max-90-se')
     expect(after.body.name).toBe('Air Max 90 SE')
     expect(after.body.variants[0].price).toBe(2_900_000)

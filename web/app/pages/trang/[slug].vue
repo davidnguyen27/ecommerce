@@ -24,7 +24,11 @@ const html = computed(() => (data.value ? renderMarkdown(data.value.body) : ''))
 const publishedOn = computed(() =>
   data.value ? new Date(data.value.publishedAt).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '',
 )
-useHead({ title: () => data.value?.title ?? '' })
+useSeo({
+  title: () => data.value?.title ?? '',
+  description: () => (data.value ? excerpt(markdownText(data.value.body)) || data.value.title : ''),
+  canonicalPath: () => `/trang/${slug.value}`,
+})
 </script>
 
 <template>

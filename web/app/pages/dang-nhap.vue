@@ -18,7 +18,8 @@ async function submit() {
   }
 }
 
-useHead({ title: 'Đăng nhập' })
+// Trang riêng của từng khách, không có nội dung để index.
+useSeo({ title: 'Đăng nhập', description: 'Đăng nhập tài khoản khách hàng.', noindex: true })
 </script>
 
 <template>

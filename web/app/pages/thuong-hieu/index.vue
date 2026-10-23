@@ -10,7 +10,7 @@ const { data, error } = await useAsyncData('brands', async () => {
 
 if (error.value) throw createError({ statusCode: 502, message: 'Không tải được danh sách thương hiệu', fatal: true })
 
-useHead({ title: 'Thương hiệu' })
+useSeo({ title: 'Thương hiệu', description: 'Các thương hiệu đang bán trên website.' })
 </script>
 
 <template>

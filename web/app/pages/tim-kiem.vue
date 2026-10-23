@@ -15,7 +15,8 @@ const title = computed(() => {
   return gender ? `Sản phẩm ${gender}` : 'Tất cả sản phẩm'
 })
 
-useHead({ title })
+// Kết quả tìm kiếm trùng nội dung với trang sản phẩm, danh mục: không cho index ở mọi URL của trang này.
+useSeo({ title, description: 'Tìm sản phẩm theo tên, thương hiệu, mã mẫu hoặc SKU.', noindex: true })
 </script>
 
 <template>

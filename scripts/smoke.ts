@@ -170,7 +170,17 @@ async function seedPublishedProduct(token: string, categoryId: string, policyPag
   await api(`${base}/status`, { method: 'PUT', token, body: { status: 'published' } })
 }
 
-type Check = { path: string; status: number; contains: string[] }
+type Check = {
+  path: string
+  status: number
+  contains: string[]
+  excludes?: string[]
+  /** Header phản hồi phải chứa đoạn chữ này (tên header viết thường). */
+  headers?: Record<string, string>
+}
+
+const canonical = (path: string) => `<link rel="canonical" href="${BASE}${path}">`
+const NOINDEX = '<meta name="robots" content="noindex, follow">'
 
 // HTML khách nhận khi render SSR. Trang quản trị là SPA nên chỉ kiểm được shell, nội dung cần trình duyệt.
 const CHECKS: Check[] = [
@@ -194,7 +204,8 @@ const CHECKS: Check[] = [
   {
     path: '/tim-kiem?q=air+max',
     status: 200,
-    contains: ['>Kết quả cho “air max”</h1>', 'href="/san-pham/air-max-90"', '1 sản phẩm', '<footer'],
+    // Kết quả tìm kiếm không được index (trùng nội dung).
+    contains: ['>Kết quả cho “air max”</h1>', 'href="/san-pham/air-max-90"', '1 sản phẩm', '<footer', NOINDEX],
   },
   { path: '/tim-kiem?q=am90-trang', status: 200, contains: ['href="/san-pham/air-max-90"'] },
   {
@@ -206,13 +217,30 @@ const CHECKS: Check[] = [
   {
     path: '/danh-muc/sneaker?attr.size=41&sort=price_asc',
     status: 200,
-    contains: ['href="/san-pham/air-max-90"', 'name="attr.size"', 'name="attr.mau"', 'name="minPrice"'],
+    // URL có bộ lọc: noindex, canonical về trang danh mục gốc.
+    contains: [
+      'href="/san-pham/air-max-90"',
+      'name="attr.size"',
+      'name="attr.mau"',
+      'name="minPrice"',
+      NOINDEX,
+      canonical('/danh-muc/sneaker'),
+    ],
   },
   {
     path: '/danh-muc/sneaker',
     status: 200,
     // Sản phẩm ở danh mục con cũng hiện ở danh mục cha; giá "từ" là giá thấp nhất.
-    contains: ['<h1>Sneaker</h1>', 'href="/danh-muc/sneaker-co-thap"', 'href="/san-pham/air-max-90"', 'từ 3.200.000 ₫'],
+    contains: [
+      '<h1>Sneaker</h1>',
+      'href="/danh-muc/sneaker-co-thap"',
+      'href="/san-pham/air-max-90"',
+      'từ 3.200.000 ₫',
+      canonical('/danh-muc/sneaker'),
+      '<meta property="og:title" content="Sneaker">',
+    ],
+    excludes: ['noindex'],
+    headers: { 'cache-control': 's-maxage=60' },
   },
   {
     path: '/san-pham/air-max-90',
@@ -227,11 +255,38 @@ const CHECKS: Check[] = [
       'Cam kết có chứng từ',
       'Bảo hành chính hãng Nike 12 tháng',
       '<footer',
+      canonical('/san-pham/air-max-90'),
+      '<meta property="og:title" content="Air Max 90">',
+      `<meta property="og:url" content="${BASE}/san-pham/air-max-90">`,
+      '<meta property="og:image" content="',
+      '<meta name="description" content="Air Max 90 của Nike, giá từ 3.200.000 ₫.">',
+      // Dữ liệu cấu trúc: khoảng giá VND của hai biến thể đang bán, thương hiệu, ảnh; chưa có availability (M2).
+      '<script type="application/ld+json">',
+      '"@type":"Product"',
+      '"brand":{"@type":"Brand","name":"Nike"}',
+      '"@type":"AggregateOffer","lowPrice":3200000,"highPrice":3500000,"offerCount":2,"priceCurrency":"VND"',
+      '"image":["',
+    ],
+    excludes: ['availability', 'noindex'],
+    headers: { 'cache-control': 's-maxage=60' },
+  },
+  // Trang biến thể dùng chung canonical với trang sản phẩm.
+  {
+    path: '/san-pham/air-max-90?sku=AM90-TRANG-41',
+    status: 200,
+    contains: ['>AM90-TRANG-41<', '3.200.000 ₫', canonical('/san-pham/air-max-90')],
+  },
+  { path: '/san-pham/khong-co', status: 404, contains: ['Không tìm thấy sản phẩm'] },
+  {
+    path: '/thuong-hieu/nike',
+    status: 200,
+    contains: [
+      '>Nike</h1>',
+      'href="/san-pham/air-max-90"',
+      canonical('/thuong-hieu/nike'),
+      '<meta property="og:title"',
     ],
   },
-  { path: '/san-pham/air-max-90?sku=AM90-TRANG-41', status: 200, contains: ['>AM90-TRANG-41<', '3.200.000 ₫'] },
-  { path: '/san-pham/khong-co', status: 404, contains: ['Không tìm thấy sản phẩm'] },
-  { path: '/thuong-hieu/nike', status: 200, contains: ['>Nike</h1>', 'href="/san-pham/air-max-90"'] },
   { path: '/danh-muc/khong-co', status: 404, contains: ['Không tìm thấy danh mục'] },
   { path: '/thuong-hieu', status: 200, contains: ['href="/thuong-hieu/seiko"'] },
   { path: '/thuong-hieu/seiko', status: 200, contains: ['>Seiko</h1>', 'Đồng hồ Nhật', 'Chưa có sản phẩm'] },
@@ -239,7 +294,13 @@ const CHECKS: Check[] = [
   {
     path: '/trang/chinh-sach-doi-tra',
     status: 200,
-    contains: ['<h1>Chính sách đổi trả</h1>', '<strong>7 ngày</strong>', '<footer'],
+    contains: [
+      '<h1>Chính sách đổi trả</h1>',
+      '<strong>7 ngày</strong>',
+      '<footer',
+      canonical('/trang/chinh-sach-doi-tra'),
+      '<meta name="description" content="Đổi trong 7 ngày.">',
+    ],
   },
   { path: '/trang/trang-nhap', status: 404, contains: ['Không tìm thấy trang', '<footer'] },
   {
@@ -267,7 +328,31 @@ const CHECKS: Check[] = [
   // Phiên khách chỉ có ở trình duyệt, nên HTML từ server chỉ có khung trang.
   { path: '/tai-khoan', status: 200, contains: ['<h1>Tài khoản</h1>', 'Đang tải'] },
   { path: '/xac-minh-email?token=sai', status: 200, contains: ['Link xác minh không hợp lệ hoặc đã hết hạn'] },
-  { path: '/admin/login', status: 200, contains: ['<div id="__nuxt">'] },
+  {
+    path: '/admin/login',
+    status: 200,
+    contains: ['<div id="__nuxt">'],
+    headers: { 'cache-control': 'no-store', 'x-robots-tag': 'noindex' },
+  },
+  // Sitemap chỉ có nội dung đã xuất bản, đang hiển thị; URL tuyệt đối theo SITE_URL.
+  {
+    path: '/sitemap.xml',
+    status: 200,
+    contains: [
+      `<loc>${BASE}/san-pham/air-max-90</loc>`,
+      `<loc>${BASE}/danh-muc/sneaker</loc>`,
+      `<loc>${BASE}/danh-muc/sneaker-co-thap</loc>`,
+      `<loc>${BASE}/thuong-hieu/seiko</loc>`,
+      `<loc>${BASE}/trang/chinh-sach-doi-tra</loc>`,
+    ],
+    excludes: ['trang-nhap', 'hang-an'],
+    headers: { 'content-type': 'application/xml' },
+  },
+  {
+    path: '/robots.txt',
+    status: 200,
+    contains: ['Disallow: /admin', 'Disallow: /api', `Sitemap: ${BASE}/sitemap.xml`],
+  },
 ]
 
 async function runChecks(): Promise<number> {
@@ -279,6 +364,10 @@ async function runChecks(): Promise<number> {
     const problems = [
       ...(res.status === check.status ? [] : [`status ${res.status}, cần ${check.status}`]),
       ...check.contains.filter((text) => !html.includes(text)).map((text) => `thiếu ${text}`),
+      ...(check.excludes ?? []).filter((text) => html.includes(text)).map((text) => `không được có ${text}`),
+      ...Object.entries(check.headers ?? {})
+        .filter(([name, text]) => !res.headers.get(name)?.includes(text))
+        .map(([name, text]) => `header ${name} là ${res.headers.get(name)}, cần chứa ${text}`),
     ]
     failures += problems.length ? 1 : 0
     console.log(problems.length ? `✗ ${check.path}: ${problems.join('; ')}` : `✓ ${check.path}`)
