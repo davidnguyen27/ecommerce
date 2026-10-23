@@ -197,7 +197,7 @@ const CHECKS: Check[] = [
     path: '/san-pham/air-max-90',
     status: 200,
     contains: [
-      '<h1>Air Max 90</h1>',
+      '>Air Max 90</h1>',
       '>AM90-DEN-40<',
       'Giá hãng',
       'href="/san-pham/air-max-90?sku=AM90-TRANG-41"',
@@ -210,10 +210,10 @@ const CHECKS: Check[] = [
   },
   { path: '/san-pham/air-max-90?sku=AM90-TRANG-41', status: 200, contains: ['>AM90-TRANG-41<', '3.200.000 ₫'] },
   { path: '/san-pham/khong-co', status: 404, contains: ['Không tìm thấy sản phẩm'] },
-  { path: '/thuong-hieu/nike', status: 200, contains: ['<h1>Nike</h1>', 'href="/san-pham/air-max-90"'] },
+  { path: '/thuong-hieu/nike', status: 200, contains: ['>Nike</h1>', 'href="/san-pham/air-max-90"'] },
   { path: '/danh-muc/khong-co', status: 404, contains: ['Không tìm thấy danh mục'] },
   { path: '/thuong-hieu', status: 200, contains: ['href="/thuong-hieu/seiko"'] },
-  { path: '/thuong-hieu/seiko', status: 200, contains: ['<h1>Seiko</h1>', 'Đồng hồ Nhật', 'Chưa có sản phẩm'] },
+  { path: '/thuong-hieu/seiko', status: 200, contains: ['>Seiko</h1>', 'Đồng hồ Nhật', 'Chưa có sản phẩm'] },
   { path: '/thuong-hieu/hang-an', status: 404, contains: ['Không tìm thấy thương hiệu'] },
   {
     path: '/trang/chinh-sach-doi-tra',
