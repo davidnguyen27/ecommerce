@@ -87,10 +87,15 @@ export function adminCategoryRoutes(prisma: Db) {
       await audited(prisma, req, async (tx, audit) => {
         // Cùng khóa với tạo và đổi cha, để không có danh mục con nào được gắn vào giữa lúc kiểm và lúc xóa.
         await lockTree(tx)
+        // Khóa dòng danh mục: sản phẩm đang được gắn vào nó (khóa `FOR KEY SHARE`) thì chờ nhau, không lọt qua bước đếm.
+        await tx.$executeRaw`SELECT 1 FROM "category" WHERE "id" = ${id}::uuid FOR UPDATE`
         const before = await tx.category.findUnique({ where: { id } })
         if (!before) throw categoryNotFound()
         if (await tx.category.count({ where: { parentId: id } })) {
           throw new AppError(409, ErrorCode.CONFLICT, 'Danh mục còn danh mục con nên không xóa được; hãy ẩn nó')
+        }
+        if (await tx.product.count({ where: { categoryId: id } })) {
+          throw new AppError(409, ErrorCode.CONFLICT, 'Danh mục còn sản phẩm nên không xóa được; hãy ẩn nó')
         }
         await tx.category.delete({ where: { id } })
         await audit({

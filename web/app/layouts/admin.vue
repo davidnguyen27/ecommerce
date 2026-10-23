@@ -3,12 +3,13 @@ import type { Permission } from '@ecommerce/shared'
 
 const session = useAdminSession()
 
-const MENU: { to: string; label: string; permission?: Permission }[] = [
+const MENU: { to: string; label: string; permission?: Permission | Permission[] }[] = [
   { to: '/admin', label: 'Tổng quan' },
   { to: '/admin/staff', label: 'Nhân viên', permission: 'staff.manage' },
   { to: '/admin/brands', label: 'Thương hiệu', permission: 'catalog.edit' },
   { to: '/admin/categories', label: 'Danh mục', permission: 'catalog.edit' },
   { to: '/admin/attribute-schemas', label: 'Schema thuộc tính', permission: 'catalog.edit' },
+  { to: '/admin/products', label: 'Sản phẩm', permission: ['catalog.edit', 'price.edit'] },
   { to: '/admin/pages', label: 'Trang nội dung', permission: 'content.edit' },
   { to: '/admin/legal-info', label: 'Thông tin pháp lý', permission: 'content.edit' },
   { to: '/admin/audit', label: 'Audit log', permission: 'audit.view' },

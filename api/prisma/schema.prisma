@@ -219,10 +219,11 @@ model Brand {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  products Product[]
+
   @@map("brand")
 }
 
-/// Nút trong cây danh mục, nằm trọn trong một nhóm hàng (ADR 0004). `parentId` null là con trực tiếp của nhóm hàng.
 /// Schema thuộc tính của một nhóm hàng; mọi danh mục trong nhóm hàng dùng chung.
 model AttributeSchema {
   productType ProductType @id @map("product_type")
@@ -233,6 +234,7 @@ model AttributeSchema {
   @@map("attribute_schema")
 }
 
+/// Nút trong cây danh mục, nằm trọn trong một nhóm hàng (ADR 0004). `parentId` null là con trực tiếp của nhóm hàng.
 model Category {
   id          String      @id @default(uuid()) @db.Uuid
   /// Cố định từ lúc tạo; danh mục con luôn cùng nhóm hàng với cha.
@@ -247,8 +249,81 @@ model Category {
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
+  products Product[]
+
   @@index([parentId])
   @@map("category")
+}
+
+/// Vòng đời sản phẩm; chỉ `published` hiện với khách. Chuyển trạng thái thuộc ticket 11.
+enum ProductStatus {
+  draft
+  published
+  archived
+
+  @@map("product_status")
+}
+
+enum VariantStatus {
+  active
+  discontinued
+
+  @@map("variant_status")
+}
+
+/// Sản phẩm: một mẫu hàng của một thương hiệu. Không có trường bảo hành (ADR 0005).
+model Product {
+  id                 String          @id @default(uuid()) @db.Uuid
+  /// Lấy từ danh mục lúc tạo và cố định; đổi danh mục chỉ trong cùng nhóm hàng.
+  productType        ProductType     @map("product_type")
+  brandId            String          @map("brand_id") @db.Uuid
+  brand              Brand           @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  categoryId         String          @map("category_id") @db.Uuid
+  category           Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  slug               String          @unique
+  name               String
+  /// Mã mẫu do hãng đặt; chuỗi rỗng khi chưa có.
+  modelCode          String          @default("") @map("model_code")
+  description        String          @default("")
+  /// Hướng dẫn sử dụng và bảo quản.
+  usageCare          String          @default("") @map("usage_care")
+  /// `SizeChart` (@ecommerce/shared), `null` khi không có.
+  sizeChart          Json?           @map("size_chart")
+  /// Thông tin nguồn gốc công bố, không kèm bằng chứng.
+  originStatement    String          @default("") @map("origin_statement")
+  /// Thuộc tính cấp sản phẩm, đã kiểm theo schema của nhóm hàng.
+  attributes         Json            @default("{}")
+  groundShippingOnly Boolean         @default(false) @map("ground_shipping_only")
+  status             ProductStatus   @default(draft)
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  variants ProductVariant[]
+
+  @@index([productType])
+  @@index([brandId])
+  @@index([categoryId])
+  @@map("product")
+}
+
+/// Biến thể khách mua. Migration có unique index `(product_id, attributes)` mà Prisma không khai báo được trên Json.
+model ProductVariant {
+  id             String        @id @default(uuid()) @db.Uuid
+  productId      String        @map("product_id") @db.Uuid
+  product        Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// Duy nhất toàn hệ thống, lưu chữ hoa.
+  sku            String        @unique
+  /// Thuộc tính cấp biến thể, đã kiểm theo schema của nhóm hàng.
+  attributes     Json          @default("{}")
+  /// VND đã gồm VAT; `null` khi chưa đặt giá. Check constraint: `> 0`, giá hãng `>=` giá bán.
+  price          BigInt?
+  compareAtPrice BigInt?       @map("compare_at_price")
+  status         VariantStatus @default(active)
+  sortOrder      Int           @default(0) @map("sort_order")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@map("product_variant")
 }
 
 /// Cấu hình hệ thống dạng khóa → giá trị JSON; schema của từng khóa định nghĩa trong `@ecommerce/shared`.

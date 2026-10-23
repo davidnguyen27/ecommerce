@@ -63,8 +63,10 @@ async function loadProfile(): Promise<StaffProfile> {
   return profile.value
 }
 
-function can(permission: Permission): boolean {
-  return profile.value?.permissions.includes(permission) ?? false
+/** Có quyền này, hoặc khi truyền danh sách thì có ít nhất một quyền trong đó. */
+function can(permission: Permission | readonly Permission[]): boolean {
+  const anyOf: readonly Permission[] = typeof permission === 'string' ? [permission] : permission
+  return anyOf.some((p) => profile.value?.permissions.includes(p) ?? false)
 }
 
 export function useAdminSession() {
