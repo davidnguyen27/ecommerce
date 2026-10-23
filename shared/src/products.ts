@@ -180,16 +180,56 @@ export type ProductCard = z.infer<typeof ProductCard>
 
 export const PRODUCT_PAGE_SIZE = 24
 
+/** Sắp xếp kết quả; bỏ trống thì có từ khóa xếp theo độ liên quan, không có thì mới xuất bản trước. */
+export const ProductSort = z.enum(['newest', 'price_asc', 'price_desc'])
+export type ProductSort = z.infer<typeof ProductSort>
+
+/** Bộ lọc thuộc tính trên URL là `attr.<key>=<giá trị>`, lặp lại để chọn nhiều giá trị (ví dụ `attr.gioi_tinh=Nam`). */
+export const ATTRIBUTE_FILTER_PREFIX = 'attr.'
+
+/** Ô bỏ trống trên form gửi lên chuỗi rỗng; coi như không lọc. */
+const blank = (value: unknown) => (value === '' ? undefined : value)
+const QueryText = z.preprocess(blank, z.string().trim().max(200).optional())
+const PriceBound = z.preprocess(blank, z.coerce.number().int().min(0).max(1_000_000_000_000).optional())
+const FilterValues = z
+  .union([z.string(), z.array(z.string())])
+  .transform((values) =>
+    [values]
+      .flat()
+      .map((v) => v.trim())
+      .filter(Boolean),
+  )
+  .pipe(z.array(z.string().max(100)).max(50))
+
 export const ProductListQuery = z.object({
+  /** Từ khóa: tên sản phẩm, tên thương hiệu, mã mẫu (không dấu, sai chính tả nhẹ) hoặc SKU. */
+  q: QueryText,
   /** Slug danh mục; gồm cả sản phẩm ở các danh mục con. */
-  category: z.string().optional(),
+  category: QueryText,
   /** Slug thương hiệu. */
-  brand: z.string().optional(),
+  brand: QueryText,
+  /** Nhóm hàng; ở trang danh mục thì nhóm hàng lấy từ danh mục. */
+  type: z.preprocess(blank, ProductType.optional()),
+  /** Khoảng giá VND, so trên giá các biến thể đang bán. */
+  minPrice: PriceBound,
+  maxPrice: PriceBound,
+  sort: z.preprocess(blank, ProductSort.optional()),
   page: z.coerce.number().int().min(1).max(10_000).default(1),
+  /** Key thuộc tính → các giá trị chọn, gom từ `attr.<key>` bằng `attributeFiltersOf`. */
+  attributes: z.record(z.string(), FilterValues).default({}),
 })
 export type ProductListQuery = z.input<typeof ProductListQuery>
 
-/** Sản phẩm đã xuất bản, mới xuất bản trước. */
+/** Gom các tham số `attr.<key>` của query string thành `{ key: giá trị }`. */
+export function attributeFiltersOf(query: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(query)
+      .filter(([name]) => name.startsWith(ATTRIBUTE_FILTER_PREFIX))
+      .map(([name, value]) => [name.slice(ATTRIBUTE_FILTER_PREFIX.length), value]),
+  )
+}
+
+/** Sản phẩm đã xuất bản, một trang. */
 export const ProductCardList = z.object({
   items: z.array(ProductCard),
   page: z.number(),
@@ -197,6 +237,31 @@ export const ProductCardList = z.object({
   total: z.number(),
 })
 export type ProductCardList = z.infer<typeof ProductCardList>
+
+/** Một bộ lọc thuộc tính và số sản phẩm của từng giá trị khi giữ nguyên mọi bộ lọc khác. */
+export const AttributeFacet = z.object({
+  key: z.string(),
+  label: z.string(),
+  type: z.enum(['enum', 'multi_enum', 'text', 'number', 'boolean']),
+  unit: z.string().nullable(),
+  values: z.array(z.object({ value: z.string(), count: z.number() })),
+})
+export type AttributeFacet = z.infer<typeof AttributeFacet>
+
+/** Kết quả tìm kiếm và lọc: một trang thẻ sản phẩm kèm facets. */
+export const ProductSearchResult = ProductCardList.extend({
+  /** Nhóm hàng đang xem (theo `type` hoặc danh mục); `null` thì chỉ lọc được giới tính, chung cho mọi nhóm hàng. */
+  productType: ProductType.nullable(),
+  facets: z.object({
+    /** Số sản phẩm của từng nhóm hàng, để thu hẹp khi chưa chọn nhóm hàng. */
+    productTypes: z.array(z.object({ productType: ProductType, count: z.number() })),
+    /** Thuộc tính có `filterable` của nhóm hàng đang xem, theo thứ tự trong schema. */
+    attributes: z.array(AttributeFacet),
+    /** Giá thấp nhất và cao nhất trong các biến thể đang bán; `null` khi không có sản phẩm. */
+    price: z.object({ min: z.number(), max: z.number() }).nullable(),
+  }),
+})
+export type ProductSearchResult = z.infer<typeof ProductSearchResult>
 
 /** Phiên bản đang xuất bản của sản phẩm, như khách thấy. */
 export const PublicProduct = z.object({

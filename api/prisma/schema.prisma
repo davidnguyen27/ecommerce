@@ -313,6 +313,7 @@ model Product {
   policyPages ProductPolicyPage[]
   documents   ProductDocument[]
   commitments ProductCommitment[]
+  search      ProductSearch?
 
   @@index([productType])
   @@index([brandId])
@@ -365,13 +366,33 @@ model ProductVersion {
   publishedById      String      @map("published_by_id") @db.Uuid
   publishedBy        Staff       @relation(fields: [publishedById], references: [id], onDelete: Restrict)
 
-  liveOf Product? @relation("LiveVersion")
+  liveOf   Product?       @relation("LiveVersion")
+  searchOf ProductSearch?
 
   @@unique([productId, version])
   @@index([slug])
   @@index([brandId])
   @@index([categoryId])
   @@map("product_version")
+}
+
+/// Dữ liệu tìm kiếm của sản phẩm đang hiện với khách, dựng từ phiên bản đang xuất bản và tên thương hiệu.
+/// Chỉ trigger trong migration ghi bảng này; truy vấn tìm kiếm viết raw SQL (api/src/catalog/search.ts).
+model ProductSearch {
+  productId String                  @id @map("product_id") @db.Uuid
+  product   Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  versionId String                  @unique @map("version_id") @db.Uuid
+  version   ProductVersion          @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  /// Tên sản phẩm, tên thương hiệu, mã mẫu đã bỏ dấu, chữ thường.
+  document  String
+  tsv       Unsupported("tsvector")
+  /// SKU đang bán, cách nhau và bao quanh bởi dấu cách.
+  skus      String
+
+  @@index([tsv], type: Gin)
+  @@index([document(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([skus(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@map("product_search")
 }
 
 /// Trang chính sách áp dụng cho sản phẩm; liên kết tới trang, không tới một phiên bản (GLOSSARY "Trang chính sách").
