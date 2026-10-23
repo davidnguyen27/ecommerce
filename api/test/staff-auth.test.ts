@@ -60,7 +60,10 @@ describe('nhân viên đăng nhập', () => {
 
     const login = await loginWeb(request)
 
-    const attributes = refreshSetCookie(login)!.split(';').slice(1).map((part) => part.trim().toLowerCase())
+    const attributes = refreshSetCookie(login)!
+      .split(';')
+      .slice(1)
+      .map((part) => part.trim().toLowerCase())
     expect(attributes).toEqual(
       expect.arrayContaining(['path=/api/admin/auth/refresh', 'httponly', 'secure', 'samesite=strict']),
     )

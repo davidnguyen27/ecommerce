@@ -69,10 +69,14 @@ export function adminStaffRoutes(prisma: Db) {
       )
     })
     .post('/:id/lock', async (req, res) => {
-      res.json(await updateStaff(prisma, req, 'staff.lock', (before) => (before.lockedAt ? null : { lockedAt: new Date() })))
+      res.json(
+        await updateStaff(prisma, req, 'staff.lock', (before) => (before.lockedAt ? null : { lockedAt: new Date() })),
+      )
     })
     .post('/:id/unlock', async (req, res) => {
-      res.json(await updateStaff(prisma, req, 'staff.unlock', (before) => (before.lockedAt ? { lockedAt: null } : null)))
+      res.json(
+        await updateStaff(prisma, req, 'staff.unlock', (before) => (before.lockedAt ? { lockedAt: null } : null)),
+      )
     })
 }
 

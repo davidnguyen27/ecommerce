@@ -8,7 +8,5 @@ const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
 }
 
 export function permissionsOf(roles: readonly StaffRole[]): Permission[] {
-  return Permission.options.filter((permission) =>
-    roles.some((role) => ROLE_PERMISSIONS[role].includes(permission)),
-  )
+  return Permission.options.filter((permission) => roles.some((role) => ROLE_PERMISSIONS[role].includes(permission)))
 }

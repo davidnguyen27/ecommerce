@@ -105,7 +105,10 @@ describe('quyền và audit', () => {
     const token = warehouse.accessToken
 
     const attempts = [
-      request.post('/api/admin/pages').set(bearer(token)).send({ ...PAGE, slug: 'khac' }),
+      request
+        .post('/api/admin/pages')
+        .set(bearer(token))
+        .send({ ...PAGE, slug: 'khac' }),
       editPage(request, token, page.id, { body: 'Sửa trộm' }),
       publish(request, token, page.id),
       request.get('/api/admin/pages').set(bearer(token)),
@@ -136,14 +139,20 @@ describe('quyền và audit', () => {
     await editPage(request, owner.accessToken, page.id, { body: 'Đổi trong 30 ngày.' })
     const published = await publish(request, owner.accessToken, page.id)
 
-    const audit = await request.get('/api/admin/audit').query({ entityType: 'content_page' }).set(bearer(owner.accessToken))
+    const audit = await request
+      .get('/api/admin/audit')
+      .query({ entityType: 'content_page' })
+      .set(bearer(owner.accessToken))
 
     expect(audit.body.items.map((e: { action: string }) => e.action)).toEqual([
       'content.page.publish',
       'content.page.update',
       'content.page.create',
     ])
-    expect(audit.body.items[0]).toMatchObject({ entityId: page.id, after: { version: 1, versionId: published.body.id } })
+    expect(audit.body.items[0]).toMatchObject({
+      entityId: page.id,
+      after: { version: 1, versionId: published.body.id },
+    })
     expect(audit.body.items[1]).toMatchObject({
       before: { body: PAGE.body },
       after: { body: 'Đổi trong 30 ngày.' },

@@ -24,7 +24,10 @@ export const StaffProfile = z.object({
 })
 export type StaffProfile = z.infer<typeof StaffProfile>
 
-const Roles = z.array(StaffRole).min(1).transform((roles) => [...new Set(roles)])
+const Roles = z
+  .array(StaffRole)
+  .min(1)
+  .transform((roles) => [...new Set(roles)])
 
 export const CreateStaffRequest = z.object({
   email: z.email(),

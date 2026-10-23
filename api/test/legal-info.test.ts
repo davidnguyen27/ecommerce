@@ -36,7 +36,10 @@ describe('thông tin pháp lý ở chân trang', () => {
     expect(save.status).toBe(200)
     expect((await request.get('/api/legal-info')).body).toEqual({ ...LEGAL, phone: '028 9999 9999' })
     const audit = await request.get('/api/admin/audit').set(bearer(owner.accessToken))
-    expect(audit.body.items.map((e: { action: string }) => e.action)).toEqual(['legal_info.change', 'legal_info.change'])
+    expect(audit.body.items.map((e: { action: string }) => e.action)).toEqual([
+      'legal_info.change',
+      'legal_info.change',
+    ])
     expect(audit.body.items[0]).toMatchObject({ before: { phone: LEGAL.phone }, after: { phone: '028 9999 9999' } })
   })
 

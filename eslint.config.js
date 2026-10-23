@@ -5,15 +5,7 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   {
-    ignores: [
-      '**/node_modules/',
-      '**/dist/',
-      '**/.output/',
-      '**/.nuxt/',
-      'api/src/generated/',
-      '.agents/',
-      '.claude/',
-    ],
+    ignores: ['**/node_modules/', '**/dist/', '**/.output/', '**/.nuxt/', 'api/src/generated/', '.agents/', '.claude/'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
