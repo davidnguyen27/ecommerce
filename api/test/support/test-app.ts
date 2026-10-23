@@ -7,6 +7,10 @@ import { createApp } from '../../src/app.ts'
 import { createPrisma } from '../../src/db.ts'
 import { InMemoryMailer } from '../../src/adapters/mailer.ts'
 import { InMemoryStorage } from '../../src/adapters/storage.ts'
+import { Jobs } from '../../src/jobs/jobs.ts'
+
+/** Gốc URL website trong link của email gửi ra từ test. */
+export const SITE_URL = 'https://shop.test'
 
 type Options = {
   /** Ghi đè URL DB, ví dụ để giả lập mất kết nối. */
@@ -34,9 +38,17 @@ export async function createTestApp(options: Options = {}) {
   const mailer = new InMemoryMailer()
   const storage = new InMemoryStorage()
   const jwtSecret = randomBytes(32).toString('base64url')
-  const app = createApp({ prisma, logger, mailer, storage, jwtSecret })
+  // Hàng đợi job thật trên DB của test; worker gửi thư vào mailer giả.
+  // DB bị ghi đè là DB giả lập hỏng, nên không khởi động worker trên đó.
+  const jobs = new Jobs({ databaseUrl, mailer, logger })
+  const startJobs = !options.databaseUrl
+  if (startJobs) await jobs.start()
+  const app = createApp({ prisma, logger, emails: jobs, storage, jwtSecret, siteUrl: SITE_URL })
 
-  onTestFinished(() => prisma.$disconnect())
+  onTestFinished(async () => {
+    if (startJobs) await jobs.stop()
+    await prisma.$disconnect()
+  })
 
   return {
     request: supertest(app),

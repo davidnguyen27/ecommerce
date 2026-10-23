@@ -35,6 +35,12 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Giá trị mặc định chỉ dùng cho local; staging/production phải đặt khóa riêng.
       JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-khong-dung-cho-production}
+      # Gốc URL trong link gửi qua email.
+      SITE_URL: ${SITE_URL:-http://localhost:${HTTP_PORT:-80}}
+      # Local chỉ ghi email ra log; staging/production đặt MAIL_PROVIDER=resend kèm RESEND_API_KEY, MAIL_FROM.
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-log}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-}
     depends_on:
       migrate: { condition: service_completed_successfully }
 
