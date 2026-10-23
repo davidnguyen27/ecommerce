@@ -42,8 +42,9 @@ model Staff {
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
 
-  auditLogs         AuditLog[]
-  publishedVersions ContentPageVersion[]
+  auditLogs                AuditLog[]
+  publishedVersions        ContentPageVersion[]
+  publishedProductVersions ProductVersion[]
 
   @@map("staff")
 }
@@ -175,6 +176,7 @@ model ContentPage {
   updatedAt DateTime        @updatedAt @map("updated_at")
 
   versions ContentPageVersion[]
+  products ProductPolicyPage[]
 
   @@map("content_page")
 }
@@ -221,7 +223,8 @@ model Brand {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  products Product[]
+  products        Product[]
+  productVersions ProductVersion[]
 
   @@map("brand")
 }
@@ -251,13 +254,14 @@ model Category {
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
-  products Product[]
+  products        Product[]
+  productVersions ProductVersion[]
 
   @@index([parentId])
   @@map("category")
 }
 
-/// Vòng đời sản phẩm; chỉ `published` hiện với khách. Chuyển trạng thái thuộc ticket 11.
+/// Vòng đời sản phẩm; chỉ `published` hiện với khách, và khách chỉ đọc phiên bản đang xuất bản.
 enum ProductStatus {
   draft
   published
@@ -297,11 +301,16 @@ model Product {
   attributes         Json            @default("{}")
   groundShippingOnly Boolean         @default(false) @map("ground_shipping_only")
   status             ProductStatus   @default(draft)
+  /// Phiên bản khách đang thấy; check constraint: có đúng khi `status = published`.
+  liveVersionId      String?         @unique @map("live_version_id") @db.Uuid
+  liveVersion        ProductVersion? @relation("LiveVersion", fields: [liveVersionId], references: [id], onDelete: Restrict)
   createdAt          DateTime        @default(now()) @map("created_at")
   updatedAt          DateTime        @updatedAt @map("updated_at")
 
-  variants ProductVariant[]
-  images   ProductImage[]
+  variants    ProductVariant[]
+  images      ProductImage[]
+  versions    ProductVersion[]    @relation("ProductVersions")
+  policyPages ProductPolicyPage[]
 
   @@index([productType])
   @@index([brandId])
@@ -329,6 +338,50 @@ model ProductVariant {
   images ProductImageVariant[]
 
   @@map("product_variant")
+}
+
+/// Nội dung sản phẩm tại một lần xuất bản; khách chỉ đọc từ đây. Không sửa, không xóa (trigger trong migration).
+/// Các cột ngoài `snapshot` là bản chép từ snapshot để lọc và sắp xếp.
+model ProductVersion {
+  id                 String      @id @default(uuid()) @db.Uuid
+  productId          String      @map("product_id") @db.Uuid
+  product            Product     @relation("ProductVersions", fields: [productId], references: [id], onDelete: Restrict)
+  /// Đánh số từ 1 trong từng sản phẩm.
+  version            Int
+  slug               String
+  productType        ProductType @map("product_type")
+  brandId            String      @map("brand_id") @db.Uuid
+  brand              Brand       @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  categoryId         String      @map("category_id") @db.Uuid
+  category           Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  /// Giá thấp nhất trong các biến thể đang bán, và giá hãng của chính biến thể đó.
+  fromPrice          BigInt      @map("from_price")
+  fromCompareAtPrice BigInt?     @map("from_compare_at_price")
+  /// `ProductSnapshot` (api/src/catalog/publication.ts).
+  snapshot           Json
+  publishedAt        DateTime    @default(now()) @map("published_at")
+  publishedById      String      @map("published_by_id") @db.Uuid
+  publishedBy        Staff       @relation(fields: [publishedById], references: [id], onDelete: Restrict)
+
+  liveOf Product? @relation("LiveVersion")
+
+  @@unique([productId, version])
+  @@index([slug])
+  @@index([brandId])
+  @@index([categoryId])
+  @@map("product_version")
+}
+
+/// Trang chính sách áp dụng cho sản phẩm; liên kết tới trang, không tới một phiên bản (GLOSSARY "Trang chính sách").
+model ProductPolicyPage {
+  productId String      @map("product_id") @db.Uuid
+  product   Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  pageId    String      @map("page_id") @db.Uuid
+  page      ContentPage @relation(fields: [pageId], references: [id], onDelete: Restrict)
+
+  @@id([productId, pageId])
+  @@index([pageId])
+  @@map("product_policy_page")
 }
 
 /// Ảnh sản phẩm trên bucket public: bản gốc `<storageKey>/original.<đuôi>` và các cỡ webp `<storageKey>/w<cỡ>.webp`.
