@@ -126,6 +126,7 @@ const CHECKS: Check[] = [
       'Công ty Smoke Test',
       'alt="Đã thông báo Bộ Công Thương"',
       '<summary>Danh mục</summary>',
+      'href="/tai-khoan"',
       'Giày dép',
       'href="/danh-muc/sneaker-co-thap"',
     ],
@@ -145,6 +146,20 @@ const CHECKS: Check[] = [
     contains: ['<h1>Chính sách đổi trả</h1>', '<strong>7 ngày</strong>', '<footer'],
   },
   { path: '/trang/trang-nhap', status: 404, contains: ['Không tìm thấy trang', '<footer'] },
+  {
+    path: '/dang-ky',
+    status: 200,
+    contains: [
+      '<h1>Đăng ký tài khoản</h1>',
+      'name="acceptPrivacyPolicy"',
+      'href="/trang/chinh-sach-bao-mat"',
+      '<footer',
+    ],
+  },
+  { path: '/dang-nhap', status: 200, contains: ['<h1>Đăng nhập</h1>', 'autocomplete="current-password"'] },
+  // Phiên khách chỉ có ở trình duyệt, nên HTML từ server chỉ có khung trang.
+  { path: '/tai-khoan', status: 200, contains: ['<h1>Tài khoản</h1>', 'Đang tải'] },
+  { path: '/xac-minh-email?token=sai', status: 200, contains: ['Link xác minh không hợp lệ hoặc đã hết hạn'] },
   { path: '/admin/login', status: 200, contains: ['<div id="__nuxt">'] },
 ]
 

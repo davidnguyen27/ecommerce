@@ -7,9 +7,10 @@ datasource db {
   provider = "postgresql"
 }
 
-/// Miền xác thực, cũng là audience của JWT. Ticket 05 thêm `customer`.
+/// Miền xác thực, cũng là audience của JWT (ADR 0001).
 enum AuthAudience {
   staff
+  customer
 
   @@map("auth_audience")
 }
@@ -89,6 +90,60 @@ model RefreshToken {
   @@map("refresh_token")
 }
 
+/// Khách tự đăng ký; tách hẳn khỏi `staff` (ADR 0001), nên có thể trùng email với một nhân viên.
+model Customer {
+  id              String    @id @default(uuid()) @db.Uuid
+  /// Luôn lưu dạng chữ thường.
+  email           String    @unique
+  /// argon2id, dạng chuỗi PHC.
+  passwordHash    String    @map("password_hash")
+  /// Chưa xác minh không chặn việc dùng tài khoản.
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  consents CustomerConsent[]
+  tokens   CustomerToken[]
+
+  @@map("customer")
+}
+
+/// Append-only: khách đồng ý với đúng phiên bản chính sách bảo mật nào, vào lúc nào.
+model CustomerConsent {
+  id              String             @id @default(uuid()) @db.Uuid
+  customerId      String             @map("customer_id") @db.Uuid
+  customer        Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  policyVersionId String             @map("policy_version_id") @db.Uuid
+  policyVersion   ContentPageVersion @relation(fields: [policyVersionId], references: [id], onDelete: Restrict)
+  consentedAt     DateTime           @default(now()) @map("consented_at")
+
+  @@index([customerId])
+  @@map("customer_consent")
+}
+
+/// Mục đích của token một lần gửi qua email. Ticket 06 thêm đặt lại mật khẩu.
+enum CustomerTokenPurpose {
+  email_verification
+
+  @@map("customer_token_purpose")
+}
+
+/// Token một lần, có hạn, gửi qua email. Chỉ lưu hash.
+model CustomerToken {
+  id         String               @id @default(uuid()) @db.Uuid
+  customerId String               @map("customer_id") @db.Uuid
+  customer   Customer             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  purpose    CustomerTokenPurpose
+  /// SHA-256 của token, hex.
+  tokenHash  String               @unique @map("token_hash")
+  expiresAt  DateTime             @map("expires_at")
+  usedAt     DateTime?            @map("used_at")
+  createdAt  DateTime             @default(now()) @map("created_at")
+
+  @@index([customerId, purpose])
+  @@map("customer_token")
+}
+
 enum ContentPageKind {
   about
   process
@@ -126,6 +181,8 @@ model ContentPageVersion {
   publishedAt   DateTime    @default(now()) @map("published_at")
   publishedById String      @map("published_by_id") @db.Uuid
   publishedBy   Staff       @relation(fields: [publishedById], references: [id], onDelete: Restrict)
+
+  customerConsents CustomerConsent[]
 
   @@unique([pageId, version])
   @@map("content_page_version")
