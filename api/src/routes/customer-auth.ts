@@ -13,8 +13,7 @@ import { findCurrentPrivacyPolicy } from '../content/pages.ts'
 import { sendVerificationEmail, verifyEmail } from '../customers/email-verification.ts'
 import { resetPassword, sendPasswordResetEmail } from '../customers/password-reset.ts'
 import type { Db } from '../db.ts'
-import { Prisma } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError, isUniqueViolation } from '../http/errors.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { parse } from '../http/validation.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
@@ -74,9 +73,7 @@ export function customerAuthRoutes(deps: CustomerAuthDeps) {
         })
         .catch((err: unknown) => {
           // Chỉ báo trùng, không nói thêm gì về tài khoản đã có.
-          throw err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'
-            ? new AppError(409, ErrorCode.CONFLICT, 'Email này đã được đăng ký')
-            : err
+          throw isUniqueViolation(err) ? new AppError(409, ErrorCode.CONFLICT, 'Email này đã được đăng ký') : err
         })
 
       await sessions.start(req, res, customer.id, 201)

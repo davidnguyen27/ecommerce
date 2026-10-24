@@ -1,7 +1,13 @@
 import { ErrorCode, SizeChart, type AdminProduct, type AdminVariant, type AttributeValues } from '@ecommerce/shared'
+import { z } from 'zod'
 import type { DbClient } from '../db.ts'
 import type { Prisma, Product, ProductVariant } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
+
+export const ProductParams = z.object({ id: z.uuid() })
+
+/** Thứ tự hiển thị của biến thể và ảnh. */
+export const SORT_ORDER = [{ sortOrder: 'asc' }, { createdAt: 'asc' }] as const
 
 export const productNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy sản phẩm')
 
@@ -9,7 +15,7 @@ export const productNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Kh�
 export async function loadProduct(db: DbClient, id: string) {
   const product = await db.product.findUnique({
     where: { id },
-    include: { variants: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] } },
+    include: { variants: { orderBy: [...SORT_ORDER] } },
   })
   if (!product) throw productNotFound()
   return product

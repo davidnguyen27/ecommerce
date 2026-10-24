@@ -1,8 +1,8 @@
-import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
 import { hashPassword } from '../auth/password.ts'
 import { revokeAllRefreshTokens } from '../auth/refresh-tokens.ts'
 import type { Db, DbClient } from '../db.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
+import { claimCustomerToken, issueCustomerToken } from './customer-tokens.ts'
 
 const RESET_TTL_MS = 60 * 60 * 1000
 
@@ -13,17 +13,7 @@ export async function sendPasswordResetEmail(
   siteUrl: string,
   customer: { id: string; email: string },
 ) {
-  const token = newOpaqueToken()
-  await db.customerToken.create({
-    data: {
-      customerId: customer.id,
-      purpose: 'password_reset',
-      tokenHash: hashOpaqueToken(token),
-      expiresAt: new Date(Date.now() + RESET_TTL_MS),
-    },
-  })
-  const link = new URL('/dat-lai-mat-khau', siteUrl)
-  link.searchParams.set('token', token)
+  const link = await issueCustomerToken(db, customer.id, 'password_reset', RESET_TTL_MS, siteUrl, '/dat-lai-mat-khau')
   await emails.sendEmail(db, {
     to: customer.email,
     subject: 'Đặt lại mật khẩu',
@@ -47,17 +37,10 @@ export async function setCustomerPassword(db: DbClient, customerId: string, pass
 /** Đặt mật khẩu mới bằng token trong thư; trả `false` khi token sai, đã dùng hoặc hết hạn. */
 export async function resetPassword(prisma: Db, token: string, password: string): Promise<boolean> {
   const passwordHash = await hashPassword(password)
-  const now = new Date()
   return prisma.$transaction(async (tx) => {
-    const found = await tx.customerToken.findUnique({ where: { tokenHash: hashOpaqueToken(token) } })
-    if (!found || found.purpose !== 'password_reset') return false
-    // Đánh dấu đã dùng có điều kiện, để hai lần gửi cùng lúc chỉ một lần thành công.
-    const claimed = await tx.customerToken.updateMany({
-      where: { id: found.id, usedAt: null, expiresAt: { gt: now } },
-      data: { usedAt: now },
-    })
-    if (claimed.count === 0) return false
-    await setCustomerPassword(tx, found.customerId, passwordHash)
+    const customerId = await claimCustomerToken(tx, token, 'password_reset')
+    if (customerId === null) return false
+    await setCustomerPassword(tx, customerId, passwordHash)
     return true
   })
 }

@@ -10,7 +10,7 @@ import {
 import type { Storage } from '../adapters/storage.ts'
 import { audited } from '../audit/audited.ts'
 import { requirePermission } from '../auth/staff-context.ts'
-import { loadProduct, lockProduct } from '../catalog/products.ts'
+import { ProductParams, loadProduct, lockProduct } from '../catalog/products.ts'
 import type { Db, DbClient } from '../db.ts'
 import type { ProductDocument } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
@@ -22,7 +22,6 @@ import {
   uploadedDocument,
 } from '../media/documents.ts'
 
-const ProductParams = z.object({ id: z.uuid() })
 const DocumentParams = z.object({ id: z.uuid(), documentId: z.uuid() })
 
 const documentNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy chứng từ')

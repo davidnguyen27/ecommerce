@@ -209,7 +209,7 @@ function addRow(chart: SizeChart) {
 }
 
 await load()
-const schema = AttributeSchema.parse(await $fetch(`/api/attribute-schemas/${product.value!.productType}`))
+const schema = AttributeSchema.parse(await session.adminFetch(`/api/attribute-schemas/${product.value!.productType}`))
 definitions.value = schema.attributes
 // Thương hiệu và danh mục cần `catalog.edit`; người chỉ sửa giá xem phần chung ở dạng chỉ đọc.
 if (canEdit) {

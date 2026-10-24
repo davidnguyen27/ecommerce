@@ -7,7 +7,7 @@ import { audited } from '../audit/audited.ts'
 import { requirePermission } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
 import { Prisma, type Brand } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError, rethrowUnique } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 import {
   LOGO_WIDTHS,
@@ -40,10 +40,6 @@ const slugTaken = () =>
   ])
 
 const brandNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy thương hiệu')
-
-function rethrowSlugTaken(err: unknown): never {
-  throw err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002' ? slugTaken() : err
-}
 
 /** Quản lý thương hiệu: logo cần `media.upload`, các route khác cần `catalog.edit`. */
 export function adminBrandRoutes(prisma: Db, storage: Storage) {
@@ -84,7 +80,7 @@ export function adminBrandRoutes(prisma: Db, storage: Storage) {
             after: auditFields(created),
           })
           return created
-        }).catch(rethrowSlugTaken)
+        }).catch(rethrowUnique(slugTaken))
         res.status(201).json(toAdmin(storage, brand))
       })
       .put('/:id', async (req, res) => {
@@ -135,7 +131,7 @@ async function updateBrand(
     const after = await tx.brand.update({ where: { id }, data })
     await audit({ action, entityType: 'brand', entityId: id, before: auditFields(before), after: auditFields(after) })
     return after
-  }).catch(rethrowSlugTaken)
+  }).catch(rethrowUnique(slugTaken))
 }
 
 /**

@@ -13,11 +13,11 @@ import {
 import type { Storage } from '../adapters/storage.ts'
 import { audited } from '../audit/audited.ts'
 import { requirePermission } from '../auth/staff-context.ts'
-import { loadProduct, lockProduct } from '../catalog/products.ts'
+import { ProductParams, SORT_ORDER, loadProduct, lockProduct } from '../catalog/products.ts'
 import { liveImages, loadDraft } from '../catalog/publication.ts'
 import type { Db, DbClient } from '../db.ts'
 import type { ProductImage } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError, invalidField } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 import {
   PRODUCT_IMAGE_WIDTHS,
@@ -29,16 +29,12 @@ import {
   type StoredImage,
 } from '../media/images.ts'
 
-const ProductParams = z.object({ id: z.uuid() })
 const ImageParams = z.object({ id: z.uuid(), imageId: z.uuid() })
 
 type ImageWithVariants = ProductImage & { variants: { variantId: string }[] }
 
-const ORDER = [{ sortOrder: 'asc' }, { createdAt: 'asc' }] as const
 const WITH_VARIANTS = { variants: { select: { variantId: true }, orderBy: { variantId: 'asc' } } } as const
 
-const invalid = (path: string, message: string) =>
-  new AppError(400, ErrorCode.VALIDATION_ERROR, message, [{ path, message }])
 const imageNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy ảnh')
 
 const stored = (image: ProductImage): StoredImage => ({
@@ -68,7 +64,7 @@ function toAdminImage(storage: Storage, image: ImageWithVariants): AdminProductI
 }
 
 const imagesOf = (db: DbClient, productId: string) =>
-  db.productImage.findMany({ where: { productId }, include: WITH_VARIANTS, orderBy: [...ORDER] })
+  db.productImage.findMany({ where: { productId }, include: WITH_VARIANTS, orderBy: [...SORT_ORDER] })
 
 /**
  * Ảnh của một sản phẩm, mount tại `/products/:id/images`. Xem cần quyền xem sản phẩm hoặc `media.upload`;
@@ -136,7 +132,7 @@ export function adminProductImageRoutes(prisma: Db, storage: Storage) {
             new Set(imageIds).size !== before.length ||
             !imageIds.every((i) => before.includes(i))
           ) {
-            throw invalid('imageIds', 'Thứ tự mới phải gồm đúng mọi ảnh của sản phẩm, mỗi ảnh một lần')
+            throw invalidField('imageIds', 'Thứ tự mới phải gồm đúng mọi ảnh của sản phẩm, mỗi ảnh một lần')
           }
           if (isDeepStrictEqual(imageIds, before) && current.every((image, index) => image.sortOrder === index)) {
             return current
@@ -166,7 +162,7 @@ export function adminProductImageRoutes(prisma: Db, storage: Storage) {
           const own = new Set(product.variants.map((v) => v.id))
           const foreign = input.variantIds.findIndex((variantId) => !own.has(variantId))
           if (foreign !== -1)
-            throw invalid(`variantIds.${foreign}`, 'Chỉ gắn được ảnh vào biến thể của chính sản phẩm này')
+            throw invalidField(`variantIds.${foreign}`, 'Chỉ gắn được ảnh vào biến thể của chính sản phẩm này')
           if (before.alt === input.alt && isDeepStrictEqual(variantIdsOf(before), variantIds)) return before
 
           const after = await tx.productImage.update({

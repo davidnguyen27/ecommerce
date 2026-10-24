@@ -583,6 +583,21 @@ describe('giá', () => {
     for (const res of attempts) expect(res.status).toBe(403)
   })
 
+  it('nhân viên không có catalog.edit lẫn price.edit thì 403 khi lưu biến thể, kể cả lưu lại không đổi gì', async () => {
+    const { request, prisma, token: ownerToken, product } = await sneakerCatalog()
+    const variant = await addVariant(request, ownerToken, product.id, { ...BLACK_40, price: 3_500_000 })
+    const staff = await createStaff(request, ownerToken, ['sales'])
+    // Mọi role hiện có đều có một trong hai quyền; dựng nhân viên không role để thử đúng cổng của route.
+    await prisma.staff.update({ where: { id: staff.id }, data: { roles: [] } })
+
+    const res = await editVariant(request, staff.accessToken, product.id, variant.body.id, {
+      ...BLACK_40,
+      price: 3_500_000,
+    })
+
+    expect(res.status).toBe(403)
+  })
+
   it('chưa đăng nhập thì 401', async () => {
     const { request, product } = await sneakerCatalog()
 
