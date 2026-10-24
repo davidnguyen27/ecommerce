@@ -9,8 +9,8 @@ import {
 import { audited } from '../audit/audited.ts'
 import { requirePermission } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
-import { Prisma, type CommitmentType } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import type { CommitmentType } from '../generated/prisma/client.ts'
+import { AppError, conflictField, rethrowUnique } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 
 const TypeParams = z.object({ id: z.uuid() })
@@ -18,13 +18,7 @@ const TypeParams = z.object({ id: z.uuid() })
 const toBody = ({ id, name, kind }: CommitmentType): CommitmentTypeBody => ({ id, name, kind })
 const auditFields = ({ name, kind }: CommitmentType) => ({ name, kind })
 
-function rethrowNameTaken(err: unknown): never {
-  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-    const message = 'Đã có loại cam kết cùng tên'
-    throw new AppError(409, ErrorCode.CONFLICT, message, [{ path: 'name', message }])
-  }
-  throw err
-}
+const nameTaken = () => conflictField('name', 'Đã có loại cam kết cùng tên')
 
 /**
  * Danh sách đóng các loại cam kết. Ai soạn sản phẩm hay xem chứng từ cũng đọc được;
@@ -52,7 +46,7 @@ export function adminCommitmentTypeRoutes(prisma: Db) {
           after: auditFields(row),
         })
         return row
-      }).catch(rethrowNameTaken)
+      }).catch(rethrowUnique(nameTaken))
       res.status(201).json(toBody(created))
     })
     .put('/:id', requirePermission('commitment.edit'), async (req, res) => {
@@ -73,7 +67,7 @@ export function adminCommitmentTypeRoutes(prisma: Db) {
           after: auditFields(after),
         })
         return after
-      }).catch(rethrowNameTaken)
+      }).catch(rethrowUnique(nameTaken))
       res.json(toBody(updated))
     })
 }

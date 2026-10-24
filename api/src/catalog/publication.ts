@@ -5,7 +5,7 @@ import type { DbClient } from '../db.ts'
 import { COMMITMENTS_WITH_TYPE, toPublicCommitment } from './commitments.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { StoredImage } from '../media/images.ts'
-import { productNotFound, toAdminProduct, toNumber } from './products.ts'
+import { SORT_ORDER, productNotFound, toAdminProduct, toNumber } from './products.ts'
 
 const Values = z.record(z.string(), z.union([z.string(), z.array(z.string()), z.number(), z.boolean()]))
 
@@ -45,15 +45,13 @@ export const ProductSnapshot = z.object({
 })
 export type ProductSnapshot = z.infer<typeof ProductSnapshot>
 
-const ORDER = [{ sortOrder: 'asc' }, { createdAt: 'asc' }] as const
-
 /** Bản đang soạn của sản phẩm, đủ để dựng snapshot. */
 export async function loadDraft(db: DbClient, id: string) {
   const product = await db.product.findUnique({
     where: { id },
     include: {
-      variants: { orderBy: [...ORDER] },
-      images: { orderBy: [...ORDER], include: { variants: { select: { variantId: true } } } },
+      variants: { orderBy: [...SORT_ORDER] },
+      images: { orderBy: [...SORT_ORDER], include: { variants: { select: { variantId: true } } } },
       policyPages: { select: { pageId: true } },
       commitments: COMMITMENTS_WITH_TYPE,
       liveVersion: true,
