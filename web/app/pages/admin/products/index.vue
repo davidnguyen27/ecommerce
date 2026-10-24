@@ -36,7 +36,7 @@ watch(
   async (productType) => {
     form.attributes = {}
     definitions.value = productType
-      ? AttributeSchema.parse(await $fetch(`/api/attribute-schemas/${productType}`)).attributes.filter(
+      ? AttributeSchema.parse(await session.adminFetch(`/api/attribute-schemas/${productType}`)).attributes.filter(
           (d) => d.level === 'product',
         )
       : []
