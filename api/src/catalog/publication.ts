@@ -1,7 +1,8 @@
 import { isDeepStrictEqual } from 'node:util'
 import { z } from 'zod'
-import { ProductType, SizeChart, type AdminProductDetail, type FieldError } from '@ecommerce/shared'
+import { ProductType, PublicCommitment, SizeChart, type AdminProductDetail, type FieldError } from '@ecommerce/shared'
 import type { DbClient } from '../db.ts'
+import { COMMITMENTS_WITH_TYPE, toPublicCommitment } from './commitments.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { StoredImage } from '../media/images.ts'
 import { productNotFound, toAdminProduct, toNumber } from './products.ts'
@@ -10,7 +11,8 @@ const Values = z.record(z.string(), z.union([z.string(), z.array(z.string()), z.
 
 /**
  * Mọi thứ khách thấy của một sản phẩm tại lần xuất bản. Endpoint công khai chỉ đọc từ đây
- * (CODING_STANDARDS "Snapshot đã xuất bản"); tên thương hiệu, danh mục, trang chính sách thì đọc từ chính chúng.
+ * (CODING_STANDARDS "Snapshot đã xuất bản"), kể cả cam kết có bằng chứng; tên thương hiệu, danh mục,
+ * tiêu đề trang chính sách và nhãn thuộc tính thì đọc từ chính chúng.
  */
 export const ProductSnapshot = z.object({
   productType: ProductType,
@@ -38,6 +40,8 @@ export const ProductSnapshot = z.object({
   /** Theo thứ tự hiển thị; `variantIds` chỉ gồm biến thể đang bán, rỗng là ảnh chung. */
   images: z.array(StoredImage.extend({ id: z.string(), alt: z.string(), variantIds: z.array(z.string()) })),
   policyPageIds: z.array(z.string()),
+  /** Cam kết có bằng chứng như khách thấy; phiên bản xuất bản trước khi có trường này coi như không có cam kết. */
+  commitments: z.array(PublicCommitment).default([]),
 })
 export type ProductSnapshot = z.infer<typeof ProductSnapshot>
 
@@ -51,6 +55,7 @@ export async function loadDraft(db: DbClient, id: string) {
       variants: { orderBy: [...ORDER] },
       images: { orderBy: [...ORDER], include: { variants: { select: { variantId: true } } } },
       policyPages: { select: { pageId: true } },
+      commitments: COMMITMENTS_WITH_TYPE,
       liveVersion: true,
     },
   })
@@ -106,6 +111,7 @@ export function buildSnapshot(draft: Draft): ProductSnapshot {
       return [{ id, key, contentType, width, height, widths, alt, variantIds }]
     }),
     policyPageIds: draft.policyPages.map((p) => p.pageId).sort(),
+    commitments: draft.commitments.map(toPublicCommitment),
   }
 }
 
@@ -140,6 +146,35 @@ export async function createVersion(
       publishedById,
     },
   })
+}
+
+/** Phiên bản khách đang thấy kèm snapshot; sản phẩm chưa xuất bản thì null. */
+export async function loadLiveVersion(db: DbClient, liveVersionId: string | null) {
+  if (liveVersionId === null) return null
+  const version = await db.productVersion.findUniqueOrThrow({ where: { id: liveVersionId } })
+  return { version: version.version, snapshot: ProductSnapshot.parse(version.snapshot) }
+}
+
+/**
+ * Giá đổi có hiệu lực ngay với khách, không chờ xuất bản lại: phiên bản mới chép phiên bản đang xuất bản
+ * và chỉ thay giá của biến thể đó, nên nội dung đang soạn không lộ ra. Gọi dưới khóa dòng sản phẩm.
+ */
+export async function publishPrice(
+  tx: Prisma.TransactionClient,
+  productId: string,
+  live: ProductSnapshot,
+  variant: { id: string; price: number; compareAtPrice: number | null },
+  publishedById: string,
+) {
+  const snapshot: ProductSnapshot = {
+    ...live,
+    variants: live.variants.map((v) =>
+      v.id === variant.id ? { ...v, price: variant.price, compareAtPrice: variant.compareAtPrice } : v,
+    ),
+  }
+  const version = await createVersion(tx, productId, snapshot, publishedById)
+  await tx.product.update({ where: { id: productId }, data: { liveVersionId: version.id } })
+  return version
 }
 
 /** Có thay đổi chưa xuất bản: snapshot dựng lại từ bản đang soạn khác phiên bản khách đang thấy. */

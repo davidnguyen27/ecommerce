@@ -10,7 +10,7 @@ import {
   type PolicyPageOptionList,
 } from '@ecommerce/shared'
 import { audited, type Audit } from '../audit/audited.ts'
-import { forbidden, hasPermission, requirePermission } from '../auth/staff-context.ts'
+import { currentStaff, forbidden, hasPermission, requirePermission } from '../auth/staff-context.ts'
 import { assertAttributes, lockAttributeSchema } from '../catalog/attribute-schemas.ts'
 import {
   lockProduct,
@@ -21,7 +21,7 @@ import {
   toNumber,
   variantAuditFields,
 } from '../catalog/products.ts'
-import { loadDraft, toAdminProductDetail } from '../catalog/publication.ts'
+import { loadDraft, loadLiveVersion, publishPrice, toAdminProductDetail } from '../catalog/publication.ts'
 import type { Db } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
@@ -158,7 +158,7 @@ export function adminProductRoutes(prisma: Db) {
         res.status(201).json(created)
       })
       // Người chỉ có `price.edit` cũng dùng route này để đổi giá, gửi kèm các trường khác không đổi.
-      .put('/:id/variants/:variantId', async (req, res) => {
+      .put('/:id/variants/:variantId', requirePermission('catalog.edit', 'price.edit'), async (req, res) => {
         const { id, variantId } = parse(VariantParams, req.params)
         const input = parse(VariantRequest, req.body)
         const updated = await audited(prisma, req, (tx, audit) => saveVariant(tx, audit, req, id, variantId, input))
@@ -220,6 +220,11 @@ async function saveVariant(
       'Đây là biến thể đang bán cuối cùng của sản phẩm đã xuất bản; muốn thôi bán thì lưu trữ sản phẩm',
     )
   }
+  const live = await loadLiveVersion(tx, product.liveVersionId)
+  const onWebsite = live?.snapshot.variants.some((v) => v.id === before?.id) ?? false
+  if (product.status === 'published' && price.price === null && (fields.status === 'active' || onWebsite)) {
+    throw conflict('price', 'Biến thể của sản phẩm đã xuất bản phải có giá bán')
+  }
 
   const data = { ...fields, ...price }
   const after = await (
@@ -248,6 +253,17 @@ async function saveVariant(
       before: priceAuditFields(before ?? { ...after, price: null, compareAtPrice: null }),
       after: priceAuditFields(after),
     })
+    if (live && onWebsite && price.price !== null) {
+      const variant = { id: after.id, price: price.price, compareAtPrice: price.compareAtPrice }
+      const version = await publishPrice(tx, productId, live.snapshot, variant, currentStaff(req).id)
+      await audit({
+        action: 'catalog.product.publish',
+        entityType: 'product',
+        entityId: productId,
+        before: { status: product.status, liveVersion: live.version },
+        after: { status: product.status, liveVersion: version.version },
+      })
+    }
   }
   return toAdminVariant(after)
 }

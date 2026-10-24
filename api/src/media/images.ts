@@ -53,20 +53,20 @@ export async function storeImage(storage: Storage, key: string, file: Buffer, wi
   const { width, height } = meta.autoOrient
   const image: StoredImage = { key, contentType, width, height, widths }
 
-  const sizes = await Promise.all(
-    widths.map((w) =>
-      sharp(file, { limitInputPixels: MAX_INPUT_PIXELS })
-        .autoOrient()
-        .resize({ width: w, withoutEnlargement: true })
-        .webp({ quality: 80 })
-        .toBuffer(),
-    ),
-  ).catch(() => {
+  const oriented = () => sharp(file, { limitInputPixels: MAX_INPUT_PIXELS }).autoOrient()
+  const [original, ...sizes] = await Promise.all([
+    // Bản gốc nằm trên bucket public: mã hóa lại cùng định dạng để bỏ EXIF (vị trí GPS, máy chụp), xoay sẵn theo chiều chụp.
+    // png không truyền `quality`: với png, sharp hiểu đó là giảm số màu.
+    oriented()
+      .toFormat(meta.format!, meta.format === 'png' ? {} : { quality: 90 })
+      .toBuffer(),
+    ...widths.map((w) => oriented().resize({ width: w, withoutEnlargement: true }).webp({ quality: 80 }).toBuffer()),
+  ]).catch(() => {
     throw fileError(400, 'Không đọc được nội dung ảnh')
   })
 
   const objects = [
-    { key: originalKey(image), body: file, contentType },
+    { key: originalKey(image), body: original!, contentType },
     ...widths.map((w, i) => ({ key: sizeKey(key, w), body: sizes[i]!, contentType: 'image/webp' })),
   ]
   try {

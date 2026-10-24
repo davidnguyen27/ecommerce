@@ -503,6 +503,38 @@ describe('cam kết trên API công khai', () => {
     expect(JSON.stringify(res.body.commitments)).not.toMatch(/bảo hành|warranty/i)
   })
 
+  it('thêm, gỡ cam kết sau khi xuất bản chỉ hiện với khách khi xuất bản lại', async () => {
+    const app = await sneakerWithWarranty()
+    await publish(app, app.product.id)
+    const imported = await typeNamed(app.request, app.token, 'Có hóa đơn nhập khẩu')
+    const added = await createCommitment(app.request, app.token, app.product.id, {
+      typeId: imported.id,
+      statement: 'Hàng nhập khẩu có hóa đơn',
+      documentIds: [app.invoice.id],
+    })
+    expect(added.status).toBe(201)
+    const removed = await app.request
+      .delete(`/api/admin/products/${app.product.id}/commitments/${app.commitment.id}`)
+      .set(bearer(app.token))
+    expect(removed.status).toBe(204)
+
+    const before = await app.request.get('/api/products/air-max-90')
+    const detail = await app.request.get(`/api/admin/products/${app.product.id}`).set(bearer(app.token))
+    await app.request
+      .put(`/api/admin/products/${app.product.id}/status`)
+      .set(bearer(app.token))
+      .send({ status: 'published' })
+    const after = await app.request.get('/api/products/air-max-90')
+
+    expect(before.body.commitments).toEqual([
+      { type: 'Bảo hành chính hãng', kind: 'warranty', statement: 'Bảo hành chính hãng Nike 12 tháng' },
+    ])
+    expect(detail.body.hasUnpublishedChanges).toBe(true)
+    expect(after.body.commitments).toEqual([
+      { type: 'Có hóa đơn nhập khẩu', kind: 'other', statement: 'Hàng nhập khẩu có hóa đơn' },
+    ])
+  })
+
   it('sản phẩm nháp không có trên API công khai', async () => {
     const { request } = await sneakerWithWarranty()
 

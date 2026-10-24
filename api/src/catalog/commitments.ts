@@ -1,6 +1,6 @@
 import type { AdminCommitment, PublicCommitment } from '@ecommerce/shared'
 import type { DbClient } from '../db.ts'
-import type { CommitmentType, ProductCommitment } from '../generated/prisma/client.ts'
+import type { CommitmentType, Prisma, ProductCommitment } from '../generated/prisma/client.ts'
 
 export const WITH_TYPE_AND_DOCUMENTS = {
   type: true,
@@ -28,16 +28,18 @@ export function toAdminCommitment(commitment: CommitmentWithEvidence): AdminComm
   }
 }
 
+/** Cam kết của sản phẩm theo thứ tự hiển thị, kèm loại; dùng khi dựng snapshot xuất bản. */
+export const COMMITMENTS_WITH_TYPE = {
+  include: { type: true },
+  orderBy: [...ORDER],
+} satisfies Prisma.ProductCommitmentFindManyArgs
+
 /**
  * Cam kết có bằng chứng như khách thấy: loại và nội dung, không bao giờ kèm chứng từ.
- * Trang chi tiết sản phẩm (ticket 11) gọi hàm này để hiển thị cam kết tách khỏi thông tin công bố;
- * bảo hành chỉ xuất hiện ở đây, dưới dạng cam kết có `kind: 'warranty'` (ADR 0005).
+ * Chép vào snapshot khi xuất bản; bảo hành chỉ xuất hiện ở đây, dưới dạng cam kết có `kind: 'warranty'` (ADR 0005).
  */
-export async function publicCommitments(db: DbClient, productId: string): Promise<PublicCommitment[]> {
-  const commitments = await db.productCommitment.findMany({
-    where: { productId },
-    include: { type: true },
-    orderBy: [...ORDER],
-  })
-  return commitments.map((c) => ({ type: c.type.name, kind: c.type.kind, statement: c.statement }))
-}
+export const toPublicCommitment = (c: ProductCommitment & { type: CommitmentType }): PublicCommitment => ({
+  type: c.type.name,
+  kind: c.type.kind,
+  statement: c.statement,
+})
