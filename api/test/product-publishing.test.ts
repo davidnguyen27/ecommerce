@@ -337,12 +337,12 @@ describe('chi tiết sản phẩm cho khách', () => {
       .put(`/api/admin/products/${product.id}`)
       .set(bearer(token))
       .send(sneaker(brand.id, running.id, { name: 'Air Max 90 SE', slug: 'air-max-90-se' }))
-    await editVariant(request, token, product.id, black.id, { ...BLACK_40, price: 2_900_000 })
+    await editVariant(request, token, product.id, black.id, { ...BLACK_40, sku: 'AM90-BLACK-40' })
 
     const before = await request.get('/api/products/air-max-90')
     const detail = await request.get(`/api/admin/products/${product.id}`).set(bearer(token))
     expect(before.body.name).toBe('Air Max 90')
-    expect(before.body.variants[0].price).toBe(3_500_000)
+    expect(before.body.variants[0].sku).toBe('AM90-DEN-40')
     expect((await request.get('/api/products/air-max-90-se')).status).toBe(404)
     expect(detail.body.hasUnpublishedChanges).toBe(true)
 
@@ -352,7 +352,7 @@ describe('chi tiết sản phẩm cho khách', () => {
     expect((await request.get('/api/products/air-max-90')).body.slug).toBe('air-max-90-se')
     const after = await request.get('/api/products/air-max-90-se')
     expect(after.body.name).toBe('Air Max 90 SE')
-    expect(after.body.variants[0].price).toBe(2_900_000)
+    expect(after.body.variants[0].sku).toBe('AM90-BLACK-40')
   })
 
   it('danh mục mà phiên bản đã xuất bản còn tham chiếu thì không xóa được', async () => {
@@ -378,6 +378,71 @@ describe('chi tiết sản phẩm cho khách', () => {
 
     expect(res.status).toBe(409)
     expect(res.body.error.fields).toEqual([{ path: 'slug', message: expect.any(String) }])
+  })
+})
+
+describe('đổi giá sản phẩm đã xuất bản', () => {
+  it('kế toán đổi giá thì khách thấy giá mới ngay, không cần xuất bản lại; sửa nháp đang chờ không lộ ra', async () => {
+    const { request, token, product, black, brand, running } = await published()
+    const { accessToken: accountant } = await createStaff(request, token, ['accountant'], 'ketoan@example.com')
+    await request
+      .put(`/api/admin/products/${product.id}`)
+      .set(bearer(token))
+      .send(sneaker(brand.id, running.id, { name: 'Air Max 90 SE' }))
+
+    const res = await editVariant(request, accountant, product.id, black.id, {
+      ...BLACK_40,
+      price: 2_900_000,
+      compareAtPrice: 3_500_000,
+    })
+
+    expect(res.status).toBe(200)
+    const live = await request.get('/api/products/air-max-90')
+    expect(live.body.name).toBe('Air Max 90')
+    expect(live.body.variants).toEqual([
+      expect.objectContaining({ sku: 'AM90-DEN-40', price: 2_900_000, compareAtPrice: 3_500_000 }),
+      expect.objectContaining({ sku: 'AM90-TRANG-41', price: 3_200_000, compareAtPrice: null }),
+    ])
+    const cards = await request.get('/api/products').query({ maxPrice: 3_000_000 })
+    expect(cards.body.items).toEqual([expect.objectContaining({ fromPrice: 2_900_000, compareAtPrice: 3_500_000 })])
+    const detail = await request.get(`/api/admin/products/${product.id}`).set(bearer(token))
+    expect(detail.body).toMatchObject({ liveVersion: { version: 2 }, hasUnpublishedChanges: true })
+    const audit = await request.get('/api/admin/audit').set(bearer(token))
+    expect(audit.body.items.slice(0, 2)).toEqual([
+      expect.objectContaining({
+        action: 'catalog.product.publish',
+        entityId: product.id,
+        before: { status: 'published', liveVersion: 1 },
+        after: { status: 'published', liveVersion: 2 },
+      }),
+      expect.objectContaining({ action: 'price.change', entityId: black.id }),
+    ])
+  })
+
+  it('đổi giá biến thể chưa có trên website thì không tạo phiên bản mới', async () => {
+    const { request, token, product } = await published()
+    const BLACK_42 = { sku: 'AM90-DEN-42', attributes: { mau: 'Đen', size: '42' } }
+    const added = await post(request, token, `/api/admin/products/${product.id}/variants`, {
+      ...BLACK_42,
+      price: 3_800_000,
+    })
+
+    const res = await editVariant(request, token, product.id, added.id, { ...BLACK_42, price: 3_700_000 })
+
+    expect(res.status).toBe(200)
+    const detail = await request.get(`/api/admin/products/${product.id}`).set(bearer(token))
+    expect(detail.body.liveVersion.version).toBe(1)
+    expect((await request.get('/api/products/air-max-90')).body.variants).toHaveLength(2)
+  })
+
+  it('không xóa được giá của biến thể đang bán thuộc sản phẩm đã xuất bản', async () => {
+    const { request, token, product, black } = await published()
+
+    const res = await editVariant(request, token, product.id, black.id, { ...BLACK_40, price: null })
+
+    expect(res.status).toBe(409)
+    expect(res.body.error.fields).toEqual([{ path: 'price', message: expect.any(String) }])
+    expect((await request.get('/api/products/air-max-90')).body.variants[0].price).toBe(3_500_000)
   })
 })
 
