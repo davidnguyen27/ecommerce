@@ -16,9 +16,13 @@ export class Jobs implements EmailQueue {
   readonly #boss: PgBoss
   readonly #mailer: Mailer
 
-  constructor(options: { databaseUrl: string; mailer: Mailer; logger: Logger }) {
+  constructor(options: { databaseUrl: string; mailer: Mailer; logger: Logger; maxConnections?: number }) {
     this.#mailer = options.mailer
-    this.#boss = new PgBoss({ connectionString: options.databaseUrl, useListenNotify: true })
+    this.#boss = new PgBoss({
+      connectionString: options.databaseUrl,
+      useListenNotify: true,
+      max: options.maxConnections,
+    })
     this.#boss.on('error', (err) => options.logger.error({ err }, 'Lỗi hàng đợi job'))
   }
 
