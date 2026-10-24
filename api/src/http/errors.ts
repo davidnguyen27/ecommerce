@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express'
 import { ErrorCode, type ApiErrorBody, type FieldError } from '@ecommerce/shared'
+import { Prisma } from '../generated/prisma/client.ts'
 
 /** Lỗi có chủ đích; error handler chuyển nó thành body lỗi thống nhất. */
 export class AppError extends Error {
@@ -12,6 +13,25 @@ export class AppError extends Error {
     super(message)
   }
 }
+
+/** 400 gắn với một trường của form. */
+export const invalidField = (path: string, message: string) =>
+  new AppError(400, ErrorCode.VALIDATION_ERROR, message, [{ path, message }])
+
+/** 409 gắn với một trường của form. */
+export const conflictField = (path: string, message: string) =>
+  new AppError(409, ErrorCode.CONFLICT, message, [{ path, message }])
+
+/** Lỗi unique constraint của Postgres qua Prisma. */
+export const isUniqueViolation = (err: unknown) =>
+  err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'
+
+/** Dùng trong `.catch`: lỗi unique constraint thành lỗi nghiệp vụ `toError()`, lỗi khác ném lại nguyên. */
+export const rethrowUnique =
+  (toError: () => AppError) =>
+  (err: unknown): never => {
+    throw isUniqueViolation(err) ? toError() : err
+  }
 
 export const notFound: RequestHandler = (req, _res, next) => {
   next(new AppError(404, ErrorCode.NOT_FOUND, `Không tìm thấy ${req.method} ${req.path}`))

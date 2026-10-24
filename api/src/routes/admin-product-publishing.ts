@@ -1,11 +1,10 @@
 import { isDeepStrictEqual } from 'node:util'
 import { Router } from 'express'
-import { z } from 'zod'
 import { ChangeProductStatusRequest, ErrorCode, ProductPoliciesRequest, type ProductStatus } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
 import { audited } from '../audit/audited.ts'
 import { currentStaff, requirePermission } from '../auth/staff-context.ts'
-import { lockProduct } from '../catalog/products.ts'
+import { ProductParams, lockProduct } from '../catalog/products.ts'
 import {
   buildSnapshot,
   createVersion,
@@ -18,13 +17,9 @@ import {
 } from '../catalog/publication.ts'
 import type { Db } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError, conflictField } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 import { deleteImageFilesQuietly, type StoredImage } from '../media/images.ts'
-
-const ProductParams = z.object({ id: z.uuid() })
-
-const conflict = (path: string, message: string) => new AppError(409, ErrorCode.CONFLICT, message, [{ path, message }])
 
 const ACTIONS: Record<ProductStatus, string> = {
   published: 'catalog.product.publish',
@@ -50,13 +45,13 @@ export function adminProductPublishingRoutes(prisma: Db, storage: Storage) {
         const unchanged = { draft: before, unused: [] as StoredImage[] }
         if (before.status === status && status !== 'published') return unchanged
         if (before.status === 'published' && status === 'draft') {
-          throw conflict(
+          throw conflictField(
             'status',
             'Không đưa được sản phẩm đã xuất bản về nháp; muốn gỡ khỏi website thì lưu trữ sản phẩm',
           )
         }
         if (before.status === 'archived' && status === 'published') {
-          throw conflict('status', 'Sản phẩm lưu trữ phải được đưa về nháp trước khi xuất bản lại')
+          throw conflictField('status', 'Sản phẩm lưu trữ phải được đưa về nháp trước khi xuất bản lại')
         }
 
         if (status === 'published') {
@@ -128,5 +123,5 @@ export function adminProductPublishingRoutes(prisma: Db, storage: Storage) {
 async function assertLiveSlugFree(tx: Prisma.TransactionClient, productId: string, slug: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('catalog.product.live_slug'))`
   const taken = await tx.product.findFirst({ where: { id: { not: productId }, liveVersion: { slug } } })
-  if (taken) throw conflict('slug', 'Slug này đang được sản phẩm khác dùng trên website')
+  if (taken) throw conflictField('slug', 'Slug này đang được sản phẩm khác dùng trên website')
 }

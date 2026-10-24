@@ -16,7 +16,7 @@ import { requirePermission } from '../auth/staff-context.ts'
 import { normalizeEmail } from '../auth/staff.ts'
 import type { Db } from '../db.ts'
 import { Prisma, type Staff } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError, isUniqueViolation } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 
 function toSummary(staff: Staff): StaffSummary {
@@ -99,10 +99,6 @@ function emailTakenError() {
   return new AppError(409, ErrorCode.CONFLICT, 'Email này đã có tài khoản nhân viên', [
     { path: 'email', message: 'Email đã được dùng' },
   ])
-}
-
-function isUniqueViolation(err: unknown) {
-  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'
 }
 
 function sameRoles(a: readonly StaffRole[], b: readonly StaffRole[]) {
