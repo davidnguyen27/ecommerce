@@ -80,7 +80,9 @@ describe('tải ảnh sản phẩm', () => {
       width: 2000,
       height: 1500,
     })
-    expect(publicObject(storage, image.originalUrl)).toMatchObject({ contentType: 'image/jpeg', body: original })
+    const stored = publicObject(storage, image.originalUrl)
+    expect(stored?.contentType).toBe('image/jpeg')
+    expect(await sharp(stored!.body).metadata()).toMatchObject({ format: 'jpeg', width: 2000, height: 1500 })
     expect(image.sizes.map((s) => s.width)).toEqual([320, 640, 1024, 1600])
     for (const size of image.sizes) {
       const stored = publicObject(storage, size.url)
@@ -88,6 +90,27 @@ describe('tải ảnh sản phẩm', () => {
       const meta = await sharp(stored!.body).metadata()
       expect({ format: meta.format, width: meta.width }).toEqual({ format: 'webp', width: size.width })
     }
+  })
+
+  it('bản gốc lưu trên storage public đã bỏ EXIF (kể cả vị trí GPS) và đã xoay theo chiều chụp', async () => {
+    const { request, token, product, storage } = await sneakerWithVariants()
+    const tagged = await sharp({ create: { width: 400, height: 300, channels: 3, background: '#a33' } })
+      .jpeg()
+      .withMetadata({ orientation: 6 })
+      .withExif({ IFD0: { Copyright: 'Kho hàng' }, IFD3: { GPSLatitudeRef: 'N', GPSLatitude: '21/1 1/1 30/1' } })
+      .toBuffer()
+    expect((await sharp(tagged).metadata()).exif).toBeDefined()
+
+    const res = await upload(request, token, product.id, tagged, 'giay.jpg')
+
+    expect(res.status).toBe(201)
+    const stored = publicObject(storage, res.body.originalUrl)
+    expect(stored?.contentType).toBe('image/jpeg')
+    const meta = await sharp(stored!.body).metadata()
+    expect(meta).toMatchObject({ format: 'jpeg', width: 300, height: 400 })
+    expect(meta.exif).toBeUndefined()
+    expect(meta.orientation).toBeUndefined()
+    expect(res.body).toMatchObject({ width: 300, height: 400 })
   })
 
   it('file giả mạo đuôi ảnh bị từ chối theo nội dung thật, không có gì lên storage', async () => {

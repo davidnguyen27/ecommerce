@@ -11,17 +11,13 @@ import {
   toAdminCommitment,
   type CommitmentWithEvidence,
 } from '../catalog/commitments.ts'
-import { loadProduct, lockProduct } from '../catalog/products.ts'
+import { ProductParams, loadProduct, lockProduct } from '../catalog/products.ts'
 import type { Db } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError, conflictField, invalidField, rethrowUnique } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 
-const ProductParams = z.object({ id: z.uuid() })
 const CommitmentParams = z.object({ id: z.uuid(), commitmentId: z.uuid() })
-
-const invalid = (path: string, message: string) =>
-  new AppError(400, ErrorCode.VALIDATION_ERROR, message, [{ path, message }])
 
 /** Trường nghiệp vụ của cam kết ghi vào audit. */
 function auditFields(commitment: CommitmentWithEvidence) {
@@ -29,13 +25,7 @@ function auditFields(commitment: CommitmentWithEvidence) {
   return { productId, typeId, statement, documentIds: documentIdsOf(commitment) }
 }
 
-function rethrowTypeTaken(err: unknown): never {
-  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-    const message = 'Sản phẩm đã có cam kết thuộc loại này'
-    throw new AppError(409, ErrorCode.CONFLICT, message, [{ path: 'typeId', message }])
-  }
-  throw err
-}
+const typeTaken = () => conflictField('typeId', 'Sản phẩm đã có cam kết thuộc loại này')
 
 /**
  * Kiểm loại cam kết có trong danh sách và mọi chứng từ thuộc chính sản phẩm; trả danh sách chứng từ đã bỏ trùng.
@@ -43,7 +33,7 @@ function rethrowTypeTaken(err: unknown): never {
  */
 async function assertEvidence(tx: Prisma.TransactionClient, productId: string, input: CommitmentRequest) {
   if (!(await tx.commitmentType.findUnique({ where: { id: input.typeId } }))) {
-    throw invalid('typeId', 'Loại cam kết không có trong danh sách')
+    throw invalidField('typeId', 'Loại cam kết không có trong danh sách')
   }
   const own = await tx.productDocument.findMany({
     where: { productId, id: { in: input.documentIds } },
@@ -51,7 +41,7 @@ async function assertEvidence(tx: Prisma.TransactionClient, productId: string, i
   })
   const ownIds = new Set(own.map((d) => d.id))
   const foreign = input.documentIds.findIndex((id) => !ownIds.has(id))
-  if (foreign !== -1) throw invalid(`documentIds.${foreign}`, 'Chỉ dựa được trên chứng từ của chính sản phẩm này')
+  if (foreign !== -1) throw invalidField(`documentIds.${foreign}`, 'Chỉ dựa được trên chứng từ của chính sản phẩm này')
   return [...ownIds].sort()
 }
 
@@ -89,7 +79,7 @@ export function adminProductCommitmentRoutes(prisma: Db) {
           after: auditFields(row),
         })
         return row
-      }).catch(rethrowTypeTaken)
+      }).catch(rethrowUnique(typeTaken))
       const body: AdminCommitment = toAdminCommitment(created)
       res.status(201).json(body)
     })
@@ -124,7 +114,7 @@ export function adminProductCommitmentRoutes(prisma: Db) {
           after: auditFields(after),
         })
         return after
-      }).catch(rethrowTypeTaken)
+      }).catch(rethrowUnique(typeTaken))
       const body: AdminCommitment = toAdminCommitment(updated)
       res.json(body)
     })

@@ -16,7 +16,7 @@ defineProps<{ commitments: PublicCommitment[] }>()
     <ul>
       <li v-for="commitment in commitments" :key="commitment.type">
         <strong>
-          <span class="badge">{{ commitment.kind === 'warranty' ? 'Bảo hành' : 'Đã xác minh' }}</span>
+          <span class="badge">{{ COMMITMENT_KIND_BADGES[commitment.kind] }}</span>
           {{ commitment.type }}
         </strong>
         <p>{{ commitment.statement }}</p>

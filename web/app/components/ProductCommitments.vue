@@ -29,8 +29,6 @@ const rows = ref<Row[]>([])
 const fresh = ref<Draft>({ typeId: '', statement: '', documentIds: [] })
 const error = ref<string | null>(null)
 
-const KIND_LABELS = { warranty: 'Bảo hành', other: 'Khác' } as const
-
 const toRow = (c: AdminCommitment): Row => ({
   ...c,
   draft: { typeId: c.typeId, statement: c.statement, documentIds: [...c.documentIds] },
@@ -95,7 +93,7 @@ rows.value = AdminCommitmentList.parse(commitmentList).items.map(toRow)
             Loại
             <select v-model="row.draft.typeId">
               <option v-for="type in types" :key="type.id" :value="type.id">
-                {{ type.name }} ({{ KIND_LABELS[type.kind] }})
+                {{ type.name }} ({{ COMMITMENT_KIND_LABELS[type.kind] }})
               </option>
             </select>
           </label>
@@ -126,7 +124,7 @@ rows.value = AdminCommitmentList.parse(commitmentList).items.map(toRow)
         <select v-model="fresh.typeId" required>
           <option value="" disabled>Chọn loại cam kết</option>
           <option v-for="type in types" :key="type.id" :value="type.id">
-            {{ type.name }} ({{ KIND_LABELS[type.kind] }})
+            {{ type.name }} ({{ COMMITMENT_KIND_LABELS[type.kind] }})
           </option>
         </select>
       </label>

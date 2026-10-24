@@ -15,8 +15,8 @@ import { audited } from '../audit/audited.ts'
 import { currentStaff, requirePermission } from '../auth/staff-context.ts'
 import { LATEST_VERSION, findPageWithLatest, listPagesWithLatest } from '../content/pages.ts'
 import type { Db } from '../db.ts'
-import { Prisma, type ContentPage, type ContentPageVersion as Version } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import type { ContentPage, ContentPageVersion as Version } from '../generated/prisma/client.ts'
+import { AppError, rethrowUnique } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 
 type PageWithLatest = ContentPage & { versions: Version[] }
@@ -63,6 +63,10 @@ const PageParams = z.object({ id: z.uuid() })
 const VersionParams = PageParams.extend({ version: z.coerce.number().int().min(1) })
 const PUBLISHER = { publishedBy: { select: { id: true, name: true } } } as const
 
+const slugTaken = () =>
+  new AppError(409, ErrorCode.CONFLICT, 'Slug này đã có trang khác dùng', [
+    { path: 'slug', message: 'Slug đã được dùng' },
+  ])
 const pageNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy trang nội dung')
 
 /** Soạn và xuất bản trang nội dung; mọi route cần `content.edit`. */
@@ -75,16 +79,11 @@ export function adminPageRoutes(prisma: Db) {
     })
     .post('/', async (req, res) => {
       const input = parse(CreateContentPageRequest, req.body)
-      const slugTaken = new AppError(409, ErrorCode.CONFLICT, 'Slug này đã có trang khác dùng', [
-        { path: 'slug', message: 'Slug đã được dùng' },
-      ])
       const page = await audited(prisma, req, async (tx, audit) => {
         const created = await tx.contentPage.create({ data: input, include: { versions: true } })
         await audit({ action: 'content.page.create', entityType: 'content_page', entityId: created.id, after: input })
         return created
-      }).catch((err: unknown) => {
-        throw err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002' ? slugTaken : err
-      })
+      }).catch(rethrowUnique(slugTaken))
       res.status(201).json(toDetail(page))
     })
     .get('/:id', async (req, res) => {

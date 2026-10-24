@@ -3,8 +3,6 @@ import { CommitmentType, CommitmentTypeList, type CommitmentKind } from '@ecomme
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'commitment.edit' })
 
-const KIND_LABELS: Record<CommitmentKind, string> = { warranty: 'Bảo hành', other: 'Khác' }
-
 type Row = CommitmentType & { draftName: string; draftKind: CommitmentKind }
 
 const session = useAdminSession()
@@ -68,7 +66,7 @@ rows.value = CommitmentTypeList.parse(await session.adminFetch('/api/admin/commi
           <td><input v-model="row.draftName" aria-label="Tên loại cam kết" maxlength="200" /></td>
           <td>
             <select v-model="row.draftKind" aria-label="Kiểu">
-              <option v-for="(label, kind) in KIND_LABELS" :key="kind" :value="kind">{{ label }}</option>
+              <option v-for="(label, kind) in COMMITMENT_KIND_LABELS" :key="kind" :value="kind">{{ label }}</option>
             </select>
           </td>
           <td>
@@ -89,7 +87,7 @@ rows.value = CommitmentTypeList.parse(await session.adminFetch('/api/admin/commi
       <label>
         Kiểu
         <select v-model="fresh.kind">
-          <option v-for="(label, kind) in KIND_LABELS" :key="kind" :value="kind">{{ label }}</option>
+          <option v-for="(label, kind) in COMMITMENT_KIND_LABELS" :key="kind" :value="kind">{{ label }}</option>
         </select>
       </label>
       <button type="submit">Thêm</button>

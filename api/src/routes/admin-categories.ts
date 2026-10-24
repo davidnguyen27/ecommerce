@@ -12,7 +12,7 @@ import { requirePermission } from '../auth/staff-context.ts'
 import { assertValidParent, lockTree } from '../catalog/categories.ts'
 import type { Db } from '../db.ts'
 import { Prisma, type Category } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError, rethrowUnique } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 
 function toAdmin({ id, productType, parentId, slug, name, hidden }: Category): AdminCategory {
@@ -23,10 +23,6 @@ const slugTaken = () =>
   new AppError(409, ErrorCode.CONFLICT, 'Slug này đã có danh mục khác dùng', [
     { path: 'slug', message: 'Slug đã được dùng' },
   ])
-
-function rethrowSlugTaken(err: unknown): never {
-  throw err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002' ? slugTaken() : err
-}
 
 /** Quản lý cây danh mục; mọi route cần `catalog.edit`. */
 export function adminCategoryRoutes(prisma: Db) {
@@ -50,7 +46,7 @@ export function adminCategoryRoutes(prisma: Db) {
           after: toAdmin(created),
         })
         return created
-      }).catch(rethrowSlugTaken)
+      }).catch(rethrowUnique(slugTaken))
       res.status(201).json(toAdmin(category))
     })
     .put('/:id', async (req, res) => {
@@ -134,6 +130,6 @@ async function updateCategory(
     const after = await tx.category.update({ where: { id }, data })
     await audit({ action, entityType: 'category', entityId: id, before: toAdmin(before), after: toAdmin(after) })
     return after
-  }).catch(rethrowSlugTaken)
+  }).catch(rethrowUnique(slugTaken))
   return toAdmin(updated)
 }
