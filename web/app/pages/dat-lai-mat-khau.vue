@@ -28,19 +28,20 @@ useSeo({ title: 'Đặt lại mật khẩu', description: 'Đặt lại mật kh
 </script>
 
 <template>
-  <main>
+  <main class="mx-auto max-w-md px-4 py-12 sm:py-20">
     <h1>Đặt lại mật khẩu</h1>
-    <p v-if="!token" role="alert">
-      Link đặt lại mật khẩu không hợp lệ. <NuxtLink to="/quen-mat-khau">Yêu cầu link mới</NuxtLink>
+    <p v-if="!token" role="alert" class="notice-error mt-8">
+      Link đặt lại mật khẩu không hợp lệ. <NuxtLink to="/quen-mat-khau" class="link">Yêu cầu link mới</NuxtLink>
     </p>
-    <p v-else-if="done" role="status">
+    <p v-else-if="done" role="status" class="notice-ok mt-8">
       Đã đổi mật khẩu. Mọi thiết bị đang đăng nhập đã bị đăng xuất.
-      <NuxtLink to="/dang-nhap">Đăng nhập bằng mật khẩu mới</NuxtLink>
+      <NuxtLink to="/dang-nhap" class="link">Đăng nhập bằng mật khẩu mới</NuxtLink>
     </p>
-    <form v-else @submit.prevent="submit">
-      <label>
+    <form v-else class="mt-8 space-y-5 rounded-lg border border-border bg-card p-6 sm:p-8" @submit.prevent="submit">
+      <label class="field">
         Mật khẩu mới (ít nhất {{ CUSTOMER_PASSWORD_MIN_LENGTH }} ký tự)
         <input
+          class="field-input"
           v-model="password"
           type="password"
           name="password"
@@ -49,8 +50,10 @@ useSeo({ title: 'Đặt lại mật khẩu', description: 'Đặt lại mật kh
           required
         />
       </label>
-      <p v-if="error" role="alert">{{ error }} <NuxtLink to="/quen-mat-khau">Yêu cầu link mới</NuxtLink></p>
-      <button type="submit" :disabled="submitting">Đặt mật khẩu mới</button>
+      <p v-if="error" role="alert" class="notice-error">
+        {{ error }} <NuxtLink to="/quen-mat-khau" class="link">Yêu cầu link mới</NuxtLink>
+      </p>
+      <button type="submit" class="btn-primary w-full" :disabled="submitting">Đặt mật khẩu mới</button>
     </form>
   </main>
 </template>

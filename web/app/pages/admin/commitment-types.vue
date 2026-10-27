@@ -9,6 +9,7 @@ const session = useAdminSession()
 const rows = ref<Row[]>([])
 const fresh = ref<{ name: string; kind: CommitmentKind }>({ name: '', kind: 'other' })
 const error = ref<string | null>(null)
+const showCreatePanel = ref(false)
 
 const toRow = (type: CommitmentType): Row => ({ ...type, draftName: type.name, draftKind: type.kind })
 
@@ -29,6 +30,7 @@ function create() {
     )
     rows.value.push(toRow(created))
     fresh.value = { name: '', kind: 'other' }
+    showCreatePanel.value = false
   })
 }
 
@@ -46,51 +48,113 @@ rows.value = CommitmentTypeList.parse(await session.adminFetch('/api/admin/commi
 </script>
 
 <template>
-  <main>
-    <h1>Loại cam kết</h1>
-    <p>
-      Danh sách các kiểu cam kết có bằng chứng doanh nghiệp được phép đưa ra. Loại "Bảo hành" là cách duy nhất để khách
-      thấy bảo hành trên trang sản phẩm.
-    </p>
-    <p v-if="error" role="alert">{{ error }}</p>
-    <table>
-      <thead>
-        <tr>
-          <th>Tên</th>
-          <th>Kiểu</th>
-          <th />
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in rows" :key="row.id">
-          <td><input v-model="row.draftName" aria-label="Tên loại cam kết" maxlength="200" /></td>
-          <td>
-            <select v-model="row.draftKind" aria-label="Kiểu">
+  <div>
+    <!-- Page Header -->
+    <div class="admin-page-header">
+      <div>
+        <h1 class="admin-page-title">Loại cam kết có bằng chứng</h1>
+        <p class="admin-page-desc">
+          Danh mục định nghĩa các kiểu cam kết được phép công bố trên sản phẩm (ADR 0005). Kiểu "Bảo hành" là phương
+          thức duy nhất để kích hoạt huy hiệu bảo hành chính hãng có căn cứ cho khách hàng.
+        </p>
+      </div>
+
+      <div class="admin-topbar-actions">
+        <button type="button" class="btn btn-primary" @click="showCreatePanel = !showCreatePanel">
+          <span>{{ showCreatePanel ? 'Đóng form' : '+ Thêm loại cam kết' }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Alert -->
+    <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
+      <span>{{ error }}</span>
+    </div>
+
+    <!-- Form Thêm Loại Cam Kết Mới -->
+    <div v-if="showCreatePanel" class="admin-panel" style="border-left: 3px solid var(--adm-dark)">
+      <div class="admin-panel-header">
+        <div>
+          <h2 class="admin-section-title" style="margin: 0">Thêm loại cam kết mới</h2>
+          <p class="form-help" style="margin-top: 2px">
+            Chỉ người có quyền quản trị cam kết (Owner) mới được cấp quyền này.
+          </p>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" @click="showCreatePanel = false">✕ Đóng</button>
+      </div>
+
+      <form @submit.prevent="create">
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Tên loại cam kết *</label>
+            <input
+              v-model="fresh.name"
+              class="form-input"
+              placeholder="Ví dụ: Bảo hành chính hãng 24 tháng"
+              required
+              maxlength="200"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Phân loại cam kết *</label>
+            <select v-model="fresh.kind" class="form-select">
               <option v-for="(label, kind) in COMMITMENT_KIND_LABELS" :key="kind" :value="kind">{{ label }}</option>
             </select>
-          </td>
-          <td>
-            <button
-              type="button"
-              :disabled="row.draftName === row.name && row.draftKind === row.kind"
-              @click="save(row)"
-            >
-              Lưu
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <form @submit.prevent="create">
-      <h2>Thêm loại cam kết</h2>
-      <label>Tên <input v-model="fresh.name" required maxlength="200" /></label>
-      <label>
-        Kiểu
-        <select v-model="fresh.kind">
-          <option v-for="(label, kind) in COMMITMENT_KIND_LABELS" :key="kind" :value="kind">{{ label }}</option>
-        </select>
-      </label>
-      <button type="submit">Thêm</button>
-    </form>
-  </main>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px">
+          <button type="button" class="btn btn-secondary" @click="showCreatePanel = false">Hủy</button>
+          <button type="submit" class="btn btn-primary">Tạo loại cam kết ›</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Bảng Loại Cam Kết -->
+    <div class="admin-table-card">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Tên loại cam kết</th>
+            <th>Phân loại</th>
+            <th style="text-align: right">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in rows" :key="row.id">
+            <td>
+              <input
+                v-model="row.draftName"
+                class="form-input"
+                style="font-size: 13px; font-weight: 500; padding: 4px 8px; max-width: 320px"
+                aria-label="Tên loại cam kết"
+                maxlength="200"
+              />
+            </td>
+            <td>
+              <select
+                v-model="row.draftKind"
+                class="form-select"
+                style="font-size: 12px; padding: 4px 8px; max-width: 200px"
+                aria-label="Kiểu"
+              >
+                <option v-for="(label, kind) in COMMITMENT_KIND_LABELS" :key="kind" :value="kind">{{ label }}</option>
+              </select>
+            </td>
+            <td style="text-align: right">
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                :disabled="row.draftName === row.name && row.draftKind === row.kind"
+                @click="save(row)"
+              >
+                Lưu thay đổi
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </template>

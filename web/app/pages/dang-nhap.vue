@@ -23,21 +23,39 @@ useSeo({ title: 'Đăng nhập', description: 'Đăng nhập tài khoản khách
 </script>
 
 <template>
-  <main>
+  <main class="mx-auto max-w-md px-4 py-12 sm:py-20">
     <h1>Đăng nhập</h1>
-    <form @submit.prevent="submit">
-      <label>
+    <p class="mt-2 text-sm text-muted-foreground">Chào mừng bạn quay lại.</p>
+    <form class="mt-8 space-y-5 rounded-lg border border-border bg-card p-6 sm:p-8" @submit.prevent="submit">
+      <label class="field">
         Email
-        <input v-model="email" type="email" name="email" autocomplete="username" inputmode="email" required />
+        <input
+          class="field-input"
+          v-model="email"
+          type="email"
+          name="email"
+          autocomplete="username"
+          inputmode="email"
+          required
+        />
       </label>
-      <label>
+      <label class="field">
         Mật khẩu
-        <input v-model="password" type="password" name="password" autocomplete="current-password" required />
+        <input
+          class="field-input"
+          v-model="password"
+          type="password"
+          name="password"
+          autocomplete="current-password"
+          required
+        />
       </label>
-      <p v-if="error" role="alert">{{ error }}</p>
-      <button type="submit" :disabled="submitting">Đăng nhập</button>
+      <p v-if="error" role="alert" class="notice-error">{{ error }}</p>
+      <p class="-mt-1 text-right text-sm"><NuxtLink to="/quen-mat-khau" class="link">Quên mật khẩu?</NuxtLink></p>
+      <button type="submit" class="btn-primary w-full" :disabled="submitting">Đăng nhập</button>
     </form>
-    <p><NuxtLink to="/quen-mat-khau">Quên mật khẩu?</NuxtLink></p>
-    <p>Chưa có tài khoản? <NuxtLink to="/dang-ky">Đăng ký</NuxtLink></p>
+    <p class="mt-6 text-center text-sm text-muted-foreground">
+      Chưa có tài khoản? <NuxtLink to="/dang-ky" class="link">Đăng ký</NuxtLink>
+    </p>
   </main>
 </template>

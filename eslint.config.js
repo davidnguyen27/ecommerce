@@ -17,7 +17,7 @@ export default tseslint.config(
   {
     languageOptions: { globals: { ...globals.node } },
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
   },
   {
@@ -26,8 +26,8 @@ export default tseslint.config(
     rules: { 'no-undef': 'off' },
   },
   {
-    // Tên file trong pages/ và layouts/ là route; app.vue, error.vue là tên Nuxt quy định, không phải tên component.
-    files: ['web/app/{pages,layouts}/**/*.vue', 'web/app/{app,error}.vue'],
+    // Tên file trong pages/ và layouts/ là route; app.vue, error.vue là tên Nuxt; components/ui là Shadcn UI primitives.
+    files: ['web/app/{pages,layouts}/**/*.vue', 'web/app/{app,error}.vue', 'web/app/components/ui/**/*.vue'],
     rules: { 'vue/multi-word-component-names': 'off' },
   },
 )

@@ -1,33 +1,155 @@
 <script setup lang="ts">
+import '~/assets/admin.css'
 import type { Permission } from '@ecommerce/shared'
 
 const session = useAdminSession()
+const route = useRoute()
 
-const MENU: { to: string; label: string; permission?: Permission | Permission[] }[] = [
-  { to: '/admin', label: 'Tổng quan' },
-  { to: '/admin/staff', label: 'Nhân viên', permission: 'staff.manage' },
-  { to: '/admin/brands', label: 'Thương hiệu', permission: 'catalog.edit' },
-  { to: '/admin/categories', label: 'Danh mục', permission: 'catalog.edit' },
-  { to: '/admin/attribute-schemas', label: 'Schema thuộc tính', permission: 'catalog.edit' },
-  { to: '/admin/products', label: 'Sản phẩm', permission: ['catalog.edit', 'price.edit'] },
-  { to: '/admin/commitment-types', label: 'Loại cam kết', permission: 'commitment.edit' },
-  { to: '/admin/pages', label: 'Trang nội dung', permission: 'content.edit' },
-  { to: '/admin/legal-info', label: 'Thông tin pháp lý', permission: 'content.edit' },
-  { to: '/admin/audit', label: 'Audit log', permission: 'audit.view' },
+type MenuItem = { to: string; label: string; permission?: Permission | Permission[] }
+type MenuGroup = { title: string; items: MenuItem[] }
+
+const MENU_GROUPS: MenuGroup[] = [
+  {
+    title: 'Tổng quan',
+    items: [{ to: '/admin', label: 'Bảng điều khiển' }],
+  },
+  {
+    title: 'Hàng hóa & Danh mục',
+    items: [
+      { to: '/admin/products', label: 'Sản phẩm', permission: ['catalog.edit', 'price.edit'] },
+      { to: '/admin/brands', label: 'Thương hiệu', permission: 'catalog.edit' },
+      { to: '/admin/categories', label: 'Cây danh mục', permission: 'catalog.edit' },
+      { to: '/admin/attribute-schemas', label: 'Schema thuộc tính', permission: 'catalog.edit' },
+      { to: '/admin/commitment-types', label: 'Loại cam kết', permission: 'commitment.edit' },
+    ],
+  },
+  {
+    title: 'Vận hành & Nhân sự',
+    items: [
+      { to: '/admin/staff', label: 'Nhân sự & Vai trò', permission: 'staff.manage' },
+      { to: '/admin/audit', label: 'Nhật ký kiểm toán', permission: 'audit.view' },
+    ],
+  },
+  {
+    title: 'Nội dung & Pháp lý',
+    items: [
+      { to: '/admin/pages', label: 'Trang bài viết', permission: 'content.edit' },
+      { to: '/admin/legal-info', label: 'Thông tin pháp lý', permission: 'content.edit' },
+    ],
+  },
 ]
-// Menu chỉ để dễ dùng; quyền thật vẫn do API kiểm ở mỗi request.
-const menu = computed(() => MENU.filter((item) => !item.permission || session.can(item.permission)))
+
+// Lọc menu theo quyền thực tế của nhân viên
+const visibleGroups = computed(() =>
+  MENU_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !item.permission || session.can(item.permission)),
+  })).filter((group) => group.items.length > 0),
+)
+
+// Xác định mục đang active
+const isItemActive = (to: string) => {
+  if (to === '/admin') return route.path === '/admin'
+  return route.path.startsWith(to)
+}
+
+// Lấy tiêu đề trang hiện tại cho breadcrumb
+const currentTitle = computed(() => {
+  for (const group of MENU_GROUPS) {
+    for (const item of group.items) {
+      if (isItemActive(item.to)) return item.label
+    }
+  }
+  return 'Quản trị'
+})
+
+const userInitials = computed(() => {
+  const name = session.profile.value?.name || 'Admin'
+  const parts = name.trim().split(/\s+/)
+  const first = parts[0]
+  const last = parts[parts.length - 1]
+  if (parts.length >= 2 && first && last && first[0] && last[0]) {
+    return (first[0] + last[0]).toUpperCase()
+  }
+  return name.slice(0, 2).toUpperCase()
+})
+
+const roleLabels: Record<string, string> = {
+  owner: 'Chủ sở hữu',
+  sales: 'Bán hàng',
+  warehouse: 'Thủ kho',
+  accountant: 'Kế toán',
+}
+
+const displayRoles = computed(() => {
+  const roles = session.profile.value?.roles || []
+  return roles.map((r) => roleLabels[r] || r).join(', ')
+})
 </script>
 
 <template>
-  <div>
-    <header>
-      <nav>
-        <NuxtLink v-for="item in menu" :key="item.to" :to="item.to">{{ item.label }}</NuxtLink>
+  <div class="admin-shell">
+    <!-- Left Rail Sidebar -->
+    <aside class="admin-sidebar">
+      <div class="admin-sidebar-header">
+        <NuxtLink to="/admin" class="admin-brand-mark">
+          <div class="admin-brand-icon">A</div>
+          <div>
+            <div class="admin-brand-text">ATELIER</div>
+            <div class="admin-brand-sub">Hệ Thống Bán Lẻ Hàng Hiệu</div>
+          </div>
+        </NuxtLink>
+      </div>
+
+      <nav class="admin-sidebar-nav" aria-label="Điều hướng quản trị">
+        <div v-for="group in visibleGroups" :key="group.title" class="admin-nav-group">
+          <div class="admin-nav-group-title">{{ group.title }}</div>
+          <NuxtLink
+            v-for="item in group.items"
+            :key="item.to"
+            :to="item.to"
+            class="admin-nav-link"
+            :class="{ active: isItemActive(item.to) }"
+          >
+            <span>{{ item.label }}</span>
+          </NuxtLink>
+        </div>
       </nav>
-      <span v-if="session.profile.value">{{ session.profile.value.name }}</span>
-      <button type="button" @click="session.logout()">Đăng xuất</button>
-    </header>
-    <slot />
+
+      <div class="admin-sidebar-footer">
+        <div v-if="session.profile.value" class="admin-user-info">
+          <div class="admin-user-avatar">{{ userInitials }}</div>
+          <div class="admin-user-meta">
+            <div class="admin-user-name">{{ session.profile.value.name }}</div>
+            <div class="admin-user-role">{{ displayRoles }}</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" style="width: 100%" @click="session.logout()">
+          Đăng xuất
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Viewport Canvas -->
+    <div class="admin-viewport">
+      <header class="admin-topbar">
+        <div class="admin-breadcrumb">
+          <NuxtLink to="/admin">Quản trị</NuxtLink>
+          <span class="admin-breadcrumb-separator">/</span>
+          <span class="admin-breadcrumb-current">{{ currentTitle }}</span>
+        </div>
+
+        <div class="admin-topbar-actions">
+          <NuxtLink to="/" target="_blank" class="btn btn-ghost btn-sm">
+            <span>Xem website khách</span>
+            <span style="font-size: 11px; opacity: 0.7">↗</span>
+          </NuxtLink>
+        </div>
+      </header>
+
+      <main class="admin-content-area">
+        <slot />
+      </main>
+    </div>
   </div>
 </template>

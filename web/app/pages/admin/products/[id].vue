@@ -31,6 +31,7 @@ type VariantDraft = {
 }
 
 const STATUS_LABELS = { draft: 'Nháp', published: 'Đã xuất bản', archived: 'Lưu trữ' } as const
+const STATUS_BADGES = { draft: 'badge-draft', published: 'badge-published', archived: 'badge-archived' } as const
 const VARIANT_STATUS_LABELS: Record<VariantStatus, string> = { active: 'Đang bán', discontinued: 'Ngừng bán' }
 
 const route = useRoute()
@@ -160,7 +161,7 @@ function saveProduct() {
   return run(
     'product',
     () => session.adminFetch(`/api/admin/products/${id}`, { method: 'PUT', body: draft.value }),
-    'Đã lưu sản phẩm',
+    'Đã lưu thông tin sản phẩm',
   )
 }
 
@@ -179,7 +180,7 @@ function saveVariant(variant: VariantDraft) {
           { method: variant.id ? 'PUT' : 'POST', body: variantBody(variant) },
         ),
       ),
-    variant.id ? `Đã lưu biến thể ${variant.sku}` : 'Đã thêm biến thể',
+    variant.id ? `Đã lưu biến thể ${variant.sku}` : 'Đã thêm biến thể mới',
   )
 }
 
@@ -211,7 +212,6 @@ function addRow(chart: SizeChart) {
 await load()
 const schema = AttributeSchema.parse(await session.adminFetch(`/api/attribute-schemas/${product.value!.productType}`))
 definitions.value = schema.attributes
-// Thương hiệu và danh mục cần `catalog.edit`; người chỉ sửa giá xem phần chung ở dạng chỉ đọc.
 if (canEdit) {
   brands.value = AdminBrandList.parse(await session.adminFetch('/api/admin/brands')).items
   categories.value = AdminCategoryList.parse(await session.adminFetch('/api/admin/categories')).items
@@ -220,212 +220,536 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
 </script>
 
 <template>
-  <main v-if="product">
-    <p><NuxtLink to="/admin/products">← Sản phẩm</NuxtLink></p>
-    <h1>{{ product.name }}</h1>
-    <p>{{ PRODUCT_TYPE_LABELS[product.productType] }} · {{ STATUS_LABELS[product.status] }}</p>
-    <p v-if="error" role="alert">{{ error }}</p>
-    <p v-if="notice" role="status">{{ notice }}</p>
-
-    <section aria-labelledby="lifecycle">
-      <h2 id="lifecycle">Xuất bản</h2>
-      <p v-if="product.liveVersion">
-        Khách đang thấy phiên bản {{ product.liveVersion.version }} (<NuxtLink
-          :to="`/san-pham/${product.slug}`"
-          target="_blank"
-          >xem trang</NuxtLink
-        >).
-        <strong v-if="product.hasUnpublishedChanges">Có thay đổi chưa xuất bản.</strong>
-      </p>
-      <p v-else>Sản phẩm chưa hiện với khách.</p>
-      <p v-if="product.status === 'published'">
-        <small>Sửa thông tin, biến thể, giá, ảnh hay chính sách chỉ hiện với khách sau khi xuất bản lại.</small>
-      </p>
-      <ul v-if="fieldErrors.target === 'status' && fieldErrors.fields.length" role="alert">
-        <li v-for="field in fieldErrors.fields" :key="field.path">{{ field.message }}</li>
-      </ul>
-      <template v-if="canEdit">
-        <button v-if="product.status === 'draft'" type="button" @click="changeStatus('published', 'Đã xuất bản')">
-          Xuất bản
-        </button>
-        <button
-          v-if="product.status === 'published'"
-          type="button"
-          :disabled="!product.hasUnpublishedChanges"
-          @click="changeStatus('published', 'Đã xuất bản thay đổi')"
-        >
-          Xuất bản thay đổi
-        </button>
-        <button v-if="product.status !== 'archived'" type="button" @click="changeStatus('archived', 'Đã lưu trữ')">
-          Lưu trữ
-        </button>
-        <button v-if="product.status === 'archived'" type="button" @click="changeStatus('draft', 'Đã đưa về nháp')">
-          Đưa về nháp
-        </button>
-      </template>
-    </section>
-
-    <form @submit.prevent="saveProduct">
-      <fieldset :disabled="!canEdit">
-        <legend>Thông tin chung</legend>
-        <label v-if="canEdit">
-          Thương hiệu
-          <select v-model="draft.brandId" required>
-            <option v-for="brand in brands" :key="brand.id" :value="brand.id">{{ brand.name }}</option>
-          </select>
-        </label>
-        <label v-if="canEdit">
-          Danh mục
-          <select v-model="draft.categoryId" required>
-            <option v-for="category in sameTypeCategories" :key="category.id" :value="category.id">
-              {{ category.name }}
-            </option>
-          </select>
-        </label>
-        <label>Tên <input v-model="draft.name" required /></label>
-        <label>
-          Slug <input v-model="draft.slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" />
-          <small v-if="errorAt('product', 'slug')" role="alert">{{ errorAt('product', 'slug') }}</small>
-        </label>
-        <label>Mã mẫu <input v-model="draft.modelCode" placeholder="SRPD55K1" /></label>
-        <label>Mô tả <textarea v-model="draft.description" rows="5" /></label>
-        <label>Hướng dẫn sử dụng và bảo quản <textarea v-model="draft.usageCare" rows="3" /></label>
-        <label>
-          Thông tin nguồn gốc công bố
-          <textarea v-model="draft.originStatement" rows="3" />
-          <small>Lời doanh nghiệp tự công bố, không kèm bằng chứng. Bảo hành chỉ hiện qua cam kết có chứng từ.</small>
-        </label>
-        <label><input v-model="draft.groundShippingOnly" type="checkbox" /> Chỉ giao đường bộ</label>
-      </fieldset>
-
-      <fieldset :disabled="!canEdit">
-        <legend>Thuộc tính</legend>
-        <div v-for="definition in productDefinitions" :key="definition.key">
-          <label>
-            {{ definition.label }}
-            <AttributeInput v-model="draft.attributes[definition.key]" :definition="definition" />
-          </label>
-          <small v-if="errorAt('product', `attributes.${definition.key}`)" role="alert">
-            {{ errorAt('product', `attributes.${definition.key}`) }}
-          </small>
+  <div v-if="product">
+    <!-- Header & Navigation -->
+    <div class="admin-page-header">
+      <div>
+        <div style="margin-bottom: 6px">
+          <NuxtLink to="/admin/products" class="btn btn-ghost btn-sm" style="padding-left: 0">
+            ← Quay lại danh sách sản phẩm
+          </NuxtLink>
         </div>
-      </fieldset>
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+          <h1 class="admin-page-title" style="margin: 0">{{ product.name }}</h1>
+          <span class="badge" :class="STATUS_BADGES[product.status]">
+            <span class="badge-dot" />
+            {{ STATUS_LABELS[product.status] }}
+          </span>
+          <span class="badge badge-role">
+            {{ PRODUCT_TYPE_LABELS[product.productType] }}
+          </span>
+        </div>
+        <div style="margin-top: 4px; font-size: 13px; color: var(--adm-muted); font-family: var(--adm-mono)">
+          /san-pham/{{ product.slug }}
+        </div>
+      </div>
+    </div>
 
-      <fieldset :disabled="!canEdit">
-        <legend>Bảng size</legend>
-        <button v-if="!draft.sizeChart" type="button" @click="addSizeChart">Thêm bảng size</button>
-        <template v-else>
-          <table>
-            <thead>
-              <tr>
-                <th v-for="(_, col) in draft.sizeChart.columns" :key="col">
-                  <input v-model="draft.sizeChart.columns[col]" aria-label="Tiêu đề cột" required />
-                  <button
-                    type="button"
-                    :disabled="draft.sizeChart.columns.length === 1"
-                    @click="removeColumn(draft.sizeChart, col)"
-                  >
-                    Xóa cột
-                  </button>
-                </th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(row, rowIndex) in draft.sizeChart.rows" :key="rowIndex">
-                <td v-for="(_, col) in row" :key="col"><input v-model="row[col]" aria-label="Ô bảng size" /></td>
-                <td><button type="button" @click="draft.sizeChart.rows.splice(rowIndex, 1)">Xóa hàng</button></td>
-              </tr>
-            </tbody>
-          </table>
-          <button type="button" @click="addColumn(draft.sizeChart)">Thêm cột</button>
-          <button type="button" @click="addRow(draft.sizeChart)">Thêm hàng</button>
-          <button type="button" @click="draft.sizeChart = null">Bỏ bảng size</button>
-        </template>
-      </fieldset>
+    <!-- Thông báo Alert -->
+    <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
+      <span>{{ error }}</span>
+    </div>
 
-      <button v-if="canEdit" type="submit">Lưu sản phẩm</button>
-    </form>
+    <div v-if="notice" class="admin-alert admin-alert-success" role="status">
+      <span>✓ {{ notice }}</span>
+    </div>
 
-    <h2>Biến thể</h2>
-    <p>
-      Mỗi biến thể có SKU riêng và một tổ hợp thuộc tính không trùng trong sản phẩm. Giá tính bằng VND, đã gồm VAT; giá
-      hãng là giá bán lẻ chính thức của thương hiệu, để trống hoặc không thấp hơn giá bán.
-      <template v-if="!canPrice">Bạn không có quyền sửa giá.</template>
-    </p>
-    <table>
-      <thead>
-        <tr>
-          <th>SKU</th>
-          <th v-for="definition in variantDefinitions" :key="definition.key">{{ definition.label }}</th>
-          <th>Trạng thái</th>
-          <th>Thứ tự</th>
-          <th>Giá bán (₫)</th>
-          <th>Giá hãng (₫)</th>
-          <th />
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="variant in [...variants, newVariant]" :key="variant.id || 'new'">
-          <td>
-            <input v-model="variant.sku" aria-label="SKU" required :disabled="!canEdit" />
-            <small v-for="path in ['sku', 'attributes', 'status']" :key="path" role="alert">
-              {{ errorAt(variant.id, path) }}
-            </small>
-          </td>
-          <td v-for="definition in variantDefinitions" :key="definition.key">
-            <AttributeInput
-              v-model="variant.attributes[definition.key]"
-              :definition="definition"
-              :disabled="!canEdit"
-            />
-            <small role="alert">{{ errorAt(variant.id, `attributes.${definition.key}`) }}</small>
-          </td>
-          <td>
-            <select v-model="variant.status" aria-label="Trạng thái" :disabled="!canEdit">
-              <option v-for="status in VariantStatus.options" :key="status" :value="status">
-                {{ VARIANT_STATUS_LABELS[status] }}
-              </option>
-            </select>
-          </td>
-          <td>
-            <input v-model.number="variant.sortOrder" type="number" min="0" aria-label="Thứ tự" :disabled="!canEdit" />
-          </td>
-          <td v-for="field in ['price', 'compareAtPrice'] as const" :key="field">
-            <input
-              type="number"
-              min="1"
-              step="1"
-              :value="variant[field] ?? ''"
-              :aria-label="field === 'price' ? 'Giá bán' : 'Giá hãng'"
-              :disabled="!canPrice"
-              @input="setPrice(variant, field, ($event.target as HTMLInputElement).value)"
-            />
-            <small role="alert">{{ errorAt(variant.id, field) }}</small>
-          </td>
-          <td>
-            <button v-if="variant.id" type="button" @click="saveVariant(variant)">Lưu</button>
-            <button v-else-if="canEdit" type="button" @click="saveVariant(variant)">Thêm biến thể</button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <!-- Bố cục 2 Cột Studio Workspace -->
+    <div class="admin-two-col">
+      <!-- CỘT TRÁI: Nội dung, Thuộc tính, Bảng Size, Biến thể (65%) -->
+      <div>
+        <!-- 1. Thông tin chung -->
+        <div class="admin-panel">
+          <div class="admin-panel-header">
+            <div>
+              <h2 class="admin-section-title" style="margin: 0">Thông tin cơ bản</h2>
+              <p class="form-help" style="margin-top: 2px">Nhận diện sản phẩm, thương hiệu và nội dung biên tập.</p>
+            </div>
+            <button v-if="canEdit" type="button" class="btn btn-primary btn-sm" @click="saveProduct">
+              Lưu thông tin
+            </button>
+          </div>
 
-    <ProductImages :product-id="id" :variants="imageVariants" />
+          <form @submit.prevent="saveProduct">
+            <fieldset :disabled="!canEdit" style="border: none; padding: 0; margin: 0">
+              <div class="form-grid-2">
+                <div v-if="canEdit" class="form-group">
+                  <label class="form-label">Thương hiệu *</label>
+                  <select v-model="draft.brandId" class="form-select" required>
+                    <option v-for="b in brands" :key="b.id" :value="b.id">{{ b.name }}</option>
+                  </select>
+                </div>
 
-    <form @submit.prevent="savePolicies">
-      <fieldset :disabled="!canEdit">
-        <legend>Chính sách áp dụng</legend>
-        <p v-if="!policyPages.length">Chưa có trang nội dung loại chính sách nào.</p>
-        <label v-for="page in policyPages" :key="page.id">
-          <input v-model="policyPageIds" type="checkbox" :value="page.id" />
-          {{ page.title }}
-          <small v-if="!page.published">(chưa xuất bản, khách chưa thấy)</small>
-        </label>
-      </fieldset>
-      <button v-if="canEdit" type="submit">Lưu chính sách</button>
-    </form>
-    <ProductDocuments v-if="canViewDocuments" :product-id="id" @change="documents = $event" />
-    <ProductCommitments :product-id="id" :documents="documents" />
-  </main>
+                <div v-if="canEdit" class="form-group">
+                  <label class="form-label">Danh mục (Cùng nhóm hàng) *</label>
+                  <select v-model="draft.categoryId" class="form-select" required>
+                    <option v-for="c in sameTypeCategories" :key="c.id" :value="c.id">
+                      {{ c.name }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Tên sản phẩm *</label>
+                  <input v-model="draft.name" class="form-input" required />
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Slug URL *</label>
+                  <input v-model="draft.slug" class="form-input" required pattern="[a-z0-9]+(-[a-z0-9]+)*" />
+                  <small v-if="errorAt('product', 'slug')" class="field-error-msg">
+                    {{ errorAt('product', 'slug') }}
+                  </small>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Mã mẫu chính hãng (Model Code)</label>
+                <input v-model="draft.modelCode" class="form-input" placeholder="Ví dụ: SRPD55K1, 386750..." />
+                <p class="form-help">Khách hàng có thể tìm kiếm sản phẩm theo mã mẫu này.</p>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Mô tả sản phẩm</label>
+                <textarea
+                  v-model="draft.description"
+                  class="form-textarea"
+                  rows="4"
+                  placeholder="Mô tả chất liệu, thiết kế, xuất xứ..."
+                />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Hướng dẫn sử dụng và bảo quản</label>
+                <textarea
+                  v-model="draft.usageCare"
+                  class="form-textarea"
+                  rows="3"
+                  placeholder="Cách lau chùi, giặt, bảo quản nơi khô thoáng..."
+                />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Thông tin nguồn gốc tự công bố</label>
+                <textarea
+                  v-model="draft.originStatement"
+                  class="form-textarea"
+                  rows="2"
+                  placeholder="Ví dụ: Hàng nhập khẩu chính ngạch từ nhà phân phối châu Âu."
+                />
+                <p class="form-help">
+                  Lời doanh nghiệp tự công bố (không kèm chứng từ). Bảo hành chỉ hiện qua Cam kết có bằng chứng.
+                </p>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0">
+                <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer">
+                  <input v-model="draft.groundShippingOnly" type="checkbox" />
+                  <span>Chỉ giao đường bộ (áp dụng cho hàng cấm bay như nước hoa dung tích lớn)</span>
+                </label>
+              </div>
+            </fieldset>
+          </form>
+        </div>
+
+        <!-- 2. Thuộc tính nhóm hàng -->
+        <div v-if="productDefinitions.length > 0" class="admin-panel">
+          <div class="admin-panel-header">
+            <div>
+              <h2 class="admin-section-title" style="margin: 0">
+                Thuộc tính cấp sản phẩm ({{ PRODUCT_TYPE_LABELS[product.productType] }})
+              </h2>
+              <p class="form-help" style="margin-top: 2px">
+                Định nghĩa theo Schema nhóm hàng, dùng cho bộ lọc và thông số kỹ thuật.
+              </p>
+            </div>
+            <button v-if="canEdit" type="button" class="btn btn-primary btn-sm" @click="saveProduct">
+              Lưu thuộc tính
+            </button>
+          </div>
+
+          <fieldset :disabled="!canEdit" style="border: none; padding: 0; margin: 0">
+            <div class="form-grid-2">
+              <div v-for="definition in productDefinitions" :key="definition.key" class="form-group">
+                <label class="form-label">{{ definition.label }}</label>
+                <AttributeInput v-model="draft.attributes[definition.key]" :definition="definition" />
+                <small v-if="errorAt('product', `attributes.${definition.key}`)" class="field-error-msg">
+                  {{ errorAt('product', `attributes.${definition.key}`) }}
+                </small>
+              </div>
+            </div>
+          </fieldset>
+        </div>
+
+        <!-- 3. Bảng Size Chart -->
+        <div class="admin-panel">
+          <div class="admin-panel-header">
+            <div>
+              <h2 class="admin-section-title" style="margin: 0">Bảng kích thước (Size Chart)</h2>
+              <p class="form-help" style="margin-top: 2px">Hướng dẫn quy đổi và đo size cho khách hàng.</p>
+            </div>
+            <div v-if="canEdit">
+              <button v-if="!draft.sizeChart" type="button" class="btn btn-secondary btn-sm" @click="addSizeChart">
+                + Thêm bảng size
+              </button>
+              <button v-else type="button" class="btn btn-primary btn-sm" @click="saveProduct">Lưu bảng size</button>
+            </div>
+          </div>
+
+          <div
+            v-if="!draft.sizeChart"
+            style="
+              padding: 20px;
+              text-align: center;
+              color: var(--adm-muted);
+              background: var(--adm-surface-subtle);
+              border-radius: 6px;
+            "
+          >
+            Sản phẩm chưa thiết lập bảng size.
+          </div>
+
+          <div v-else>
+            <div style="overflow-x: auto; margin-bottom: 12px">
+              <table class="admin-table" style="background: var(--adm-surface)">
+                <thead>
+                  <tr>
+                    <th v-for="(_, col) in draft.sizeChart.columns" :key="col" style="padding: 6px 10px">
+                      <div style="display: flex; gap: 4px; align-items: center">
+                        <input
+                          v-model="draft.sizeChart.columns[col]"
+                          class="form-input"
+                          style="padding: 4px 6px; font-size: 12px; font-weight: 600"
+                          placeholder="Tiêu đề"
+                          required
+                          :disabled="!canEdit"
+                        />
+                        <button
+                          v-if="canEdit"
+                          type="button"
+                          class="btn btn-ghost btn-sm"
+                          style="padding: 2px 6px; color: var(--adm-danger)"
+                          :disabled="draft.sizeChart.columns.length === 1"
+                          @click="removeColumn(draft.sizeChart, col)"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </th>
+                    <th style="width: 50px" />
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(row, rowIndex) in draft.sizeChart.rows" :key="rowIndex">
+                    <td v-for="(_, col) in row" :key="col" style="padding: 6px 10px">
+                      <input
+                        v-model="row[col]"
+                        class="form-input"
+                        style="padding: 4px 6px; font-size: 12px"
+                        placeholder="Giá trị"
+                        :disabled="!canEdit"
+                      />
+                    </td>
+                    <td style="text-align: center; padding: 6px">
+                      <button
+                        v-if="canEdit"
+                        type="button"
+                        class="btn btn-ghost btn-sm"
+                        style="color: var(--adm-danger); padding: 2px 6px"
+                        @click="draft.sizeChart.rows.splice(rowIndex, 1)"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div v-if="canEdit" style="display: flex; gap: 8px">
+              <button type="button" class="btn btn-secondary btn-sm" @click="addColumn(draft.sizeChart)">
+                + Thêm cột
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" @click="addRow(draft.sizeChart)">
+                + Thêm hàng
+              </button>
+              <button type="button" class="btn btn-danger btn-sm" @click="draft.sizeChart = null">
+                Xóa toàn bộ bảng
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Ma trận biến thể -->
+        <div class="admin-panel">
+          <div class="admin-panel-header">
+            <div>
+              <h2 class="admin-section-title" style="margin: 0">Ma trận Biến thể (Variants & SKUs)</h2>
+              <p class="form-help" style="margin-top: 2px">
+                Quản lý SKU duy nhất, thuộc tính riêng biệt (Màu, Size, Dung tích), giá bán và giá hãng.
+                <span v-if="!canPrice" style="color: var(--adm-draft)"> (Bạn không có quyền sửa giá).</span>
+              </p>
+            </div>
+          </div>
+
+          <div style="overflow-x: auto">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th style="min-width: 130px">SKU *</th>
+                  <th v-for="d in variantDefinitions" :key="d.key">{{ d.label }}</th>
+                  <th style="min-width: 110px">Trạng thái</th>
+                  <th style="min-width: 120px" class="admin-table-num">Giá bán (₫)</th>
+                  <th style="min-width: 120px" class="admin-table-num">Giá hãng (₫)</th>
+                  <th style="text-align: right; min-width: 90px">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="v in [...variants, newVariant]"
+                  :key="v.id || 'new'"
+                  :style="{ background: !v.id ? 'var(--adm-surface-subtle)' : undefined }"
+                >
+                  <!-- SKU -->
+                  <td>
+                    <input
+                      v-model="v.sku"
+                      class="form-input"
+                      style="font-family: var(--adm-mono); font-size: 12px; font-weight: 600"
+                      :placeholder="!v.id ? '+ SKU MỚI' : 'SKU'"
+                      required
+                      :disabled="!canEdit"
+                    />
+                    <small v-for="path in ['sku', 'attributes', 'status']" :key="path" class="field-error-msg">
+                      {{ errorAt(v.id, path) }}
+                    </small>
+                  </td>
+
+                  <!-- Variant Attributes -->
+                  <td v-for="d in variantDefinitions" :key="d.key">
+                    <AttributeInput v-model="v.attributes[d.key]" :definition="d" :disabled="!canEdit" />
+                    <small v-if="errorAt(v.id, `attributes.${d.key}`)" class="field-error-msg">
+                      {{ errorAt(v.id, `attributes.${d.key}`) }}
+                    </small>
+                  </td>
+
+                  <!-- Trạng thái bán -->
+                  <td>
+                    <select v-model="v.status" class="form-select" style="font-size: 12px" :disabled="!canEdit">
+                      <option v-for="s in VariantStatus.options" :key="s" :value="s">
+                        {{ VARIANT_STATUS_LABELS[s] }}
+                      </option>
+                    </select>
+                  </td>
+
+                  <!-- Giá bán -->
+                  <td>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1000"
+                      class="form-input admin-table-num"
+                      style="font-weight: 600"
+                      :value="v.price ?? ''"
+                      placeholder="Chưa đặt"
+                      :disabled="!canPrice"
+                      @input="setPrice(v, 'price', ($event.target as HTMLInputElement).value)"
+                    />
+                    <small v-if="errorAt(v.id, 'price')" class="field-error-msg">
+                      {{ errorAt(v.id, 'price') }}
+                    </small>
+                  </td>
+
+                  <!-- Giá hãng -->
+                  <td>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1000"
+                      class="form-input admin-table-num"
+                      :value="v.compareAtPrice ?? ''"
+                      placeholder="Không có"
+                      :disabled="!canPrice"
+                      @input="setPrice(v, 'compareAtPrice', ($event.target as HTMLInputElement).value)"
+                    />
+                    <small v-if="errorAt(v.id, 'compareAtPrice')" class="field-error-msg">
+                      {{ errorAt(v.id, 'compareAtPrice') }}
+                    </small>
+                  </td>
+
+                  <!-- Actions -->
+                  <td style="text-align: right">
+                    <button v-if="v.id" type="button" class="btn btn-secondary btn-sm" @click="saveVariant(v)">
+                      Lưu
+                    </button>
+                    <button v-else-if="canEdit" type="button" class="btn btn-primary btn-sm" @click="saveVariant(v)">
+                      + Thêm
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 5. Chính sách áp dụng -->
+        <div class="admin-panel">
+          <div class="admin-panel-header">
+            <div>
+              <h2 class="admin-section-title" style="margin: 0">Chính sách áp dụng</h2>
+              <p class="form-help" style="margin-top: 2px">
+                Gắn các điều khoản đổi trả, bảo hành liên quan vào sản phẩm.
+              </p>
+            </div>
+            <button v-if="canEdit" type="button" class="btn btn-primary btn-sm" @click="savePolicies">
+              Lưu chính sách
+            </button>
+          </div>
+
+          <div v-if="!policyPages.length" style="color: var(--adm-muted); font-size: 13px">
+            Chưa có trang bài viết loại chính sách nào được tạo.
+          </div>
+
+          <div v-else style="display: flex; flex-direction: column; gap: 8px">
+            <label
+              v-for="page in policyPages"
+              :key="page.id"
+              style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer"
+            >
+              <input v-model="policyPageIds" type="checkbox" :value="page.id" :disabled="!canEdit" />
+              <span style="font-weight: 500">{{ page.title }}</span>
+              <span v-if="!page.published" style="color: var(--adm-draft); font-size: 11px">
+                (bản nháp chưa xuất bản, khách chưa thấy)
+              </span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- CỘT PHẢI: Trạm Xuất bản, Ảnh, Chứng từ, Cam kết (35%) -->
+      <div>
+        <!-- Trạm kiểm soát xuất bản (Publication Station) -->
+        <div class="admin-panel" style="border-top: 3px solid var(--adm-dark)">
+          <h2 class="admin-section-title" style="margin-bottom: 12px">Trạm kiểm soát xuất bản</h2>
+
+          <div style="background: var(--adm-surface-subtle); padding: 14px; border-radius: 6px; margin-bottom: 16px">
+            <div
+              style="
+                font-size: 11px;
+                color: var(--adm-muted);
+                margin-bottom: 4px;
+                text-transform: uppercase;
+                font-weight: 600;
+              "
+            >
+              Trạng thái hiển thị công khai:
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between">
+              <span class="badge" :class="STATUS_BADGES[product.status]" style="font-size: 12px">
+                <span class="badge-dot" />
+                {{ STATUS_LABELS[product.status] }}
+              </span>
+
+              <NuxtLink
+                v-if="product.liveVersion"
+                :to="`/san-pham/${product.slug}`"
+                target="_blank"
+                class="btn btn-ghost btn-sm"
+                style="padding: 2px 6px; font-size: 12px"
+              >
+                Xem trang live ↗
+              </NuxtLink>
+            </div>
+
+            <div v-if="product.liveVersion" style="margin-top: 10px; font-size: 12px; color: var(--adm-muted)">
+              Khách đang thấy phiên bản: <strong>v.{{ product.liveVersion.version }}</strong>
+            </div>
+
+            <div
+              v-if="product.hasUnpublishedChanges"
+              style="
+                margin-top: 8px;
+                padding: 6px 10px;
+                background: var(--adm-draft-bg);
+                border: 1px solid var(--adm-draft-border);
+                border-radius: 4px;
+                font-size: 12px;
+                color: var(--adm-draft);
+                font-weight: 500;
+              "
+            >
+              ⚠ Có thay đổi trong bản soạn chưa được xuất bản.
+            </div>
+          </div>
+
+          <!-- Lỗi chặn xuất bản -->
+          <div
+            v-if="fieldErrors.target === 'status' && fieldErrors.fields.length"
+            class="admin-alert admin-alert-danger"
+            style="font-size: 12px; margin-bottom: 14px; flex-direction: column; gap: 4px"
+          >
+            <strong>Không đủ điều kiện xuất bản:</strong>
+            <ul style="margin: 0; padding-left: 18px">
+              <li v-for="f in fieldErrors.fields" :key="f.path">{{ f.message }}</li>
+            </ul>
+          </div>
+
+          <!-- Các nút hành động vòng đời -->
+          <div v-if="canEdit" style="display: flex; flex-direction: column; gap: 8px">
+            <button
+              v-if="product.status === 'draft'"
+              type="button"
+              class="btn btn-primary"
+              style="width: 100%; justify-content: center"
+              @click="changeStatus('published', 'Đã xuất bản sản phẩm')"
+            >
+              Xuất bản lên website
+            </button>
+
+            <button
+              v-if="product.status === 'published'"
+              type="button"
+              class="btn btn-primary"
+              style="width: 100%; justify-content: center"
+              :disabled="!product.hasUnpublishedChanges"
+              @click="changeStatus('published', 'Đã xuất bản thay đổi mới')"
+            >
+              Xuất bản thay đổi mới
+            </button>
+
+            <button
+              v-if="product.status !== 'archived'"
+              type="button"
+              class="btn btn-secondary"
+              style="width: 100%; justify-content: center; color: var(--adm-archived)"
+              @click="changeStatus('archived', 'Đã chuyển vào lưu trữ')"
+            >
+              Lưu trữ sản phẩm
+            </button>
+
+            <button
+              v-if="product.status === 'archived'"
+              type="button"
+              class="btn btn-secondary"
+              style="width: 100%; justify-content: center"
+              @click="changeStatus('draft', 'Đã đưa về bản nháp')"
+            >
+              Đưa về bản nháp để sửa
+            </button>
+          </div>
+        </div>
+
+        <!-- Thư viện hình ảnh -->
+        <ProductImages :product-id="id" :variants="imageVariants" />
+
+        <!-- Chứng từ nguồn hàng -->
+        <ProductDocuments v-if="canViewDocuments" :product-id="id" @change="documents = $event" />
+
+        <!-- Cam kết có bằng chứng -->
+        <ProductCommitments :product-id="id" :documents="documents" />
+      </div>
+    </div>
+  </div>
 </template>
