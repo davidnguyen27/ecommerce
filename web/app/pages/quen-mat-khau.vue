@@ -25,20 +25,30 @@ useSeo({ title: 'Quên mật khẩu', description: 'Lấy lại mật khẩu tà
 </script>
 
 <template>
-  <main>
+  <main class="mx-auto max-w-md px-4 py-12 sm:py-20">
     <h1>Quên mật khẩu</h1>
-    <p v-if="sent" role="status">
+    <p v-if="sent" role="status" class="notice-ok mt-8">
       Nếu email này có tài khoản, chúng tôi đã gửi link đặt lại mật khẩu. Link dùng được một lần, trong 1 giờ.
     </p>
-    <form v-else @submit.prevent="submit">
-      <p>Nhập email của tài khoản, chúng tôi sẽ gửi link để bạn đặt mật khẩu mới.</p>
-      <label>
+    <form v-else class="mt-8 space-y-5 rounded-lg border border-border bg-card p-6 sm:p-8" @submit.prevent="submit">
+      <p class="text-sm text-muted-foreground">
+        Nhập email của tài khoản, chúng tôi sẽ gửi link để bạn đặt mật khẩu mới.
+      </p>
+      <label class="field">
         Email
-        <input v-model="email" type="email" name="email" autocomplete="email" inputmode="email" required />
+        <input
+          class="field-input"
+          v-model="email"
+          type="email"
+          name="email"
+          autocomplete="email"
+          inputmode="email"
+          required
+        />
       </label>
-      <p v-if="error" role="alert">{{ error }}</p>
-      <button type="submit" :disabled="submitting">Gửi link đặt lại</button>
+      <p v-if="error" role="alert" class="notice-error">{{ error }}</p>
+      <button type="submit" class="btn-primary w-full" :disabled="submitting">Gửi link đặt lại</button>
     </form>
-    <p><NuxtLink to="/dang-nhap">Quay lại đăng nhập</NuxtLink></p>
+    <p class="mt-6 text-center text-sm"><NuxtLink to="/dang-nhap" class="link">Quay lại đăng nhập</NuxtLink></p>
   </main>
 </template>

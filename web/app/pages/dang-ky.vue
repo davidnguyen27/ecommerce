@@ -30,16 +30,26 @@ useSeo({ title: 'Đăng ký', description: 'Đăng ký tài khoản khách hàng
 </script>
 
 <template>
-  <main>
+  <main class="mx-auto max-w-md px-4 py-12 sm:py-20">
     <h1>Đăng ký tài khoản</h1>
-    <form @submit.prevent="submit">
-      <label>
+    <p class="mt-2 text-sm text-muted-foreground">Tạo tài khoản bằng email của bạn.</p>
+    <form class="mt-8 space-y-5 rounded-lg border border-border bg-card p-6 sm:p-8" @submit.prevent="submit">
+      <label class="field">
         Email
-        <input v-model="email" type="email" name="email" autocomplete="email" inputmode="email" required />
+        <input
+          class="field-input"
+          v-model="email"
+          type="email"
+          name="email"
+          autocomplete="email"
+          inputmode="email"
+          required
+        />
       </label>
-      <label>
+      <label class="field">
         Mật khẩu (ít nhất {{ CUSTOMER_PASSWORD_MIN_LENGTH }} ký tự)
         <input
+          class="field-input"
           v-model="password"
           type="password"
           name="password"
@@ -48,15 +58,25 @@ useSeo({ title: 'Đăng ký', description: 'Đăng ký tài khoản khách hàng
           required
         />
       </label>
-      <label>
-        <input v-model="acceptPrivacyPolicy" type="checkbox" name="acceptPrivacyPolicy" required />
-        Tôi đồng ý với
-        <NuxtLink :to="`/trang/${PRIVACY_POLICY_SLUG}`" target="_blank">chính sách bảo mật</NuxtLink>
-        về xử lý dữ liệu cá nhân
+      <label class="flex items-start gap-3 text-sm leading-6">
+        <input
+          v-model="acceptPrivacyPolicy"
+          type="checkbox"
+          name="acceptPrivacyPolicy"
+          required
+          class="mt-1 h-4 w-4 shrink-0 accent-primary"
+        />
+        <span>
+          Tôi đồng ý với
+          <NuxtLink :to="`/trang/${PRIVACY_POLICY_SLUG}`" target="_blank" class="link">chính sách bảo mật</NuxtLink>
+          về xử lý dữ liệu cá nhân</span
+        >
       </label>
-      <p v-if="error" role="alert">{{ error }}</p>
-      <button type="submit" :disabled="submitting">Đăng ký</button>
+      <p v-if="error" role="alert" class="notice-error">{{ error }}</p>
+      <button type="submit" class="btn-primary w-full" :disabled="submitting">Đăng ký</button>
     </form>
-    <p>Đã có tài khoản? <NuxtLink to="/dang-nhap">Đăng nhập</NuxtLink></p>
+    <p class="mt-6 text-center text-sm text-muted-foreground">
+      Đã có tài khoản? <NuxtLink to="/dang-nhap" class="link">Đăng nhập</NuxtLink>
+    </p>
   </main>
 </template>

@@ -6,6 +6,9 @@ import {
   DocumentUrl,
   MAX_DOCUMENT_BYTES,
 } from '@ecommerce/shared'
+import { FileText, Upload, Trash2, ExternalLink, ShieldAlert } from 'lucide-vue-next'
+import { Button } from '~/components/ui/button'
+import { Alert, AlertDescription } from '~/components/ui/alert'
 
 /** Chứng từ nguồn hàng private của một sản phẩm: tải lên, mở qua URL ký có hạn, xóa. Cần `document.view`. */
 const props = defineProps<{ productId: string }>()
@@ -53,7 +56,6 @@ async function upload(event: Event) {
 
 /** Mỗi lần mở là một lần cấp URL ký mới, được ghi audit. */
 function open(document: AdminProductDocument) {
-  // Mở tab trước khi chờ API, để trình duyệt không chặn popup.
   const tab = window.open('', '_blank')
   return attempt(async () => {
     try {
@@ -82,24 +84,74 @@ documents.value = AdminProductDocumentList.parse(await session.adminFetch(base))
 </script>
 
 <template>
-  <section>
-    <h2>Chứng từ nguồn hàng</h2>
-    <p>
-      Hóa đơn nhập, giấy tờ nhà cung cấp. Chứng từ không bao giờ hiện với khách; mỗi lần mở đều được ghi vào audit log.
-    </p>
-    <p v-if="error" role="alert">{{ error }}</p>
-    <label>
-      Tải chứng từ (pdf, jpeg, png, webp, tối đa {{ MAX_DOCUMENT_BYTES / 1024 / 1024 }} MB)
-      <input type="file" multiple :accept="DOCUMENT_CONTENT_TYPES.join(',')" :disabled="!!uploading" @change="upload" />
-    </label>
-    <p v-if="uploading" role="status">Đang tải {{ uploading }}…</p>
-    <p v-if="documents.length === 0">Sản phẩm chưa có chứng từ.</p>
-    <ul>
-      <li v-for="document in documents" :key="document.id">
-        {{ document.fileName }} <small>({{ sizeLabel(document.sizeBytes) }})</small>
-        <button type="button" @click="open(document)">Mở</button>
-        <button type="button" @click="remove(document)">Xóa</button>
-      </li>
-    </ul>
-  </section>
+  <div class="admin-panel">
+    <div class="admin-panel-header">
+      <div>
+        <h2 class="admin-section-title" style="margin: 0">Chứng từ nguồn hàng (Private R2)</h2>
+        <p class="form-help" style="margin-top: 2px">
+          Hóa đơn nhập, tờ khai hải quan. Tuyệt đối không công khai với khách; mỗi lần mở URL ký đều ghi Audit log.
+        </p>
+      </div>
+      <label>
+        <Button variant="secondary" size="sm" as="span" class="cursor-pointer">
+          <Upload class="size-3.5 mr-1" />
+          <span>Tải chứng từ</span>
+        </Button>
+        <input
+          type="file"
+          multiple
+          :accept="DOCUMENT_CONTENT_TYPES.join(',')"
+          :disabled="!!uploading"
+          class="hidden"
+          @change="upload"
+        />
+      </label>
+    </div>
+
+    <Alert v-if="error" variant="destructive" class="mb-3">
+      <ShieldAlert class="size-4" />
+      <AlertDescription>{{ error }}</AlertDescription>
+    </Alert>
+
+    <Alert v-if="uploading" variant="warning" class="mb-3">
+      <AlertDescription>
+        Đang tải lên: <strong>{{ uploading }}</strong
+        >…
+      </AlertDescription>
+    </Alert>
+
+    <div
+      v-if="documents.length === 0"
+      class="p-6 text-center text-xs text-muted-foreground bg-secondary/30 rounded-md border border-dashed border-border"
+    >
+      Chưa có chứng từ nào được đính kèm cho sản phẩm này.
+    </div>
+
+    <div v-else class="flex flex-col gap-2">
+      <div
+        v-for="document in documents"
+        :key="document.id"
+        class="flex items-center justify-between p-2.5 px-3.5 bg-secondary/30 border border-border rounded-md hover:bg-secondary/50 transition-colors"
+      >
+        <div class="min-w-0 flex items-center gap-2.5">
+          <FileText class="size-4 text-muted-foreground shrink-0" />
+          <span class="font-medium text-xs text-foreground truncate">
+            {{ document.fileName }}
+          </span>
+          <span class="text-[11px] text-muted-foreground font-mono"> ({{ sizeLabel(document.sizeBytes) }}) </span>
+        </div>
+
+        <div class="flex items-center gap-1.5 shrink-0">
+          <Button variant="outline" size="sm" class="h-7 text-xs" @click="open(document)">
+            <ExternalLink class="size-3 mr-1" />
+            Xem (Ký URL)
+          </Button>
+          <Button variant="destructive" size="sm" class="h-7 text-xs" @click="remove(document)">
+            <Trash2 class="size-3 mr-1" />
+            Xóa
+          </Button>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>

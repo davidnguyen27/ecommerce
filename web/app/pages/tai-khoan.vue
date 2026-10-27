@@ -59,28 +59,47 @@ useSeo({ title: 'Tài khoản', description: 'Thông tin tài khoản khách hà
 </script>
 
 <template>
-  <main>
+  <main class="mx-auto max-w-2xl px-4 py-12 sm:py-16">
     <h1>Tài khoản</h1>
-    <p v-if="!profile">Đang tải…</p>
+    <p v-if="!profile" class="mt-8 text-muted-foreground">Đang tải…</p>
     <template v-else>
-      <p>Email: {{ profile.email }}</p>
-      <p v-if="profile.emailVerified">Email đã xác minh.</p>
-      <p v-else>
-        Email chưa xác minh.
-        <button type="button" :disabled="sending" @click="resendVerification">Gửi lại thư xác minh</button>
-      </p>
-      <p v-if="notice" role="status">{{ notice }}</p>
-      <p>
-        <small>
+      <section class="mt-8 rounded-lg border border-border bg-card p-6 sm:p-8">
+        <h2>Thông tin đăng nhập</h2>
+        <dl class="mt-4 text-sm">
+          <dt class="text-muted-foreground">Email</dt>
+          <dd class="mt-1 flex flex-wrap items-center gap-2 font-medium">
+            {{ profile.email }}
+            <span
+              v-if="profile.emailVerified"
+              class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800"
+              >Email đã xác minh.</span
+            >
+            <span v-else class="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900"
+              >Email chưa xác minh.</span
+            >
+          </dd>
+        </dl>
+        <button
+          v-if="!profile.emailVerified"
+          type="button"
+          class="btn-outline mt-4"
+          :disabled="sending"
+          @click="resendVerification"
+        >
+          Gửi lại thư xác minh
+        </button>
+        <p v-if="notice" role="status" class="mt-4 text-sm">{{ notice }}</p>
+        <p class="mt-6 border-t border-border pt-4 text-xs text-muted-foreground">
           Bạn đã đồng ý với chính sách bảo mật phiên bản {{ profile.privacyConsent.policyVersion }} lúc
           {{ consentedOn }}.
-        </small>
-      </p>
-      <form @submit.prevent="changePassword">
+        </p>
+      </section>
+      <form class="mt-6 space-y-5 rounded-lg border border-border bg-card p-6 sm:p-8" @submit.prevent="changePassword">
         <h2>Đổi mật khẩu</h2>
-        <label>
+        <label class="field">
           Mật khẩu hiện tại
           <input
+            class="field-input"
             v-model="currentPassword"
             type="password"
             name="currentPassword"
@@ -88,9 +107,10 @@ useSeo({ title: 'Tài khoản', description: 'Thông tin tài khoản khách hà
             required
           />
         </label>
-        <label>
+        <label class="field">
           Mật khẩu mới (ít nhất {{ CUSTOMER_PASSWORD_MIN_LENGTH }} ký tự)
           <input
+            class="field-input"
             v-model="newPassword"
             type="password"
             name="newPassword"
@@ -99,10 +119,10 @@ useSeo({ title: 'Tài khoản', description: 'Thông tin tài khoản khách hà
             required
           />
         </label>
-        <p v-if="passwordNotice" role="status">{{ passwordNotice }}</p>
-        <button type="submit" :disabled="changing">Đổi mật khẩu</button>
+        <p v-if="passwordNotice" role="status" class="text-sm">{{ passwordNotice }}</p>
+        <button type="submit" class="btn-primary" :disabled="changing">Đổi mật khẩu</button>
       </form>
-      <button type="button" @click="session.logout()">Đăng xuất</button>
+      <button type="button" class="btn-outline mt-6" @click="session.logout()">Đăng xuất</button>
     </template>
   </main>
 </template>

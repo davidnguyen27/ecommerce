@@ -31,19 +31,27 @@ useSeo({
 </script>
 
 <template>
-  <main v-if="data">
-    <nav aria-label="Đường dẫn">
+  <main v-if="data" class="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
+    <nav aria-label="Đường dẫn" class="mb-3 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
       <span>{{ PRODUCT_TYPE_LABELS[data.productType] }}</span>
       <template v-for="ancestor in data.ancestors" :key="ancestor.slug">
-        › <NuxtLink :to="`/danh-muc/${ancestor.slug}`">{{ ancestor.name }}</NuxtLink>
+        <span aria-hidden="true">/</span>
+        <NuxtLink :to="`/danh-muc/${ancestor.slug}`" class="transition-colors hover:text-foreground">{{
+          ancestor.name
+        }}</NuxtLink>
       </template>
     </nav>
     <h1>{{ data.name }}</h1>
-    <ul v-if="data.children.length">
+    <ul v-if="data.children.length" class="mt-6 flex flex-wrap gap-2">
       <li v-for="child in data.children" :key="child.slug">
-        <NuxtLink :to="`/danh-muc/${child.slug}`">{{ child.name }}</NuxtLink>
+        <NuxtLink
+          :to="`/danh-muc/${child.slug}`"
+          class="inline-flex h-10 items-center rounded-full border border-border bg-card px-4 text-sm font-medium transition-colors hover:border-foreground"
+          >{{ child.name }}</NuxtLink
+        >
       </li>
     </ul>
+    <div class="h-8" />
     <ProductSearch :category="data.slug" empty="Chưa có sản phẩm phù hợp trong danh mục này." />
   </main>
 </template>

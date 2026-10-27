@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ATTRIBUTE_FILTER_PREFIX, ProductSearchResult, type AttributeFacet, type ProductSort } from '@ecommerce/shared'
+import { SlidersHorizontal, X } from 'lucide-vue-next'
 
 /**
  * Danh sách sản phẩm có tìm kiếm, bộ lọc, sắp xếp và phân trang. Mọi lựa chọn nằm trên URL để chia sẻ được;
@@ -75,183 +76,164 @@ function apply(event: Event) {
 </script>
 
 <template>
-  <section class="search">
-    <p v-if="error" role="alert">
+  <section>
+    <p v-if="error" role="alert" class="notice-error">
       {{ (error as { statusCode?: number }).statusCode === 400 ? 'Bộ lọc không hợp lệ.' : 'Không tải được sản phẩm.' }}
     </p>
     <template v-else-if="data">
-      <div class="toolbar">
-        <p class="total">{{ data.total }} sản phẩm</p>
-        <nav aria-label="Sắp xếp" class="sorts">
-          <template v-for="sort in SORTS" :key="sort.label">
-            <NuxtLink
-              v-if="sort.value || filters.q"
-              :to="sortLink(sort.value)"
-              :aria-current="currentSort === sort.value ? 'true' : undefined"
-              >{{ sort.label }}</NuxtLink
-            >
-          </template>
-        </nav>
-      </div>
-
-      <details class="filters" :open="open" @toggle="open = ($event.target as HTMLDetailsElement).open">
-        <summary>Bộ lọc{{ activeCount ? ` (${activeCount})` : '' }}</summary>
-        <form method="get" :action="route.path" class="panel" @submit.prevent="apply">
-          <header>
-            <strong>Bộ lọc</strong>
-            <button type="button" aria-label="Đóng bộ lọc" @click="open = false">✕</button>
-          </header>
-          <input v-if="filters.q" type="hidden" name="q" :value="first('q')" />
-          <input v-if="filters.sort" type="hidden" name="sort" :value="first('sort')" />
-
-          <fieldset v-if="!category && data.facets.productTypes.length">
-            <legend>Nhóm hàng</legend>
-            <label>
-              <input type="radio" name="type" value="" :checked="!first('type')" />
-              Tất cả
-            </label>
-            <label v-for="option in data.facets.productTypes" :key="option.productType">
-              <input
-                type="radio"
-                name="type"
-                :value="option.productType"
-                :checked="first('type') === option.productType"
-              />
-              {{ PRODUCT_TYPE_LABELS[option.productType] }} ({{ option.count }})
-            </label>
-          </fieldset>
-
-          <fieldset v-for="facet in data.facets.attributes" :key="facet.key">
-            <legend>{{ facet.label }}</legend>
-            <label v-for="option in facet.values" :key="option.value">
-              <input
-                type="checkbox"
-                :name="ATTRIBUTE_FILTER_PREFIX + facet.key"
-                :value="option.value"
-                :checked="isSelected(facet, option.value)"
-              />
-              {{ valueLabel(facet, option.value) }} ({{ option.count }})
-            </label>
-            <!-- Giá trị đang chọn mà không còn sản phẩm vẫn hiện, để bỏ chọn được. -->
-            <template v-for="value in values(ATTRIBUTE_FILTER_PREFIX + facet.key)" :key="`chon-${value}`">
-              <label v-if="!facet.values.some((option) => option.value === value)">
-                <input type="checkbox" :name="ATTRIBUTE_FILTER_PREFIX + facet.key" :value="value" checked />
-                {{ valueLabel(facet, value) }} (0)
-              </label>
+      <div class="mb-8 flex flex-wrap items-center justify-between gap-3 border-y border-border py-3">
+        <p class="text-sm tabular-nums text-muted-foreground">{{ data.total }} sản phẩm</p>
+        <div class="flex flex-wrap items-center gap-2">
+          <nav aria-label="Sắp xếp" class="flex flex-wrap gap-1 text-sm">
+            <template v-for="sort in SORTS" :key="sort.label">
+              <NuxtLink
+                v-if="sort.value || filters.q"
+                :to="sortLink(sort.value)"
+                :aria-current="currentSort === sort.value ? 'true' : undefined"
+                class="inline-flex h-10 items-center rounded-md px-3 text-muted-foreground transition-colors hover:text-foreground aria-[current]:bg-secondary aria-[current]:font-semibold aria-[current]:text-foreground"
+                >{{ sort.label }}</NuxtLink
+              >
             </template>
-          </fieldset>
+          </nav>
 
-          <fieldset>
-            <legend>Khoảng giá (₫)</legend>
-            <div class="price">
-              <input
-                type="number"
-                name="minPrice"
-                min="0"
-                step="1000"
-                inputmode="numeric"
-                aria-label="Giá từ"
-                :placeholder="data.facets.price ? String(data.facets.price.min) : 'Từ'"
-                :value="first('minPrice')"
-              />
-              <span>–</span>
-              <input
-                type="number"
-                name="maxPrice"
-                min="0"
-                step="1000"
-                inputmode="numeric"
-                aria-label="Giá đến"
-                :placeholder="data.facets.price ? String(data.facets.price.max) : 'Đến'"
-                :value="first('maxPrice')"
-              />
-            </div>
-          </fieldset>
+          <details :open="open" @toggle="open = ($event.target as HTMLDetailsElement).open">
+            <summary
+              class="inline-flex h-10 cursor-pointer list-none items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium transition-colors hover:border-foreground [&::-webkit-details-marker]:hidden"
+            >
+              <SlidersHorizontal class="h-4 w-4" aria-hidden="true" />
+              Bộ lọc{{ activeCount ? ` (${activeCount})` : '' }}
+            </summary>
+            <!-- Ngăn kéo trượt ra từ cạnh phải, vừa màn hình điện thoại; phần còn lại phủ tối. -->
+            <form
+              method="get"
+              :action="route.path"
+              class="fixed inset-y-0 right-0 z-50 flex w-[min(380px,90vw)] flex-col bg-card shadow-[0_0_0_100vmax_rgb(0_0_0/0.45)]"
+              @submit.prevent="apply"
+            >
+              <header class="flex items-center justify-between border-b border-border px-5 py-4">
+                <strong class="font-display text-lg font-semibold">Bộ lọc</strong>
+                <button
+                  type="button"
+                  aria-label="Đóng bộ lọc"
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-md hover:bg-secondary"
+                  @click="open = false"
+                >
+                  <X class="h-5 w-5" aria-hidden="true" />
+                </button>
+              </header>
+              <input v-if="filters.q" type="hidden" name="q" :value="first('q')" />
+              <input v-if="filters.sort" type="hidden" name="sort" :value="first('sort')" />
 
-          <footer>
-            <NuxtLink :to="clearLink" @click="open = false">Xóa bộ lọc</NuxtLink>
-            <button type="submit">Xem kết quả</button>
-          </footer>
-        </form>
-      </details>
+              <div class="flex-1 divide-y divide-border overflow-y-auto px-5">
+                <fieldset v-if="!category && data.facets.productTypes.length" class="pb-5">
+                  <legend class="float-left mb-3 w-full pt-5 text-sm font-semibold">Nhóm hàng</legend>
+                  <div class="clear-both space-y-1">
+                    <label class="flex min-h-10 cursor-pointer items-center gap-3 text-sm">
+                      <input
+                        type="radio"
+                        name="type"
+                        value=""
+                        :checked="!first('type')"
+                        class="h-4 w-4 accent-primary"
+                      />
+                      Tất cả
+                    </label>
+                    <label
+                      v-for="option in data.facets.productTypes"
+                      :key="option.productType"
+                      class="flex min-h-10 cursor-pointer items-center gap-3 text-sm"
+                    >
+                      <input
+                        type="radio"
+                        name="type"
+                        :value="option.productType"
+                        :checked="first('type') === option.productType"
+                        class="h-4 w-4 accent-primary"
+                      />
+                      {{ PRODUCT_TYPE_LABELS[option.productType] }}
+                      <span class="ml-auto tabular-nums text-muted-foreground">{{ option.count }}</span>
+                    </label>
+                  </div>
+                </fieldset>
+
+                <fieldset v-for="facet in data.facets.attributes" :key="facet.key" class="pb-5">
+                  <legend class="float-left mb-3 w-full pt-5 text-sm font-semibold">{{ facet.label }}</legend>
+                  <div class="clear-both space-y-1">
+                    <label
+                      v-for="option in facet.values"
+                      :key="option.value"
+                      class="flex min-h-10 cursor-pointer items-center gap-3 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        :name="ATTRIBUTE_FILTER_PREFIX + facet.key"
+                        :value="option.value"
+                        :checked="isSelected(facet, option.value)"
+                        class="h-4 w-4 accent-primary"
+                      />
+                      {{ valueLabel(facet, option.value) }}
+                      <span class="ml-auto tabular-nums text-muted-foreground">{{ option.count }}</span>
+                    </label>
+                    <!-- Giá trị đang chọn mà không còn sản phẩm vẫn hiện, để bỏ chọn được. -->
+                    <template v-for="value in values(ATTRIBUTE_FILTER_PREFIX + facet.key)" :key="`chon-${value}`">
+                      <label
+                        v-if="!facet.values.some((option) => option.value === value)"
+                        class="flex min-h-10 cursor-pointer items-center gap-3 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          :name="ATTRIBUTE_FILTER_PREFIX + facet.key"
+                          :value="value"
+                          checked
+                          class="h-4 w-4 accent-primary"
+                        />
+                        {{ valueLabel(facet, value) }}
+                        <span class="ml-auto tabular-nums text-muted-foreground">0</span>
+                      </label>
+                    </template>
+                  </div>
+                </fieldset>
+
+                <fieldset class="pb-5">
+                  <legend class="float-left mb-3 w-full pt-5 text-sm font-semibold">Khoảng giá (₫)</legend>
+                  <div class="clear-both flex items-center gap-2">
+                    <input
+                      type="number"
+                      name="minPrice"
+                      min="0"
+                      step="1000"
+                      inputmode="numeric"
+                      aria-label="Giá từ"
+                      :placeholder="data.facets.price ? String(data.facets.price.min) : 'Từ'"
+                      :value="first('minPrice')"
+                      class="field-input min-w-0"
+                    />
+                    <span class="text-muted-foreground" aria-hidden="true">–</span>
+                    <input
+                      type="number"
+                      name="maxPrice"
+                      min="0"
+                      step="1000"
+                      inputmode="numeric"
+                      aria-label="Giá đến"
+                      :placeholder="data.facets.price ? String(data.facets.price.max) : 'Đến'"
+                      :value="first('maxPrice')"
+                      class="field-input min-w-0"
+                    />
+                  </div>
+                </fieldset>
+              </div>
+
+              <footer class="flex items-center gap-3 border-t border-border px-5 py-4">
+                <NuxtLink :to="clearLink" class="btn-outline flex-1" @click="open = false">Xóa bộ lọc</NuxtLink>
+                <button type="submit" class="btn-primary flex-1">Xem kết quả</button>
+              </footer>
+            </form>
+          </details>
+        </div>
+      </div>
 
       <ProductCardGrid :list="data" :empty="empty" />
     </template>
   </section>
 </template>
-
-<style scoped>
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  align-items: baseline;
-  justify-content: space-between;
-}
-.sorts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.sorts [aria-current] {
-  font-weight: 600;
-}
-.filters > summary {
-  display: inline-block;
-  padding: 8px 12px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  cursor: pointer;
-}
-/* Ngăn kéo trượt ra từ cạnh phải, vừa màn hình điện thoại; phần còn lại phủ tối. */
-.panel {
-  position: fixed;
-  inset: 0 0 0 auto;
-  z-index: 10;
-  width: min(360px, 88vw);
-  overflow-y: auto;
-  padding: 16px;
-  background: Canvas;
-  color: CanvasText;
-  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.4);
-}
-.panel header,
-.panel footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.panel footer {
-  position: sticky;
-  bottom: -16px;
-  padding: 12px 0;
-  background: Canvas;
-}
-.panel fieldset {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 12px 0;
-  border: 0;
-  padding: 0;
-}
-.panel legend {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-.panel label {
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.price {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.price input {
-  width: 100%;
-  min-width: 0;
-}
-</style>

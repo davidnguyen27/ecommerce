@@ -22,13 +22,20 @@ function setNumber(raw: string) {
 </script>
 
 <template>
-  <select v-if="definition.type === 'enum'" v-model="value" :aria-label="label" :title="label" :disabled="disabled">
+  <select
+    v-if="definition.type === 'enum'"
+    v-model="value"
+    class="form-select"
+    :aria-label="label"
+    :title="label"
+    :disabled="disabled"
+  >
     <option :value="null">—</option>
     <option v-for="option in definition.options" :key="option" :value="option">{{ option }}</option>
   </select>
-  <fieldset v-else-if="definition.type === 'multi_enum'" :disabled="disabled">
-    <legend>{{ label }}</legend>
-    <label v-for="option in definition.options" :key="option">
+  <fieldset v-else-if="definition.type === 'multi_enum'" class="flex flex-wrap gap-x-4 gap-y-1" :disabled="disabled">
+    <legend class="sr-only">{{ label }}</legend>
+    <label v-for="option in definition.options" :key="option" class="inline-flex items-center gap-1.5">
       <input
         type="checkbox"
         :checked="selected.includes(option)"
@@ -39,6 +46,7 @@ function setNumber(raw: string) {
   </fieldset>
   <input
     v-else-if="definition.type === 'number'"
+    class="form-input"
     type="number"
     step="any"
     :value="value ?? ''"
@@ -54,5 +62,5 @@ function setNumber(raw: string) {
     :aria-label="label"
     :disabled="disabled"
   />
-  <input v-else v-model="value" :aria-label="label" :title="label" :disabled="disabled" />
+  <input v-else v-model="value" class="form-input" :aria-label="label" :title="label" :disabled="disabled" />
 </template>

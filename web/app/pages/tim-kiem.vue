@@ -20,8 +20,10 @@ useSeo({ title, description: 'Tìm sản phẩm theo tên, thương hiệu, mã 
 </script>
 
 <template>
-  <main>
+  <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
+    <p class="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Tìm kiếm</p>
     <h1>{{ title }}</h1>
+    <div class="h-8" />
     <ProductSearch empty="Không tìm thấy sản phẩm phù hợp. Thử bỏ bớt bộ lọc hoặc gõ từ khóa khác." />
   </main>
 </template>

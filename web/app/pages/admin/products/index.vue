@@ -21,6 +21,11 @@ const brands = ref<AdminBrand[]>([])
 const categories = ref<AdminCategory[]>([])
 const error = ref<string | null>(null)
 const fieldErrors = ref<FieldError[]>([])
+
+const showCreateDrawer = ref(false)
+const filterStatus = ref<'all' | 'published' | 'draft' | 'archived'>('all')
+const searchQuery = ref('')
+
 const form = reactive({
   brandId: '',
   categoryId: '',
@@ -43,12 +48,33 @@ watch(
   },
 )
 
+// Tự động sinh slug từ tên sản phẩm nếu slug chưa bị người dùng sửa
+watch(
+  () => form.name,
+  (name) => {
+    if (!form.slug || form.slug === slugify(name.slice(0, -1))) {
+      form.slug = slugify(name)
+    }
+  },
+)
+
+function slugify(text: string) {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 /** Sản phẩm mới chỉ có thông tin tối thiểu; nội dung và biến thể soạn tiếp ở trình soạn. */
 async function create() {
   error.value = null
   fieldErrors.value = []
   try {
     const product = AdminProduct.parse(await session.adminFetch('/api/admin/products', { method: 'POST', body: form }))
+    showCreateDrawer.value = false
     await navigateTo(`/admin/products/${product.id}`)
   } catch (err) {
     error.value = apiErrorMessage(err)
@@ -59,76 +85,248 @@ async function create() {
 const errorAt = (path: string) => fieldErrors.value.find((f) => f.path === path)?.message
 
 const STATUS_LABELS = { draft: 'Nháp', published: 'Đã xuất bản', archived: 'Lưu trữ' } as const
+const STATUS_BADGES = { draft: 'badge-draft', published: 'badge-published', archived: 'badge-archived' } as const
 
 products.value = AdminProductList.parse(await session.adminFetch('/api/admin/products')).items
-// Thương hiệu và danh mục cần `catalog.edit`; người chỉ sửa giá không tạo sản phẩm nên không cần.
 if (canEdit) {
   brands.value = AdminBrandList.parse(await session.adminFetch('/api/admin/brands')).items
   categories.value = AdminCategoryList.parse(await session.adminFetch('/api/admin/categories')).items
 }
+
+// Lọc sản phẩm theo trạng thái và từ khóa tìm kiếm
+const filteredProducts = computed(() => {
+  return products.value.filter((p) => {
+    const matchStatus = filterStatus.value === 'all' || p.status === filterStatus.value
+    const q = searchQuery.value.trim().toLowerCase()
+    const matchQuery =
+      !q ||
+      p.name.toLowerCase().includes(q) ||
+      p.modelCode.toLowerCase().includes(q) ||
+      p.brand.name.toLowerCase().includes(q) ||
+      p.category.name.toLowerCase().includes(q)
+    return matchStatus && matchQuery
+  })
+})
+
+const counts = computed(() => ({
+  all: products.value.length,
+  published: products.value.filter((p) => p.status === 'published').length,
+  draft: products.value.filter((p) => p.status === 'draft').length,
+  archived: products.value.filter((p) => p.status === 'archived').length,
+}))
 </script>
 
 <template>
-  <main>
-    <h1>Sản phẩm</h1>
-    <p v-if="error" role="alert">{{ error }}</p>
+  <div>
+    <!-- Page Header -->
+    <div class="admin-page-header">
+      <div>
+        <h1 class="admin-page-title">Sản phẩm</h1>
+        <p class="admin-page-desc">
+          Quản lý danh mục hàng hiệu, soạn thảo biến thể, kiểm soát giá bán và phát hành phiên bản snapshot công khai.
+        </p>
+      </div>
 
-    <table>
-      <thead>
-        <tr>
-          <th>Tên</th>
-          <th>Mã mẫu</th>
-          <th>Thương hiệu</th>
-          <th>Danh mục</th>
-          <th>Biến thể</th>
-          <th>Trạng thái</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="product in products" :key="product.id">
-          <td>
-            <NuxtLink :to="`/admin/products/${product.id}`">{{ product.name }}</NuxtLink>
-          </td>
-          <td>{{ product.modelCode }}</td>
-          <td>{{ product.brand.name }}</td>
-          <td>{{ PRODUCT_TYPE_LABELS[product.productType] }} › {{ product.category.name }}</td>
-          <td>{{ product.variantCount }}</td>
-          <td>{{ STATUS_LABELS[product.status] }}</td>
-        </tr>
-      </tbody>
-    </table>
+      <div v-if="canEdit" class="admin-topbar-actions">
+        <button type="button" class="btn btn-primary" @click="showCreateDrawer = !showCreateDrawer">
+          <span>{{ showCreateDrawer ? 'Đóng form' : '+ Thêm sản phẩm mới' }}</span>
+        </button>
+      </div>
+    </div>
 
-    <template v-if="canEdit">
-      <h2>Thêm sản phẩm</h2>
-      <p>Sản phẩm mới luôn là nháp. Nhóm hàng lấy theo danh mục và không đổi được sau khi tạo.</p>
-      <form @submit.prevent="create">
-        <label>
-          Thương hiệu
-          <select v-model="form.brandId" required>
-            <option v-for="brand in brands" :key="brand.id" :value="brand.id">{{ brand.name }}</option>
-          </select>
-        </label>
-        <label>
-          Danh mục
-          <select v-model="form.categoryId" required>
-            <option v-for="category in categories" :key="category.id" :value="category.id">
-              {{ PRODUCT_TYPE_LABELS[category.productType] }} › {{ category.name }}
-            </option>
-          </select>
-        </label>
-        <label>Tên <input v-model="form.name" required /></label>
-        <label>Slug <input v-model="form.slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" /></label>
-        <div v-for="definition in definitions" :key="definition.key">
-          <label>
-            {{ definition.label }}
-            <AttributeInput v-model="form.attributes[definition.key]" :definition="definition" />
-          </label>
-          <small v-if="errorAt(`attributes.${definition.key}`)" role="alert">
-            {{ errorAt(`attributes.${definition.key}`) }}
-          </small>
+    <!-- Alert nếu có lỗi -->
+    <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
+      <span>{{ error }}</span>
+    </div>
+
+    <!-- Form tạo sản phẩm mới (Slide-down Panel) -->
+    <div v-if="showCreateDrawer && canEdit" class="admin-panel" style="border-left: 3px solid var(--adm-dark)">
+      <div class="admin-panel-header">
+        <div>
+          <h2 class="admin-section-title" style="margin: 0">Khởi tạo bản thảo sản phẩm mới</h2>
+          <p class="form-help" style="margin-top: 2px">
+            Sản phẩm khởi tạo luôn ở trạng thái <strong>Nháp</strong>. Nhóm hàng cố định theo danh mục ban đầu và không
+            thể thay đổi sau khi tạo.
+          </p>
         </div>
-        <button type="submit">Tạo sản phẩm</button>
+        <button type="button" class="btn btn-ghost btn-sm" @click="showCreateDrawer = false">✕ Đóng</button>
+      </div>
+
+      <form @submit.prevent="create">
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Thương hiệu *</label>
+            <select v-model="form.brandId" class="form-select" required>
+              <option value="" disabled>-- Chọn thương hiệu --</option>
+              <option v-for="brand in brands" :key="brand.id" :value="brand.id">{{ brand.name }}</option>
+            </select>
+            <small v-if="errorAt('brandId')" class="field-error-msg">{{ errorAt('brandId') }}</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Danh mục phân loại *</label>
+            <select v-model="form.categoryId" class="form-select" required>
+              <option value="" disabled>-- Chọn danh mục --</option>
+              <option v-for="category in categories" :key="category.id" :value="category.id">
+                {{ PRODUCT_TYPE_LABELS[category.productType] }} › {{ category.name }}
+              </option>
+            </select>
+            <small v-if="errorAt('categoryId')" class="field-error-msg">{{ errorAt('categoryId') }}</small>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Tên sản phẩm *</label>
+            <input v-model="form.name" class="form-input" placeholder="Ví dụ: Giày Sneaker Ace Leather" required />
+            <small v-if="errorAt('name')" class="field-error-msg">{{ errorAt('name') }}</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Slug đường dẫn (URL) *</label>
+            <input
+              v-model="form.slug"
+              class="form-input"
+              pattern="[a-z0-9]+(-[a-z0-9]+)*"
+              placeholder="giay-sneaker-ace-leather"
+              required
+            />
+            <small v-if="errorAt('slug')" class="field-error-msg">{{ errorAt('slug') }}</small>
+          </div>
+        </div>
+
+        <!-- Thuộc tính bắt buộc cấp sản phẩm -->
+        <div
+          v-if="definitions.length > 0"
+          style="margin-top: 10px; padding-top: 16px; border-top: 1px solid var(--adm-border-subtle)"
+        >
+          <div style="font-size: 13px; font-weight: 600; margin-bottom: 12px; color: var(--adm-ink)">
+            Thuộc tính bắt buộc cấp sản phẩm:
+          </div>
+          <div class="form-grid-2">
+            <div v-for="definition in definitions" :key="definition.key" class="form-group">
+              <label class="form-label">{{ definition.label }}</label>
+              <AttributeInput v-model="form.attributes[definition.key]" :definition="definition" />
+              <small v-if="errorAt(`attributes.${definition.key}`)" class="field-error-msg">
+                {{ errorAt(`attributes.${definition.key}`) }}
+              </small>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px">
+          <button type="button" class="btn btn-secondary" @click="showCreateDrawer = false">Hủy</button>
+          <button type="submit" class="btn btn-primary">Tạo bản thảo & Tiếp tục soạn ›</button>
+        </div>
       </form>
-    </template>
-  </main>
+    </div>
+
+    <!-- Tab filter bar & Search -->
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px">
+      <div class="tab-filter-bar" style="margin-bottom: 0">
+        <button
+          type="button"
+          class="tab-filter-btn"
+          :class="{ active: filterStatus === 'all' }"
+          @click="filterStatus = 'all'"
+        >
+          Tất cả ({{ counts.all }})
+        </button>
+        <button
+          type="button"
+          class="tab-filter-btn"
+          :class="{ active: filterStatus === 'published' }"
+          @click="filterStatus = 'published'"
+        >
+          Đang bán ({{ counts.published }})
+        </button>
+        <button
+          type="button"
+          class="tab-filter-btn"
+          :class="{ active: filterStatus === 'draft' }"
+          @click="filterStatus = 'draft'"
+        >
+          Bản nháp ({{ counts.draft }})
+        </button>
+        <button
+          type="button"
+          class="tab-filter-btn"
+          :class="{ active: filterStatus === 'archived' }"
+          @click="filterStatus = 'archived'"
+        >
+          Lưu trữ ({{ counts.archived }})
+        </button>
+      </div>
+
+      <div>
+        <input
+          v-model="searchQuery"
+          type="search"
+          class="form-input"
+          style="width: 260px; padding: 6px 12px"
+          placeholder="Lọc tên, mã mẫu, hãng..."
+        />
+      </div>
+    </div>
+
+    <!-- Bảng danh sách sản phẩm -->
+    <div class="admin-table-card" style="margin-top: 16px">
+      <div v-if="filteredProducts.length === 0" style="padding: 40px; text-align: center; color: var(--adm-muted)">
+        Không tìm thấy sản phẩm nào phù hợp với bộ lọc hiện tại.
+      </div>
+
+      <table v-else class="admin-table">
+        <thead>
+          <tr>
+            <th>Tên sản phẩm</th>
+            <th>Mã mẫu</th>
+            <th>Thương hiệu</th>
+            <th>Phân loại danh mục</th>
+            <th class="admin-table-num">Số biến thể</th>
+            <th>Trạng thái</th>
+            <th style="text-align: right">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="product in filteredProducts" :key="product.id">
+            <td>
+              <NuxtLink :to="`/admin/products/${product.id}`" style="display: block; font-size: 14px">
+                {{ product.name }}
+              </NuxtLink>
+              <span style="font-size: 11px; color: var(--adm-muted); font-family: var(--adm-mono)">
+                /{{ product.slug }}
+              </span>
+            </td>
+            <td>
+              <span v-if="product.modelCode" style="font-family: var(--adm-mono); font-size: 12px">
+                {{ product.modelCode }}
+              </span>
+              <span v-else style="color: var(--adm-muted); font-size: 12px">—</span>
+            </td>
+            <td>
+              <span style="font-weight: 500">{{ product.brand.name }}</span>
+            </td>
+            <td>
+              <span style="color: var(--adm-muted); font-size: 12px">
+                {{ PRODUCT_TYPE_LABELS[product.productType] }} ›
+              </span>
+              <span style="font-weight: 500">{{ product.category.name }}</span>
+            </td>
+            <td class="admin-table-num" style="font-weight: 600">
+              {{ product.variantCount }}
+            </td>
+            <td>
+              <span class="badge" :class="STATUS_BADGES[product.status]">
+                <span class="badge-dot" />
+                {{ STATUS_LABELS[product.status] }}
+              </span>
+            </td>
+            <td style="text-align: right">
+              <NuxtLink :to="`/admin/products/${product.id}`" class="btn btn-secondary btn-sm"> Chi tiết › </NuxtLink>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </template>

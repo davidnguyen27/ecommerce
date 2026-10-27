@@ -59,136 +59,248 @@ async function upload(files: FileList | File[]) {
     }
   }
   uploading.value = null
-  if (skipped.length > 0) {
-    error.value = `Không tải được: ${skipped.join(', ')}. Chỉ nhận jpeg, png, webp, tối đa ${MAX_IMAGE_BYTES / 1024 / 1024} MB.`
-  }
-}
-
-function onPick(event: Event) {
-  const input = event.target as HTMLInputElement
-  if (input.files) void upload([...input.files]).then(() => (input.value = ''))
+  error.value = skipped.length > 0 ? `Không tải được: ${skipped.join(', ')}` : null
 }
 
 function onDropFiles(event: DragEvent) {
   dropActive.value = false
-  if (event.dataTransfer?.files.length) void upload([...event.dataTransfer.files])
+  if (event.dataTransfer?.files?.length) void upload(event.dataTransfer.files)
 }
 
-/** Thả ảnh đang kéo vào vị trí `index` rồi lưu thứ tự mới; lỗi thì nạp lại thứ tự trên server. */
-function onDropRow(index: number) {
-  const from = dragging.value
-  dragging.value = null
-  if (from === null || from === index) return
-  const [moved] = rows.value.splice(from, 1)
-  rows.value.splice(index, 0, moved!)
-  return attempt(async () => {
-    try {
-      const body = { imageIds: rows.value.map((r) => r.id) }
-      const list = AdminProductImageList.parse(await session.adminFetch(`${base}/order`, { method: 'PUT', body }))
-      rows.value = list.items.map(toRow)
-    } catch (err) {
-      await load()
-      throw err
-    }
-  })
+function onPick(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (input.files?.length) void upload(input.files)
+  input.value = ''
+}
+
+function isDirty(row: Row) {
+  const altChanged = row.draftAlt !== row.alt
+  const variantsChanged =
+    row.draftVariantIds.length !== row.variantIds.length ||
+    row.draftVariantIds.some((id) => !row.variantIds.includes(id))
+  return altChanged || variantsChanged
 }
 
 function save(row: Row) {
   return attempt(async () => {
-    const body = { alt: row.draftAlt, variantIds: row.draftVariantIds }
-    const image = AdminProductImage.parse(await session.adminFetch(`${base}/${row.id}`, { method: 'PUT', body }))
-    Object.assign(row, toRow(image))
+    const updated = AdminProductImage.parse(
+      await session.adminFetch(`${base}/${row.id}`, {
+        method: 'PUT',
+        body: { alt: row.draftAlt, variantIds: row.draftVariantIds },
+      }),
+    )
+    Object.assign(row, toRow(updated))
   })
 }
 
 function remove(row: Row) {
-  if (!confirm('Xóa ảnh này? File ảnh trên storage cũng bị xóa.')) return
+  if (!confirm('Xóa ảnh này khỏi sản phẩm?')) return
   return attempt(async () => {
     await session.adminFetch(`${base}/${row.id}`, { method: 'DELETE' })
     rows.value = rows.value.filter((r) => r.id !== row.id)
   })
 }
 
-const isDirty = (row: Row) =>
-  row.draftAlt !== row.alt || [...row.draftVariantIds].sort().join() !== [...row.variantIds].sort().join()
+function onDropRow(targetIndex: number) {
+  if (dragging.value === null || dragging.value === targetIndex) return
+  const from = dragging.value
+  const item = rows.value.splice(from, 1)[0]!
+  rows.value.splice(targetIndex, 0, item)
+  dragging.value = null
+  const imageIds = rows.value.map((r) => r.id)
+  return attempt(async () => {
+    await session.adminFetch(`${base}/order`, { method: 'PUT', body: { imageIds } })
+  })
+}
 
 await load()
 </script>
 
 <template>
-  <section>
-    <h2>Ảnh</h2>
-    <p>
-      Ảnh đầu tiên là ảnh đại diện. Gắn ảnh vào biến thể để khi khách chọn biến thể đó (ví dụ một màu) thì ảnh đổi theo;
-      ảnh không gắn biến thể nào là ảnh chung.
-    </p>
-    <p v-if="error" role="alert">{{ error }}</p>
+  <div class="admin-panel">
+    <div class="admin-panel-header">
+      <div>
+        <h2 class="admin-section-title" style="margin: 0">Thư viện Hình ảnh Sản phẩm</h2>
+        <p class="form-help" style="margin-top: 2px">
+          Kéo thả để sắp xếp vị trí. Ảnh đầu tiên là ảnh đại diện. Có thể gán ảnh riêng cho từng biến thể SKU.
+        </p>
+      </div>
+    </div>
 
+    <div v-if="error" class="admin-alert admin-alert-danger" role="alert" style="margin-bottom: 12px">
+      <span>{{ error }}</span>
+    </div>
+
+    <!-- Dropzone -->
     <div
       v-if="canUpload"
-      class="dropzone"
+      class="admin-dropzone"
       :class="{ active: dropActive }"
       @dragover.prevent="dropActive = true"
       @dragleave="dropActive = false"
       @drop.prevent="onDropFiles"
     >
-      <label>
-        Kéo thả ảnh vào đây hoặc chọn file (jpeg, png, webp, tối đa {{ MAX_IMAGE_BYTES / 1024 / 1024 }} MB)
-        <input type="file" multiple :accept="IMAGE_CONTENT_TYPES.join(',')" :disabled="!!uploading" @change="onPick" />
+      <label style="cursor: pointer; display: block; text-align: center">
+        <div style="font-size: 20px; margin-bottom: 4px; opacity: 0.6">📷</div>
+        <div style="font-weight: 600; font-size: 13px; color: var(--adm-ink)">
+          Kéo thả ảnh vào đây, hoặc <span style="text-decoration: underline">chọn file từ máy</span>
+        </div>
+        <div class="form-help" style="font-size: 11px">
+          Định dạng JPEG, PNG, WebP (Tối đa {{ MAX_IMAGE_BYTES / 1024 / 1024 }} MB). Tự động nén WebP đa kích thước.
+        </div>
+        <input
+          type="file"
+          multiple
+          :accept="IMAGE_CONTENT_TYPES.join(',')"
+          :disabled="!!uploading"
+          style="display: none"
+          @change="onPick"
+        />
       </label>
-      <p v-if="uploading" role="status">Đang tải {{ uploading }}…</p>
+      <p v-if="uploading" style="font-size: 12px; color: var(--adm-draft); text-align: center; margin-top: 8px">
+        Đang xử lý & tải lên: <strong>{{ uploading }}</strong
+        >…
+      </p>
     </div>
 
-    <p v-if="rows.length === 0">Sản phẩm chưa có ảnh.</p>
-    <ol class="images">
-      <li
+    <div
+      v-if="rows.length === 0"
+      style="
+        padding: 24px;
+        text-align: center;
+        color: var(--adm-muted);
+        background: var(--adm-surface-subtle);
+        border-radius: 6px;
+        margin-top: 14px;
+      "
+    >
+      Sản phẩm chưa có ảnh. Vui lòng tải ít nhất 1 ảnh trước khi xuất bản.
+    </div>
+
+    <!-- Image List -->
+    <div v-else style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px">
+      <div
         v-for="(row, index) in rows"
         :key="row.id"
-        :draggable="canUpload"
+        class="admin-image-card"
         :class="{ dragging: dragging === index }"
+        :draggable="canUpload"
         @dragstart="dragging = index"
         @dragend="dragging = null"
         @dragover.prevent
         @drop.prevent="onDropRow(index)"
       >
-        <a :href="row.originalUrl" target="_blank" rel="noopener">
-          <img :src="row.sizes[0]?.url" :alt="row.alt" width="120" />
-        </a>
-        <fieldset :disabled="!canUpload">
-          <label>Alt text <input v-model="row.draftAlt" maxlength="500" placeholder="Mô tả ngắn nội dung ảnh" /></label>
-          <div v-if="variants.length > 0">
-            Biến thể:
-            <label v-for="variant in variants" :key="variant.id">
-              <input v-model="row.draftVariantIds" type="checkbox" :value="variant.id" />
-              {{ variant.label }}
-            </label>
+        <div style="display: flex; gap: 14px; align-items: flex-start">
+          <!-- Thumbnail -->
+          <div style="position: relative">
+            <a :href="row.originalUrl" target="_blank" rel="noopener">
+              <img
+                :src="row.sizes[0]?.url"
+                :alt="row.alt"
+                style="
+                  width: 80px;
+                  height: 80px;
+                  object-fit: cover;
+                  border-radius: 4px;
+                  border: 1px solid var(--adm-border);
+                "
+              />
+            </a>
+            <span
+              v-if="index === 0"
+              class="badge badge-published"
+              style="position: absolute; bottom: 4px; left: 4px; font-size: 9px; padding: 1px 4px"
+            >
+              Ảnh bìa
+            </span>
           </div>
-          <small>{{ row.width }} × {{ row.height }} px</small>
-          <button type="button" :disabled="!isDirty(row)" @click="save(row)">Lưu ảnh</button>
-          <button type="button" @click="remove(row)">Xóa ảnh</button>
-        </fieldset>
-      </li>
-    </ol>
-  </section>
+
+          <!-- Controls -->
+          <div style="flex: 1; min-width: 0">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px">
+              <span style="font-size: 11px; color: var(--adm-muted); font-family: var(--adm-mono)">
+                #{{ index + 1 }} · {{ row.width }} × {{ row.height }} px
+              </span>
+              <div style="display: flex; gap: 6px">
+                <button type="button" class="btn btn-primary btn-sm" :disabled="!isDirty(row)" @click="save(row)">
+                  Lưu
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" @click="remove(row)">Xóa</button>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 8px">
+              <input
+                v-model="row.draftAlt"
+                class="form-input"
+                style="padding: 4px 8px; font-size: 12px"
+                maxlength="500"
+                placeholder="Mô tả alt text ảnh..."
+                :disabled="!canUpload"
+              />
+            </div>
+
+            <!-- Gán biến thể -->
+            <div v-if="variants.length > 0" style="font-size: 12px">
+              <span style="color: var(--adm-muted); font-size: 11px; display: block; margin-bottom: 4px"
+                >Gắn với biến thể:</span
+              >
+              <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                <label
+                  v-for="variant in variants"
+                  :key="variant.id"
+                  style="
+                    font-size: 11px;
+                    background: var(--adm-surface);
+                    border: 1px solid var(--adm-border);
+                    border-radius: 3px;
+                    padding: 2px 6px;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                  "
+                >
+                  <input v-model="row.draftVariantIds" type="checkbox" :value="variant.id" :disabled="!canUpload" />
+                  <span>{{ variant.label }}</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.dropzone {
-  border: 2px dashed currentColor;
-  padding: 1rem;
+.admin-dropzone {
+  border: 1px dashed var(--adm-border);
+  background-color: var(--adm-surface-subtle);
+  border-radius: 6px;
+  padding: 20px 16px;
+  transition: all 0.15s ease;
 }
-.dropzone.active {
-  background: rgba(0, 0, 0, 0.05);
+
+.admin-dropzone.active {
+  border-color: var(--adm-ink);
+  background-color: var(--adm-surface-active);
 }
-.images li {
-  display: flex;
-  gap: 1rem;
-  align-items: flex-start;
+
+.admin-image-card {
+  background: var(--adm-surface-subtle);
+  border: 1px solid var(--adm-border-subtle);
+  border-radius: 6px;
+  padding: 12px;
+  transition: background 0.15s ease;
 }
-.images li[draggable='true'] {
+
+.admin-image-card[draggable='true'] {
   cursor: grab;
 }
-.images li.dragging {
-  opacity: 0.5;
+
+.admin-image-card.dragging {
+  opacity: 0.4;
+  border-style: dashed;
 }
 </style>
