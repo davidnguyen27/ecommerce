@@ -14,7 +14,7 @@ Ghi chú cho subagent: `implement-spec-notes.md`. Danh sách sửa sau code revi
 - Bước 3: đã xóa mọi worktree agent và các nhánh ticket/*, fix/review đã merge.
 
 ## Còn lại
-1. Giao diện Tailwind: đã chuyển thẳng trên nhánh tích hợp (`b3dbbda`, 2026-10-28), không merge `ui/tailwind`. Website dùng Tailwind/Shadcn, admin giữ `admin.css` (selector chung đã gắn phạm vi `.admin-shell`). Typecheck, lint qua. Còn: chạy `pnpm smoke` và xem bằng mắt (cần Docker), rồi quyết định xóa nhánh `ui/tailwind`.
+1. Giao diện Tailwind: đã chuyển thẳng trên nhánh tích hợp (`b3dbbda`, 2026-10-28), không merge `ui/tailwind`. Website dùng Tailwind/Shadcn, admin giữ `admin.css` (selector chung đã gắn phạm vi `.admin-shell`). Typecheck, lint, smoke qua; đã xem bằng mắt các trang khách và /admin/login (sửa /admin/login bỏ layout website, `b32274a`). Còn: xem các trang admin sau đăng nhập, quyết định xóa nhánh `ui/tailwind`.
 2. Báo cáo nhánh tích hợp và danh sách cần chủ doanh nghiệp xác nhận (dưới đây).
 
 ## Cần chủ doanh nghiệp xác nhận
