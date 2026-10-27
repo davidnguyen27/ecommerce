@@ -14,7 +14,7 @@ Ghi chú cho subagent: `implement-spec-notes.md`. Danh sách sửa sau code revi
 - Bước 3: đã xóa mọi worktree agent và các nhánh ticket/*, fix/review đã merge.
 
 ## Còn lại
-1. Merge `ui/tailwind` (`0e1e0fc`, bản làm lại giao diện bằng Tailwind/reka-ui, đang làm dở) vào nhánh tích hợp sau cùng; chuyển các trang mới của ticket 11/12/14 sang giao diện mới. Hỏi chủ dự án trước nếu bản UI chưa xong. Thử merge (merge-tree) có 6 xung đột.
+1. Giao diện Tailwind: đã chuyển thẳng trên nhánh tích hợp (`b3dbbda`, 2026-10-28), không merge `ui/tailwind`. Website dùng Tailwind/Shadcn, admin giữ `admin.css` (selector chung đã gắn phạm vi `.admin-shell`). Typecheck, lint qua. Còn: chạy `pnpm smoke` và xem bằng mắt (cần Docker), rồi quyết định xóa nhánh `ui/tailwind`.
 2. Báo cáo nhánh tích hợp và danh sách cần chủ doanh nghiệp xác nhận (dưới đây).
 
 ## Cần chủ doanh nghiệp xác nhận
