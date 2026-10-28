@@ -18,6 +18,9 @@ const env = {
   HTTPS_PORT: '8444',
   POSTGRES_PORT: '55432',
   JWT_SECRET: randomBytes(32).toString('base64url'),
+  // Không theo .env local: bỏ SeaweedFS (sẽ tranh cổng 9000 với stack dev), giữ file trong bộ nhớ.
+  COMPOSE_PROFILES: '',
+  STORAGE_PROVIDER: 'memory',
 }
 
 function compose(...args: string[]) {
