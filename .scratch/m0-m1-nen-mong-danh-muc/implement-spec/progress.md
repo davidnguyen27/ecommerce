@@ -30,3 +30,8 @@ Ghi chú cho subagent: `implement-spec-notes.md`. Danh sách sửa sau code revi
 - Nguyên nhân (đã đo): có những khoảng 10–40 giây mà kết nối mới từ Windows vào container Postgres test không tới được Postgres. Trong lúc đó Postgres vẫn khỏe (`pg_isready` bên trong container chạy đều, log không có `connection received` của test), worker Node vẫn khỏe (độ trễ event loop khoảng 50 ms), TCP tới proxy cục bộ của Docker vẫn xong ngay (`SYN_SENT`=0). Đợt treo xảy ra riêng theo từng container. Tức là lớp chuyển cổng của Docker Desktop trên Windows bị đứng.
 - Đã loại: Postgres thiếu CPU; event loop nghẽn; cạn cổng tạm (khoảng 1.600 TIME_WAIT/15.700); riêng đường IPv6 (127.0.0.1 vẫn đỏ); mở kết nối quá dày (bỏ pg-boss khỏi test không gửi mail, giảm khoảng 75% kết nối, vẫn treo và còn tệ hơn vì truy vấn đầu tiên của pg-boss chờ 10s rồi nuốt lỗi, vô tình che đợt treo cho Prisma). Đã khôi phục.
 - Chưa sửa. Code app không có lỗi; cần chọn cách xử lý môi trường (chạy test API trong container Linux, dựa vào CI Linux, hoặc nới timeout kết nối trong test).
+
+## Chạy local để xem sản phẩm (2026-10-28)
+- `.env` local bật `COMPOSE_PROFILES=local` (SeaweedFS làm S3, `s3.localhost:9000`); `pnpm demo-seed` dựng cửa hàng mẫu. Owner demo: `chu-shop@example.com` / `mat-khau-demo-local`.
+- DB dev còn dữ liệu rác từ 22–23/10: trang `smoke-chinh-sach` (tiêu đề lỗi encoding, hiện ở chân trang), 3 nhân viên cũ không rõ mật khẩu.
+- Chủ dự án tạm chưa làm VPS/Cloudflare/Sentry (ticket 15/16).
