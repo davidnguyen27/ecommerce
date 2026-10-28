@@ -4,7 +4,7 @@ import { AuditActors, AuditPage, type AuditActor } from '@ecommerce/shared'
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'audit.view' })
 
 const PAGE_SIZE = 50
-const ENTITY_TYPES = ['staff', 'content_page', 'system_config', 'product', 'brand', 'category']
+const ENTITY_TYPES = AUDIT_ENTITY_TYPES
 
 const session = useAdminSession()
 const actors = ref<AuditActor[]>([])
@@ -121,7 +121,7 @@ await load()
             <label class="form-label" style="font-size: 12px">Loại đối tượng</label>
             <select v-model="filters.entityType" class="form-select" style="font-size: 12px; padding: 6px 10px">
               <option value="">-- Tất cả đối tượng --</option>
-              <option v-for="t in ENTITY_TYPES" :key="t" :value="t">{{ t }}</option>
+              <option v-for="t in ENTITY_TYPES" :key="t" :value="t">{{ auditEntityLabel(t) }}</option>
             </select>
           </div>
 
@@ -175,22 +175,13 @@ await load()
                   <strong style="color: var(--adm-ink)">{{ entry.actor.name }}</strong>
                 </td>
                 <td>
-                  <code
-                    style="
-                      font-family: var(--adm-mono);
-                      font-size: 11px;
-                      background: var(--adm-surface-subtle);
-                      padding: 2px 6px;
-                      border-radius: 4px;
-                      border: 1px solid var(--adm-border);
-                      color: var(--adm-ink);
-                    "
-                  >
+                  <div style="font-weight: 500; color: var(--adm-ink)">{{ auditActionLabel(entry.action) }}</div>
+                  <code style="font-family: var(--adm-mono); font-size: 10px; color: var(--adm-muted)">
                     {{ entry.action }}
                   </code>
                 </td>
                 <td>
-                  <span style="font-weight: 500">{{ entry.entityType }}</span>
+                  <span style="font-weight: 500; white-space: nowrap">{{ auditEntityLabel(entry.entityType) }}</span>
                   <div style="font-family: var(--adm-mono); font-size: 10px; color: var(--adm-muted)">
                     {{ entry.entityId.slice(0, 8) }}...
                   </div>
