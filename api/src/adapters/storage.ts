@@ -65,6 +65,8 @@ export class R2Storage implements Storage {
       region: 'auto',
       endpoint: config.endpoint,
       credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
+      // Bucket nằm trong path, không trong tên miền: R2 nhận cả hai kiểu, MinIO ở local chỉ nhận kiểu này.
+      forcePathStyle: true,
     })
   }
 
