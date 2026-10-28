@@ -24,3 +24,9 @@ Ghi chú cho subagent: `implement-spec-notes.md`. Danh sách sửa sau code revi
 - 06: ngưỡng giới hạn tần suất (đăng nhập 10/15 phút theo email, 50 theo IP; quên mật khẩu 3/giờ theo email, 20 theo IP); link đặt lại hết hạn sau 1 giờ.
 - 12: ngưỡng gõ sai 0,6; khớp tiền tố SKU từ 3 ký tự; chưa chọn nhóm hàng thì chỉ lọc được giới tính, giá, nhóm hàng; chỉ mục tìm kiếm cập nhật khi xuất bản.
 - Đã quyết khi review (đã làm): đổi giá của sản phẩm đã xuất bản lên website ngay, không cần xuất bản lại; cam kết có bằng chứng đi theo bản xuất bản.
+
+## Chẩn đoán test chập chờn (/diagnosing-bugs), 2026-10-28
+- Triệu chứng: `Connection terminated due to connection timeout` (pg-pool). Tái hiện: 3 bộ test đầy đủ song song thì 5/6 lượt đỏ.
+- Nguyên nhân (đã đo): có những khoảng 10–40 giây mà kết nối mới từ Windows vào container Postgres test không tới được Postgres. Trong lúc đó Postgres vẫn khỏe (`pg_isready` bên trong container chạy đều, log không có `connection received` của test), worker Node vẫn khỏe (độ trễ event loop khoảng 50 ms), TCP tới proxy cục bộ của Docker vẫn xong ngay (`SYN_SENT`=0). Đợt treo xảy ra riêng theo từng container. Tức là lớp chuyển cổng của Docker Desktop trên Windows bị đứng.
+- Đã loại: Postgres thiếu CPU; event loop nghẽn; cạn cổng tạm (khoảng 1.600 TIME_WAIT/15.700); riêng đường IPv6 (127.0.0.1 vẫn đỏ); mở kết nối quá dày (bỏ pg-boss khỏi test không gửi mail, giảm khoảng 75% kết nối, vẫn treo và còn tệ hơn vì truy vấn đầu tiên của pg-boss chờ 10s rồi nuốt lỗi, vô tình che đợt treo cho Prisma). Đã khôi phục.
+- Chưa sửa. Code app không có lỗi; cần chọn cách xử lý môi trường (chạy test API trong container Linux, dựa vào CI Linux, hoặc nới timeout kết nối trong test).
