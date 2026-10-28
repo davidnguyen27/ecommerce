@@ -1,40 +1,53 @@
 <script setup lang="ts">
 import '~/assets/admin.css'
 import type { Permission } from '@ecommerce/shared'
+import {
+  BadgeCheck,
+  FileText,
+  FolderTree,
+  History,
+  LayoutDashboard,
+  ListChecks,
+  Package,
+  Scale,
+  Tag,
+  Users,
+  type LucideIcon,
+} from 'lucide-vue-next'
 
 const session = useAdminSession()
 const route = useRoute()
 
-type MenuItem = { to: string; label: string; permission?: Permission | Permission[] }
+type MenuItem = { to: string; label: string; icon: LucideIcon; permission?: Permission | Permission[] }
 type MenuGroup = { title: string; items: MenuItem[] }
 
 const MENU_GROUPS: MenuGroup[] = [
   {
     title: 'Tổng quan',
-    items: [{ to: '/admin', label: 'Bảng điều khiển' }],
+    items: [{ to: '/admin', label: 'Bảng điều khiển', icon: LayoutDashboard }],
   },
   {
     title: 'Hàng hóa & Danh mục',
     items: [
-      { to: '/admin/products', label: 'Sản phẩm', permission: ['catalog.edit', 'price.edit'] },
-      { to: '/admin/brands', label: 'Thương hiệu', permission: 'catalog.edit' },
-      { to: '/admin/categories', label: 'Cây danh mục', permission: 'catalog.edit' },
-      { to: '/admin/attribute-schemas', label: 'Schema thuộc tính', permission: 'catalog.edit' },
-      { to: '/admin/commitment-types', label: 'Loại cam kết', permission: 'commitment.edit' },
+      { to: '/admin/products', label: 'Sản phẩm', icon: Package, permission: ['catalog.edit', 'price.edit'] },
+      { to: '/admin/brands', label: 'Thương hiệu', icon: Tag, permission: 'catalog.edit' },
+      { to: '/admin/categories', label: 'Cây danh mục', icon: FolderTree, permission: 'catalog.edit' },
+      { to: '/admin/attribute-schemas', label: 'Schema thuộc tính', icon: ListChecks, permission: 'catalog.edit' },
+      { to: '/admin/commitment-types', label: 'Loại cam kết', icon: BadgeCheck, permission: 'commitment.edit' },
     ],
   },
   {
     title: 'Vận hành & Nhân sự',
     items: [
-      { to: '/admin/staff', label: 'Nhân sự & Vai trò', permission: 'staff.manage' },
-      { to: '/admin/audit', label: 'Nhật ký kiểm toán', permission: 'audit.view' },
+      { to: '/admin/staff', label: 'Nhân sự & Vai trò', icon: Users, permission: 'staff.manage' },
+      { to: '/admin/audit', label: 'Nhật ký kiểm toán', icon: History, permission: 'audit.view' },
     ],
   },
   {
     title: 'Nội dung & Pháp lý',
     items: [
-      { to: '/admin/pages', label: 'Trang bài viết', permission: 'content.edit' },
-      { to: '/admin/legal-info', label: 'Thông tin pháp lý', permission: 'content.edit' },
+      { to: '/admin/pages', label: 'Trang bài viết', icon: FileText, permission: 'content.edit' },
+      { to: '/admin/legal-info', label: 'Thông tin pháp lý', icon: Scale, permission: 'content.edit' },
     ],
   },
 ]
@@ -111,6 +124,7 @@ const displayRoles = computed(() => {
             class="admin-nav-link"
             :class="{ active: isItemActive(item.to) }"
           >
+            <component :is="item.icon" class="admin-nav-icon" aria-hidden="true" />
             <span>{{ item.label }}</span>
           </NuxtLink>
         </div>

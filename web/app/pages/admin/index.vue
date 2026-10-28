@@ -143,7 +143,9 @@ const formatTime = (iso: string) => {
                   {{ STATUS_LABELS[p.status] }}
                 </span>
               </td>
-              <td style="font-size: 12px; color: var(--adm-muted)">{{ formatTime(p.updatedAt) }}</td>
+              <td style="font-size: 12px; color: var(--adm-muted); white-space: nowrap">
+                {{ formatTime(p.updatedAt) }}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -191,9 +193,7 @@ const formatTime = (iso: string) => {
                 <strong style="color: var(--adm-ink)">{{ log.actor.name }}</strong>
                 <span style="color: var(--adm-muted)">{{ formatTime(log.createdAt) }}</span>
               </div>
-              <div style="color: var(--adm-muted)">
-                Hành động: <code style="font-family: var(--adm-mono); color: var(--adm-ink)">{{ log.action }}</code>
-              </div>
+              <div style="color: var(--adm-muted)">{{ auditActionLabel(log.action) }}</div>
             </div>
           </div>
         </div>
