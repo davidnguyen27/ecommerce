@@ -19,8 +19,9 @@ declare module 'vitest' {
 export default async function setup(project: TestProject) {
   const container = await new PostgreSqlContainer('postgres:17-alpine')
     .withDatabase(TEMPLATE_DB)
-    // DB dùng một lần: bỏ ghi đĩa đồng bộ. Mỗi test clone DB từ template, I/O dồn lại làm Postgres khựng vài giây
-    // và transaction tương tác của Prisma quá 5s thì hết hạn giữa chừng (500 ngẫu nhiên).
+    // DB dùng một lần: bỏ ghi đĩa đồng bộ cho nhanh, vì mỗi test clone một DB từ template.
+    // Trên Windows, thỉnh thoảng có test lỗi "Connection terminated due to connection timeout": lớp chuyển cổng của
+    // Docker Desktop đứng 10–40 giây, không do Postgres hay code. CI Linux mới là cửa kiểm tra (ticket 15).
     .withCommand(['postgres', '-c', 'fsync=off', '-c', 'synchronous_commit=off', '-c', 'full_page_writes=off'])
     .start()
     .catch((err: Error) => {
