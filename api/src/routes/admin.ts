@@ -8,6 +8,7 @@ import { adminAuditRoutes } from './admin-audit.ts'
 import { adminBrandRoutes } from './admin-brands.ts'
 import { adminCategoryRoutes } from './admin-categories.ts'
 import { adminCommitmentTypeRoutes } from './admin-commitment-types.ts'
+import { adminImportRoutes } from './admin-import.ts'
 import { adminPageRoutes } from './admin-pages.ts'
 import { adminProductCommitmentRoutes } from './admin-product-commitments.ts'
 import { adminProductDocumentRoutes } from './admin-product-documents.ts'
@@ -41,5 +42,6 @@ export function adminRoutes(prisma: Db, storage: Storage) {
       .use('/products/:id/commitments', adminProductCommitmentRoutes(prisma))
       .use('/products', adminProductRoutes(prisma))
       .use('/stock', adminStockRoutes(prisma))
+      .use('/import', adminImportRoutes(prisma))
   )
 }
