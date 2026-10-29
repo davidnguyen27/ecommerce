@@ -190,9 +190,7 @@ useHead({
                   !option.variant.inStock && 'text-muted-foreground opacity-60',
                 ]"
               >
-                <span :class="!option.variant.inStock && 'line-through'">
-                  {{ formatAttribute(choice.definition, option.value) }}
-                </span>
+                <span>{{ formatAttribute(choice.definition, option.value) }}</span>
                 <span v-if="!option.variant.inStock" class="text-[11px]">Hết hàng</span>
               </NuxtLink>
             </div>

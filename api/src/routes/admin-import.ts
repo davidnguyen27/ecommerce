@@ -5,6 +5,7 @@ import { audited, type AuditEntry } from '../audit/audited.ts'
 import { currentStaff, hasPermission, requirePermission } from '../auth/staff-context.ts'
 import {
   ALREADY_LEDGERED,
+  type PlannedOpening,
   buildTemplate,
   hasOpeningStock,
   hasPrices,
@@ -48,13 +49,51 @@ async function readUpload(req: Request, ref: Awaited<ReturnType<typeof loadRefer
   return { ...read, fileName: file.originalname }
 }
 
-/** Lỗi của file khi xác nhận: không ghi gì; đường dẫn lỗi dạng `<sheet> / <dòng> / <cột>`. */
-function fileHasErrors(errors: ImportIssue[]) {
+/** 400 cho file còn lỗi khi xác nhận (không ghi gì); đường dẫn lỗi dạng `<sheet> / <dòng> / <cột>`. */
+function invalidImportFile(errors: ImportIssue[]) {
   const fields = errors.map((e) => ({
     path: [e.sheet, e.row, e.column].filter((p) => p !== null).join(' / '),
     message: e.message,
   }))
   return new AppError(400, ErrorCode.VALIDATION_ERROR, 'File còn lỗi, chưa ghi gì; hãy xem trước để sửa', fields)
+}
+
+/**
+ * Ghi tồn đầu kỳ qua `changeStock`, sau khi biến thể mới đã được tạo. Điều kiện "chưa có dòng sổ" được kiểm lại
+ * dưới khóa, vì có thể đã có dòng sổ từ lúc xem trước tới giờ. Trả các bản audit `stock.opening`.
+ */
+async function recordOpeningStocks(
+  tx: Prisma.TransactionClient,
+  actorId: string,
+  openings: PlannedOpening[],
+): Promise<AuditEntry[]> {
+  if (openings.length === 0) return []
+  const variants = await tx.productVariant.findMany({
+    where: { sku: { in: openings.map((o) => o.sku) } },
+    select: { id: true, sku: true },
+  })
+  const idOf = new Map(variants.map((v) => [v.sku, v.id]))
+  const skuOf = new Map(variants.map((v) => [v.id, v.sku]))
+  const { movements } = await changeStock(tx, actorId, [...idOf.values()], async () => {
+    const ledgered = await tx.stockMovement.findMany({
+      where: { variantId: { in: [...idOf.values()] } },
+      select: { variantId: true },
+      distinct: ['variantId'],
+    })
+    const late = openings.filter((o) => ledgered.some((m) => m.variantId === idOf.get(o.sku)))
+    if (late.length) {
+      throw invalidImportFile(
+        late.map((o) => ({ sheet: o.sheet, row: o.row, column: 'Tồn đầu kỳ', message: ALREADY_LEDGERED })),
+      )
+    }
+    return openings.map((o) => ({ variantId: idOf.get(o.sku)!, quantity: o.quantity, kind: 'opening', path: 'file' }))
+  })
+  return movements.map((m) => ({
+    action: 'stock.opening',
+    entityType: 'product_variant',
+    entityId: m.variantId,
+    after: { sku: skuOf.get(m.variantId)!, onHand: m.onHandAfter },
+  }))
 }
 
 /** Import sản phẩm và biến thể bằng file .xlsx; mọi thao tác cần `catalog.edit`. */
@@ -75,7 +114,7 @@ export function adminImportRoutes(prisma: Db) {
       const body: ImportPreview = {
         products: plan.products.length,
         variants: plan.products.reduce((n, p) => n + p.variants.length, 0),
-        openingStocks: plan.openingStocks,
+        openingStocks: plan.openings.length,
         errors: [...structure, ...plan.errors],
         warnings: plan.warnings,
       }
@@ -94,7 +133,7 @@ export function adminImportRoutes(prisma: Db) {
           const { rows, errors: structure, fileName } = await readUpload(req, ref)
           const plan = await planImport(tx, rows, ref)
           const errors = [...structure, ...plan.errors]
-          if (errors.length) throw fileHasErrors(errors)
+          if (errors.length) throw invalidImportFile(errors)
           // Không tạo gì và không có tồn đầu kỳ (mọi dòng có SKU đã tồn tại): không ghi gì, kể cả audit.
           if (plan.products.length === 0 && plan.openings.length === 0) {
             return { products: 0, variants: 0, openingStocks: 0 }
@@ -106,63 +145,15 @@ export function adminImportRoutes(prisma: Db) {
               data: products.map(({ variants: _variants, ...p }) => ({ ...p, sizeChart: Prisma.DbNull })),
             })
             await tx.productVariant.createMany({
-              data: products.flatMap((p) =>
-                p.variants.map(({ openingStock: _o, sheet: _s, row: _r, ...v }) => ({ ...v, productId: p.id })),
-              ),
+              data: products.flatMap((p) => p.variants.map((v) => ({ ...v, productId: p.id }))),
             })
           }
+          const openingEntries = await recordOpeningStocks(tx, currentStaff(req).id, plan.openings)
 
           const created = await tx.product.findMany({
             where: { id: { in: products.map((p) => p.id) } },
             include: { variants: { orderBy: { sortOrder: 'asc' } } },
           })
-          const createdIds = new Map(created.flatMap((p) => p.variants.map((v) => [v.sku, v.id])))
-          const openings = [
-            ...plan.openings,
-            ...products.flatMap((p) =>
-              p.variants
-                .filter((v) => v.openingStock > 0)
-                .map((v) => ({
-                  variantId: createdIds.get(v.sku)!,
-                  sku: v.sku,
-                  quantity: v.openingStock,
-                  sheet: v.sheet,
-                  row: v.row,
-                })),
-            ),
-          ]
-          const actorId = currentStaff(req).id
-          const { movements } = await changeStock(
-            tx,
-            actorId,
-            openings.map((o) => o.variantId),
-            async () => {
-              // Tồn đầu kỳ chỉ một lần: kiểm lại dưới khóa, vì có thể đã có dòng sổ từ lúc xem trước tới giờ.
-              const ledgered = new Set(
-                (
-                  await tx.stockMovement.findMany({
-                    where: { variantId: { in: openings.map((o) => o.variantId) } },
-                    select: { variantId: true },
-                    distinct: ['variantId'],
-                  })
-                ).map((m) => m.variantId),
-              )
-              const late = openings.filter((o) => ledgered.has(o.variantId))
-              if (late.length) {
-                throw fileHasErrors(
-                  late.map((o) => ({ sheet: o.sheet, row: o.row, column: 'Tồn đầu kỳ', message: ALREADY_LEDGERED })),
-                )
-              }
-              return openings.map((o) => ({
-                variantId: o.variantId,
-                quantity: o.quantity,
-                kind: 'opening',
-                path: 'file',
-              }))
-            },
-          )
-          const skuOf = new Map(openings.map((o) => [o.variantId, o.sku]))
-
           const entries: AuditEntry[] = []
           for (const product of created) {
             entries.push({
@@ -189,18 +180,11 @@ export function adminImportRoutes(prisma: Db) {
               }
             }
           }
-          for (const m of movements) {
-            entries.push({
-              action: 'stock.opening',
-              entityType: 'product_variant',
-              entityId: m.variantId,
-              after: { sku: skuOf.get(m.variantId)!, onHand: m.onHandAfter },
-            })
-          }
+          entries.push(...openingEntries)
           const summary = {
             products: created.length,
             variants: created.reduce((n, p) => n + p.variants.length, 0),
-            openingStocks: movements.length,
+            openingStocks: openingEntries.length,
           }
           entries.push({
             action: 'catalog.import',

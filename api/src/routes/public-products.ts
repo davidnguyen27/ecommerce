@@ -85,17 +85,18 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
         where: { id: { in: versionIds } },
         include: { brand: true },
       })
-      const snapshots = new Map(
+      // Phiên bản kèm snapshot đã parse, theo id phiên bản.
+      const parsedById = new Map(
         versions.map((v) => [v.id, { version: v, snapshot: ProductSnapshot.parse(v.snapshot) }]),
       )
       const stocked = await inStockIds(
         prisma,
-        [...snapshots.values()].flatMap(({ snapshot }) => snapshot.variants.map((v) => v.id)),
+        [...parsedById.values()].flatMap(({ snapshot }) => snapshot.variants.map((v) => v.id)),
       )
 
       const body: ProductSearchResult = {
         items: versionIds.map((id) => {
-          const { version, snapshot } = snapshots.get(id)!
+          const { version, snapshot } = parsedById.get(id)!
           return toCard(
             version,
             snapshot,

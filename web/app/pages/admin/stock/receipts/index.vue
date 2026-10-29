@@ -49,8 +49,8 @@ async function lookUp(line: Line) {
   const sku = line.sku.trim().toUpperCase()
   if (!sku) return (line.found = undefined)
   try {
-    const page = StockPage.parse(await session.adminFetch('/api/admin/stock', { query: { q: sku, pageSize: 5 } }))
-    const item = page.items.find((i) => i.sku === sku)
+    const matches = StockPage.parse(await session.adminFetch('/api/admin/stock', { query: { q: sku, pageSize: 5 } }))
+    const item = matches.items.find((i) => i.sku === sku)
     line.found = item ? { productName: item.product.name, onHand: item.onHand } : null
   } catch {
     line.found = undefined
@@ -80,8 +80,6 @@ async function save() {
     error.value = apiErrorMessage(err)
   }
 }
-
-const formatDate = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('vi-VN')
 
 await load()
 </script>
@@ -214,7 +212,7 @@ await load()
               <tr v-for="r in result.items" :key="r.id">
                 <td style="white-space: nowrap">
                   <NuxtLink :to="`/admin/stock/receipts/${r.id}`" style="font-weight: 600">
-                    {{ formatDate(r.receivedOn) }}
+                    {{ formatDateOnly(r.receivedOn) }}
                   </NuxtLink>
                 </td>
                 <td>{{ r.supplierName }}</td>
