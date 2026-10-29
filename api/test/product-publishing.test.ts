@@ -533,6 +533,7 @@ describe('danh sách sản phẩm cho khách', () => {
         fromPrice: 3_000_000,
         compareAtPrice: 4_000_000,
         image: expect.objectContaining({ alt: 'Ảnh', originalUrl: expect.any(String) }),
+        inStock: false,
       },
     ])
   })

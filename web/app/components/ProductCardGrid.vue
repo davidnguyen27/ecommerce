@@ -20,7 +20,13 @@ const pageLink = (page: number) => ({ query: { ...route.query, trang: page > 1 ?
     <ul v-else class="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4">
       <li v-for="product in list.items" :key="product.slug">
         <NuxtLink :to="`/san-pham/${product.slug}`" class="group flex flex-col gap-1">
-          <div class="mb-2 aspect-[4/5] overflow-hidden rounded-md bg-secondary">
+          <div class="relative mb-2 aspect-[4/5] overflow-hidden rounded-md bg-secondary">
+            <span
+              v-if="!product.inStock"
+              class="absolute left-2 top-2 z-10 rounded bg-background/90 px-2 py-0.5 text-[11px] font-semibold text-muted-foreground"
+            >
+              Hết hàng
+            </span>
             <img
               v-if="product.image"
               :src="imageSrc(product.image, 320)"

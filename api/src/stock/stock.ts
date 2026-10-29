@@ -1,6 +1,19 @@
 import type { StockAdjustmentReason, StockMovementKind } from '@ecommerce/shared'
+import type { DbClient } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { conflictField } from '../http/errors.ts'
+
+/**
+ * Những biến thể còn hàng trong `variantIds`. Khách chỉ thấy còn hay hết, đọc trực tiếp từ tồn chứ không từ
+ * phiên bản xuất bản (ADR 0006), và không bao giờ thấy số lượng.
+ */
+export async function inStockIds(db: DbClient, variantIds: readonly string[]): Promise<Set<string>> {
+  const rows = await db.productVariant.findMany({
+    where: { id: { in: [...variantIds] }, onHand: { gt: 0 } },
+    select: { id: true },
+  })
+  return new Set(rows.map((r) => r.id))
+}
 
 /** Biến thể đang bị khóa để đổi tồn. */
 export type LockedVariant = { id: string; sku: string; productId: string; onHand: number }

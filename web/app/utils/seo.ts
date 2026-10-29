@@ -30,19 +30,21 @@ export function listingCanonicalPath(path: string, query: LocationQuery): string
 
 /**
  * Dữ liệu cấu trúc schema.org Product. Giá VND của các biến thể đang bán: một biến thể là `Offer`, nhiều biến
- * thể là `AggregateOffer` với khoảng giá. Chưa có `availability` vì chưa quản lý tồn kho (M2).
+ * thể là `AggregateOffer` với khoảng giá. `availability` là còn hàng khi có ít nhất một biến thể còn hàng.
  */
 export function productJsonLd(product: PublicProduct, url: string, absolute: (src: string) => string) {
   const prices = product.variants.map((variant) => variant.price)
+  const availability = `https://schema.org/${product.variants.some((v) => v.inStock) ? 'InStock' : 'OutOfStock'}`
   const offers =
     prices.length === 1
-      ? { '@type': 'Offer', price: prices[0], priceCurrency: 'VND', url }
+      ? { '@type': 'Offer', price: prices[0], priceCurrency: 'VND', availability, url }
       : {
           '@type': 'AggregateOffer',
           lowPrice: Math.min(...prices),
           highPrice: Math.max(...prices),
           offerCount: prices.length,
           priceCurrency: 'VND',
+          availability,
         }
   return {
     '@context': 'https://schema.org',
