@@ -396,6 +396,8 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
   }
 
   const seenSkus = new Map<string, SheetRow>()
+  /** Dòng đầu tiên dùng mỗi slug; nhóm theo cả nhóm hàng nên cùng slug ở hai sheet phải bắt riêng ở đây. */
+  const slugOwners = new Map<string, SheetRow>()
   const products: PlannedProduct[] = []
   for (const group of groups.values()) {
     const [first] = group as [SheetRow, ...SheetRow[]]
@@ -405,6 +407,12 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
       errors.push(issue(row, key, message))
       ok = false
     }
+
+    const slug = text(first.values.get('slug')).trim()
+    const owner = slugOwners.get(slug)
+    if (owner && slug)
+      fail(first, 'slug', `Slug này đã dùng cho sản phẩm khác ở sheet ${owner.sheet} dòng ${owner.row}`)
+    else slugOwners.set(slug, first)
 
     const resolve = (index: NameIndex, key: string, what: string) => {
       const name = text(first.values.get(key))

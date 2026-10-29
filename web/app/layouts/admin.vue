@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import '~/assets/admin.css'
-import type { Permission } from '@ecommerce/shared'
+import { STOCK_VIEW_PERMISSIONS, type Permission } from '@ecommerce/shared'
 import {
   BadgeCheck,
   FileSpreadsheet,
@@ -19,13 +19,10 @@ import {
   type LucideIcon,
 } from 'lucide-vue-next'
 
-/** Ai soạn danh mục, đặt giá hoặc giữ kho đều xem được tồn. */
-const STOCK_VIEW: Permission[] = ['catalog.edit', 'price.edit', 'stock.adjust']
-
 const session = useAdminSession()
 const route = useRoute()
 
-type MenuItem = { to: string; label: string; icon: LucideIcon; permission?: Permission | Permission[] }
+type MenuItem = { to: string; label: string; icon: LucideIcon; permission?: Permission | readonly Permission[] }
 type MenuGroup = { title: string; items: MenuItem[] }
 
 const MENU_GROUPS: MenuGroup[] = [
@@ -48,8 +45,8 @@ const MENU_GROUPS: MenuGroup[] = [
   {
     title: 'Kho',
     items: [
-      { to: '/admin/stock', label: 'Tồn kho', icon: Warehouse, permission: STOCK_VIEW },
-      { to: '/admin/stock/movements', label: 'Sổ xuất nhập', icon: ScrollText, permission: STOCK_VIEW },
+      { to: '/admin/stock', label: 'Tồn kho', icon: Warehouse, permission: STOCK_VIEW_PERMISSIONS },
+      { to: '/admin/stock/movements', label: 'Sổ xuất nhập', icon: ScrollText, permission: STOCK_VIEW_PERMISSIONS },
     ],
   },
   {

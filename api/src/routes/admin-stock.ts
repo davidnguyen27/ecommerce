@@ -1,9 +1,12 @@
 import { Router } from 'express'
 import {
+  ADJUSTMENT_INPUT,
   ErrorCode,
+  STOCK_VIEW_PERMISSIONS,
   StockAdjustmentRequest,
   StockMovementQuery,
   StockQuery,
+  adjustmentDelta,
   type AttributeValues,
   type StockItem,
   type StockMovementPage,
@@ -48,7 +51,7 @@ async function loadStockItem(db: DbClient, variantId: string) {
  */
 export function adminStockRoutes(prisma: Db) {
   return Router()
-    .use(requirePermission('catalog.edit', 'price.edit', 'stock.adjust'))
+    .use(requirePermission(...STOCK_VIEW_PERMISSIONS))
     .get('/', async (req, res) => {
       const query = parse(StockQuery, req.query)
       const where: Prisma.ProductVariantWhereInput = {
@@ -131,16 +134,14 @@ export function adminStockRoutes(prisma: Db) {
           if (!variant) throw invalidField('variantId', 'Biến thể không tồn tại')
           if (variant.onHand !== input.expectedOnHand) {
             const message = `Tồn đã đổi thành ${variant.onHand} trong lúc bạn đang nhập; kiểm tra lại rồi gửi lại`
-            throw new AppError(409, ErrorCode.CONFLICT, message, [{ path: 'expectedOnHand', message }])
+            throw new AppError(409, ErrorCode.CONFLICT, message, [{ path: 'expectedOnHand', message }], {
+              onHand: variant.onHand,
+            })
           }
-          const quantity =
-            input.reason === 'stocktake'
-              ? input.countedQuantity - variant.onHand
-              : input.reason === 'other'
-                ? input.quantity
-                : -input.quantity
+          const amount = 'countedQuantity' in input ? input.countedQuantity : input.quantity
+          const quantity = adjustmentDelta(input.reason, amount, variant.onHand)
           if (quantity === 0) return []
-          const path = input.reason === 'stocktake' ? 'countedQuantity' : 'quantity'
+          const path = ADJUSTMENT_INPUT[input.reason].field
           return [{ variantId: variant.id, quantity, kind: 'adjustment', reason: input.reason, note: input.note, path }]
         })
         const [movement] = movements

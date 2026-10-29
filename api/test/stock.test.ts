@@ -170,6 +170,7 @@ describe('các lý do điều chỉnh', () => {
 
     expect(res.status).toBe(409)
     expect(res.body.error.message).toContain('6')
+    expect(res.body.error.details).toEqual({ onHand: 6 })
     expect(movements.body.items).toHaveLength(1)
     expect(await onHandOf(request, token, 'AM90-40')).toBe(6)
   })
