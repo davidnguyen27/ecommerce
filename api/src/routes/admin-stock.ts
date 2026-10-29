@@ -114,6 +114,7 @@ export function adminStockRoutes(prisma: Db) {
           quantity: m.quantity,
           onHandAfter: m.onHandAfter,
           reason: m.reason,
+          receiptId: m.receiptId,
           note: m.note,
           variant,
           product,

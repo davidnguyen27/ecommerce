@@ -46,6 +46,7 @@ model Staff {
   publishedVersions        ContentPageVersion[]
   publishedProductVersions ProductVersion[]
   stockMovements           StockMovement[]
+  stockReceipts            StockReceipt[]
 
   @@map("staff")
 }
@@ -378,13 +379,33 @@ model StockMovement {
   /// Chỉ có ở điều chỉnh (check constraint).
   reason      StockAdjustmentReason?
   note        String                 @default("")
+  /// Chỉ có, và luôn có, ở dòng nhập kho (check constraint).
+  receiptId   String?                @map("receipt_id") @db.Uuid
+  receipt     StockReceipt?          @relation(fields: [receiptId], references: [id], onDelete: Restrict)
   actorId     String                 @map("actor_id") @db.Uuid
   actor       Staff                  @relation(fields: [actorId], references: [id], onDelete: Restrict)
   createdAt   DateTime               @default(now()) @map("created_at")
 
   @@index([variantId, seq])
   @@index([createdAt])
+  @@index([receiptId])
   @@map("stock_movement")
+}
+
+/// Phiếu nhập kho; các dòng là `StockMovement` loại `receipt`. Append-only: trigger chặn UPDATE, DELETE, TRUNCATE.
+model StockReceipt {
+  id           String          @id @default(uuid()) @db.Uuid
+  seq          BigInt          @unique @default(autoincrement())
+  /// Chữ tự do; M2 chưa có danh bạ nhà cung cấp.
+  supplierName String          @map("supplier_name")
+  receivedOn   DateTime        @map("received_on") @db.Date
+  note         String          @default("")
+  createdById  String          @map("created_by_id") @db.Uuid
+  createdBy    Staff           @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  movements    StockMovement[]
+
+  @@map("stock_receipt")
 }
 
 /// Nội dung sản phẩm tại một lần xuất bản; khách chỉ đọc từ đây. Không sửa, không xóa (trigger trong migration).

@@ -55,7 +55,7 @@ export type ProductRequest = z.input<typeof ProductRequest>
 const Price = z.number().int('Giá phải là số nguyên VND').positive('Giá phải lớn hơn 0').max(1_000_000_000_000)
 
 /** SKU lưu chữ hoa, để `abc-1` và `ABC-1` không thành hai SKU. */
-const Sku = z
+export const Sku = z
   .string()
   .trim()
   .min(1)

@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   ListChecks,
   Package,
+  PackagePlus,
   Scale,
   ScrollText,
   Tag,
@@ -46,6 +47,7 @@ const MENU_GROUPS: MenuGroup[] = [
     title: 'Kho',
     items: [
       { to: '/admin/stock', label: 'Tồn kho', icon: Warehouse, permission: STOCK_VIEW_PERMISSIONS },
+      { to: '/admin/stock/receipts', label: 'Phiếu nhập', icon: PackagePlus, permission: STOCK_VIEW_PERMISSIONS },
       { to: '/admin/stock/movements', label: 'Sổ xuất nhập', icon: ScrollText, permission: STOCK_VIEW_PERMISSIONS },
     ],
   },

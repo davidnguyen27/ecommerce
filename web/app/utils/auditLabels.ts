@@ -34,6 +34,7 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'commitment_type.create': 'Thêm loại cam kết',
   'commitment_type.update': 'Sửa loại cam kết',
   'stock.adjust': 'Điều chỉnh tồn',
+  'stock.receipt.create': 'Ghi phiếu nhập kho',
   'catalog.import': 'Import hàng hóa từ Excel',
 }
 
@@ -51,6 +52,7 @@ const AUDIT_ENTITY_LABELS: Record<string, string> = {
   product_commitment: 'Cam kết',
   commitment_type: 'Loại cam kết',
   import: 'Lần import',
+  stock_receipt: 'Phiếu nhập kho',
 }
 
 export const AUDIT_ENTITY_TYPES = Object.keys(AUDIT_ENTITY_LABELS)

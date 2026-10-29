@@ -13,6 +13,8 @@ export type StockChange = {
   kind: StockMovementKind
   reason?: StockAdjustmentReason
   note?: string
+  /** Phiếu nhập; bắt buộc với loại `receipt` (check constraint). */
+  receiptId?: string
   path: string
 }
 
@@ -60,6 +62,7 @@ export async function changeStock(
           onHandAfter: m.onHandAfter,
           reason: m.reason ?? null,
           note: m.note ?? '',
+          receiptId: m.receiptId ?? null,
           actorId,
         },
       }),

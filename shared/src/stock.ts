@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { AuditActor } from './audit.ts'
 import { ProductType } from './catalog.ts'
-import { ProductStatus, VariantStatus } from './products.ts'
+import { ProductStatus, Sku, VariantStatus } from './products.ts'
 import type { Permission } from './staff.ts'
 
 /** Loại biến động trong sổ xuất nhập. */
@@ -112,6 +112,8 @@ export const StockMovement = z.object({
   onHandAfter: z.number(),
   reason: StockAdjustmentReason.nullable(),
   note: z.string(),
+  /** Phiếu nhập của dòng loại nhập kho; loại khác thì `null`. */
+  receiptId: z.string().nullable(),
   variant: z.object({ id: z.string(), sku: z.string() }),
   product: z.object({ id: z.string(), name: z.string() }),
   actor: AuditActor,
@@ -137,3 +139,54 @@ export const StockMovementPage = z.object({
   pageSize: z.number(),
 })
 export type StockMovementPage = z.infer<typeof StockMovementPage>
+
+// Phiếu nhập
+
+/** Ghi một lô hàng về kho: nhiều dòng SKU và số lượng, ghi toàn bộ hoặc không dòng nào. SKU không được trùng. */
+export const StockReceiptRequest = z.object({
+  supplierName: z.string().trim().min(1, 'Cần tên nhà cung cấp').max(200),
+  /** Ngày hàng về, `YYYY-MM-DD`. */
+  receivedOn: z.iso.date(),
+  note: Note,
+  lines: z
+    .array(z.object({ sku: Sku, quantity: z.number().int().min(1).max(1_000_000) }))
+    .min(1, 'Phiếu cần ít nhất một dòng')
+    .max(500),
+})
+export type StockReceiptRequest = z.input<typeof StockReceiptRequest>
+
+const ReceiptHeader = z.object({
+  id: z.string(),
+  supplierName: z.string(),
+  receivedOn: z.string(),
+  note: z.string(),
+  createdAt: z.string(),
+  createdBy: AuditActor,
+})
+
+export const StockReceipt = ReceiptHeader.extend({
+  lines: z.array(
+    z.object({
+      variantId: z.string(),
+      sku: z.string(),
+      productName: z.string(),
+      quantity: z.number(),
+      onHandAfter: z.number(),
+    }),
+  ),
+})
+export type StockReceipt = z.infer<typeof StockReceipt>
+
+export const StockReceiptQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+})
+export type StockReceiptQuery = z.infer<typeof StockReceiptQuery>
+
+export const StockReceiptPage = z.object({
+  items: z.array(ReceiptHeader.extend({ lineCount: z.number(), totalQuantity: z.number() })),
+  total: z.number(),
+  page: z.number(),
+  pageSize: z.number(),
+})
+export type StockReceiptPage = z.infer<typeof StockReceiptPage>
