@@ -177,6 +177,8 @@ export const ProductCard = z.object({
   /** Giá hãng của chính biến thể có giá thấp nhất. */
   compareAtPrice: z.number().nullable(),
   image: PublicImage.nullable(),
+  /** Có ít nhất một biến thể đang hiện với khách còn hàng; không bao giờ kèm số lượng (ADR 0006). */
+  inStock: z.boolean(),
 })
 export type ProductCard = z.infer<typeof ProductCard>
 
@@ -290,6 +292,8 @@ export const PublicProduct = z.object({
       attributes: AttributeValues,
       price: z.number(),
       compareAtPrice: z.number().nullable(),
+      /** Còn hàng hay hết, đọc trực tiếp từ tồn chứ không từ phiên bản xuất bản (ADR 0006). */
+      inStock: z.boolean(),
     }),
   ),
   /** Theo thứ tự hiển thị; `skus` rỗng là ảnh chung. */
@@ -298,7 +302,7 @@ export const PublicProduct = z.object({
   policies: z.array(z.object({ slug: z.string(), title: z.string() })),
   /**
    * Cam kết có bằng chứng, tách khỏi thông tin nguồn gốc công bố; bảo hành chỉ có ở đây (ADR 0005).
-   * Đọc trực tiếp, không qua phiên bản xuất bản: cam kết có quyền riêng và chứng từ làm căn cứ.
+   * Lấy từ phiên bản đang xuất bản như các trường khác.
    */
   commitments: z.array(PublicCommitment),
   publishedAt: z.string(),

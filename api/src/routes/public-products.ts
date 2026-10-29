@@ -22,6 +22,7 @@ import type { Brand, ProductVersion } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 import { imageRenditions } from '../media/images.ts'
+import { inStockIds } from '../stock/stock.ts'
 
 const SlugParams = z.object({ slug: z.string() })
 
@@ -29,11 +30,15 @@ const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấ
 
 /**
  * Sản phẩm như khách thấy: chỉ sản phẩm đã xuất bản, và chỉ đọc phiên bản đang xuất bản, không đọc bản đang soạn.
+ * Ngoại lệ duy nhất là còn hàng hay hết, đọc trực tiếp từ tồn (ADR 0006).
  * Ẩn thương hiệu, danh mục không làm sản phẩm biến mất (GLOSSARY "Ẩn").
  */
 export function publicProductRoutes(prisma: Db, storage: Storage) {
-  function toCard(version: ProductVersion & { brand: Brand }): ProductCard {
-    const snapshot = ProductSnapshot.parse(version.snapshot)
+  function toCard(
+    version: ProductVersion & { brand: Brand },
+    snapshot: ProductSnapshot,
+    inStock: boolean,
+  ): ProductCard {
     const cheapest = cheapestVariant(snapshot)
     const cover = snapshot.images[0]
     return {
@@ -43,6 +48,7 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
       fromPrice: cheapest.price,
       compareAtPrice: cheapest.compareAtPrice,
       image: cover ? { ...imageRenditions(storage, cover), alt: cover.alt } : null,
+      inStock,
     }
   }
 
@@ -79,10 +85,23 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
         where: { id: { in: versionIds } },
         include: { brand: true },
       })
-      const byId = new Map(versions.map((v) => [v.id, v]))
+      const snapshots = new Map(
+        versions.map((v) => [v.id, { version: v, snapshot: ProductSnapshot.parse(v.snapshot) }]),
+      )
+      const stocked = await inStockIds(
+        prisma,
+        [...snapshots.values()].flatMap(({ snapshot }) => snapshot.variants.map((v) => v.id)),
+      )
 
       const body: ProductSearchResult = {
-        items: versionIds.map((id) => toCard(byId.get(id)!)),
+        items: versionIds.map((id) => {
+          const { version, snapshot } = snapshots.get(id)!
+          return toCard(
+            version,
+            snapshot,
+            snapshot.variants.some((v) => stocked.has(v.id)),
+          )
+        }),
         page: query.page,
         pageSize: PRODUCT_PAGE_SIZE,
         total,
@@ -107,7 +126,7 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
       const version = product.liveVersion
       const snapshot = ProductSnapshot.parse(version.snapshot)
 
-      const [schema, tree, pages] = await Promise.all([
+      const [schema, tree, pages, stocked] = await Promise.all([
         loadAttributeSchema(prisma, snapshot.productType),
         loadVisibleTree(prisma),
         prisma.contentPage.findMany({
@@ -115,6 +134,10 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
           include: { versions: LATEST_VERSION },
           orderBy: { createdAt: 'asc' },
         }),
+        inStockIds(
+          prisma,
+          snapshot.variants.map((v) => v.id),
+        ),
       ])
       const skuOf = new Map(snapshot.variants.map((v) => [v.id, v.sku]))
       const category = findVisible(tree, version.category.slug)?.category
@@ -133,11 +156,12 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
         attributes: snapshot.attributes,
         groundShippingOnly: snapshot.groundShippingOnly,
         attributeSchema: schema.attributes,
-        variants: snapshot.variants.map(({ sku, attributes, price, compareAtPrice }) => ({
+        variants: snapshot.variants.map(({ id, sku, attributes, price, compareAtPrice }) => ({
           sku,
           attributes,
           price,
           compareAtPrice,
+          inStock: stocked.has(id),
         })),
         images: snapshot.images.map((image) => ({
           ...imageRenditions(storage, image),

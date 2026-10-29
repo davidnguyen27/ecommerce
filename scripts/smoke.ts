@@ -137,12 +137,22 @@ async function seedPublishedProduct(token: string, categoryId: string, policyPag
     },
   })
   const base = `/api/admin/products/${product.id}`
-  for (const variant of [
-    { sku: 'AM90-DEN-40', attributes: { mau: 'Đen', size: '40' }, price: 3_500_000, compareAtPrice: 4_000_000 },
-    { sku: 'AM90-TRANG-41', attributes: { mau: 'Trắng', size: '41' }, price: 3_200_000 },
-  ]) {
-    await api(`${base}/variants`, { method: 'POST', token, body: variant })
-  }
+  const black = await api(`${base}/variants`, {
+    method: 'POST',
+    token,
+    body: { sku: 'AM90-DEN-40', attributes: { mau: 'Đen', size: '40' }, price: 3_500_000, compareAtPrice: 4_000_000 },
+  })
+  await api(`${base}/variants`, {
+    method: 'POST',
+    token,
+    body: { sku: 'AM90-TRANG-41', attributes: { mau: 'Trắng', size: '41' }, price: 3_200_000 },
+  })
+  // Đen còn hàng, Trắng hết hàng (M2): trang sản phẩm hiện cả hai trạng thái.
+  await api('/api/admin/stock/adjustments', {
+    method: 'POST',
+    token,
+    body: { variantId: black.id, reason: 'stocktake', countedQuantity: 3, expectedOnHand: 0 },
+  })
   const form = new FormData()
   form.append('file', new Blob([Buffer.from(PIXEL_PNG, 'base64')], { type: 'image/png' }), 'anh.png')
   const upload = await fetch(`${BASE}${base}/images`, {
@@ -263,21 +273,25 @@ const CHECKS: Check[] = [
       `<meta property="og:url" content="${BASE}/san-pham/air-max-90">`,
       '<meta property="og:image" content="',
       '<meta name="description" content="Air Max 90 của Nike, giá từ 3.200.000 ₫.">',
-      // Dữ liệu cấu trúc: khoảng giá VND của hai biến thể đang bán, thương hiệu, ảnh; chưa có availability (M2).
+      // Biến thể đang chọn (Đen) còn hàng; lựa chọn Trắng hiện "Hết hàng".
+      'data-testid="availability"',
+      'Còn hàng',
+      'Hết hàng',
+      // Dữ liệu cấu trúc: khoảng giá VND của hai biến thể đang bán, còn hàng vì Đen còn, thương hiệu, ảnh.
       '<script type="application/ld+json">',
       '"@type":"Product"',
       '"brand":{"@type":"Brand","name":"Nike"}',
-      '"@type":"AggregateOffer","lowPrice":3200000,"highPrice":3500000,"offerCount":2,"priceCurrency":"VND"',
+      '"@type":"AggregateOffer","lowPrice":3200000,"highPrice":3500000,"offerCount":2,"priceCurrency":"VND","availability":"https://schema.org/InStock"',
       '"image":["',
     ],
-    excludes: ['availability', 'noindex'],
+    excludes: ['noindex'],
     headers: { 'cache-control': 's-maxage=60' },
   },
   // Trang biến thể dùng chung canonical với trang sản phẩm.
   {
     path: '/san-pham/air-max-90?sku=AM90-TRANG-41',
     status: 200,
-    contains: ['>AM90-TRANG-41<', '3.200.000 ₫', canonical('/san-pham/air-max-90')],
+    contains: ['>AM90-TRANG-41<', '3.200.000 ₫', canonical('/san-pham/air-max-90'), 'Hết hàng'],
   },
   { path: '/san-pham/khong-co', status: 404, contains: ['Không tìm thấy sản phẩm'] },
   {

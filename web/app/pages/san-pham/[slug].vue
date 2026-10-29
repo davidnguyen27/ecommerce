@@ -26,10 +26,10 @@ type Variant = PublicProduct['variants'][number]
 const definitionOf = (key: string) => data.value?.attributeSchema.find((d) => d.key === key)
 const same = (a: AttributeValue | undefined, b: AttributeValue | undefined) => JSON.stringify(a) === JSON.stringify(b)
 
-/** Biến thể theo `?sku=`; không có hoặc sai thì biến thể đầu tiên. */
+/** Biến thể theo `?sku=`; không có hoặc sai thì biến thể đầu tiên còn hàng, hết cả thì biến thể đầu tiên. */
 const selected = computed<Variant>(() => {
   const variants = data.value!.variants
-  return variants.find((v) => v.sku === route.query.sku) ?? variants[0]!
+  return variants.find((v) => v.sku === route.query.sku) ?? variants.find((v) => v.inStock) ?? variants[0]!
 })
 
 /** Thuộc tính cấp biến thể theo thứ tự schema, mỗi thuộc tính kèm các giá trị có ở ít nhất một biến thể. */
@@ -48,13 +48,13 @@ const choices = computed(() =>
 )
 
 /**
- * Biến thể có thật mang giá trị này, giữ được nhiều lựa chọn hiện tại nhất; nhờ vậy mọi lựa chọn đều dẫn tới
- * một tổ hợp có thật, kể cả khi tổ hợp với lựa chọn hiện tại không có.
+ * Biến thể có thật mang giá trị này, giữ được nhiều lựa chọn hiện tại nhất (ngang nhau thì ưu tiên còn hàng);
+ * nhờ vậy mọi lựa chọn đều dẫn tới một tổ hợp có thật, kể cả khi tổ hợp với lựa chọn hiện tại không có.
  */
 function closest(key: string, value: AttributeValue): Variant {
   const current = selected.value.attributes
   const score = (v: Variant) =>
-    Object.keys(current).filter((k) => k !== key && same(v.attributes[k], current[k])).length
+    Object.keys(current).filter((k) => k !== key && same(v.attributes[k], current[k])).length * 2 + (v.inStock ? 1 : 0)
   return data
     .value!.variants.filter((v) => same(v.attributes[key], value))
     .reduce((best, v) => (score(v) > score(best) ? v : best))
@@ -157,6 +157,12 @@ useHead({
             <p v-if="selected.compareAtPrice" class="text-sm text-muted-foreground">
               Giá hãng <s class="tabular-nums">{{ formatVnd(selected.compareAtPrice) }}</s>
             </p>
+            <p
+              data-testid="availability"
+              :class="['text-sm font-medium', selected.inStock ? 'text-emerald-700' : 'text-muted-foreground']"
+            >
+              {{ selected.inStock ? 'Còn hàng' : 'Hết hàng' }}
+            </p>
           </div>
           <p class="mt-2 text-xs text-muted-foreground">
             SKU: <span data-testid="sku" class="tabular-nums text-foreground">{{ selected.sku }}</span>
@@ -178,9 +184,16 @@ useHead({
                 :to="{ query: { sku: option.variant.sku } }"
                 replace
                 :aria-current="same(selected.attributes[choice.definition.key], option.value) ? 'true' : undefined"
-                class="inline-flex h-11 min-w-11 items-center justify-center rounded-md border border-border bg-card px-4 text-sm transition-colors hover:border-foreground aria-[current]:border-foreground aria-[current]:bg-primary aria-[current]:font-semibold aria-[current]:text-primary-foreground"
+                :title="option.variant.inStock ? undefined : 'Hết hàng'"
+                :class="[
+                  'inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-4 text-sm transition-colors hover:border-foreground aria-[current]:border-foreground aria-[current]:bg-primary aria-[current]:font-semibold aria-[current]:text-primary-foreground',
+                  !option.variant.inStock && 'text-muted-foreground opacity-60',
+                ]"
               >
-                {{ formatAttribute(choice.definition, option.value) }}
+                <span :class="!option.variant.inStock && 'line-through'">
+                  {{ formatAttribute(choice.definition, option.value) }}
+                </span>
+                <span v-if="!option.variant.inStock" class="text-[11px]">Hết hàng</span>
               </NuxtLink>
             </div>
           </fieldset>
