@@ -77,6 +77,8 @@ export function adminImportRoutes(prisma: Db) {
               fields,
             )
           }
+          // Không tạo gì (mọi dòng có SKU đã tồn tại, hoặc file không có dòng nào): không ghi gì, kể cả audit.
+          if (plan.products.length === 0) return { products: 0, variants: 0 }
 
           const products = plan.products.map(({ variants, ...p }) => ({ ...p, id: randomUUID(), variants }))
           await tx.product.createMany({
@@ -133,6 +135,6 @@ export function adminImportRoutes(prisma: Db) {
         ),
       )
       const body: ImportResult = result
-      res.status(201).json(body)
+      res.status(body.products > 0 ? 201 : 200).json(body)
     })
 }

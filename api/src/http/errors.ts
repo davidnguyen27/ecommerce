@@ -9,6 +9,7 @@ export class AppError extends Error {
     readonly code: ErrorCode,
     message: string,
     readonly fields?: FieldError[],
+    readonly details?: Record<string, unknown>,
   ) {
     super(message)
   }
@@ -47,6 +48,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
       code: error.code,
       message: error.message,
       ...(error.fields && { fields: error.fields }),
+      ...(error.details && { details: error.details }),
       requestId: String(req.id),
     },
   }

@@ -284,6 +284,50 @@ describe('xem trước và xác nhận', () => {
   })
 })
 
+describe('slug trùng giữa các sheet và file không tạo gì', () => {
+  it('cùng một slug ở hai sheet là lỗi ngay khi xem trước, chỉ ra cả hai dòng', async () => {
+    const { request, token } = await shop()
+    const workbook = await template(request, token)
+    await fill(workbook, 'Giày dép', [shoeRow({ slug: 'trung-slug' })])
+    const file = await fill(workbook, 'Nước hoa', [
+      {
+        slug: 'trung-slug',
+        name: 'No. 5',
+        brand: 'Chanel',
+        category: 'Nước hoa nữ',
+        'sp.gioi_tinh': 'Nữ',
+        'sp.nong_do': 'Parfum',
+        sku: 'NO5-100',
+        'bt.dung_tich': 100,
+      },
+    ])
+
+    const preview = await upload(request, token, 'preview', file)
+
+    expect(preview.body.errors).toEqual([
+      expect.objectContaining({
+        sheet: 'Nước hoa',
+        row: 2,
+        column: 'Slug',
+        message: expect.stringContaining('Giày dép'),
+      }),
+    ])
+  })
+
+  it('mọi dòng đều có SKU đã tồn tại thì xác nhận trả 200, không ghi audit', async () => {
+    const { request, token } = await shop()
+    const file = await fill(await template(request, token), 'Giày dép', [shoeRow()])
+    expect((await upload(request, token, 'commit', file)).status).toBe(201)
+
+    const again = await upload(request, token, 'commit', file)
+    const audit = await request.get('/api/admin/audit').query({ entityType: 'import' }).set(bearer(token))
+
+    expect(again.status).toBe(200)
+    expect(again.body).toEqual({ products: 0, variants: 0 })
+    expect(audit.body.items).toHaveLength(1)
+  })
+})
+
 describe('quyền và giới hạn', () => {
   it('có điền giá mà không có price.edit thì từ chối cả file; không điền giá thì import được', async () => {
     const { request, token } = await shop()

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { AuditActor } from './audit.ts'
 import { ProductType } from './catalog.ts'
 import { ProductStatus, VariantStatus } from './products.ts'
+import type { Permission } from './staff.ts'
 
 /** Loại biến động trong sổ xuất nhập. */
 export const StockMovementKind = z.enum(['receipt', 'adjustment', 'opening'])
@@ -10,6 +11,36 @@ export type StockMovementKind = z.infer<typeof StockMovementKind>
 /** Lý do điều chỉnh: kiểm kê, hàng hỏng, mất hàng, khác. */
 export const StockAdjustmentReason = z.enum(['stocktake', 'damaged', 'lost', 'other'])
 export type StockAdjustmentReason = z.infer<typeof StockAdjustmentReason>
+
+/** Ai soạn danh mục, đặt giá hoặc giữ kho đều xem được tồn và sổ xuất nhập; đổi tồn cần `stock.adjust`. */
+export const STOCK_VIEW_PERMISSIONS = [
+  'catalog.edit',
+  'price.edit',
+  'stock.adjust',
+] as const satisfies readonly Permission[]
+
+/**
+ * Cách nhập số của từng lý do điều chỉnh: kiểm kê nhập số đếm thực tế (`countedQuantity`); hỏng, mất nhập số giảm;
+ * khác nhập số có dấu. API và form quản trị cùng đọc bảng này.
+ */
+export const ADJUSTMENT_INPUT = {
+  stocktake: { field: 'countedQuantity', mode: 'count' },
+  damaged: { field: 'quantity', mode: 'decrease' },
+  lost: { field: 'quantity', mode: 'decrease' },
+  other: { field: 'quantity', mode: 'signed' },
+} as const satisfies Record<StockAdjustmentReason, { field: string; mode: 'count' | 'decrease' | 'signed' }>
+
+/** Thay đổi tồn (có dấu) khi nhân viên nhập `amount` với lý do này, lúc tồn đang là `onHand`. */
+export function adjustmentDelta(reason: StockAdjustmentReason, amount: number, onHand: number) {
+  switch (ADJUSTMENT_INPUT[reason].mode) {
+    case 'count':
+      return amount - onHand
+    case 'decrease':
+      return -amount
+    case 'signed':
+      return amount
+  }
+}
 
 const Quantity = z.number().int().min(-1_000_000).max(1_000_000)
 const Note = z.string().trim().max(1000).default('')

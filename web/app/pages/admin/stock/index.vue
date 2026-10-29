@@ -1,20 +1,19 @@
 <script setup lang="ts">
 import {
+  ADJUSTMENT_INPUT,
   AdminBrandList,
   ProductType,
+  STOCK_VIEW_PERMISSIONS,
   StockAdjustmentReason,
   StockItem,
   StockPage,
   StockSort,
   VariantStatus,
+  adjustmentDelta,
   type FieldError,
 } from '@ecommerce/shared'
 
-definePageMeta({
-  layout: 'admin',
-  middleware: 'admin-auth',
-  permission: ['catalog.edit', 'price.edit', 'stock.adjust'],
-})
+definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: STOCK_VIEW_PERMISSIONS })
 
 const PAGE_SIZE = 50
 const SORT_LABELS: Record<StockSort, string> = {
@@ -81,23 +80,20 @@ function openAdjustment(item: StockItem) {
   notice.value = null
 }
 
-const amountLabel = computed(() => {
-  switch (form.value?.reason) {
-    case 'stocktake':
-      return 'Số đếm thực tế'
-    case 'other':
-      return 'Số tăng (dương) hoặc giảm (âm)'
-    default:
-      return 'Số lượng giảm'
-  }
-})
+const AMOUNT_LABELS = {
+  count: 'Số đếm thực tế',
+  decrease: 'Số lượng giảm',
+  signed: 'Số tăng (dương) hoặc giảm (âm)',
+} as const
+const AMOUNT_MIN = { count: 0, decrease: 1, signed: undefined } as const
+
+const inputMode = computed(() => ADJUSTMENT_INPUT[form.value?.reason ?? 'stocktake'].mode)
 
 /** Tồn sau khi lưu, để nhân viên thấy trước kết quả; `null` khi chưa nhập số. */
 const preview = computed(() => {
   const f = form.value
   if (!f || f.amount === null || Number.isNaN(f.amount)) return null
-  if (f.reason === 'stocktake') return f.amount
-  return f.expectedOnHand + (f.reason === 'other' ? f.amount : -f.amount)
+  return f.expectedOnHand + adjustmentDelta(f.reason, f.amount, f.expectedOnHand)
 })
 
 const errorAt = (path: string) => formErrors.value.find((f) => f.path === path)?.message
@@ -105,13 +101,12 @@ const errorAt = (path: string) => formErrors.value.find((f) => f.path === path)?
 async function saveAdjustment() {
   const f = form.value
   if (!f) return
-  const quantityField = f.reason === 'stocktake' ? 'countedQuantity' : 'quantity'
   const body = {
     variantId: f.item.variantId,
     reason: f.reason,
     expectedOnHand: f.expectedOnHand,
     note: f.note,
-    [quantityField]: f.amount,
+    [ADJUSTMENT_INPUT[f.reason].field]: f.amount,
   }
   try {
     const saved = StockItem.parse(await session.adminFetch('/api/admin/stock/adjustments', { method: 'POST', body }))
@@ -121,8 +116,13 @@ async function saveAdjustment() {
   } catch (err) {
     formErrors.value = apiFieldErrors(err)
     error.value = apiErrorMessage(err)
-    // Tồn đã đổi: nạp lại để nhân viên thấy số mới rồi đếm lại.
-    if (formErrors.value.some((e) => e.path === 'expectedOnHand')) await load()
+    // Tồn đã đổi: form nhận số tồn mới và xóa số đã nhập, để nhân viên đếm lại thay vì gửi lại số cũ.
+    const onHand = apiErrorDetails(err)?.onHand
+    if (typeof onHand === 'number') {
+      f.expectedOnHand = onHand
+      f.amount = null
+      await load()
+    }
   }
 }
 
@@ -173,12 +173,12 @@ await load()
             </select>
           </div>
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label">{{ amountLabel }}</label>
+            <label class="form-label">{{ AMOUNT_LABELS[inputMode] }}</label>
             <input
               v-model.number="form.amount"
               type="number"
               step="1"
-              :min="form.reason === 'other' ? undefined : form.reason === 'stocktake' ? 0 : 1"
+              :min="AMOUNT_MIN[inputMode]"
               class="form-input"
               required
             />

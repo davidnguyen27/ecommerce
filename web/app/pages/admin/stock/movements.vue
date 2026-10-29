@@ -1,11 +1,7 @@
 <script setup lang="ts">
-import { StockMovementKind, StockMovementPage } from '@ecommerce/shared'
+import { STOCK_VIEW_PERMISSIONS, StockMovementKind, StockMovementPage } from '@ecommerce/shared'
 
-definePageMeta({
-  layout: 'admin',
-  middleware: 'admin-auth',
-  permission: ['catalog.edit', 'price.edit', 'stock.adjust'],
-})
+definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: STOCK_VIEW_PERMISSIONS })
 
 const PAGE_SIZE = 50
 

@@ -42,3 +42,4 @@
 - Role `warehouse` có thêm `stock.adjust`; test `/me` của role warehouse được cập nhật.
 - Trang quản trị: `/admin/stock` (tồn, lọc, form điều chỉnh có xem trước tồn sau khi lưu) và `/admin/stock/movements` (nhận `?variantId=`). Menu `admin.vue` giờ chọn mục active theo đường dẫn khớp dài nhất, để `/admin/stock/movements` không sáng cả mục Tồn kho.
 - Chưa xem bằng mắt các trang Kho trong app đang chạy.
+- Sau code review (2026-10-29): body lỗi chung (`ApiErrorBody`) có thêm `error.details` tùy chọn; 409 khi tồn đã đổi trả `details: { onHand }`, form điều chỉnh nhận số tồn mới và xóa số đã nhập. Cách nhập số theo lý do (`ADJUSTMENT_INPUT`, `adjustmentDelta`) và bộ quyền xem tồn (`STOCK_VIEW_PERMISSIONS`) chuyển vào `shared/src/stock.ts`, API và web cùng dùng.
