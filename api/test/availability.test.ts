@@ -127,6 +127,29 @@ describe('thẻ sản phẩm và thứ tự trong danh sách', () => {
     expect(res.body.items[0]).toMatchObject({ slug: 'pegasus', inStock: false })
   })
 
+  it('biến thể đã ngừng bán (không còn trong phiên bản đang xuất bản) còn hàng thì sản phẩm vẫn là hết hàng', async () => {
+    const { request, token, add, stock } = await shop()
+    const product = await add('air-max', shoe('AM'))
+    const discontinued = product.variants['AM-41']!
+    const edit = await request
+      .put(`/api/admin/products/${product.id}/variants/${discontinued}`)
+      .set(bearer(token))
+      .send({ sku: 'AM-41', attributes: { mau: 'Đen', size: '41' }, price: 2_000_000, status: 'discontinued' })
+    expect(edit.status).toBe(200)
+    const republish = await request
+      .put(`/api/admin/products/${product.id}/status`)
+      .set(bearer(token))
+      .send({ status: 'published' })
+    expect(republish.status).toBe(200)
+    await stock(discontinued, 7)
+
+    const list = await request.get('/api/products')
+    const page = await request.get('/api/products/air-max')
+
+    expect(list.body.items[0]).toMatchObject({ slug: 'air-max', inStock: false })
+    expect(page.body.variants).toEqual([expect.objectContaining({ sku: 'AM-40', inStock: false })])
+  })
+
   it('biến thể chưa có trong phiên bản đang xuất bản còn hàng thì sản phẩm vẫn là hết hàng', async () => {
     const { request, token, add, stock } = await shop()
     const product = await add('air-max', shoe('AM'))

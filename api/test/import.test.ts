@@ -362,6 +362,23 @@ describe('tồn đầu kỳ', () => {
     expect(products.body.items).toHaveLength(1)
   })
 
+  it('hai dòng cùng một SKU đã có là lỗi, không ghi tồn đầu kỳ hai lần', async () => {
+    const { request, token } = await shop()
+    const first = await fill(await template(request, token), 'Giày dép', [shoeRow()])
+    expect((await upload(request, token, 'commit', first)).status).toBe(201)
+    const twice = await fill(await template(request, token), 'Giày dép', [
+      shoeRow({ openingStock: 4 }),
+      shoeRow({ openingStock: 4 }),
+    ])
+
+    const preview = await upload(request, token, 'preview', twice)
+    const commit = await upload(request, token, 'commit', twice)
+
+    expect(preview.body.errors).toEqual([expect.objectContaining({ row: 3, column: 'SKU' })])
+    expect(commit.status).toBe(400)
+    expect(await stockOf(request, token, 'AM90-40')).toBe(0)
+  })
+
   it('tồn đầu kỳ không phải số nguyên không âm là lỗi theo ô', async () => {
     const { request, token } = await shop()
     const file = await fill(await template(request, token), 'Giày dép', [shoeRow({ openingStock: -2 })])

@@ -26,3 +26,4 @@
 - `ImportPreview` và `ImportResult` có thêm `openingStocks`. Xác nhận trả 201 khi tạo sản phẩm hoặc ghi tồn đầu kỳ, 200 khi không đổi gì.
 - Dòng có SKU đã tồn tại: có tồn đầu kỳ thì cảnh báo "chỉ ghi tồn đầu kỳ, các cột khác được bỏ qua"; trống hoặc 0 thì giữ cảnh báo "dòng này được bỏ qua" như ticket 04.
 - Audit `stock.opening` chỉ có `after` (`sku`, `onHand`), vì trước đó tồn luôn là 0 và không có dòng sổ nào.
+- Sau code review (2026-10-29): hai dòng cùng một SKU đã có từng ghi tồn đầu kỳ hai lần (kiểm SKU trùng chỉ chạy cho SKU mới); giờ mọi dòng đi qua cùng một bước kiểm SKU trùng, có test. `planImport` trả một danh sách `openings` (theo SKU) cho cả biến thể mới lẫn đã có; route đổi SKU sang id và ghi qua `recordOpeningStocks`. `fileHasErrors` đổi tên thành `invalidImportFile`.

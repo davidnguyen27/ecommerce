@@ -348,13 +348,12 @@ export type PlannedVariant = {
   price: number | null
   compareAtPrice: number | null
   sortOrder: number
-  /** Lớn hơn 0 thì ghi tồn đầu kỳ ngay sau khi tạo. */
-  openingStock: number
-  sheet: string
-  row: number
 }
-/** Tồn đầu kỳ cho biến thể đã có (dòng có SKU đã tồn tại). */
-export type PlannedOpening = { variantId: string; sku: string; quantity: number; sheet: string; row: number }
+/**
+ * Tồn đầu kỳ sẽ ghi, cho biến thể đã có hoặc biến thể sắp tạo (theo SKU). `sheet`, `row` là dòng trong file, để
+ * báo lỗi khi lúc ghi phát hiện biến thể đã có dòng sổ.
+ */
+export type PlannedOpening = { sku: string; quantity: number; sheet: string; row: number }
 export type PlannedProduct = {
   productType: ProductType
   brandId: string
@@ -418,17 +417,26 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
   const takenSlugs = new Set(existingSlugs.map((p) => p.slug))
 
   const openings: PlannedOpening[] = []
+  /** Dòng đầu tiên dùng mỗi SKU, cho cả SKU đã có lẫn SKU mới: hai dòng cùng SKU là lỗi. */
+  const seenSkus = new Map<string, SheetRow>()
+  const duplicateSku = (row: SheetRow, sku: string) => {
+    const other = seenSkus.get(sku)
+    if (other) errors.push(issue(row, 'sku', `SKU ${sku} đã có ở ${other.sheet} dòng ${other.row}`))
+    else seenSkus.set(sku, row)
+    return !!other
+  }
   const groups = new Map<string, SheetRow[]>()
   for (const row of rows) {
     const existing = takenSkus.get(skuOf(row))
     if (existing) {
+      if (duplicateSku(row, existing.sku)) continue
       const quantity = parseOpeningStock(row.values.get('openingStock'))
       if (Number.isNaN(quantity)) errors.push(issue(row, 'openingStock', OPENING_STOCK_ERROR))
       else if (!quantity) warnings.push(issue(row, 'sku', `SKU ${existing.sku} đã có; dòng này được bỏ qua`))
       else if (existing._count.stockMovements > 0) errors.push(issue(row, 'openingStock', ALREADY_LEDGERED))
       else {
         warnings.push(issue(row, 'sku', `SKU ${existing.sku} đã có; chỉ ghi tồn đầu kỳ, các cột khác được bỏ qua`))
-        openings.push({ variantId: existing.id, sku: existing.sku, quantity, sheet: row.sheet, row: row.row })
+        openings.push({ sku: existing.sku, quantity, sheet: row.sheet, row: row.row })
       }
       continue
     }
@@ -436,7 +444,6 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
     groups.set(key, [...(groups.get(key) ?? []), row])
   }
 
-  const seenSkus = new Map<string, SheetRow>()
   /** Dòng đầu tiên dùng mỗi slug; nhóm theo cả nhóm hàng nên cùng slug ở hai sheet phải bắt riêng ở đây. */
   const slugOwners = new Map<string, SheetRow>()
   const products: PlannedProduct[] = []
@@ -507,6 +514,7 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
     }
 
     const variants: PlannedVariant[] = []
+    const groupOpenings: PlannedOpening[] = []
     group.forEach((row, index) => {
       for (const [key, value] of first.values) {
         if (isProductColumn(key) && row !== first && text(row.values.get(key)) !== text(value)) {
@@ -544,9 +552,7 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
       if (!variant.success || !attributes.ok) return
 
       const { sku } = variant.data
-      const other = seenSkus.get(sku)
-      if (other) return fail(row, 'sku', `SKU ${sku} đã có ở ${other.sheet} dòng ${other.row}`)
-      seenSkus.set(sku, row)
+      if (duplicateSku(row, sku)) return (ok = false)
       const v = { price: variant.data.price ?? null, compareAtPrice: variant.data.compareAtPrice ?? null }
       if (v.compareAtPrice !== null && (v.price === null || v.compareAtPrice < v.price)) {
         return fail(row, 'compareAtPrice', 'Giá hãng phải để trống hoặc không thấp hơn giá bán')
@@ -554,15 +560,8 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
       if (variants.some((p) => JSON.stringify(p.attributes) === JSON.stringify(attributes.values))) {
         return fail(row, null, 'Sản phẩm đã có biến thể với tổ hợp thuộc tính này ở dòng khác')
       }
-      variants.push({
-        sku,
-        attributes: attributes.values,
-        ...v,
-        sortOrder: index,
-        openingStock: Number.isNaN(openingStock) ? 0 : (openingStock ?? 0),
-        sheet: row.sheet,
-        row: row.row,
-      })
+      variants.push({ sku, attributes: attributes.values, ...v, sortOrder: index })
+      if (openingStock) groupOpenings.push({ sku, quantity: openingStock, sheet: row.sheet, row: row.row })
     })
 
     if (ok && product.success && productAttributes.ok && brandId && categoryId) {
@@ -575,9 +574,9 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
         attributes: productAttributes.values,
         variants,
       })
+      openings.push(...groupOpenings)
     }
   }
 
-  const openingStocks = openings.length + products.flatMap((p) => p.variants).filter((v) => v.openingStock > 0).length
-  return { products, openings, openingStocks, errors, warnings }
+  return { products, openings, errors, warnings }
 }

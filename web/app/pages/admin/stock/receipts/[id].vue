@@ -15,7 +15,6 @@ try {
 }
 
 const total = computed(() => receipt.value?.lines.reduce((sum, l) => sum + l.quantity, 0) ?? 0)
-const formatDate = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('vi-VN')
 </script>
 
 <template>
@@ -24,7 +23,7 @@ const formatDate = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateSt
       <div>
         <h1 class="admin-page-title">Phiếu nhập kho</h1>
         <p v-if="receipt" class="admin-page-desc">
-          {{ receipt.supplierName }} · hàng về ngày {{ formatDate(receipt.receivedOn) }} · ghi bởi
+          {{ receipt.supplierName }} · hàng về ngày {{ formatDateOnly(receipt.receivedOn) }} · ghi bởi
           {{ receipt.createdBy.name }} lúc {{ new Date(receipt.createdAt).toLocaleString('vi-VN') }}
         </p>
       </div>

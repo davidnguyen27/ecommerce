@@ -30,3 +30,4 @@
 - Sửa comment cũ trong `PublicProduct.commitments` (đã đọc từ snapshot từ đợt sửa sau review M1, comment vẫn ghi "đọc trực tiếp").
 - Smoke: seed nhập tồn cho AM90-DEN-40, để AM90-TRANG-41 hết; 30/30 kiểm tra qua. Test card ở `product-publishing.test.ts` thêm `inStock: false`.
 - Cache `swr: 60` giữ nguyên: tình trạng hàng trên website có thể trễ tới khoảng 60 giây (ADR 0006).
+- Sau code review (2026-10-29): bỏ gạch ngang trên lựa chọn hết hàng (dễ hiểu nhầm là Ngừng bán), chỉ giữ mờ kèm chữ "Hết hàng"; thêm test biến thể đã ngừng bán (không còn trong phiên bản xuất bản) còn hàng thì sản phẩm vẫn hết hàng.

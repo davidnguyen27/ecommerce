@@ -5,6 +5,7 @@ import {
   STOCK_VIEW_PERMISSIONS,
   StockReceiptQuery,
   StockReceiptRequest,
+  type AuditActor,
   type FieldError,
   type StockReceipt,
   type StockReceiptPage,
@@ -12,6 +13,7 @@ import {
 import { audited } from '../audit/audited.ts'
 import { currentStaff, requirePermission } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
+import type { StockReceipt as StockReceiptRow } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 import { changeStock } from '../stock/stock.ts'
@@ -19,8 +21,19 @@ import { changeStock } from '../stock/stock.ts'
 const ReceiptParams = z.object({ id: z.uuid() })
 const CREATED_BY = { select: { id: true, name: true, email: true } } as const
 
-/** Ngày hàng về lưu kiểu DATE; trả về dạng `YYYY-MM-DD`. */
-const dateOnly = (date: Date) => date.toISOString().slice(0, 10)
+type ReceiptRow = Pick<StockReceiptRow, 'id' | 'supplierName' | 'receivedOn' | 'note' | 'createdAt'> & {
+  createdBy: AuditActor
+}
+
+/** Phần đầu phiếu dùng chung cho danh sách và chi tiết; ngày hàng về lưu kiểu DATE, trả dạng `YYYY-MM-DD`. */
+const toReceiptHeader = (r: ReceiptRow) => ({
+  id: r.id,
+  supplierName: r.supplierName,
+  receivedOn: r.receivedOn.toISOString().slice(0, 10),
+  note: r.note,
+  createdAt: r.createdAt.toISOString(),
+  createdBy: r.createdBy,
+})
 
 async function loadReceipt(prisma: Db, id: string): Promise<StockReceipt> {
   const receipt = await prisma.stockReceipt.findUnique({
@@ -35,12 +48,7 @@ async function loadReceipt(prisma: Db, id: string): Promise<StockReceipt> {
   })
   if (!receipt) throw new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy phiếu nhập')
   return {
-    id: receipt.id,
-    supplierName: receipt.supplierName,
-    receivedOn: dateOnly(receipt.receivedOn),
-    note: receipt.note,
-    createdAt: receipt.createdAt.toISOString(),
-    createdBy: receipt.createdBy,
+    ...toReceiptHeader(receipt),
     lines: receipt.movements.map((m) => ({
       variantId: m.variant.id,
       sku: m.variant.sku,
@@ -71,12 +79,7 @@ export function adminStockReceiptRoutes(prisma: Db) {
       ])
       const body: StockReceiptPage = {
         items: receipts.map((r) => ({
-          id: r.id,
-          supplierName: r.supplierName,
-          receivedOn: dateOnly(r.receivedOn),
-          note: r.note,
-          createdAt: r.createdAt.toISOString(),
-          createdBy: r.createdBy,
+          ...toReceiptHeader(r),
           lineCount: r.movements.length,
           totalQuantity: r.movements.reduce((sum, m) => sum + m.quantity, 0),
         })),
