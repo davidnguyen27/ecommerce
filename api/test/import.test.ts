@@ -110,6 +110,7 @@ describe('file mẫu', () => {
       'bt.mau',
       'price',
       'compareAtPrice',
+      'openingStock',
     ])
     expect(headerKeys(fragrance)).toEqual(expect.arrayContaining(['sp.nong_do', 'bt.dung_tich']))
   })
@@ -154,10 +155,10 @@ describe('xem trước và xác nhận', () => {
     const detail = await request.get(`/api/admin/products/${products.body.items[0].id}`).set(bearer(token))
 
     expect(preview.status).toBe(200)
-    expect(preview.body).toEqual({ products: 1, variants: 2, errors: [], warnings: [] })
+    expect(preview.body).toEqual({ products: 1, variants: 2, openingStocks: 0, errors: [], warnings: [] })
     expect(afterPreview.body.items).toEqual([])
     expect(commit.status).toBe(201)
-    expect(commit.body).toEqual({ products: 1, variants: 2 })
+    expect(commit.body).toEqual({ products: 1, variants: 2, openingStocks: 0 })
     expect(detail.body).toMatchObject({
       name: 'Air Max 90',
       slug: 'air-max-90',
@@ -241,7 +242,7 @@ describe('xem trước và xác nhận', () => {
 
     expect(preview.body).toMatchObject({ products: 1, variants: 1, errors: [] })
     expect(preview.body.warnings).toEqual([expect.objectContaining({ row: 2, column: 'SKU' })])
-    expect(commit.body).toEqual({ products: 1, variants: 1 })
+    expect(commit.body).toEqual({ products: 1, variants: 1, openingStocks: 0 })
     expect(products.body.items.map((p: { name: string }) => p.name).sort()).toEqual(['Air Max 90', 'Pegasus 41'])
   })
 
@@ -279,8 +280,121 @@ describe('xem trước và xác nhận', () => {
     expect(audit.body.items).toContainEqual(
       expect.objectContaining({
         action: 'catalog.import',
-        after: { fileName: 'dot-1.xlsx', products: 1, variants: 1 },
+        after: { fileName: 'dot-1.xlsx', products: 1, variants: 1, openingStocks: 0 },
       }),
+    )
+  })
+})
+
+describe('tồn đầu kỳ', () => {
+  const stockOf = async (request: Request, token: string, sku: string) => {
+    const res = await request.get('/api/admin/stock').query({ q: sku }).set(bearer(token))
+    return (res.body.items as { sku: string; onHand: number }[]).find((i) => i.sku === sku)?.onHand
+  }
+
+  it('biến thể mới tạo kèm tồn đầu kỳ: tồn bằng số đó, sổ có một dòng tồn đầu kỳ; ô trống hoặc 0 thì không ghi', async () => {
+    const { request, token } = await shop()
+    const file = await fill(await template(request, token), 'Giày dép', [
+      shoeRow({ openingStock: 4 }),
+      shoeRow({ sku: 'AM90-41', 'bt.size': '41', openingStock: 0 }),
+      shoeRow({ sku: 'AM90-42', 'bt.size': '42' }),
+    ])
+
+    const preview = await upload(request, token, 'preview', file)
+    const commit = await upload(request, token, 'commit', file)
+    const movements = await request.get('/api/admin/stock/movements').set(bearer(token))
+
+    expect(preview.body).toMatchObject({ products: 1, variants: 3, openingStocks: 1, errors: [] })
+    expect(commit.body).toEqual({ products: 1, variants: 3, openingStocks: 1 })
+    expect(await stockOf(request, token, 'AM90-40')).toBe(4)
+    expect(movements.body.items).toEqual([
+      expect.objectContaining({
+        kind: 'opening',
+        quantity: 4,
+        onHandAfter: 4,
+        variant: expect.objectContaining({ sku: 'AM90-40' }),
+      }),
+    ])
+  })
+
+  it('SKU đã có và chưa có dòng sổ: ghi được tồn đầu kỳ, thông tin sản phẩm không đổi', async () => {
+    const { request, token } = await shop()
+    const first = await fill(await template(request, token), 'Giày dép', [shoeRow()])
+    expect((await upload(request, token, 'commit', first)).status).toBe(201)
+    const again = await fill(await template(request, token), 'Giày dép', [
+      shoeRow({ name: 'Tên mới', openingStock: 6 }),
+    ])
+
+    const preview = await upload(request, token, 'preview', again)
+    const commit = await upload(request, token, 'commit', again)
+    const products = await request.get('/api/admin/products').set(bearer(token))
+
+    expect(preview.body).toMatchObject({ products: 0, variants: 0, openingStocks: 1, errors: [] })
+    expect(preview.body.warnings).toEqual([
+      expect.objectContaining({ row: 2, column: 'SKU', message: expect.stringContaining('chỉ ghi tồn đầu kỳ') }),
+    ])
+    expect(commit.status).toBe(201)
+    expect(commit.body).toEqual({ products: 0, variants: 0, openingStocks: 1 })
+    expect(await stockOf(request, token, 'AM90-40')).toBe(6)
+    expect(products.body.items.map((p: { name: string }) => p.name)).toEqual(['Air Max 90'])
+  })
+
+  it('biến thể đã có dòng sổ thì lỗi và cả file không được ghi; chạy lại cùng file lần hai cũng lỗi', async () => {
+    const { request, token } = await shop()
+    const file = await fill(await template(request, token), 'Giày dép', [shoeRow({ openingStock: 4 })])
+    expect((await upload(request, token, 'commit', file)).status).toBe(201)
+    const withNew = await fill(await template(request, token), 'Giày dép', [
+      shoeRow({ openingStock: 4 }),
+      shoeRow({ slug: 'pegasus-41', name: 'Pegasus 41', sku: 'PG41-40', openingStock: 2 }),
+    ])
+
+    const again = await upload(request, token, 'commit', file)
+    const mixed = await upload(request, token, 'commit', withNew)
+    const preview = await upload(request, token, 'preview', file)
+    const products = await request.get('/api/admin/products').set(bearer(token))
+
+    expect(again.status).toBe(400)
+    expect(mixed.status).toBe(400)
+    expect(preview.body.errors).toEqual([
+      expect.objectContaining({ row: 2, column: 'Tồn đầu kỳ', message: expect.stringContaining('sổ xuất nhập') }),
+    ])
+    expect(await stockOf(request, token, 'AM90-40')).toBe(4)
+    expect(products.body.items).toHaveLength(1)
+  })
+
+  it('tồn đầu kỳ không phải số nguyên không âm là lỗi theo ô', async () => {
+    const { request, token } = await shop()
+    const file = await fill(await template(request, token), 'Giày dép', [shoeRow({ openingStock: -2 })])
+
+    const preview = await upload(request, token, 'preview', file)
+
+    expect(preview.body.errors).toEqual([expect.objectContaining({ row: 2, column: 'Tồn đầu kỳ' })])
+  })
+
+  it('có điền tồn đầu kỳ mà không có stock.adjust thì từ chối cả file', async () => {
+    const { request, token } = await shop()
+    const sales = await createStaff(request, token, ['sales'], 'sales@example.com')
+    const file = await fill(await template(request, token), 'Giày dép', [shoeRow({ openingStock: 4 })])
+
+    expect((await upload(request, sales.accessToken, 'preview', file)).status).toBe(403)
+    expect((await upload(request, sales.accessToken, 'commit', file)).status).toBe(403)
+  })
+
+  it('ghi audit stock.opening cho từng biến thể, bản catalog.import có số tồn đầu kỳ', async () => {
+    const { request, token } = await shop()
+    const file = await fill(await template(request, token), 'Giày dép', [shoeRow({ openingStock: 4 })])
+
+    await upload(request, token, 'commit', file, 'ton-dau-ky.xlsx')
+    const audit = await request.get('/api/admin/audit').set(bearer(token))
+
+    expect(audit.body.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: 'stock.opening', after: { sku: 'AM90-40', onHand: 4 } }),
+        expect.objectContaining({
+          action: 'catalog.import',
+          after: { fileName: 'ton-dau-ky.xlsx', products: 1, variants: 1, openingStocks: 1 },
+        }),
+      ]),
     )
   })
 })
@@ -324,7 +438,7 @@ describe('slug trùng giữa các sheet và file không tạo gì', () => {
     const audit = await request.get('/api/admin/audit').query({ entityType: 'import' }).set(bearer(token))
 
     expect(again.status).toBe(200)
-    expect(again.body).toEqual({ products: 0, variants: 0 })
+    expect(again.body).toEqual({ products: 0, variants: 0, openingStocks: 0 })
     expect(audit.body.items).toHaveLength(1)
   })
 })

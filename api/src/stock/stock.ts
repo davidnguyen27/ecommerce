@@ -40,14 +40,15 @@ export async function changeStock(
   tx: Prisma.TransactionClient,
   actorId: string,
   variantIds: readonly string[],
-  plan: (locked: ReadonlyMap<string, LockedVariant>) => StockChange[],
+  plan: (locked: ReadonlyMap<string, LockedVariant>) => StockChange[] | Promise<StockChange[]>,
 ) {
   const ids = [...new Set(variantIds)].sort()
   const rows = await tx.$queryRaw<LockedVariant[]>`
     SELECT "id"::text AS id, "sku", "product_id"::text AS "productId", "on_hand" AS "onHand"
     FROM "product_variant" WHERE "id" = ANY(${ids}::uuid[]) ORDER BY "id" FOR UPDATE`
   const locked = new Map(rows.map((row) => [row.id, row]))
-  const changes = plan(locked)
+  // `plan` có thể đọc thêm DB (ví dụ biến thể đã có dòng sổ chưa); đọc lúc này là đã dưới khóa.
+  const changes = await plan(locked)
 
   const onHand = new Map(rows.map((row) => [row.id, row.onHand]))
   const movements = changes.map((change) => {
