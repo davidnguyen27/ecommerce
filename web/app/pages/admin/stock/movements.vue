@@ -159,6 +159,9 @@ await load()
                 <td>
                   {{ STOCK_KIND_LABELS[m.kind] }}
                   <span v-if="m.reason" style="color: var(--adm-muted)"> · {{ STOCK_REASON_LABELS[m.reason] }}</span>
+                  <NuxtLink v-if="m.receiptId" :to="`/admin/stock/receipts/${m.receiptId}`" style="margin-left: 4px"
+                    >· xem phiếu</NuxtLink
+                  >
                 </td>
                 <td class="admin-table-num" :style="{ fontWeight: 600, color: m.quantity < 0 ? '#b91c1c' : '#15803d' }">
                   {{ signed(m.quantity) }}
