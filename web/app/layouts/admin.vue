@@ -3,6 +3,7 @@ import '~/assets/admin.css'
 import type { Permission } from '@ecommerce/shared'
 import {
   BadgeCheck,
+  FileSpreadsheet,
   FileText,
   FolderTree,
   History,
@@ -35,6 +36,7 @@ const MENU_GROUPS: MenuGroup[] = [
     title: 'Hàng hóa & Danh mục',
     items: [
       { to: '/admin/products', label: 'Sản phẩm', icon: Package, permission: ['catalog.edit', 'price.edit'] },
+      { to: '/admin/import', label: 'Import từ Excel', icon: FileSpreadsheet, permission: 'catalog.edit' },
       { to: '/admin/brands', label: 'Thương hiệu', icon: Tag, permission: 'catalog.edit' },
       { to: '/admin/categories', label: 'Cây danh mục', icon: FolderTree, permission: 'catalog.edit' },
       { to: '/admin/attribute-schemas', label: 'Schema thuộc tính', icon: ListChecks, permission: 'catalog.edit' },
