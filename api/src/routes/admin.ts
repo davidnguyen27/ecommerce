@@ -16,6 +16,7 @@ import { adminProductPublishingRoutes } from './admin-product-publishing.ts'
 import { adminProductRoutes } from './admin-products.ts'
 import { adminLegalInfoRoutes } from './legal-info.ts'
 import { adminStaffRoutes } from './admin-staff.ts'
+import { adminStockRoutes } from './admin-stock.ts'
 
 /** Các route quản trị; đã đi qua `requireAuth` audience staff và `loadStaff`. */
 export function adminRoutes(prisma: Db, storage: Storage) {
@@ -39,5 +40,6 @@ export function adminRoutes(prisma: Db, storage: Storage) {
       .use('/products/:id/documents', adminProductDocumentRoutes(prisma, storage))
       .use('/products/:id/commitments', adminProductCommitmentRoutes(prisma))
       .use('/products', adminProductRoutes(prisma))
+      .use('/stock', adminStockRoutes(prisma))
   )
 }

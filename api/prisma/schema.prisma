@@ -45,6 +45,7 @@ model Staff {
   auditLogs                AuditLog[]
   publishedVersions        ContentPageVersion[]
   publishedProductVersions ProductVersion[]
+  stockMovements           StockMovement[]
 
   @@map("staff")
 }
@@ -335,12 +336,55 @@ model ProductVariant {
   compareAtPrice BigInt?       @map("compare_at_price")
   status         VariantStatus @default(active)
   sortOrder      Int           @default(0) @map("sort_order")
+  /// Tồn trong kho; check constraint `>= 0`. Chỉ module kho ghi (api/src/stock/stock.ts), kèm một dòng sổ.
+  onHand         Int           @default(0) @map("on_hand")
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
-  images ProductImageVariant[]
+  images         ProductImageVariant[]
+  stockMovements StockMovement[]
 
   @@map("product_variant")
+}
+
+enum StockMovementKind {
+  receipt
+  adjustment
+  opening
+
+  @@map("stock_movement_kind")
+}
+
+enum StockAdjustmentReason {
+  stocktake
+  damaged
+  lost
+  other
+
+  @@map("stock_adjustment_reason")
+}
+
+/// Sổ xuất nhập. Append-only: trigger trong migration chặn UPDATE, DELETE và TRUNCATE.
+model StockMovement {
+  id          String                 @id @default(uuid()) @db.Uuid
+  /// Thứ tự ghi, để sắp xếp ổn định khi nhiều dòng trùng thời điểm.
+  seq         BigInt                 @unique @default(autoincrement())
+  variantId   String                 @map("variant_id") @db.Uuid
+  variant     ProductVariant         @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  kind        StockMovementKind
+  /// Có dấu: dương là tăng, âm là giảm; khác 0.
+  quantity    Int
+  onHandAfter Int                    @map("on_hand_after")
+  /// Chỉ có ở điều chỉnh (check constraint).
+  reason      StockAdjustmentReason?
+  note        String                 @default("")
+  actorId     String                 @map("actor_id") @db.Uuid
+  actor       Staff                  @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt   DateTime               @default(now()) @map("created_at")
+
+  @@index([variantId, seq])
+  @@index([createdAt])
+  @@map("stock_movement")
 }
 
 /// Nội dung sản phẩm tại một lần xuất bản; khách chỉ đọc từ đây. Không sửa, không xóa (trigger trong migration).

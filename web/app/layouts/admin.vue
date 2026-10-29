@@ -10,10 +10,15 @@ import {
   ListChecks,
   Package,
   Scale,
+  ScrollText,
   Tag,
   Users,
+  Warehouse,
   type LucideIcon,
 } from 'lucide-vue-next'
+
+/** Ai soạn danh mục, đặt giá hoặc giữ kho đều xem được tồn. */
+const STOCK_VIEW: Permission[] = ['catalog.edit', 'price.edit', 'stock.adjust']
 
 const session = useAdminSession()
 const route = useRoute()
@@ -34,6 +39,13 @@ const MENU_GROUPS: MenuGroup[] = [
       { to: '/admin/categories', label: 'Cây danh mục', icon: FolderTree, permission: 'catalog.edit' },
       { to: '/admin/attribute-schemas', label: 'Schema thuộc tính', icon: ListChecks, permission: 'catalog.edit' },
       { to: '/admin/commitment-types', label: 'Loại cam kết', icon: BadgeCheck, permission: 'commitment.edit' },
+    ],
+  },
+  {
+    title: 'Kho',
+    items: [
+      { to: '/admin/stock', label: 'Tồn kho', icon: Warehouse, permission: STOCK_VIEW },
+      { to: '/admin/stock/movements', label: 'Sổ xuất nhập', icon: ScrollText, permission: STOCK_VIEW },
     ],
   },
   {
@@ -60,11 +72,15 @@ const visibleGroups = computed(() =>
   })).filter((group) => group.items.length > 0),
 )
 
-// Xác định mục đang active
-const isItemActive = (to: string) => {
-  if (to === '/admin') return route.path === '/admin'
-  return route.path.startsWith(to)
-}
+// Mục đang active là mục có đường dẫn dài nhất khớp với trang, để `/admin/stock/movements` không sáng cả `/admin/stock`
+const activeItem = computed(() => {
+  const matches = (to: string) =>
+    to === '/admin' ? route.path === '/admin' : route.path === to || route.path.startsWith(`${to}/`)
+  return MENU_GROUPS.flatMap((g) => g.items)
+    .filter((item) => matches(item.to))
+    .sort((a, b) => b.to.length - a.to.length)[0]?.to
+})
+const isItemActive = (to: string) => activeItem.value === to
 
 // Lấy tiêu đề trang hiện tại cho breadcrumb
 const currentTitle = computed(() => {

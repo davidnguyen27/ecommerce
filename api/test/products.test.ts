@@ -273,6 +273,7 @@ describe('biến thể', () => {
         compareAtPrice: null,
         status: 'active',
         sortOrder: 0,
+        onHand: 0,
       },
       expect.objectContaining({ id: second.body.id, sku: 'AM90-DEN-41', sortOrder: 1 }),
     ])
