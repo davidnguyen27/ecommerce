@@ -32,6 +32,10 @@ export type AdminProductImage = z.infer<typeof AdminProductImage>
 export const AdminProductImageList = z.object({ items: z.array(AdminProductImage) })
 export type AdminProductImageList = z.infer<typeof AdminProductImageList>
 
+/** Kết quả tải một ảnh hàng loạt theo SKU: ảnh đã gắn vào sản phẩm và biến thể của SKU trong tên file. */
+export const BulkImageResult = z.object({ productId: z.string(), sku: z.string(), image: AdminProductImage })
+export type BulkImageResult = z.infer<typeof BulkImageResult>
+
 /** Trường text gửi kèm file khi tải ảnh (multipart, file ở trường `file`). */
 export const UploadProductImageFields = z.object({ alt: Alt.default('') })
 

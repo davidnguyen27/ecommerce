@@ -12,7 +12,7 @@ import { adminImportRoutes } from './admin-import.ts'
 import { adminPageRoutes } from './admin-pages.ts'
 import { adminProductCommitmentRoutes } from './admin-product-commitments.ts'
 import { adminProductDocumentRoutes } from './admin-product-documents.ts'
-import { adminProductImageRoutes } from './admin-product-images.ts'
+import { adminBulkImageRoutes, adminProductImageRoutes } from './admin-product-images.ts'
 import { adminProductPublishingRoutes } from './admin-product-publishing.ts'
 import { adminProductRoutes } from './admin-products.ts'
 import { adminLegalInfoRoutes } from './legal-info.ts'
@@ -43,5 +43,6 @@ export function adminRoutes(prisma: Db, storage: Storage) {
       .use('/products', adminProductRoutes(prisma))
       .use('/stock', adminStockRoutes(prisma))
       .use('/import', adminImportRoutes(prisma))
+      .use('/images', adminBulkImageRoutes(prisma, storage))
   )
 }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
-import { Router } from 'express'
+import { Router, type Request } from 'express'
 import { z } from 'zod'
 import {
   ErrorCode,
@@ -9,6 +9,7 @@ import {
   UploadProductImageFields,
   type AdminProductImage,
   type AdminProductImageList,
+  type BulkImageResult,
 } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
 import { audited } from '../audit/audited.ts'
@@ -19,6 +20,7 @@ import type { Db, DbClient } from '../db.ts'
 import type { ProductImage } from '../generated/prisma/client.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
+import { fileError } from '../media/upload.ts'
 import {
   PRODUCT_IMAGE_WIDTHS,
   deleteImageFilesQuietly,
@@ -67,6 +69,85 @@ const imagesOf = (db: DbClient, productId: string) =>
   db.productImage.findMany({ where: { productId }, include: WITH_VARIANTS, orderBy: [...SORT_ORDER] })
 
 /**
+ * Xử lý ảnh, đẩy lên storage rồi nối vào sau các ảnh của sản phẩm, gắn sẵn với `variantIds` (biến thể của chính
+ * sản phẩm đó, nơi gọi đã kiểm). Lỗi khi ghi DB thì xóa file vừa đẩy lên.
+ */
+async function appendImage(
+  prisma: Db,
+  storage: Storage,
+  req: Request,
+  input: { productId: string; file: Buffer; alt: string; variantIds: string[] },
+) {
+  const { productId } = input
+  const imageId = randomUUID()
+  const image = await storeImage(storage, `products/${productId}/${imageId}`, input.file, PRODUCT_IMAGE_WIDTHS)
+  return audited(prisma, req, async (tx, audit) => {
+    await lockProduct(tx, productId)
+    const last = await tx.productImage.findFirst({ where: { productId }, orderBy: { sortOrder: 'desc' } })
+    const row = await tx.productImage.create({
+      data: {
+        id: imageId,
+        productId,
+        storageKey: image.key,
+        contentType: image.contentType,
+        width: image.width,
+        height: image.height,
+        widths: image.widths,
+        alt: input.alt,
+        sortOrder: (last?.sortOrder ?? -1) + 1,
+        variants: { create: input.variantIds.map((variantId) => ({ variantId })) },
+      },
+      include: WITH_VARIANTS,
+    })
+    await audit({
+      action: 'media.product_image.upload',
+      entityType: 'product_image',
+      entityId: row.id,
+      after: auditFields(row),
+    })
+    return row
+  }).catch(async (err: unknown) => {
+    await deleteImageFilesQuietly(storage, req, image)
+    throw err
+  })
+}
+
+/** Tên file ảnh hàng loạt: `<SKU>.<đuôi>` hoặc `<SKU>_<n>.<đuôi>`. */
+const BULK_FILE_NAME = /^(.+?)\.[A-Za-z0-9]+$/
+
+/**
+ * Ảnh hàng loạt, mount tại `/images`: mỗi request một file, tên file cho biết SKU. Cần `media.upload`.
+ * Thứ tự giữa các ảnh do trình duyệt gửi lần lượt (đã sắp theo SKU và số thứ tự); API chỉ nối vào sau.
+ */
+export function adminBulkImageRoutes(prisma: Db, storage: Storage) {
+  return Router().post('/by-sku', requirePermission('media.upload'), receiveImage, async (req, res) => {
+    const file = uploadedFile(req)
+    const stem = BULK_FILE_NAME.exec(req.file!.originalname)?.[1]?.trim().toUpperCase() ?? ''
+    // SKU được phép có dấu gạch dưới: thử cả tên trước, rồi mới bỏ phần `_<n>` ở cuối.
+    const candidates = [stem, stem.replace(/_\d+$/, '')].filter((sku, i, all) => sku && all.indexOf(sku) === i)
+    const variants = await prisma.productVariant.findMany({
+      where: { sku: { in: candidates } },
+      include: { product: { select: { name: true } } },
+    })
+    const variant = candidates.map((sku) => variants.find((v) => v.sku === sku)).find(Boolean)
+    if (!variant) throw fileError(400, `Không có biến thể nào có SKU ${candidates.at(-1) || req.file!.originalname}`)
+
+    const created = await appendImage(prisma, storage, req, {
+      productId: variant.productId,
+      file,
+      alt: variant.product.name,
+      variantIds: [variant.id],
+    })
+    const body: BulkImageResult = {
+      productId: variant.productId,
+      sku: variant.sku,
+      image: toAdminImage(storage, created),
+    }
+    res.status(201).json(body)
+  })
+}
+
+/**
  * Ảnh của một sản phẩm, mount tại `/products/:id/images`. Xem cần quyền xem sản phẩm hoặc `media.upload`;
  * tải lên, sửa, sắp xếp, xóa cần `media.upload`. Thao tác ghi khóa dòng sản phẩm để thứ tự và việc gắn biến thể
  * không bị hai request cùng lọt qua.
@@ -86,37 +167,7 @@ export function adminProductImageRoutes(prisma: Db, storage: Storage) {
         const file = uploadedFile(req)
         // Kiểm sản phẩm trước khi xử lý ảnh, để không đẩy file lên storage cho sản phẩm không có.
         await loadProduct(prisma, id)
-
-        const imageId = randomUUID()
-        const image = await storeImage(storage, `products/${id}/${imageId}`, file, PRODUCT_IMAGE_WIDTHS)
-        const created = await audited(prisma, req, async (tx, audit) => {
-          await lockProduct(tx, id)
-          const last = await tx.productImage.findFirst({ where: { productId: id }, orderBy: { sortOrder: 'desc' } })
-          const row = await tx.productImage.create({
-            data: {
-              id: imageId,
-              productId: id,
-              storageKey: image.key,
-              contentType: image.contentType,
-              width: image.width,
-              height: image.height,
-              widths: image.widths,
-              alt,
-              sortOrder: (last?.sortOrder ?? -1) + 1,
-            },
-            include: WITH_VARIANTS,
-          })
-          await audit({
-            action: 'media.product_image.upload',
-            entityType: 'product_image',
-            entityId: row.id,
-            after: auditFields(row),
-          })
-          return row
-        }).catch(async (err: unknown) => {
-          await deleteImageFilesQuietly(storage, req, image)
-          throw err
-        })
+        const created = await appendImage(prisma, storage, req, { productId: id, file, alt, variantIds: [] })
         res.status(201).json(toAdminImage(storage, created))
       })
       // Khai báo trước `/:imageId` để `order` không bị hiểu là id ảnh.
