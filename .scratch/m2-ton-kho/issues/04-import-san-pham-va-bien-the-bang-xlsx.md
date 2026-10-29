@@ -49,4 +49,4 @@ Ticket này chưa có cột tồn đầu kỳ; ticket 05 thêm.
 - Trang quản trị `/admin/import` (menu "Import từ Excel", quyền `catalog.edit`). Nhãn audit `catalog.import`, loại đối tượng `import`.
 - Chưa thử mở file mẫu bằng Excel thật; test đọc lại bằng exceljs.
 - Sau code review (2026-10-29): cùng một slug ở hai sheet là lỗi ngay khi xem trước (trước đó lọt tới bước xác nhận và thành 409 sai nguyên nhân). Xác nhận không tạo gì (mọi dòng có SKU đã tồn tại) trả 200 `{ products: 0, variants: 0 }` và không ghi audit.
-- Còn mở, chờ người dùng quyết: (1) kiểm quyền giá đang tính cả ô giá ở dòng bị bỏ qua vì SKU đã có; (2) file .xlsx chỉ được kiểm là file zip, file .docx đổi đuôi sẽ bị báo thiếu sheet thay vì "không phải .xlsx".
+- Người dùng quyết (2026-10-29): kiểm quyền giá **giữ nguyên**, có ô giá ở bất kỳ dòng nào (kể cả dòng bị bỏ qua vì SKU đã có) là cần `price.edit`. File không có worksheet nào (ví dụ .docx đổi đuôi; trước đó lọt qua và trả "0 sản phẩm, không lỗi") bị từ chối "File phải là Excel .xlsx"; file Excel không có sheet nhóm hàng nào bị từ chối kèm hướng dẫn dùng file mẫu.

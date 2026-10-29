@@ -227,6 +227,12 @@ export async function readWorkbook(buffer: Buffer, ref: Reference) {
   } catch {
     throw fileError(400, 'Không đọc được file Excel .xlsx')
   }
+  // File Office khác (như .docx) cũng là zip và exceljs đọc không lỗi, nhưng không có sheet nào; .xlsx luôn có ít nhất một.
+  if (workbook.worksheets.length === 0) throw fileError(400, 'File phải là Excel .xlsx')
+  if (!ProductType.options.some((type) => workbook.getWorksheet(SHEET_NAMES[type]))) {
+    const names = ProductType.options.map((type) => SHEET_NAMES[type]).join(', ')
+    throw fileError(400, `File không có sheet nhóm hàng nào (${names}); hãy tải file mẫu rồi điền vào đó`)
+  }
 
   const rows: SheetRow[] = []
   const errors: ImportIssue[] = []
