@@ -33,6 +33,7 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'commitment.delete': 'Xóa cam kết',
   'commitment_type.create': 'Thêm loại cam kết',
   'commitment_type.update': 'Sửa loại cam kết',
+  'stock.adjust': 'Điều chỉnh tồn',
 }
 
 const AUDIT_ENTITY_LABELS: Record<string, string> = {

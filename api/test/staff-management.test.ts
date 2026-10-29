@@ -25,7 +25,7 @@ describe('phân quyền', () => {
     const me = await request.get('/api/admin/me').set(bearer(warehouse.accessToken))
 
     expect(me.body.roles).toEqual(['warehouse'])
-    expect(me.body.permissions.sort()).toEqual(['catalog.edit', 'document.view', 'media.upload'])
+    expect(me.body.permissions.sort()).toEqual(['catalog.edit', 'document.view', 'media.upload', 'stock.adjust'])
   })
 })
 

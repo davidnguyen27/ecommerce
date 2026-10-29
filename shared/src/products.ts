@@ -151,6 +151,8 @@ export const PolicyPageOptionList = z.object({
 export type PolicyPageOptionList = z.infer<typeof PolicyPageOptionList>
 
 export const AdminProductDetail = AdminProduct.extend({
+  /** Như `AdminProduct.variants`, kèm tồn trong kho (chỉ đọc; đổi tồn qua `/api/admin/stock`). */
+  variants: z.array(AdminVariant.extend({ onHand: z.number() })),
   /** Trang chính sách đã gắn, kể cả trang chưa xuất bản (khách chỉ thấy trang đã xuất bản). */
   policyPageIds: z.array(z.string()),
   /** Phiên bản khách đang thấy; `null` khi sản phẩm không ở trạng thái đã xuất bản. */

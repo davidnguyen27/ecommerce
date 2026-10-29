@@ -5,7 +5,7 @@ import type { DbClient } from '../db.ts'
 import { COMMITMENTS_WITH_TYPE, toPublicCommitment } from './commitments.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { StoredImage } from '../media/images.ts'
-import { SORT_ORDER, productNotFound, toAdminProduct, toNumber } from './products.ts'
+import { SORT_ORDER, productNotFound, toAdminProduct, toAdminVariant, toNumber } from './products.ts'
 
 const Values = z.record(z.string(), z.union([z.string(), z.array(z.string()), z.number(), z.boolean()]))
 
@@ -184,6 +184,7 @@ export function hasUnpublishedChanges(draft: Draft) {
 export function toAdminProductDetail(draft: Draft): AdminProductDetail {
   return {
     ...toAdminProduct(draft),
+    variants: draft.variants.map((v) => ({ ...toAdminVariant(v), onHand: v.onHand })),
     policyPageIds: draft.policyPages.map((p) => p.pageId).sort(),
     liveVersion: draft.liveVersion && {
       version: draft.liveVersion.version,

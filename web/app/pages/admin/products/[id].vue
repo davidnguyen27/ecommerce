@@ -76,6 +76,8 @@ const imageVariants = computed(() =>
     label: [v.sku, ...Object.values(v.attributes).map(String)].join(' · '),
   })),
 )
+/** Tồn của biến thể đã lưu, theo lần tải gần nhất. */
+const onHandOf = (variantId: string) => product.value?.variants.find((v) => v.id === variantId)?.onHand ?? null
 const sameTypeCategories = computed(() => categories.value.filter((c) => c.productType === product.value?.productType))
 
 const emptyVariant = (): VariantDraft => ({
@@ -503,6 +505,7 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
                   <th style="min-width: 110px">Trạng thái</th>
                   <th style="min-width: 120px" class="admin-table-num">Giá bán (₫)</th>
                   <th style="min-width: 120px" class="admin-table-num">Giá hãng (₫)</th>
+                  <th style="min-width: 70px" class="admin-table-num">Tồn</th>
                   <th style="text-align: right; min-width: 90px">Thao tác</th>
                 </tr>
               </thead>
@@ -577,6 +580,19 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
                     <small v-if="errorAt(v.id, 'compareAtPrice')" class="field-error-msg">
                       {{ errorAt(v.id, 'compareAtPrice') }}
                     </small>
+                  </td>
+
+                  <!-- Tồn: chỉ đọc, đổi ở trang Kho -->
+                  <td class="admin-table-num">
+                    <NuxtLink
+                      v-if="v.id && onHandOf(v.id) !== null"
+                      :to="`/admin/stock/movements?variantId=${v.id}`"
+                      title="Xem sổ xuất nhập của biến thể"
+                      style="font-weight: 600"
+                    >
+                      {{ onHandOf(v.id) }}
+                    </NuxtLink>
+                    <span v-else style="color: var(--adm-muted)">—</span>
                   </td>
 
                   <!-- Actions -->
