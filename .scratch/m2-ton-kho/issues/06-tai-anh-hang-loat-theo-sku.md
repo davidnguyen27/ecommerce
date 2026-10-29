@@ -25,4 +25,4 @@
 - Alt text mặc định là tên sản phẩm; sửa ở trang soạn sản phẩm.
 - Chưa có test riêng cho file quá dung lượng ở route này; giới hạn dùng chung `receiveImage` đã có test ở ảnh từng cái.
 - Trang quản trị `/admin/bulk-images` (menu "Ảnh hàng loạt", quyền `media.upload`).
-- Code review (2026-10-29) ghi nhận thứ tự theo `n` do trình duyệt bảo đảm là lệch với câu chữ spec; chờ người dùng quyết có cần API tự sắp theo `n` không.
+- Code review (2026-10-29) ghi nhận thứ tự theo `n` do trình duyệt bảo đảm là lệch với câu chữ spec; người dùng quyết **giữ nguyên** (chỉ trang quản trị gọi API này).

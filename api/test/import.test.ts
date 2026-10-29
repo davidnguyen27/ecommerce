@@ -1,3 +1,4 @@
+import { crc32 } from 'node:zlib'
 import ExcelJS from 'exceljs'
 import { describe, expect, it } from 'vitest'
 import { OWNER, appWithOwner, bearer, createStaff, login, type Request } from './support/staff.ts'
@@ -360,4 +361,64 @@ describe('quyền và giới hạn', () => {
     expect(big.status).toBe(400)
     expect(big.body.error.message).toContain('2001')
   })
+
+  it('file Word đổi đuôi thành .xlsx bị từ chối là "không phải Excel", không phải "thiếu sheet"', async () => {
+    const { request, token } = await shop()
+    const docx = zipOf({ '[Content_Types].xml': '<Types/>', 'word/document.xml': '<w:document/>' })
+
+    const res = await upload(request, token, 'preview', docx, 'hang-hoa.xlsx')
+
+    expect(res.status).toBe(400)
+    expect(res.body.error.message).toBe('File phải là Excel .xlsx')
+  })
+
+  it('file Excel không có sheet nhóm hàng nào bị từ chối kèm hướng dẫn dùng file mẫu', async () => {
+    const { request, token } = await shop()
+    const workbook = new ExcelJS.Workbook()
+    workbook.addWorksheet('Sheet1').addRow(['slug', 'name'])
+
+    const res = await upload(request, token, 'preview', Buffer.from(await workbook.xlsx.writeBuffer()))
+
+    expect(res.status).toBe(400)
+    expect(res.body.error.message).toContain('file mẫu')
+  })
 })
+
+/** File zip không nén, đủ để giả một file Office khác Excel (ví dụ .docx) mà không cần thêm thư viện. */
+function zipOf(files: Record<string, string>) {
+  const locals: Buffer[] = []
+  const centrals: Buffer[] = []
+  let offset = 0
+  for (const [name, content] of Object.entries(files)) {
+    const nameBytes = Buffer.from(name)
+    const data = Buffer.from(content)
+    const crc = crc32(data)
+    const local = Buffer.alloc(30)
+    local.writeUInt32LE(0x04034b50, 0)
+    local.writeUInt16LE(20, 4)
+    local.writeUInt32LE(crc, 14)
+    local.writeUInt32LE(data.length, 18)
+    local.writeUInt32LE(data.length, 22)
+    local.writeUInt16LE(nameBytes.length, 26)
+    const central = Buffer.alloc(46)
+    central.writeUInt32LE(0x02014b50, 0)
+    central.writeUInt16LE(20, 4)
+    central.writeUInt16LE(20, 6)
+    central.writeUInt32LE(crc, 16)
+    central.writeUInt32LE(data.length, 20)
+    central.writeUInt32LE(data.length, 24)
+    central.writeUInt16LE(nameBytes.length, 28)
+    central.writeUInt32LE(offset, 42)
+    locals.push(local, nameBytes, data)
+    centrals.push(central, nameBytes)
+    offset += local.length + nameBytes.length + data.length
+  }
+  const directory = Buffer.concat(centrals)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(Object.keys(files).length, 8)
+  end.writeUInt16LE(Object.keys(files).length, 10)
+  end.writeUInt32LE(directory.length, 12)
+  end.writeUInt32LE(offset, 16)
+  return Buffer.concat([...locals, directory, end])
+}
