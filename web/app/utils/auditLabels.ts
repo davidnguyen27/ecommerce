@@ -35,6 +35,7 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'commitment_type.update': 'Sửa loại cam kết',
   'stock.adjust': 'Điều chỉnh tồn',
   'stock.receipt.create': 'Ghi phiếu nhập kho',
+  'stock.opening': 'Ghi tồn đầu kỳ',
   'catalog.import': 'Import hàng hóa từ Excel',
 }
 

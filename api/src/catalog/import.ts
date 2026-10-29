@@ -61,6 +61,7 @@ function columnsOf(definitions: readonly AttributeDefinition[]): Column[] {
     ...definitions.filter((d) => d.level === 'variant').map(attribute('bt')),
     fixed('price', 'Giá bán'),
     fixed('compareAtPrice', 'Giá hãng'),
+    fixed('openingStock', 'Tồn đầu kỳ'),
   ]
 }
 
@@ -271,9 +272,24 @@ export async function readWorkbook(buffer: Buffer, ref: Reference) {
   return { rows, errors }
 }
 
+const filled = (rows: readonly SheetRow[], keys: readonly string[]) =>
+  rows.some((r) => keys.some((key) => r.values.get(key) !== null && r.values.get(key) !== undefined))
+
 /** File có điền ô giá nào không; có thì cần quyền `price.edit`. */
-export const hasPrices = (rows: readonly SheetRow[]) =>
-  rows.some((r) => PRICE_KEYS.some((key) => r.values.get(key) !== null && r.values.get(key) !== undefined))
+export const hasPrices = (rows: readonly SheetRow[]) => filled(rows, PRICE_KEYS)
+
+/** File có điền ô tồn đầu kỳ nào không; có thì cần quyền `stock.adjust`. */
+export const hasOpeningStock = (rows: readonly SheetRow[]) => filled(rows, ['openingStock'])
+
+/** Tồn đầu kỳ: số nguyên không âm; trống thì `null`; sai thì `NaN`. */
+function parseOpeningStock(value: CellValue | undefined): number | null {
+  const n = parsePrice(value)
+  return n === null || (Number.isInteger(n) && n >= 0 && n <= 1_000_000) ? n : Number.NaN
+}
+
+const OPENING_STOCK_ERROR = 'Tồn đầu kỳ phải là số nguyên không âm'
+export const ALREADY_LEDGERED =
+  'Biến thể đã có dòng trong sổ xuất nhập; tồn đầu kỳ chỉ ghi một lần, hãy dùng điều chỉnh ở trang Tồn kho'
 
 // Kiểm và lập kế hoạch tạo
 
@@ -332,7 +348,13 @@ export type PlannedVariant = {
   price: number | null
   compareAtPrice: number | null
   sortOrder: number
+  /** Lớn hơn 0 thì ghi tồn đầu kỳ ngay sau khi tạo. */
+  openingStock: number
+  sheet: string
+  row: number
 }
+/** Tồn đầu kỳ cho biến thể đã có (dòng có SKU đã tồn tại). */
+export type PlannedOpening = { variantId: string; sku: string; quantity: number; sheet: string; row: number }
 export type PlannedProduct = {
   productType: ProductType
   brandId: string
@@ -352,8 +374,9 @@ export type PlannedProduct = {
 const COLUMN_OF_FIELD: Record<string, string> = { brandId: 'brand', categoryId: 'category' }
 
 /**
- * Kiểm cả file và lập danh sách sản phẩm sẽ tạo. Dòng có SKU đã tồn tại bị bỏ qua (cảnh báo); slug đã thuộc về
- * sản phẩm có sẵn là lỗi, vì import không thêm biến thể vào sản phẩm đã có. Gọi trong transaction khi xác nhận.
+ * Kiểm cả file và lập danh sách sản phẩm sẽ tạo. Dòng có SKU đã tồn tại chỉ dùng cột tồn đầu kỳ (các cột khác bỏ
+ * qua, có cảnh báo); slug đã thuộc về sản phẩm có sẵn là lỗi, vì import không thêm biến thể vào sản phẩm đã có.
+ * Gọi trong transaction khi xác nhận; việc biến thể chưa có dòng sổ được kiểm lại dưới khóa lúc ghi.
  */
 export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: Reference) {
   const errors: ImportIssue[] = []
@@ -382,19 +405,31 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
 
   const skuOf = (row: SheetRow) => text(row.values.get('sku')).trim().toUpperCase()
   const [existingSkus, existingSlugs] = await Promise.all([
-    db.productVariant.findMany({ where: { sku: { in: rows.map(skuOf).filter(Boolean) } }, select: { sku: true } }),
+    db.productVariant.findMany({
+      where: { sku: { in: rows.map(skuOf).filter(Boolean) } },
+      select: { id: true, sku: true, _count: { select: { stockMovements: true } } },
+    }),
     db.product.findMany({
       where: { slug: { in: rows.map((r) => text(r.values.get('slug')).trim()) } },
       select: { slug: true },
     }),
   ])
-  const takenSkus = new Set(existingSkus.map((v) => v.sku))
+  const takenSkus = new Map(existingSkus.map((v) => [v.sku, v]))
   const takenSlugs = new Set(existingSlugs.map((p) => p.slug))
 
+  const openings: PlannedOpening[] = []
   const groups = new Map<string, SheetRow[]>()
   for (const row of rows) {
-    if (takenSkus.has(skuOf(row))) {
-      warnings.push(issue(row, 'sku', `SKU ${skuOf(row)} đã có; dòng này được bỏ qua`))
+    const existing = takenSkus.get(skuOf(row))
+    if (existing) {
+      const quantity = parseOpeningStock(row.values.get('openingStock'))
+      if (Number.isNaN(quantity)) errors.push(issue(row, 'openingStock', OPENING_STOCK_ERROR))
+      else if (!quantity) warnings.push(issue(row, 'sku', `SKU ${existing.sku} đã có; dòng này được bỏ qua`))
+      else if (existing._count.stockMovements > 0) errors.push(issue(row, 'openingStock', ALREADY_LEDGERED))
+      else {
+        warnings.push(issue(row, 'sku', `SKU ${existing.sku} đã có; chỉ ghi tồn đầu kỳ, các cột khác được bỏ qua`))
+        openings.push({ variantId: existing.id, sku: existing.sku, quantity, sheet: row.sheet, row: row.row })
+      }
       continue
     }
     const key = `${row.productType}:${text(row.values.get('slug')).trim()}`
@@ -486,6 +521,8 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
       ] as const) {
         if (Number.isNaN(value)) fail(row, key, 'Giá phải là số nguyên VND')
       }
+      const openingStock = parseOpeningStock(row.values.get('openingStock'))
+      if (Number.isNaN(openingStock)) fail(row, 'openingStock', OPENING_STOCK_ERROR)
       const variant = VariantRequest.safeParse({
         sku: text(row.values.get('sku')),
         price: Number.isNaN(price) ? null : price,
@@ -517,7 +554,15 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
       if (variants.some((p) => JSON.stringify(p.attributes) === JSON.stringify(attributes.values))) {
         return fail(row, null, 'Sản phẩm đã có biến thể với tổ hợp thuộc tính này ở dòng khác')
       }
-      variants.push({ sku, attributes: attributes.values, ...v, sortOrder: index })
+      variants.push({
+        sku,
+        attributes: attributes.values,
+        ...v,
+        sortOrder: index,
+        openingStock: Number.isNaN(openingStock) ? 0 : (openingStock ?? 0),
+        sheet: row.sheet,
+        row: row.row,
+      })
     })
 
     if (ok && product.success && productAttributes.ok && brandId && categoryId) {
@@ -533,5 +578,6 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
     }
   }
 
-  return { products, errors, warnings }
+  const openingStocks = openings.length + products.flatMap((p) => p.variants).filter((v) => v.openingStock > 0).length
+  return { products, openings, openingStocks, errors, warnings }
 }

@@ -63,7 +63,7 @@ async function commit() {
     const result = ImportResult.parse(
       await session.adminFetch('/api/admin/import/commit', { method: 'POST', body: formData() }),
     )
-    notice.value = `Đã tạo ${result.products} sản phẩm nháp với ${result.variants} biến thể. Hãy thêm ảnh và kiểm lại trước khi xuất bản.`
+    notice.value = `Đã tạo ${result.products} sản phẩm nháp với ${result.variants} biến thể, ghi tồn đầu kỳ cho ${result.openingStocks} biến thể. Hãy thêm ảnh và kiểm lại trước khi xuất bản.`
     preview.value = null
     file.value = null
   } catch (err) {
@@ -75,7 +75,12 @@ async function commit() {
   }
 }
 
-const canCommit = computed(() => !!preview.value && preview.value.errors.length === 0 && preview.value.variants > 0)
+const canCommit = computed(
+  () =>
+    !!preview.value &&
+    preview.value.errors.length === 0 &&
+    (preview.value.variants > 0 || preview.value.openingStocks > 0),
+)
 </script>
 
 <template>
@@ -85,8 +90,8 @@ const canCommit = computed(() => !!preview.value && preview.value.errors.length 
         <h1 class="admin-page-title">Import từ Excel</h1>
         <p class="admin-page-desc">
           Tạo sản phẩm nháp và biến thể hàng loạt từ file .xlsx (tối đa {{ IMPORT_MAX_ROWS }} dòng biến thể, 5 MB). Dòng
-          có SKU đã tồn tại được bỏ qua; import không sửa sản phẩm đã có. Ảnh, bảng size, chính sách và cam kết thêm sau
-          ở trang soạn sản phẩm.
+          có SKU đã tồn tại chỉ dùng để ghi tồn đầu kỳ (một lần cho mỗi biến thể); import không sửa sản phẩm đã có. Ảnh,
+          bảng size, chính sách và cam kết thêm sau ở trang soạn sản phẩm.
         </p>
       </div>
       <button type="button" class="btn btn-secondary btn-sm" @click="downloadTemplate">Tải file mẫu</button>
@@ -126,7 +131,9 @@ const canCommit = computed(() => !!preview.value && preview.value.errors.length 
     <div v-if="preview" class="admin-panel" style="padding: 16px 20px">
       <p style="margin: 0 0 12px">
         Sẽ tạo <strong>{{ preview.products }}</strong> sản phẩm nháp với <strong>{{ preview.variants }}</strong> biến
-        thể.
+        thể<template v-if="preview.openingStocks"
+          >, ghi tồn đầu kỳ cho <strong>{{ preview.openingStocks }}</strong> biến thể</template
+        >.
         <span v-if="preview.errors.length" style="color: #b91c1c">
           Còn {{ preview.errors.length }} lỗi; sửa file rồi xem trước lại.
         </span>

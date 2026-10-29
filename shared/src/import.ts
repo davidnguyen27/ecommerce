@@ -16,11 +16,13 @@ export type ImportIssue = z.infer<typeof ImportIssue>
 export const ImportPreview = z.object({
   products: z.number(),
   variants: z.number(),
+  /** Số biến thể (mới tạo hoặc đã có) sẽ được ghi tồn đầu kỳ. */
+  openingStocks: z.number(),
   errors: z.array(ImportIssue),
   warnings: z.array(ImportIssue),
 })
 export type ImportPreview = z.infer<typeof ImportPreview>
 
-/** Kết quả xác nhận: số sản phẩm (nháp) và biến thể đã tạo. */
-export const ImportResult = z.object({ products: z.number(), variants: z.number() })
+/** Kết quả xác nhận: số sản phẩm (nháp) và biến thể đã tạo, số biến thể đã ghi tồn đầu kỳ. */
+export const ImportResult = z.object({ products: z.number(), variants: z.number(), openingStocks: z.number() })
 export type ImportResult = z.infer<typeof ImportResult>
