@@ -7,6 +7,7 @@ import {
   FileText,
   FolderTree,
   History,
+  Images,
   LayoutDashboard,
   ListChecks,
   Package,
@@ -37,6 +38,7 @@ const MENU_GROUPS: MenuGroup[] = [
     items: [
       { to: '/admin/products', label: 'Sản phẩm', icon: Package, permission: ['catalog.edit', 'price.edit'] },
       { to: '/admin/import', label: 'Import từ Excel', icon: FileSpreadsheet, permission: 'catalog.edit' },
+      { to: '/admin/bulk-images', label: 'Ảnh hàng loạt', icon: Images, permission: 'media.upload' },
       { to: '/admin/brands', label: 'Thương hiệu', icon: Tag, permission: 'catalog.edit' },
       { to: '/admin/categories', label: 'Cây danh mục', icon: FolderTree, permission: 'catalog.edit' },
       { to: '/admin/attribute-schemas', label: 'Schema thuộc tính', icon: ListChecks, permission: 'catalog.edit' },
