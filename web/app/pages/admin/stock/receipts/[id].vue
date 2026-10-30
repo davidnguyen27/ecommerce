@@ -24,7 +24,7 @@ const total = computed(() => receipt.value?.lines.reduce((sum, l) => sum + l.qua
         <h1 class="admin-page-title">Phiếu nhập kho</h1>
         <p v-if="receipt" class="admin-page-desc">
           {{ receipt.supplierName }} · hàng về ngày {{ formatDateOnly(receipt.receivedOn) }} · ghi bởi
-          {{ receipt.createdBy.name }} lúc {{ new Date(receipt.createdAt).toLocaleString('vi-VN') }}
+          {{ receipt.createdBy.name }} lúc {{ formatDateTime(receipt.createdAt) }}
         </p>
       </div>
       <NuxtLink to="/admin/stock/receipts" class="btn btn-secondary btn-sm">‹ Danh sách phiếu</NuxtLink>

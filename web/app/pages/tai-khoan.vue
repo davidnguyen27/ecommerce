@@ -48,11 +48,7 @@ async function changePassword() {
   }
 }
 
-const consentedOn = computed(() =>
-  profile.value
-    ? new Date(profile.value.privacyConsent.consentedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
-    : '',
-)
+const consentedOn = computed(() => (profile.value ? formatDateTime(profile.value.privacyConsent.consentedAt) : ''))
 
 // Trang riêng của từng khách, không có nội dung để index.
 useSeo({ title: 'Tài khoản', description: 'Thông tin tài khoản khách hàng.', noindex: true })

@@ -1,5 +1,6 @@
 import { ErrorCode, SizeChart, type AdminProduct, type AdminVariant, type AttributeValues } from '@ecommerce/shared'
 import { z } from 'zod'
+import type { AuditEntry } from '../audit/audited.ts'
 import type { DbClient } from '../db.ts'
 import type { Prisma, Product, ProductVariant } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
@@ -77,6 +78,28 @@ export function productAuditFields(product: Product) {
 export function variantAuditFields(variant: ProductVariant) {
   const { sku, attributes, status, sortOrder } = toAdminVariant(variant)
   return { productId: variant.productId, sku, attributes, status, sortOrder }
+}
+
+/** Audit khi tạo biến thể; có điền giá thì kèm `price.change` từ giá trống, để lịch sử giá có điểm bắt đầu. */
+export function variantCreatedAudits(variant: ProductVariant): AuditEntry[] {
+  const entries: AuditEntry[] = [
+    {
+      action: 'catalog.variant.create',
+      entityType: 'product_variant',
+      entityId: variant.id,
+      after: variantAuditFields(variant),
+    },
+  ]
+  if (variant.price !== null || variant.compareAtPrice !== null) {
+    entries.push({
+      action: 'price.change',
+      entityType: 'product_variant',
+      entityId: variant.id,
+      before: priceAuditFields({ ...variant, price: null, compareAtPrice: null }),
+      after: priceAuditFields(variant),
+    })
+  }
+  return entries
 }
 
 /** Giá của biến thể ghi vào audit `price.change`. */

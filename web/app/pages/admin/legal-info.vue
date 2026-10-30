@@ -174,7 +174,7 @@ async function save() {
           </div>
 
           <div class="form-group" style="margin-top: 24px">
-            <label class="form-label">Xem trước logo hiển thị</label>
+            <p class="form-label">Xem trước logo hiển thị</p>
             <div
               style="
                 background-color: var(--adm-surface-subtle);

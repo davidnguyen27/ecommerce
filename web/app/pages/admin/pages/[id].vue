@@ -70,22 +70,11 @@ function openVersion(version: number) {
   })
 }
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 await load()
 </script>
 
 <template>
   <main v-if="page">
-    <!-- Header -->
     <div class="admin-page-header">
       <div>
         <div class="admin-breadcrumb" style="margin-bottom: 8px">
@@ -121,7 +110,6 @@ await load()
       </div>
     </div>
 
-    <!-- Alert Notices -->
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="10"></circle>
@@ -139,9 +127,7 @@ await load()
       <div>{{ notice }}</div>
     </div>
 
-    <!-- Dual Plane Workspace -->
     <div class="admin-two-col">
-      <!-- Cột chính: Soạn thảo & Xem trước Markdown -->
       <section>
         <div class="admin-panel" style="padding-bottom: 24px">
           <div class="form-group">
@@ -155,7 +141,6 @@ await load()
             />
           </div>
 
-          <!-- Switcher Tab: Soạn thảo vs Xem trước -->
           <div class="tab-filter-bar" style="margin-bottom: 14px">
             <button
               type="button"
@@ -175,7 +160,6 @@ await load()
             </button>
           </div>
 
-          <!-- Tab Soạn thảo -->
           <div v-show="activeTab === 'editor'">
             <div class="form-group" style="margin-bottom: 0">
               <textarea
@@ -189,7 +173,6 @@ await load()
             </div>
           </div>
 
-          <!-- Tab Xem trước -->
           <div
             v-show="activeTab === 'preview'"
             style="
@@ -207,7 +190,6 @@ await load()
           </div>
         </div>
 
-        <!-- Khối xem lại bản lưu lịch sử (Historical Version Drawer) -->
         <div v-if="viewing" class="admin-panel" style="border-left: 3px solid var(--adm-ink); margin-top: 24px">
           <div class="admin-panel-header">
             <div>
@@ -215,7 +197,7 @@ await load()
                 Đang xem lại: Phiên bản {{ viewing.version }} — {{ viewing.title }}
               </h3>
               <span class="form-help">
-                Xuất bản lúc {{ formatTime(viewing.publishedAt) }} bởi {{ viewing.publishedBy.name }}
+                Xuất bản lúc {{ formatDateTime(viewing.publishedAt) }} bởi {{ viewing.publishedBy.name }}
               </span>
             </div>
             <button class="btn btn-secondary btn-sm" @click="viewing = null">Đóng bản xem lại</button>
@@ -235,9 +217,7 @@ await load()
         </div>
       </section>
 
-      <!-- Cột phụ: Trạm điều khiển phát hành & Lịch sử phiên bản -->
       <aside>
-        <!-- Trạm xuất bản -->
         <div class="admin-panel">
           <div class="admin-panel-header">
             <div>
@@ -302,7 +282,6 @@ await load()
           </div>
         </div>
 
-        <!-- Lịch sử phiên bản (Version Ledger) -->
         <div class="admin-panel">
           <div class="admin-panel-header">
             <div>
@@ -335,7 +314,7 @@ await load()
                   v{{ v.version }} · {{ v.title }}
                 </div>
                 <div style="color: var(--adm-muted); font-size: 11px">
-                  {{ formatTime(v.publishedAt) }} · {{ v.publishedBy.name }}
+                  {{ formatDateTime(v.publishedAt) }} · {{ v.publishedBy.name }}
                 </div>
               </div>
 

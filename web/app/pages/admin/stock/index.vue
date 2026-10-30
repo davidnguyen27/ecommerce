@@ -149,7 +149,6 @@ await load()
       <span>{{ notice }}</span>
     </div>
 
-    <!-- Form điều chỉnh -->
     <div v-if="form" class="admin-panel" style="padding: 16px 20px; margin-bottom: 20px">
       <form @submit.prevent="saveAdjustment">
         <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px">
@@ -165,16 +164,17 @@ await load()
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px">
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label">Lý do</label>
-            <select v-model="form.reason" class="form-select">
+            <label class="form-label" for="stock-form-reason">Lý do</label>
+            <select id="stock-form-reason" v-model="form.reason" class="form-select">
               <option v-for="r in StockAdjustmentReason.options" :key="r" :value="r">
                 {{ STOCK_REASON_LABELS[r] }}
               </option>
             </select>
           </div>
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label">{{ AMOUNT_LABELS[inputMode] }}</label>
+            <label class="form-label" for="stock-form-amount">{{ AMOUNT_LABELS[inputMode] }}</label>
             <input
+              id="stock-form-amount"
               v-model.number="form.amount"
               type="number"
               step="1"
@@ -185,8 +185,14 @@ await load()
             <small class="field-error-msg">{{ errorAt('countedQuantity') ?? errorAt('quantity') }}</small>
           </div>
           <div class="form-group" style="margin-bottom: 0; grid-column: span 2">
-            <label class="form-label">Ghi chú{{ form.reason === 'other' ? ' *' : '' }}</label>
-            <input v-model="form.note" class="form-input" :required="form.reason === 'other'" maxlength="1000" />
+            <label class="form-label" for="stock-form-note">Ghi chú{{ form.reason === 'other' ? ' *' : '' }}</label>
+            <input
+              id="stock-form-note"
+              v-model="form.note"
+              class="form-input"
+              :required="form.reason === 'other'"
+              maxlength="1000"
+            />
             <small class="field-error-msg">{{ errorAt('note') }}</small>
           </div>
         </div>
@@ -200,7 +206,6 @@ await load()
       </form>
     </div>
 
-    <!-- Bộ lọc -->
     <div class="admin-panel" style="padding: 16px 20px; margin-bottom: 20px">
       <form @submit.prevent="search">
         <div
@@ -212,33 +217,58 @@ await load()
           "
         >
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label" style="font-size: 12px">SKU hoặc tên sản phẩm</label>
-            <input v-model="filters.q" class="form-input" style="font-size: 12px; padding: 5px 10px" />
+            <label class="form-label" for="stock-filters-q" style="font-size: 12px">SKU hoặc tên sản phẩm</label>
+            <input
+              id="stock-filters-q"
+              v-model="filters.q"
+              class="form-input"
+              style="font-size: 12px; padding: 5px 10px"
+            />
           </div>
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label" style="font-size: 12px">Nhóm hàng</label>
-            <select v-model="filters.productType" class="form-select" style="font-size: 12px; padding: 6px 10px">
+            <label class="form-label" for="stock-filters-product-type" style="font-size: 12px">Nhóm hàng</label>
+            <select
+              id="stock-filters-product-type"
+              v-model="filters.productType"
+              class="form-select"
+              style="font-size: 12px; padding: 6px 10px"
+            >
               <option value="">-- Tất cả --</option>
               <option v-for="t in ProductType.options" :key="t" :value="t">{{ PRODUCT_TYPE_LABELS[t] }}</option>
             </select>
           </div>
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label" style="font-size: 12px">Thương hiệu</label>
-            <select v-model="filters.brandId" class="form-select" style="font-size: 12px; padding: 6px 10px">
+            <label class="form-label" for="stock-filters-brand-id" style="font-size: 12px">Thương hiệu</label>
+            <select
+              id="stock-filters-brand-id"
+              v-model="filters.brandId"
+              class="form-select"
+              style="font-size: 12px; padding: 6px 10px"
+            >
               <option value="">-- Tất cả --</option>
               <option v-for="b in brands" :key="b.id" :value="b.id">{{ b.name }}</option>
             </select>
           </div>
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label" style="font-size: 12px">Trạng thái biến thể</label>
-            <select v-model="filters.status" class="form-select" style="font-size: 12px; padding: 6px 10px">
+            <label class="form-label" for="stock-filters-status" style="font-size: 12px">Trạng thái biến thể</label>
+            <select
+              id="stock-filters-status"
+              v-model="filters.status"
+              class="form-select"
+              style="font-size: 12px; padding: 6px 10px"
+            >
               <option value="">-- Tất cả --</option>
               <option v-for="s in VariantStatus.options" :key="s" :value="s">{{ VARIANT_STATUS_LABELS[s] }}</option>
             </select>
           </div>
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label" style="font-size: 12px">Sắp xếp</label>
-            <select v-model="filters.sort" class="form-select" style="font-size: 12px; padding: 6px 10px">
+            <label class="form-label" for="stock-filters-sort" style="font-size: 12px">Sắp xếp</label>
+            <select
+              id="stock-filters-sort"
+              v-model="filters.sort"
+              class="form-select"
+              style="font-size: 12px; padding: 6px 10px"
+            >
               <option v-for="s in StockSort.options" :key="s" :value="s">{{ SORT_LABELS[s] }}</option>
             </select>
           </div>
@@ -247,7 +277,6 @@ await load()
       </form>
     </div>
 
-    <!-- Bảng tồn -->
     <div class="admin-table-card">
       <div
         v-if="!result || result.items.length === 0"

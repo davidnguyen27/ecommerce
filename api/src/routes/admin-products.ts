@@ -22,6 +22,7 @@ import {
   toAdminVariant,
   toNumber,
   variantAuditFields,
+  variantCreatedAudits,
 } from '../catalog/products.ts'
 import { loadDraft, loadLiveVersion, publishPrice, toAdminProductDetail } from '../catalog/publication.ts'
 import type { Db } from '../db.ts'
@@ -184,21 +185,7 @@ async function createVariant(
   const created = await tx.productVariant
     .create({ data: { ...fields, ...price, productId } })
     .catch(rethrowUnique(skuTaken))
-  await audit({
-    action: 'catalog.variant.create',
-    entityType: 'product_variant',
-    entityId: created.id,
-    after: variantAuditFields(created),
-  })
-  if (priced) {
-    await audit({
-      action: 'price.change',
-      entityType: 'product_variant',
-      entityId: created.id,
-      before: priceAuditFields({ ...created, price: null, compareAtPrice: null }),
-      after: priceAuditFields(created),
-    })
-  }
+  await audit(variantCreatedAudits(created))
   return toAdminVariant(created)
 }
 

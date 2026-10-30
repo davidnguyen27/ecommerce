@@ -57,18 +57,6 @@ function goTo(page: number) {
 
 const lastPage = computed(() => Math.max(1, Math.ceil((result.value?.total ?? 0) / PAGE_SIZE)))
 
-const formatTime = (iso: string) => {
-  const d = new Date(iso)
-  return d.toLocaleString('vi-VN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
-}
-
 const formatJson = (val: unknown) => {
   if (val === null || val === undefined) return '—'
   return JSON.stringify(val, null, 2)
@@ -80,7 +68,6 @@ await load()
 
 <template>
   <div>
-    <!-- Page Header -->
     <div class="admin-page-header">
       <div>
         <h1 class="admin-page-title">Nhật ký kiểm toán (Audit Log)</h1>
@@ -91,12 +78,10 @@ await load()
       </div>
     </div>
 
-    <!-- Alert -->
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <span>{{ error }}</span>
     </div>
 
-    <!-- Bộ lọc tìm kiếm kiểm toán -->
     <div class="admin-panel" style="padding: 16px 20px; margin-bottom: 20px">
       <form @submit.prevent="search">
         <div
@@ -108,8 +93,13 @@ await load()
           "
         >
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label" style="font-size: 12px">Người thực hiện</label>
-            <select v-model="filters.actorId" class="form-select" style="font-size: 12px; padding: 6px 10px">
+            <label class="form-label" for="audit-filters-actor-id" style="font-size: 12px">Người thực hiện</label>
+            <select
+              id="audit-filters-actor-id"
+              v-model="filters.actorId"
+              class="form-select"
+              style="font-size: 12px; padding: 6px 10px"
+            >
               <option value="">-- Tất cả nhân sự --</option>
               <option v-for="actor in actors" :key="actor.id" :value="actor.id">
                 {{ actor.name }} ({{ actor.email }})
@@ -118,21 +108,38 @@ await load()
           </div>
 
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label" style="font-size: 12px">Loại đối tượng</label>
-            <select v-model="filters.entityType" class="form-select" style="font-size: 12px; padding: 6px 10px">
+            <label class="form-label" for="audit-filters-entity-type" style="font-size: 12px">Loại đối tượng</label>
+            <select
+              id="audit-filters-entity-type"
+              v-model="filters.entityType"
+              class="form-select"
+              style="font-size: 12px; padding: 6px 10px"
+            >
               <option value="">-- Tất cả đối tượng --</option>
               <option v-for="t in ENTITY_TYPES" :key="t" :value="t">{{ auditEntityLabel(t) }}</option>
             </select>
           </div>
 
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label" style="font-size: 12px">Từ ngày</label>
-            <input v-model="filters.from" type="date" class="form-input" style="font-size: 12px; padding: 5px 10px" />
+            <label class="form-label" for="audit-filters-from" style="font-size: 12px">Từ ngày</label>
+            <input
+              id="audit-filters-from"
+              v-model="filters.from"
+              type="date"
+              class="form-input"
+              style="font-size: 12px; padding: 5px 10px"
+            />
           </div>
 
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label" style="font-size: 12px">Đến ngày</label>
-            <input v-model="filters.to" type="date" class="form-input" style="font-size: 12px; padding: 5px 10px" />
+            <label class="form-label" for="audit-filters-to" style="font-size: 12px">Đến ngày</label>
+            <input
+              id="audit-filters-to"
+              v-model="filters.to"
+              type="date"
+              class="form-input"
+              style="font-size: 12px; padding: 5px 10px"
+            />
           </div>
 
           <div style="display: flex; gap: 6px">
@@ -143,7 +150,6 @@ await load()
       </form>
     </div>
 
-    <!-- Bảng Kiểm Toán -->
     <div class="admin-table-card">
       <div
         v-if="!result || result.items.length === 0"
@@ -169,7 +175,7 @@ await load()
             <tbody>
               <tr v-for="entry in result.items" :key="entry.id">
                 <td style="font-family: var(--adm-mono); font-size: 11px; color: var(--adm-muted); white-space: nowrap">
-                  {{ formatTime(entry.createdAt) }}
+                  {{ formatDateTime(entry.createdAt, { seconds: true }) }}
                 </td>
                 <td>
                   <strong style="color: var(--adm-ink)">{{ entry.actor.name }}</strong>
@@ -234,7 +240,6 @@ await load()
           </table>
         </div>
 
-        <!-- Pagination Bar -->
         <div
           style="
             display: flex;

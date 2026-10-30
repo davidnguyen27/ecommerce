@@ -10,14 +10,7 @@ const { data, error } = await useAsyncData(`category-${slug.value}`, async () =>
   return PublicCategory.parse(body)
 })
 
-if (error.value) {
-  const notFound = (error.value as { statusCode?: number }).statusCode === 404
-  throw createError({
-    statusCode: notFound ? 404 : 502,
-    message: notFound ? 'Không tìm thấy danh mục' : 'Không tải được danh mục',
-    fatal: true,
-  })
-}
+if (error.value) throwPageError(error.value, 'danh mục')
 
 useSeo({
   title: () => data.value?.name ?? '',

@@ -1,60 +1,22 @@
-import { AuthTokens, CustomerProfile, type ChangePasswordRequest, type RegisterRequest } from '@ecommerce/shared'
+import { CustomerProfile, type ChangePasswordRequest, type RegisterRequest } from '@ecommerce/shared'
 
 // Phiên khách chỉ sống ở trình duyệt: cookie refresh chỉ gửi tới `/api/auth/refresh`, nên server Nuxt
-// không bao giờ biết khách là ai. Biến module này chỉ được ghi trong handler chạy ở trình duyệt,
-// vì trên server nó dùng chung cho mọi request.
-const accessToken = ref<string | null>(null)
-let refreshing: Promise<boolean> | null = null
+// không bao giờ biết khách là ai.
+const tokens = createTokenSession('/api/auth')
 
-const AUTH = '/api/auth'
-const WEB_CLIENT = { 'X-Client': 'web' }
+const login = (email: string, password: string) => tokens.start('/login', { email, password })
 
-/** Đổi cookie refresh lấy access token mới. Nhiều lời gọi cùng lúc chỉ refresh một lần. */
-function refresh(): Promise<boolean> {
-  refreshing ??= $fetch(`${AUTH}/refresh`, { method: 'POST', headers: WEB_CLIENT })
-    .then((body) => {
-      accessToken.value = AuthTokens.parse(body).accessToken
-      return true
-    })
-    .catch(() => {
-      accessToken.value = null
-      return false
-    })
-    .finally(() => {
-      refreshing = null
-    })
-  return refreshing
-}
-
-async function login(email: string, password: string) {
-  const body = await $fetch(`${AUTH}/login`, { method: 'POST', headers: WEB_CLIENT, body: { email, password } })
-  accessToken.value = AuthTokens.parse(body).accessToken
-}
-
-async function register(input: RegisterRequest) {
-  const body = await $fetch(`${AUTH}/register`, { method: 'POST', headers: WEB_CLIENT, body: input })
-  accessToken.value = AuthTokens.parse(body).accessToken
-}
+const register = (input: RegisterRequest) => tokens.start('/register', input)
 
 async function logout() {
-  await $fetch(`${AUTH}/refresh`, { method: 'DELETE', headers: WEB_CLIENT }).catch(() => {})
-  accessToken.value = null
+  await tokens.end()
   await navigateTo('/dang-nhap')
 }
 
-type FetchOptions = NonNullable<Parameters<typeof $fetch>[1]>
-
-/** Gọi `/api/account/*` kèm access token; chưa có hoặc hết hạn thì refresh rồi thử lại một lần. */
-async function accountFetch(path: string, options: FetchOptions = {}): Promise<unknown> {
-  const send = () =>
-    $fetch(path, { ...options, headers: { ...options.headers, Authorization: `Bearer ${accessToken.value}` } })
-  if (accessToken.value === null && !(await refresh())) throw new Error('Chưa đăng nhập')
-  try {
-    return await send()
-  } catch (error) {
-    if ((error as { status?: number }).status !== 401 || !(await refresh())) throw error
-    return send()
-  }
+/** Gọi `/api/account/*` kèm access token; chưa có thì refresh trước, không được thì coi là chưa đăng nhập. */
+async function accountFetch(path: string, options?: Parameters<typeof tokens.authorizedFetch>[1]): Promise<unknown> {
+  if (tokens.accessToken.value === null && !(await tokens.refresh())) throw new Error('Chưa đăng nhập')
+  return tokens.authorizedFetch(path, options)
 }
 
 async function loadProfile(): Promise<CustomerProfile> {
@@ -63,10 +25,9 @@ async function loadProfile(): Promise<CustomerProfile> {
 
 /** Đổi mật khẩu; mọi thiết bị khác bị đăng xuất, trình duyệt này nhận phiên mới. */
 async function changePassword(input: ChangePasswordRequest) {
-  const body = await accountFetch('/api/account/password', { method: 'POST', headers: WEB_CLIENT, body: input })
-  accessToken.value = AuthTokens.parse(body).accessToken
+  tokens.accept(await accountFetch('/api/account/password', { method: 'POST', headers: tokens.webClient, body: input }))
 }
 
 export function useCustomerSession() {
-  return { refresh, login, register, logout, accountFetch, loadProfile, changePassword }
+  return { refresh: tokens.refresh, login, register, logout, accountFetch, loadProfile, changePassword }
 }

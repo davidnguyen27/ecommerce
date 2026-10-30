@@ -7,6 +7,19 @@ const session = useAdminSession()
 const canCatalog = session.can('catalog.edit')
 const canPrice = session.can('price.edit')
 const canAudit = session.can('audit.view')
+const canSeeProducts = canCatalog || canPrice
+
+// Lối tắt lấy quyền từ menu nên chỉ hiện trang người dùng mở được.
+const SHORTCUTS = [
+  { to: '/admin/products', label: 'Sản phẩm & Biến thể' },
+  { to: '/admin/brands', label: 'Quản lý Thương hiệu & Logo' },
+  { to: '/admin/categories', label: 'Cây Danh mục 5 Nhóm hàng' },
+  { to: '/admin/pages', label: 'Soạn Chính sách Đổi trả / Bảo hành' },
+]
+const shortcuts = SHORTCUTS.filter((shortcut) => {
+  const permission = ADMIN_MENU_ITEMS.find((item) => item.to === shortcut.to)?.permission
+  return !permission || session.can(permission)
+})
 
 const stats = reactive({
   publishedCount: 0,
@@ -21,7 +34,7 @@ const loading = ref(true)
 
 onMounted(async () => {
   try {
-    if (canCatalog || canPrice) {
+    if (canSeeProducts) {
       const prodRes = AdminProductList.parse(await session.adminFetch('/api/admin/products'))
       stats.publishedCount = prodRes.items.filter((p) => p.status === 'published').length
       stats.draftCount = prodRes.items.filter((p) => p.status === 'draft').length
@@ -44,25 +57,14 @@ onMounted(async () => {
     loading.value = false
   }
 })
-
-const STATUS_LABELS = { draft: 'Nháp', published: 'Đã xuất bản', archived: 'Lưu trữ' } as const
-const STATUS_BADGES = { draft: 'badge-draft', published: 'badge-published', archived: 'badge-archived' } as const
-
-const formatTime = (iso: string) => {
-  const d = new Date(iso)
-  return d.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
-}
 </script>
 
 <template>
   <div>
-    <!-- Page Header -->
     <div class="admin-page-header">
       <div>
         <h1 class="admin-page-title">Bảng điều khiển trung tâm</h1>
-        <p class="admin-page-desc">
-          Tổng quan vận hành hàng hóa thời trang cao cấp, trạng thái xuất bản và lịch sử kiểm toán.
-        </p>
+        <p class="admin-page-desc">Tổng quan hàng hóa, trạng thái xuất bản và lịch sử kiểm toán.</p>
       </div>
 
       <div v-if="canCatalog" class="admin-topbar-actions">
@@ -72,8 +74,7 @@ const formatTime = (iso: string) => {
       </div>
     </div>
 
-    <!-- Stat Metrics Grid -->
-    <div class="stat-grid">
+    <div v-if="canSeeProducts" class="stat-grid">
       <div class="stat-card">
         <div class="stat-label">Sản phẩm đang bán trên Web</div>
         <div class="stat-value" style="color: var(--adm-published)">{{ stats.publishedCount }}</div>
@@ -92,17 +93,15 @@ const formatTime = (iso: string) => {
         <div class="stat-sub">Ngừng kinh doanh, giữ nguyên lịch sử</div>
       </div>
 
-      <div class="stat-card">
-        <div class="stat-label">Thương hiệu đối tác</div>
+      <div v-if="canCatalog" class="stat-card">
+        <div class="stat-label">Thương hiệu</div>
         <div class="stat-value">{{ stats.brandCount }}</div>
-        <div class="stat-sub">Nhà mốt & thương hiệu quốc tế</div>
+        <div class="stat-sub">Đang có trong danh mục</div>
       </div>
     </div>
 
-    <!-- Main Workspace Split -->
     <div class="admin-two-col">
-      <!-- Cột Trái: Sản phẩm mới cập nhật -->
-      <div class="admin-panel" style="padding: 0; overflow: hidden">
+      <div v-if="canSeeProducts" class="admin-panel" style="padding: 0; overflow: hidden">
         <div style="padding: 18px 20px 14px; border-bottom: 1px solid var(--adm-border)">
           <div style="display: flex; align-items: center; justify-content: space-between">
             <h2 class="admin-section-title" style="margin: 0">Sản phẩm cập nhật gần nhất</h2>
@@ -138,41 +137,32 @@ const formatTime = (iso: string) => {
               <td>{{ p.brand.name }}</td>
               <td class="admin-table-num">{{ p.variantCount }}</td>
               <td>
-                <span class="badge" :class="STATUS_BADGES[p.status]">
-                  <span class="badge-dot" />
-                  {{ STATUS_LABELS[p.status] }}
-                </span>
+                <ProductStatusBadge :status="p.status" />
               </td>
               <td style="font-size: 12px; color: var(--adm-muted); white-space: nowrap">
-                {{ formatTime(p.updatedAt) }}
+                {{ formatDateTime(p.updatedAt) }}
               </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <!-- Cột Phải: Lối tắt & Nhật ký Audit gần nhất -->
       <div>
-        <!-- Lối tắt tác vụ nhanh -->
-        <div class="admin-panel" style="margin-bottom: 20px">
+        <div v-if="shortcuts.length" class="admin-panel" style="margin-bottom: 20px">
           <h2 class="admin-section-title">Lối tắt tác vụ</h2>
           <div style="display: flex; flex-direction: column; gap: 8px">
-            <NuxtLink to="/admin/products" class="btn btn-secondary" style="justify-content: flex-start">
-              <span>Sản phẩm & Biến thể</span>
-            </NuxtLink>
-            <NuxtLink to="/admin/brands" class="btn btn-secondary" style="justify-content: flex-start">
-              <span>Quản lý Thương hiệu & Logo</span>
-            </NuxtLink>
-            <NuxtLink to="/admin/categories" class="btn btn-secondary" style="justify-content: flex-start">
-              <span>Cây Danh mục 5 Nhóm hàng</span>
-            </NuxtLink>
-            <NuxtLink to="/admin/pages" class="btn btn-secondary" style="justify-content: flex-start">
-              <span>Soạn Chính sách Đổi trả / Bảo hành</span>
+            <NuxtLink
+              v-for="shortcut in shortcuts"
+              :key="shortcut.to"
+              :to="shortcut.to"
+              class="btn btn-secondary"
+              style="justify-content: flex-start"
+            >
+              <span>{{ shortcut.label }}</span>
             </NuxtLink>
           </div>
         </div>
 
-        <!-- Nhật ký Audit gần nhất -->
         <div v-if="canAudit" class="admin-panel" style="padding: 16px 20px">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
             <h2 class="admin-section-title" style="margin: 0">Kiểm toán gần nhất</h2>
@@ -191,7 +181,7 @@ const formatTime = (iso: string) => {
             >
               <div style="display: flex; justify-content: space-between; margin-bottom: 2px">
                 <strong style="color: var(--adm-ink)">{{ log.actor.name }}</strong>
-                <span style="color: var(--adm-muted)">{{ formatTime(log.createdAt) }}</span>
+                <span style="color: var(--adm-muted)">{{ formatDateTime(log.createdAt) }}</span>
               </div>
               <div style="color: var(--adm-muted)">{{ auditActionLabel(log.action) }}</div>
             </div>

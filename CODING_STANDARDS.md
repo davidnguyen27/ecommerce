@@ -22,6 +22,7 @@ Reviewer đọc file này khi chạy `/code-review`. Chỉ ghi các judgement ca
 ## Test
 
 - Test đi qua HTTP (supertest trên Postgres thật). `prisma` trong test chỉ dùng để dựng trạng thái ban đầu, không dùng để kiểm kết quả.
+- Ngoại lệ khi không có đường HTTP để chạm tới hành vi: trigger chặn sửa (thử bằng SQL trực tiếp), job nền (gọi thẳng hàm job), bất biến mà API hiện tại chưa chạm tới (ví dụ chốt tồn âm khi giảm song song). Kết quả vẫn kiểm qua HTTP khi có thể, và comment trong test nói vì sao phải đi đường tắt.
 - Tên test mô tả hành vi bằng tiếng Việt, đọc như một dòng đặc tả.
 
 ## Web

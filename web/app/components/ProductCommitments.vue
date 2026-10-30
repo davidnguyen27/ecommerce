@@ -107,7 +107,6 @@ rows.value = AdminCommitmentList.parse(commitmentList).items.map(toRow)
       Sản phẩm chưa có cam kết xác thực nào.
     </div>
 
-    <!-- Danh sách cam kết hiện có -->
     <div v-else style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px">
       <div
         v-for="row in rows"
@@ -132,8 +131,8 @@ rows.value = AdminCommitmentList.parse(commitmentList).items.map(toRow)
           </div>
 
           <div class="form-group" style="margin-bottom: 10px">
-            <label class="form-label">Loại cam kết</label>
-            <select v-model="row.draft.typeId" class="form-select">
+            <label class="form-label" :for="`commitment-${row.id}-type`">Loại cam kết</label>
+            <select :id="`commitment-${row.id}-type`" v-model="row.draft.typeId" class="form-select">
               <option v-for="t in types" :key="t.id" :value="t.id">
                 {{ t.name }} ({{ COMMITMENT_KIND_LABELS[t.kind] }})
               </option>
@@ -141,12 +140,18 @@ rows.value = AdminCommitmentList.parse(commitmentList).items.map(toRow)
           </div>
 
           <div class="form-group" style="margin-bottom: 10px">
-            <label class="form-label">Nội dung hiển thị cho khách hàng</label>
-            <textarea v-model="row.draft.statement" class="form-textarea" rows="2" maxlength="2000" />
+            <label class="form-label" :for="`commitment-${row.id}-statement`">Nội dung hiển thị cho khách hàng</label>
+            <textarea
+              :id="`commitment-${row.id}-statement`"
+              v-model="row.draft.statement"
+              class="form-textarea"
+              rows="2"
+              maxlength="2000"
+            />
           </div>
 
           <div>
-            <label class="form-label" style="margin-bottom: 4px">Chứng từ làm căn cứ:</label>
+            <p class="form-label" style="margin-bottom: 4px">Chứng từ làm căn cứ:</p>
             <div v-if="documents.length > 0" style="display: flex; flex-wrap: wrap; gap: 8px">
               <label
                 v-for="doc in documents"
@@ -175,7 +180,6 @@ rows.value = AdminCommitmentList.parse(commitmentList).items.map(toRow)
       </div>
     </div>
 
-    <!-- Form Thêm cam kết mới -->
     <div v-if="canEdit" style="padding-top: 16px; border-top: 1px solid var(--adm-border-subtle)">
       <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 10px 0; color: var(--adm-ink)">+ Thêm cam kết mới</h3>
 
@@ -189,8 +193,8 @@ rows.value = AdminCommitmentList.parse(commitmentList).items.map(toRow)
 
       <form @submit.prevent="create">
         <div class="form-group">
-          <label class="form-label">Loại cam kết *</label>
-          <select v-model="fresh.typeId" class="form-select" required>
+          <label class="form-label" for="commitment-new-type-id">Loại cam kết *</label>
+          <select id="commitment-new-type-id" v-model="fresh.typeId" class="form-select" required>
             <option value="" disabled>-- Chọn loại cam kết --</option>
             <option v-for="t in types" :key="t.id" :value="t.id">
               {{ t.name }} ({{ COMMITMENT_KIND_LABELS[t.kind] }})
@@ -199,8 +203,9 @@ rows.value = AdminCommitmentList.parse(commitmentList).items.map(toRow)
         </div>
 
         <div class="form-group">
-          <label class="form-label">Tuyên bố cam kết cho khách hàng *</label>
+          <label class="form-label" for="commitment-new-statement">Tuyên bố cam kết cho khách hàng *</label>
           <textarea
+            id="commitment-new-statement"
             v-model="fresh.statement"
             class="form-textarea"
             rows="2"
@@ -211,7 +216,7 @@ rows.value = AdminCommitmentList.parse(commitmentList).items.map(toRow)
         </div>
 
         <div class="form-group">
-          <label class="form-label">Chứng từ làm căn cứ xác minh (Chọn ít nhất 1) *</label>
+          <p class="form-label">Chứng từ làm căn cứ xác minh (Chọn ít nhất 1) *</p>
           <div v-if="documents.length > 0" style="display: flex; flex-wrap: wrap; gap: 8px">
             <label
               v-for="doc in documents"

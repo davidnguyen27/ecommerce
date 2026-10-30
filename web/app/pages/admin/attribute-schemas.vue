@@ -142,7 +142,6 @@ await load()
 
 <template>
   <div>
-    <!-- Page Header -->
     <div class="admin-page-header">
       <div>
         <h1 class="admin-page-title">Schema thuộc tính động</h1>
@@ -158,7 +157,6 @@ await load()
       </div>
     </div>
 
-    <!-- Alert / Notice -->
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <span>{{ error }}</span>
     </div>
@@ -173,7 +171,6 @@ await load()
       <span>✓ Đã lưu thành công schema thuộc tính cho nhóm {{ PRODUCT_TYPE_LABELS[selected] }}.</span>
     </div>
 
-    <!-- Tab Chọn Nhóm Hàng -->
     <div class="tab-filter-bar" style="margin-bottom: 24px">
       <button
         v-for="productType in ProductType.options"
@@ -187,7 +184,6 @@ await load()
       </button>
     </div>
 
-    <!-- Bảng Schema Thuộc Tính -->
     <form @submit.prevent="save">
       <div class="admin-table-card">
         <div
@@ -217,7 +213,6 @@ await load()
             </thead>
             <tbody>
               <tr v-for="(row, index) in drafts" :key="index">
-                <!-- Key -->
                 <td>
                   <input
                     v-model="row.key"
@@ -233,7 +228,6 @@ await load()
                   </small>
                 </td>
 
-                <!-- Label -->
                 <td>
                   <input
                     v-model="row.label"
@@ -244,7 +238,6 @@ await load()
                   />
                 </td>
 
-                <!-- Type -->
                 <td>
                   <select
                     v-model="row.type"
@@ -256,7 +249,6 @@ await load()
                   </select>
                 </td>
 
-                <!-- Options / Unit -->
                 <td>
                   <textarea
                     v-if="row.type === 'enum' || row.type === 'multi_enum'"
@@ -277,7 +269,6 @@ await load()
                   <span v-else style="color: var(--adm-muted); font-size: 12px">—</span>
                 </td>
 
-                <!-- Level -->
                 <td>
                   <select
                     v-model="row.level"
@@ -291,12 +282,10 @@ await load()
                   </select>
                 </td>
 
-                <!-- Required -->
                 <td style="text-align: center">
                   <input v-model="row.required" type="checkbox" style="cursor: pointer" />
                 </td>
 
-                <!-- Filterable -->
                 <td style="text-align: center">
                   <input
                     v-model="row.filterable"
@@ -306,7 +295,6 @@ await load()
                   />
                 </td>
 
-                <!-- Actions -->
                 <td style="text-align: right">
                   <div style="display: flex; justify-content: flex-end; gap: 4px">
                     <button

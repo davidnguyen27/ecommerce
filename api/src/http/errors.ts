@@ -19,9 +19,9 @@ export class AppError extends Error {
 export const invalidField = (path: string, message: string) =>
   new AppError(400, ErrorCode.VALIDATION_ERROR, message, [{ path, message }])
 
-/** 409 gắn với một trường của form. */
-export const conflictField = (path: string, message: string) =>
-  new AppError(409, ErrorCode.CONFLICT, message, [{ path, message }])
+/** 409 gắn với một trường của form; `details` cho client trạng thái mới để hiện lại. */
+export const conflictField = (path: string, message: string, details?: Record<string, unknown>) =>
+  new AppError(409, ErrorCode.CONFLICT, message, [{ path, message }], details)
 
 /** Lỗi unique constraint của Postgres qua Prisma. */
 export const isUniqueViolation = (err: unknown) =>

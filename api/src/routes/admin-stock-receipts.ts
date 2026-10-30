@@ -10,16 +10,16 @@ import {
   type StockReceipt,
   type StockReceiptPage,
 } from '@ecommerce/shared'
-import { audited } from '../audit/audited.ts'
+import { ACTOR_SELECT, audited } from '../audit/audited.ts'
 import { currentStaff, requirePermission } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
 import type { StockReceipt as StockReceiptRow } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
+import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
 import { changeStock } from '../stock/stock.ts'
 
 const ReceiptParams = z.object({ id: z.uuid() })
-const CREATED_BY = { select: { id: true, name: true, email: true } } as const
 
 type ReceiptRow = Pick<StockReceiptRow, 'id' | 'supplierName' | 'receivedOn' | 'note' | 'createdAt'> & {
   createdBy: AuditActor
@@ -39,7 +39,7 @@ async function loadReceipt(prisma: Db, id: string): Promise<StockReceipt> {
   const receipt = await prisma.stockReceipt.findUnique({
     where: { id },
     include: {
-      createdBy: CREATED_BY,
+      createdBy: { select: ACTOR_SELECT },
       movements: {
         include: { variant: { select: { id: true, sku: true, product: { select: { name: true } } } } },
         orderBy: { seq: 'asc' },
@@ -70,10 +70,9 @@ export function adminStockReceiptRoutes(prisma: Db) {
       const query = parse(StockReceiptQuery, req.query)
       const [receipts, total] = await Promise.all([
         prisma.stockReceipt.findMany({
-          include: { createdBy: CREATED_BY, movements: { select: { quantity: true } } },
+          include: { createdBy: { select: ACTOR_SELECT }, movements: { select: { quantity: true } } },
           orderBy: { seq: 'desc' },
-          skip: (query.page - 1) * query.pageSize,
-          take: query.pageSize,
+          ...pageWindow(query),
         }),
         prisma.stockReceipt.count(),
       ])

@@ -32,7 +32,7 @@ const { data: menu } = await useAsyncData('site-menu', async () => {
 
 const issuedOn = computed(() => {
   const date = data.value?.legal.businessRegistrationIssuedOn
-  return date ? date.split('-').reverse().join('/') : ''
+  return date ? formatDateOnly(date) : ''
 })
 
 // Menu là <details> để mở được khi chưa có JavaScript; có JavaScript thì tự đóng khi chuyển trang, bấm ra ngoài hoặc Esc.
@@ -186,10 +186,7 @@ onBeforeUnmount(() => {
       <div class="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-12">
         <div class="md:col-span-4">
           <p class="font-display text-xl font-semibold text-foreground">Atelier</p>
-          <p class="mt-3 max-w-xs leading-relaxed">
-            Giày dép, quần áo, đồng hồ, túi xách và nước hoa của các thương hiệu nổi tiếng, do doanh nghiệp trực tiếp
-            nhập khẩu và bán.
-          </p>
+          <p class="mt-3 max-w-xs leading-relaxed">Giày dép, quần áo, đồng hồ, túi xách và nước hoa.</p>
         </div>
 
         <nav v-if="data.pages.length" aria-label="Chính sách" class="md:col-span-3">

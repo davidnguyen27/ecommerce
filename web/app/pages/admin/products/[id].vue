@@ -6,33 +6,15 @@ import {
   AdminVariant,
   PolicyPageOptionList,
   AttributeSchema,
-  VariantStatus,
   type AdminBrand,
   type AdminProductDocument,
   type AdminCategory,
   type AttributeDefinition,
-  type AttributeValue,
-  type FieldError,
   type SizeChart,
 } from '@ecommerce/shared'
+import type { DraftValues, TargetedFieldErrors, VariantDraft } from '~/utils/productDraft'
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: ['catalog.edit', 'price.edit'] })
-
-type Values = Record<string, AttributeValue | null | undefined>
-/** Một dòng biến thể đang soạn; `id` rỗng là dòng thêm mới. */
-type VariantDraft = {
-  id: string
-  sku: string
-  attributes: Values
-  status: VariantStatus
-  sortOrder: number
-  price: number | null
-  compareAtPrice: number | null
-}
-
-const STATUS_LABELS = { draft: 'Nháp', published: 'Đã xuất bản', archived: 'Lưu trữ' } as const
-const STATUS_BADGES = { draft: 'badge-draft', published: 'badge-published', archived: 'badge-archived' } as const
-const VARIANT_STATUS_LABELS: Record<VariantStatus, string> = { active: 'Đang bán', discontinued: 'Ngừng bán' }
 
 const route = useRoute()
 const id = String(route.params.id)
@@ -58,14 +40,13 @@ const draft = ref({
   usageCare: '',
   sizeChart: null as SizeChart | null,
   originStatement: '',
-  attributes: {} as Values,
+  attributes: {} as DraftValues,
   groundShippingOnly: false,
 })
 const variants = ref<VariantDraft[]>([])
 const error = ref<string | null>(null)
 const notice = ref<string | null>(null)
-/** Lỗi theo trường của lần lưu gần nhất; khóa là `product` hoặc id biến thể (rỗng với dòng thêm mới). */
-const fieldErrors = ref<{ target: string; fields: FieldError[] }>({ target: '', fields: [] })
+const fieldErrors = ref<TargetedFieldErrors>({ target: '', fields: [] })
 
 const productDefinitions = computed(() => definitions.value.filter((d) => d.level === 'product'))
 const variantDefinitions = computed(() => definitions.value.filter((d) => d.level === 'variant'))
@@ -76,8 +57,7 @@ const imageVariants = computed(() =>
     label: [v.sku, ...Object.values(v.attributes).map(String)].join(' · '),
   })),
 )
-/** Tồn của biến thể đã lưu, theo lần tải gần nhất. */
-const onHandOf = (variantId: string) => product.value?.variants.find((v) => v.id === variantId)?.onHand ?? null
+const onHand = computed(() => new Map((product.value?.variants ?? []).map((v) => [v.id, v.onHand])))
 const sameTypeCategories = computed(() => categories.value.filter((c) => c.productType === product.value?.productType))
 
 const emptyVariant = (): VariantDraft => ({
@@ -141,8 +121,7 @@ async function load() {
   show(AdminProductDetail.parse(await session.adminFetch(`/api/admin/products/${id}`)))
 }
 
-const errorAt = (target: string, path: string) =>
-  fieldErrors.value.target === target ? fieldErrors.value.fields.find((f) => f.path === path)?.message : undefined
+const errorAt = (path: string) => fieldErrorAt(fieldErrors.value, 'product', path)
 
 /** Chạy một thao tác lưu; lỗi theo trường gắn vào `target` để hiện cạnh đúng ô. */
 async function run(target: string, action: () => Promise<unknown>, message: string) {
@@ -186,31 +165,6 @@ function saveVariant(variant: VariantDraft) {
   )
 }
 
-/** Ô giá: chuỗi rỗng là chưa đặt giá. */
-function setPrice(variant: VariantDraft, field: 'price' | 'compareAtPrice', raw: string) {
-  variant[field] = raw.trim() === '' ? null : Number(raw)
-}
-
-// Bảng size
-
-function addSizeChart() {
-  draft.value.sizeChart = { columns: ['Size'], rows: [] }
-}
-
-function addColumn(chart: SizeChart) {
-  chart.columns.push('')
-  chart.rows.forEach((row) => row.push(''))
-}
-
-function removeColumn(chart: SizeChart, index: number) {
-  chart.columns.splice(index, 1)
-  chart.rows.forEach((row) => row.splice(index, 1))
-}
-
-function addRow(chart: SizeChart) {
-  chart.rows.push(chart.columns.map(() => ''))
-}
-
 await load()
 const schema = AttributeSchema.parse(await session.adminFetch(`/api/attribute-schemas/${product.value!.productType}`))
 definitions.value = schema.attributes
@@ -223,7 +177,6 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
 
 <template>
   <div v-if="product">
-    <!-- Header & Navigation -->
     <div class="admin-page-header">
       <div>
         <div style="margin-bottom: 6px">
@@ -233,10 +186,7 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
         </div>
         <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
           <h1 class="admin-page-title" style="margin: 0">{{ product.name }}</h1>
-          <span class="badge" :class="STATUS_BADGES[product.status]">
-            <span class="badge-dot" />
-            {{ STATUS_LABELS[product.status] }}
-          </span>
+          <ProductStatusBadge :status="product.status" />
           <span class="badge badge-role">
             {{ PRODUCT_TYPE_LABELS[product.productType] }}
           </span>
@@ -247,7 +197,6 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
       </div>
     </div>
 
-    <!-- Thông báo Alert -->
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <span>{{ error }}</span>
     </div>
@@ -256,11 +205,8 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
       <span>✓ {{ notice }}</span>
     </div>
 
-    <!-- Bố cục 2 Cột Studio Workspace -->
     <div class="admin-two-col">
-      <!-- CỘT TRÁI: Nội dung, Thuộc tính, Bảng Size, Biến thể (65%) -->
       <div>
-        <!-- 1. Thông tin chung -->
         <div class="admin-panel">
           <div class="admin-panel-header">
             <div>
@@ -276,15 +222,15 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
             <fieldset :disabled="!canEdit" style="border: none; padding: 0; margin: 0">
               <div class="form-grid-2">
                 <div v-if="canEdit" class="form-group">
-                  <label class="form-label">Thương hiệu *</label>
-                  <select v-model="draft.brandId" class="form-select" required>
+                  <label class="form-label" for="product-brand">Thương hiệu *</label>
+                  <select id="product-brand" v-model="draft.brandId" class="form-select" required>
                     <option v-for="b in brands" :key="b.id" :value="b.id">{{ b.name }}</option>
                   </select>
                 </div>
 
                 <div v-if="canEdit" class="form-group">
-                  <label class="form-label">Danh mục (Cùng nhóm hàng) *</label>
-                  <select v-model="draft.categoryId" class="form-select" required>
+                  <label class="form-label" for="product-category">Danh mục (Cùng nhóm hàng) *</label>
+                  <select id="product-category" v-model="draft.categoryId" class="form-select" required>
                     <option v-for="c in sameTypeCategories" :key="c.id" :value="c.id">
                       {{ c.name }}
                     </option>
@@ -294,28 +240,40 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
 
               <div class="form-grid-2">
                 <div class="form-group">
-                  <label class="form-label">Tên sản phẩm *</label>
-                  <input v-model="draft.name" class="form-input" required />
+                  <label class="form-label" for="product-name">Tên sản phẩm *</label>
+                  <input id="product-name" v-model="draft.name" class="form-input" required />
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label">Slug URL *</label>
-                  <input v-model="draft.slug" class="form-input" required pattern="[a-z0-9]+(-[a-z0-9]+)*" />
-                  <small v-if="errorAt('product', 'slug')" class="field-error-msg">
-                    {{ errorAt('product', 'slug') }}
+                  <label class="form-label" for="product-slug">Slug URL *</label>
+                  <input
+                    id="product-slug"
+                    v-model="draft.slug"
+                    class="form-input"
+                    required
+                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                  />
+                  <small v-if="errorAt('slug')" class="field-error-msg">
+                    {{ errorAt('slug') }}
                   </small>
                 </div>
               </div>
 
               <div class="form-group">
-                <label class="form-label">Mã mẫu chính hãng (Model Code)</label>
-                <input v-model="draft.modelCode" class="form-input" placeholder="Ví dụ: SRPD55K1, 386750..." />
+                <label class="form-label" for="product-model-code">Mã mẫu (Model Code)</label>
+                <input
+                  id="product-model-code"
+                  v-model="draft.modelCode"
+                  class="form-input"
+                  placeholder="Ví dụ: SRPD55K1, 386750..."
+                />
                 <p class="form-help">Khách hàng có thể tìm kiếm sản phẩm theo mã mẫu này.</p>
               </div>
 
               <div class="form-group">
-                <label class="form-label">Mô tả sản phẩm</label>
+                <label class="form-label" for="product-description">Mô tả sản phẩm</label>
                 <textarea
+                  id="product-description"
                   v-model="draft.description"
                   class="form-textarea"
                   rows="4"
@@ -324,8 +282,9 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
               </div>
 
               <div class="form-group">
-                <label class="form-label">Hướng dẫn sử dụng và bảo quản</label>
+                <label class="form-label" for="product-usage-care">Hướng dẫn sử dụng và bảo quản</label>
                 <textarea
+                  id="product-usage-care"
                   v-model="draft.usageCare"
                   class="form-textarea"
                   rows="3"
@@ -334,8 +293,9 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
               </div>
 
               <div class="form-group">
-                <label class="form-label">Thông tin nguồn gốc tự công bố</label>
+                <label class="form-label" for="product-origin">Thông tin nguồn gốc công bố</label>
                 <textarea
+                  id="product-origin"
                   v-model="draft.originStatement"
                   class="form-textarea"
                   rows="2"
@@ -356,7 +316,6 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
           </form>
         </div>
 
-        <!-- 2. Thuộc tính nhóm hàng -->
         <div v-if="productDefinitions.length > 0" class="admin-panel">
           <div class="admin-panel-header">
             <div>
@@ -375,242 +334,33 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
           <fieldset :disabled="!canEdit" style="border: none; padding: 0; margin: 0">
             <div class="form-grid-2">
               <div v-for="definition in productDefinitions" :key="definition.key" class="form-group">
-                <label class="form-label">{{ definition.label }}</label>
-                <AttributeInput v-model="draft.attributes[definition.key]" :definition="definition" />
-                <small v-if="errorAt('product', `attributes.${definition.key}`)" class="field-error-msg">
-                  {{ errorAt('product', `attributes.${definition.key}`) }}
+                <label class="form-label" :for="`product-attr-${definition.key}`">{{ definition.label }}</label>
+                <AttributeInput
+                  :id="`product-attr-${definition.key}`"
+                  v-model="draft.attributes[definition.key]"
+                  :definition="definition"
+                />
+                <small v-if="errorAt(`attributes.${definition.key}`)" class="field-error-msg">
+                  {{ errorAt(`attributes.${definition.key}`) }}
                 </small>
               </div>
             </div>
           </fieldset>
         </div>
 
-        <!-- 3. Bảng Size Chart -->
-        <div class="admin-panel">
-          <div class="admin-panel-header">
-            <div>
-              <h2 class="admin-section-title" style="margin: 0">Bảng kích thước (Size Chart)</h2>
-              <p class="form-help" style="margin-top: 2px">Hướng dẫn quy đổi và đo size cho khách hàng.</p>
-            </div>
-            <div v-if="canEdit">
-              <button v-if="!draft.sizeChart" type="button" class="btn btn-secondary btn-sm" @click="addSizeChart">
-                + Thêm bảng size
-              </button>
-              <button v-else type="button" class="btn btn-primary btn-sm" @click="saveProduct">Lưu bảng size</button>
-            </div>
-          </div>
+        <SizeChartEditor v-model="draft.sizeChart" :disabled="!canEdit" @save="saveProduct" />
 
-          <div
-            v-if="!draft.sizeChart"
-            style="
-              padding: 20px;
-              text-align: center;
-              color: var(--adm-muted);
-              background: var(--adm-surface-subtle);
-              border-radius: 6px;
-            "
-          >
-            Sản phẩm chưa thiết lập bảng size.
-          </div>
+        <VariantMatrix
+          v-model:variants="variants"
+          v-model:new-variant="newVariant"
+          :definitions="variantDefinitions"
+          :on-hand="onHand"
+          :errors="fieldErrors"
+          :can-edit="canEdit"
+          :can-price="canPrice"
+          @save="saveVariant"
+        />
 
-          <div v-else>
-            <div style="overflow-x: auto; margin-bottom: 12px">
-              <table class="admin-table" style="background: var(--adm-surface)">
-                <thead>
-                  <tr>
-                    <th v-for="(_, col) in draft.sizeChart.columns" :key="col" style="padding: 6px 10px">
-                      <div style="display: flex; gap: 4px; align-items: center">
-                        <input
-                          v-model="draft.sizeChart.columns[col]"
-                          class="form-input"
-                          style="padding: 4px 6px; font-size: 12px; font-weight: 600"
-                          placeholder="Tiêu đề"
-                          required
-                          :disabled="!canEdit"
-                        />
-                        <button
-                          v-if="canEdit"
-                          type="button"
-                          class="btn btn-ghost btn-sm"
-                          style="padding: 2px 6px; color: var(--adm-danger)"
-                          :disabled="draft.sizeChart.columns.length === 1"
-                          @click="removeColumn(draft.sizeChart, col)"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </th>
-                    <th style="width: 50px" />
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(row, rowIndex) in draft.sizeChart.rows" :key="rowIndex">
-                    <td v-for="(_, col) in row" :key="col" style="padding: 6px 10px">
-                      <input
-                        v-model="row[col]"
-                        class="form-input"
-                        style="padding: 4px 6px; font-size: 12px"
-                        placeholder="Giá trị"
-                        :disabled="!canEdit"
-                      />
-                    </td>
-                    <td style="text-align: center; padding: 6px">
-                      <button
-                        v-if="canEdit"
-                        type="button"
-                        class="btn btn-ghost btn-sm"
-                        style="color: var(--adm-danger); padding: 2px 6px"
-                        @click="draft.sizeChart.rows.splice(rowIndex, 1)"
-                      >
-                        ✕
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div v-if="canEdit" style="display: flex; gap: 8px">
-              <button type="button" class="btn btn-secondary btn-sm" @click="addColumn(draft.sizeChart)">
-                + Thêm cột
-              </button>
-              <button type="button" class="btn btn-secondary btn-sm" @click="addRow(draft.sizeChart)">
-                + Thêm hàng
-              </button>
-              <button type="button" class="btn btn-danger btn-sm" @click="draft.sizeChart = null">
-                Xóa toàn bộ bảng
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 4. Ma trận biến thể -->
-        <div class="admin-panel">
-          <div class="admin-panel-header">
-            <div>
-              <h2 class="admin-section-title" style="margin: 0">Ma trận Biến thể (Variants & SKUs)</h2>
-              <p class="form-help" style="margin-top: 2px">
-                Quản lý SKU duy nhất, thuộc tính riêng biệt (Màu, Size, Dung tích), giá bán và giá hãng.
-                <span v-if="!canPrice" style="color: var(--adm-draft)"> (Bạn không có quyền sửa giá).</span>
-              </p>
-            </div>
-          </div>
-
-          <div style="overflow-x: auto">
-            <table class="admin-table">
-              <thead>
-                <tr>
-                  <th style="min-width: 130px">SKU *</th>
-                  <th v-for="d in variantDefinitions" :key="d.key">{{ d.label }}</th>
-                  <th style="min-width: 110px">Trạng thái</th>
-                  <th style="min-width: 120px" class="admin-table-num">Giá bán (₫)</th>
-                  <th style="min-width: 120px" class="admin-table-num">Giá hãng (₫)</th>
-                  <th style="min-width: 70px" class="admin-table-num">Tồn</th>
-                  <th style="text-align: right; min-width: 90px">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="v in [...variants, newVariant]"
-                  :key="v.id || 'new'"
-                  :style="{ background: !v.id ? 'var(--adm-surface-subtle)' : undefined }"
-                >
-                  <!-- SKU -->
-                  <td>
-                    <input
-                      v-model="v.sku"
-                      class="form-input"
-                      style="font-family: var(--adm-mono); font-size: 12px; font-weight: 600"
-                      :placeholder="!v.id ? '+ SKU MỚI' : 'SKU'"
-                      required
-                      :disabled="!canEdit"
-                    />
-                    <small v-for="path in ['sku', 'attributes', 'status']" :key="path" class="field-error-msg">
-                      {{ errorAt(v.id, path) }}
-                    </small>
-                  </td>
-
-                  <!-- Variant Attributes -->
-                  <td v-for="d in variantDefinitions" :key="d.key">
-                    <AttributeInput v-model="v.attributes[d.key]" :definition="d" :disabled="!canEdit" />
-                    <small v-if="errorAt(v.id, `attributes.${d.key}`)" class="field-error-msg">
-                      {{ errorAt(v.id, `attributes.${d.key}`) }}
-                    </small>
-                  </td>
-
-                  <!-- Trạng thái bán -->
-                  <td>
-                    <select v-model="v.status" class="form-select" style="font-size: 12px" :disabled="!canEdit">
-                      <option v-for="s in VariantStatus.options" :key="s" :value="s">
-                        {{ VARIANT_STATUS_LABELS[s] }}
-                      </option>
-                    </select>
-                  </td>
-
-                  <!-- Giá bán -->
-                  <td>
-                    <input
-                      type="number"
-                      min="1"
-                      step="1000"
-                      class="form-input admin-table-num"
-                      style="font-weight: 600"
-                      :value="v.price ?? ''"
-                      placeholder="Chưa đặt"
-                      :disabled="!canPrice"
-                      @input="setPrice(v, 'price', ($event.target as HTMLInputElement).value)"
-                    />
-                    <small v-if="errorAt(v.id, 'price')" class="field-error-msg">
-                      {{ errorAt(v.id, 'price') }}
-                    </small>
-                  </td>
-
-                  <!-- Giá hãng -->
-                  <td>
-                    <input
-                      type="number"
-                      min="1"
-                      step="1000"
-                      class="form-input admin-table-num"
-                      :value="v.compareAtPrice ?? ''"
-                      placeholder="Không có"
-                      :disabled="!canPrice"
-                      @input="setPrice(v, 'compareAtPrice', ($event.target as HTMLInputElement).value)"
-                    />
-                    <small v-if="errorAt(v.id, 'compareAtPrice')" class="field-error-msg">
-                      {{ errorAt(v.id, 'compareAtPrice') }}
-                    </small>
-                  </td>
-
-                  <!-- Tồn: chỉ đọc, đổi ở trang Kho -->
-                  <td class="admin-table-num">
-                    <NuxtLink
-                      v-if="v.id && onHandOf(v.id) !== null"
-                      :to="`/admin/stock/movements?variantId=${v.id}`"
-                      title="Xem sổ xuất nhập của biến thể"
-                      style="font-weight: 600"
-                    >
-                      {{ onHandOf(v.id) }}
-                    </NuxtLink>
-                    <span v-else style="color: var(--adm-muted)">—</span>
-                  </td>
-
-                  <!-- Actions -->
-                  <td style="text-align: right">
-                    <button v-if="v.id" type="button" class="btn btn-secondary btn-sm" @click="saveVariant(v)">
-                      Lưu
-                    </button>
-                    <button v-else-if="canEdit" type="button" class="btn btn-primary btn-sm" @click="saveVariant(v)">
-                      + Thêm
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- 5. Chính sách áp dụng -->
         <div class="admin-panel">
           <div class="admin-panel-header">
             <div>
@@ -644,126 +394,17 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
         </div>
       </div>
 
-      <!-- CỘT PHẢI: Trạm Xuất bản, Ảnh, Chứng từ, Cam kết (35%) -->
       <div>
-        <!-- Trạm kiểm soát xuất bản (Publication Station) -->
-        <div class="admin-panel" style="border-top: 3px solid var(--adm-dark)">
-          <h2 class="admin-section-title" style="margin-bottom: 12px">Trạm kiểm soát xuất bản</h2>
+        <PublicationPanel
+          :product="product"
+          :blockers="fieldErrors.target === 'status' ? fieldErrors.fields : []"
+          :can-edit="canEdit"
+          @change-status="changeStatus"
+        />
 
-          <div style="background: var(--adm-surface-subtle); padding: 14px; border-radius: 6px; margin-bottom: 16px">
-            <div
-              style="
-                font-size: 11px;
-                color: var(--adm-muted);
-                margin-bottom: 4px;
-                text-transform: uppercase;
-                font-weight: 600;
-              "
-            >
-              Trạng thái hiển thị công khai:
-            </div>
-            <div style="display: flex; align-items: center; justify-content: space-between">
-              <span class="badge" :class="STATUS_BADGES[product.status]" style="font-size: 12px">
-                <span class="badge-dot" />
-                {{ STATUS_LABELS[product.status] }}
-              </span>
-
-              <NuxtLink
-                v-if="product.liveVersion"
-                :to="`/san-pham/${product.slug}`"
-                target="_blank"
-                class="btn btn-ghost btn-sm"
-                style="padding: 2px 6px; font-size: 12px"
-              >
-                Xem trang live ↗
-              </NuxtLink>
-            </div>
-
-            <div v-if="product.liveVersion" style="margin-top: 10px; font-size: 12px; color: var(--adm-muted)">
-              Khách đang thấy phiên bản: <strong>v.{{ product.liveVersion.version }}</strong>
-            </div>
-
-            <div
-              v-if="product.hasUnpublishedChanges"
-              style="
-                margin-top: 8px;
-                padding: 6px 10px;
-                background: var(--adm-draft-bg);
-                border: 1px solid var(--adm-draft-border);
-                border-radius: 4px;
-                font-size: 12px;
-                color: var(--adm-draft);
-                font-weight: 500;
-              "
-            >
-              ⚠ Có thay đổi trong bản soạn chưa được xuất bản.
-            </div>
-          </div>
-
-          <!-- Lỗi chặn xuất bản -->
-          <div
-            v-if="fieldErrors.target === 'status' && fieldErrors.fields.length"
-            class="admin-alert admin-alert-danger"
-            style="font-size: 12px; margin-bottom: 14px; flex-direction: column; gap: 4px"
-          >
-            <strong>Không đủ điều kiện xuất bản:</strong>
-            <ul style="margin: 0; padding-left: 18px">
-              <li v-for="f in fieldErrors.fields" :key="f.path">{{ f.message }}</li>
-            </ul>
-          </div>
-
-          <!-- Các nút hành động vòng đời -->
-          <div v-if="canEdit" style="display: flex; flex-direction: column; gap: 8px">
-            <button
-              v-if="product.status === 'draft'"
-              type="button"
-              class="btn btn-primary"
-              style="width: 100%; justify-content: center"
-              @click="changeStatus('published', 'Đã xuất bản sản phẩm')"
-            >
-              Xuất bản lên website
-            </button>
-
-            <button
-              v-if="product.status === 'published'"
-              type="button"
-              class="btn btn-primary"
-              style="width: 100%; justify-content: center"
-              :disabled="!product.hasUnpublishedChanges"
-              @click="changeStatus('published', 'Đã xuất bản thay đổi mới')"
-            >
-              Xuất bản thay đổi mới
-            </button>
-
-            <button
-              v-if="product.status !== 'archived'"
-              type="button"
-              class="btn btn-secondary"
-              style="width: 100%; justify-content: center; color: var(--adm-archived)"
-              @click="changeStatus('archived', 'Đã chuyển vào lưu trữ')"
-            >
-              Lưu trữ sản phẩm
-            </button>
-
-            <button
-              v-if="product.status === 'archived'"
-              type="button"
-              class="btn btn-secondary"
-              style="width: 100%; justify-content: center"
-              @click="changeStatus('draft', 'Đã đưa về bản nháp')"
-            >
-              Đưa về bản nháp để sửa
-            </button>
-          </div>
-        </div>
-
-        <!-- Thư viện hình ảnh -->
         <ProductImages :product-id="id" :variants="imageVariants" />
 
-        <!-- Chứng từ nguồn hàng -->
-        <ProductDocuments v-if="canViewDocuments" :product-id="id" @change="documents = $event" />
-
-        <!-- Cam kết có bằng chứng -->
+        <ProductDocuments v-if="canViewDocuments" v-model="documents" :product-id="id" />
         <ProductCommitments :product-id="id" :documents="documents" />
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PageQuery, pageOf } from './pagination.ts'
 
 /** Query string của `GET /api/admin/audit`. Khoảng thời gian tính `from <= createdAt < to`. */
 export const AuditQuery = z.object({
@@ -6,8 +7,7 @@ export const AuditQuery = z.object({
   entityType: z.string().min(1).optional(),
   from: z.iso.datetime({ offset: true }).optional(),
   to: z.iso.datetime({ offset: true }).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  ...PageQuery.shape,
 })
 export type AuditQuery = z.infer<typeof AuditQuery>
 
@@ -32,10 +32,5 @@ export const AuditEntry = z.object({
 })
 export type AuditEntry = z.infer<typeof AuditEntry>
 
-export const AuditPage = z.object({
-  items: z.array(AuditEntry),
-  total: z.number(),
-  page: z.number(),
-  pageSize: z.number(),
-})
+export const AuditPage = pageOf(AuditEntry)
 export type AuditPage = z.infer<typeof AuditPage>

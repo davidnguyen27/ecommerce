@@ -118,7 +118,6 @@ await load()
 
 <template>
   <div>
-    <!-- Page Header -->
     <div class="admin-page-header">
       <div>
         <h1 class="admin-page-title">Cây danh mục phân loại</h1>
@@ -135,12 +134,10 @@ await load()
       </div>
     </div>
 
-    <!-- Alert -->
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <span>{{ error }}</span>
     </div>
 
-    <!-- Form Thêm Danh mục (Slide-down Panel) -->
     <div v-if="showCreatePanel" class="admin-panel" style="border-left: 3px solid var(--adm-dark)">
       <div class="admin-panel-header">
         <div>
@@ -155,8 +152,8 @@ await load()
       <form @submit.prevent="create">
         <div class="form-grid-2">
           <div class="form-group">
-            <label class="form-label">Nhóm hàng gốc (Product Type) *</label>
-            <select v-model="form.productType" class="form-select" required>
+            <label class="form-label" for="categories-form-product-type">Nhóm hàng gốc (Product Type) *</label>
+            <select id="categories-form-product-type" v-model="form.productType" class="form-select" required>
               <option v-for="pt in ProductType.options" :key="pt" :value="pt">
                 {{ PRODUCT_TYPE_LABELS[pt] }}
               </option>
@@ -164,8 +161,8 @@ await load()
           </div>
 
           <div class="form-group">
-            <label class="form-label">Danh mục cha</label>
-            <select v-model="form.parentId" class="form-select">
+            <label class="form-label" for="categories-form-parent-id">Danh mục cha</label>
+            <select id="categories-form-parent-id" v-model="form.parentId" class="form-select">
               <option :value="null">(Con trực tiếp của {{ PRODUCT_TYPE_LABELS[form.productType] }})</option>
               <option v-for="opt in rowsOf(form.productType)" :key="opt.id" :value="opt.id">
                 {{ indentSymbol(opt.depth) }} {{ opt.name }}
@@ -176,8 +173,9 @@ await load()
 
         <div class="form-grid-2">
           <div class="form-group">
-            <label class="form-label">Tên danh mục *</label>
+            <label class="form-label" for="categories-form-name">Tên danh mục *</label>
             <input
+              id="categories-form-name"
               v-model="form.name"
               class="form-input"
               placeholder="Ví dụ: Sneaker cổ thấp, Túi xách đeo chéo..."
@@ -186,8 +184,9 @@ await load()
           </div>
 
           <div class="form-group">
-            <label class="form-label">Slug URL *</label>
+            <label class="form-label" for="categories-form-slug">Slug URL *</label>
             <input
+              id="categories-form-slug"
               v-model="form.slug"
               class="form-input"
               pattern="[a-z0-9]+(-[a-z0-9]+)*"
@@ -204,7 +203,6 @@ await load()
       </form>
     </div>
 
-    <!-- Danh sách theo 5 nhóm hàng -->
     <div style="display: flex; flex-direction: column; gap: 24px">
       <div v-for="root in tree" :key="root.productType" class="admin-panel" style="padding: 0; overflow: hidden">
         <div
@@ -241,7 +239,6 @@ await load()
           </thead>
           <tbody>
             <tr v-for="row in root.rows" :key="row.id">
-              <!-- Đang sửa -->
               <template v-if="editing?.id === row.id">
                 <td style="min-width: 260px">
                   <div style="display: flex; flex-direction: column; gap: 6px">
@@ -270,7 +267,6 @@ await load()
                 </td>
               </template>
 
-              <!-- Xem bình thường -->
               <template v-else>
                 <td>
                   <div style="display: flex; align-items: center">

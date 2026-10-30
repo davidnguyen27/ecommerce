@@ -49,7 +49,6 @@ rows.value = CommitmentTypeList.parse(await session.adminFetch('/api/admin/commi
 
 <template>
   <div>
-    <!-- Page Header -->
     <div class="admin-page-header">
       <div>
         <h1 class="admin-page-title">Loại cam kết có bằng chứng</h1>
@@ -66,12 +65,10 @@ rows.value = CommitmentTypeList.parse(await session.adminFetch('/api/admin/commi
       </div>
     </div>
 
-    <!-- Alert -->
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <span>{{ error }}</span>
     </div>
 
-    <!-- Form Thêm Loại Cam Kết Mới -->
     <div v-if="showCreatePanel" class="admin-panel" style="border-left: 3px solid var(--adm-dark)">
       <div class="admin-panel-header">
         <div>
@@ -86,8 +83,9 @@ rows.value = CommitmentTypeList.parse(await session.adminFetch('/api/admin/commi
       <form @submit.prevent="create">
         <div class="form-grid-2">
           <div class="form-group">
-            <label class="form-label">Tên loại cam kết *</label>
+            <label class="form-label" for="commitment-types-fresh-name">Tên loại cam kết *</label>
             <input
+              id="commitment-types-fresh-name"
               v-model="fresh.name"
               class="form-input"
               placeholder="Ví dụ: Bảo hành chính hãng 24 tháng"
@@ -97,8 +95,8 @@ rows.value = CommitmentTypeList.parse(await session.adminFetch('/api/admin/commi
           </div>
 
           <div class="form-group">
-            <label class="form-label">Phân loại cam kết *</label>
-            <select v-model="fresh.kind" class="form-select">
+            <label class="form-label" for="commitment-types-fresh-kind">Phân loại cam kết *</label>
+            <select id="commitment-types-fresh-kind" v-model="fresh.kind" class="form-select">
               <option v-for="(label, kind) in COMMITMENT_KIND_LABELS" :key="kind" :value="kind">{{ label }}</option>
             </select>
           </div>
@@ -111,7 +109,6 @@ rows.value = CommitmentTypeList.parse(await session.adminFetch('/api/admin/commi
       </form>
     </div>
 
-    <!-- Bảng Loại Cam Kết -->
     <div class="admin-table-card">
       <table class="admin-table">
         <thead>

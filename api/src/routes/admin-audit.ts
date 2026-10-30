@@ -1,8 +1,10 @@
 import { Router } from 'express'
 import { AuditQuery, type AuditActors, type AuditPage } from '@ecommerce/shared'
+import { ACTOR_SELECT } from '../audit/audited.ts'
 import { requirePermission } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
+import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
 
 /** Chỉ có endpoint đọc: audit log không sửa hay xóa được qua API. */
@@ -23,10 +25,9 @@ export function adminAuditRoutes(prisma: Db) {
       const [entries, total] = await Promise.all([
         prisma.auditLog.findMany({
           where,
-          include: { actor: { select: { id: true, name: true, email: true } } },
+          include: { actor: { select: ACTOR_SELECT } },
           orderBy: { seq: 'desc' },
-          skip: (query.page - 1) * query.pageSize,
-          take: query.pageSize,
+          ...pageWindow(query),
         }),
         prisma.auditLog.count({ where }),
       ])
@@ -53,7 +54,7 @@ export function adminAuditRoutes(prisma: Db) {
     .get('/actors', async (_req, res) => {
       const actors = await prisma.staff.findMany({
         where: { auditLogs: { some: {} } },
-        select: { id: true, name: true, email: true },
+        select: ACTOR_SELECT,
         orderBy: { name: 'asc' },
       })
       const body: AuditActors = { items: actors }
