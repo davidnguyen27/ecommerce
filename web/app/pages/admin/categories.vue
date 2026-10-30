@@ -242,8 +242,19 @@ await load()
               <template v-if="editing?.id === row.id">
                 <td style="min-width: 260px">
                   <div style="display: flex; flex-direction: column; gap: 6px">
-                    <input v-model="editing.name" class="form-input" placeholder="Tên danh mục" required />
-                    <select v-model="editing.parentId" class="form-select" style="font-size: 12px">
+                    <input
+                      aria-label="Tên danh mục"
+                      v-model="editing.name"
+                      class="form-input"
+                      placeholder="Tên danh mục"
+                      required
+                    />
+                    <select
+                      aria-label="Danh mục cha"
+                      v-model="editing.parentId"
+                      class="form-select"
+                      style="font-size: 12px"
+                    >
                       <option :value="null">(Con trực tiếp của {{ PRODUCT_TYPE_LABELS[root.productType] }})</option>
                       <option v-for="opt in parentOptions(root.productType, row.id)" :key="opt.id" :value="opt.id">
                         {{ indentSymbol(opt.depth) }} {{ opt.name }}
@@ -252,7 +263,13 @@ await load()
                   </div>
                 </td>
                 <td>
-                  <input v-model="editing.slug" class="form-input" required pattern="[a-z0-9]+(-[a-z0-9]+)*" />
+                  <input
+                    aria-label="Slug URL"
+                    v-model="editing.slug"
+                    class="form-input"
+                    required
+                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                  />
                 </td>
                 <td>
                   <span class="badge" :class="row.hidden ? 'badge-draft' : 'badge-published'">

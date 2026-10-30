@@ -163,6 +163,7 @@ await load()
           <div v-show="activeTab === 'editor'">
             <div class="form-group" style="margin-bottom: 0">
               <textarea
+                aria-label="Nội dung Markdown"
                 v-model="draft.body"
                 rows="24"
                 class="form-textarea"

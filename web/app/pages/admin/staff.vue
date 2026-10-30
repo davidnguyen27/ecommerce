@@ -183,6 +183,7 @@ await load()
             <td>
               <div style="display: flex; flex-direction: column; gap: 6px">
                 <input
+                  aria-label="Tên nhân viên"
                   v-model="draftProfiles[s.id]!.name"
                   class="form-input"
                   style="font-size: 13px; font-weight: 600; padding: 4px 8px"
@@ -191,6 +192,7 @@ await load()
                 />
                 <div style="display: flex; gap: 6px">
                   <input
+                    aria-label="Email nhân viên"
                     v-model="draftProfiles[s.id]!.email"
                     type="email"
                     class="form-input"

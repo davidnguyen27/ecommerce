@@ -263,6 +263,7 @@ const counts = computed(() => ({
 
       <div>
         <input
+          aria-label="Lọc sản phẩm"
           v-model="searchQuery"
           type="search"
           class="form-input"
