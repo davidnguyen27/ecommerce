@@ -1,7 +1,6 @@
 import { Router } from 'express'
 import {
   ADJUSTMENT_INPUT,
-  ErrorCode,
   STOCK_VIEW_PERMISSIONS,
   StockAdjustmentRequest,
   StockMovementQuery,
@@ -12,11 +11,12 @@ import {
   type StockMovementPage,
   type StockPage,
 } from '@ecommerce/shared'
-import { audited } from '../audit/audited.ts'
+import { ACTOR_SELECT, audited } from '../audit/audited.ts'
 import { currentStaff, requirePermission } from '../auth/staff-context.ts'
 import type { Db, DbClient } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { AppError, invalidField } from '../http/errors.ts'
+import { conflictField, invalidField } from '../http/errors.ts'
+import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
 import { changeStock } from '../stock/stock.ts'
 
@@ -76,8 +76,7 @@ export function adminStockRoutes(prisma: Db) {
           where,
           include: STOCK_INCLUDE,
           orderBy,
-          skip: (query.page - 1) * query.pageSize,
-          take: query.pageSize,
+          ...pageWindow(query),
         }),
         prisma.productVariant.count({ where }),
       ])
@@ -99,11 +98,10 @@ export function adminStockRoutes(prisma: Db) {
           where,
           include: {
             variant: { select: { id: true, sku: true, product: { select: { id: true, name: true } } } },
-            actor: { select: { id: true, name: true, email: true } },
+            actor: { select: ACTOR_SELECT },
           },
           orderBy: { seq: 'desc' },
-          skip: (query.page - 1) * query.pageSize,
-          take: query.pageSize,
+          ...pageWindow(query),
         }),
         prisma.stockMovement.count({ where }),
       ])
@@ -134,10 +132,11 @@ export function adminStockRoutes(prisma: Db) {
           const variant = variants.get(input.variantId)
           if (!variant) throw invalidField('variantId', 'Biến thể không tồn tại')
           if (variant.onHand !== input.expectedOnHand) {
-            const message = `Tồn đã đổi thành ${variant.onHand} trong lúc bạn đang nhập; kiểm tra lại rồi gửi lại`
-            throw new AppError(409, ErrorCode.CONFLICT, message, [{ path: 'expectedOnHand', message }], {
-              onHand: variant.onHand,
-            })
+            throw conflictField(
+              'expectedOnHand',
+              `Tồn đã đổi thành ${variant.onHand} trong lúc bạn đang nhập; kiểm tra lại rồi gửi lại`,
+              { onHand: variant.onHand },
+            )
           }
           const amount = 'countedQuantity' in input ? input.countedQuantity : input.quantity
           const quantity = adjustmentDelta(input.reason, amount, variant.onHand)

@@ -1,75 +1,11 @@
 <script setup lang="ts">
 import '~/assets/admin.css'
-import { STOCK_VIEW_PERMISSIONS, type Permission } from '@ecommerce/shared'
-import {
-  BadgeCheck,
-  FileSpreadsheet,
-  FileText,
-  FolderTree,
-  History,
-  Images,
-  LayoutDashboard,
-  ListChecks,
-  Package,
-  PackagePlus,
-  Scale,
-  ScrollText,
-  Tag,
-  Users,
-  Warehouse,
-  type LucideIcon,
-} from 'lucide-vue-next'
-
 const session = useAdminSession()
 const route = useRoute()
 
-type MenuItem = { to: string; label: string; icon: LucideIcon; permission?: Permission | readonly Permission[] }
-type MenuGroup = { title: string; items: MenuItem[] }
-
-const MENU_GROUPS: MenuGroup[] = [
-  {
-    title: 'Tổng quan',
-    items: [{ to: '/admin', label: 'Bảng điều khiển', icon: LayoutDashboard }],
-  },
-  {
-    title: 'Hàng hóa & Danh mục',
-    items: [
-      { to: '/admin/products', label: 'Sản phẩm', icon: Package, permission: ['catalog.edit', 'price.edit'] },
-      { to: '/admin/import', label: 'Import từ Excel', icon: FileSpreadsheet, permission: 'catalog.edit' },
-      { to: '/admin/bulk-images', label: 'Ảnh hàng loạt', icon: Images, permission: 'media.upload' },
-      { to: '/admin/brands', label: 'Thương hiệu', icon: Tag, permission: 'catalog.edit' },
-      { to: '/admin/categories', label: 'Cây danh mục', icon: FolderTree, permission: 'catalog.edit' },
-      { to: '/admin/attribute-schemas', label: 'Schema thuộc tính', icon: ListChecks, permission: 'catalog.edit' },
-      { to: '/admin/commitment-types', label: 'Loại cam kết', icon: BadgeCheck, permission: 'commitment.edit' },
-    ],
-  },
-  {
-    title: 'Kho',
-    items: [
-      { to: '/admin/stock', label: 'Tồn kho', icon: Warehouse, permission: STOCK_VIEW_PERMISSIONS },
-      { to: '/admin/stock/receipts', label: 'Phiếu nhập', icon: PackagePlus, permission: STOCK_VIEW_PERMISSIONS },
-      { to: '/admin/stock/movements', label: 'Sổ xuất nhập', icon: ScrollText, permission: STOCK_VIEW_PERMISSIONS },
-    ],
-  },
-  {
-    title: 'Vận hành & Nhân sự',
-    items: [
-      { to: '/admin/staff', label: 'Nhân sự & Vai trò', icon: Users, permission: 'staff.manage' },
-      { to: '/admin/audit', label: 'Nhật ký kiểm toán', icon: History, permission: 'audit.view' },
-    ],
-  },
-  {
-    title: 'Nội dung & Pháp lý',
-    items: [
-      { to: '/admin/pages', label: 'Trang bài viết', icon: FileText, permission: 'content.edit' },
-      { to: '/admin/legal-info', label: 'Thông tin pháp lý', icon: Scale, permission: 'content.edit' },
-    ],
-  },
-]
-
 // Lọc menu theo quyền thực tế của nhân viên
 const visibleGroups = computed(() =>
-  MENU_GROUPS.map((group) => ({
+  ADMIN_MENU_GROUPS.map((group) => ({
     ...group,
     items: group.items.filter((item) => !item.permission || session.can(item.permission)),
   })).filter((group) => group.items.length > 0),
@@ -79,20 +15,13 @@ const visibleGroups = computed(() =>
 const activeItem = computed(() => {
   const matches = (to: string) =>
     to === '/admin' ? route.path === '/admin' : route.path === to || route.path.startsWith(`${to}/`)
-  return MENU_GROUPS.flatMap((g) => g.items)
-    .filter((item) => matches(item.to))
-    .sort((a, b) => b.to.length - a.to.length)[0]?.to
+  return ADMIN_MENU_ITEMS.filter((item) => matches(item.to)).sort((a, b) => b.to.length - a.to.length)[0]?.to
 })
 const isItemActive = (to: string) => activeItem.value === to
 
 // Lấy tiêu đề trang hiện tại cho breadcrumb
 const currentTitle = computed(() => {
-  for (const group of MENU_GROUPS) {
-    for (const item of group.items) {
-      if (isItemActive(item.to)) return item.label
-    }
-  }
-  return 'Quản trị'
+  return ADMIN_MENU_ITEMS.find((item) => isItemActive(item.to))?.label ?? 'Quản trị'
 })
 
 const userInitials = computed(() => {
@@ -121,7 +50,6 @@ const displayRoles = computed(() => {
 
 <template>
   <div class="admin-shell">
-    <!-- Left Rail Sidebar -->
     <aside class="admin-sidebar">
       <div class="admin-sidebar-header">
         <NuxtLink to="/admin" class="admin-brand-mark">
@@ -163,7 +91,6 @@ const displayRoles = computed(() => {
       </div>
     </aside>
 
-    <!-- Main Viewport Canvas -->
     <div class="admin-viewport">
       <header class="admin-topbar">
         <div class="admin-breadcrumb">

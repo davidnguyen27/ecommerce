@@ -53,7 +53,9 @@ export async function changeStock(
   const onHand = new Map(rows.map((row) => [row.id, row.onHand]))
   const movements = changes.map((change) => {
     const variant = locked.get(change.variantId)
-    if (!variant) throw new Error(`Biến thể ${change.variantId} chưa được khóa`)
+    if (!ids.includes(change.variantId)) throw new Error(`Biến thể ${change.variantId} chưa được khóa`)
+    // Biến thể đã bị xóa giữa lúc đọc ngoài transaction và lúc khóa.
+    if (!variant) throw conflictField(change.path, 'Biến thể không còn tồn tại, hãy tải lại trang')
     const after = onHand.get(variant.id)! + change.quantity
     if (after < 0) {
       throw conflictField(change.path, `Tồn của ${variant.sku} không đủ: hiện còn ${onHand.get(variant.id)}`)

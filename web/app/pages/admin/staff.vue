@@ -64,7 +64,6 @@ await load()
 
 <template>
   <div>
-    <!-- Page Header -->
     <div class="admin-page-header">
       <div>
         <h1 class="admin-page-title">Nhân sự & Phân quyền</h1>
@@ -81,12 +80,10 @@ await load()
       </div>
     </div>
 
-    <!-- Alert -->
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <span>{{ error }}</span>
     </div>
 
-    <!-- Form Thêm Nhân Viên Mới -->
     <div v-if="showCreatePanel" class="admin-panel" style="border-left: 3px solid var(--adm-dark)">
       <div class="admin-panel-header">
         <div>
@@ -101,19 +98,33 @@ await load()
       <form @submit.prevent="create">
         <div class="form-grid-2">
           <div class="form-group">
-            <label class="form-label">Họ và tên nhân viên *</label>
-            <input v-model="form.name" class="form-input" placeholder="Ví dụ: Nguyễn Văn A" required />
+            <label class="form-label" for="staff-form-name">Họ và tên nhân viên *</label>
+            <input
+              id="staff-form-name"
+              v-model="form.name"
+              class="form-input"
+              placeholder="Ví dụ: Nguyễn Văn A"
+              required
+            />
           </div>
 
           <div class="form-group">
-            <label class="form-label">Email làm việc *</label>
-            <input v-model="form.email" type="email" class="form-input" placeholder="nhanvien@shop.vn" required />
+            <label class="form-label" for="staff-form-email">Email làm việc *</label>
+            <input
+              id="staff-form-email"
+              v-model="form.email"
+              type="email"
+              class="form-input"
+              placeholder="nhanvien@shop.vn"
+              required
+            />
           </div>
         </div>
 
         <div class="form-group">
-          <label class="form-label">Mật khẩu khởi tạo ban đầu (Tối thiểu 12 ký tự) *</label>
+          <label class="form-label" for="staff-form-password">Mật khẩu khởi tạo ban đầu (Tối thiểu 12 ký tự) *</label>
           <input
+            id="staff-form-password"
             v-model="form.password"
             type="password"
             class="form-input"
@@ -125,7 +136,7 @@ await load()
         </div>
 
         <div class="form-group">
-          <label class="form-label">Vai trò được giao (Chọn ít nhất 1 role) *</label>
+          <p class="form-label">Vai trò được giao (Chọn ít nhất 1 role) *</p>
           <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px">
             <label
               v-for="role in StaffRole.options"
@@ -157,7 +168,6 @@ await load()
       </form>
     </div>
 
-    <!-- Bảng Danh Sách Nhân Viên -->
     <div class="admin-table-card">
       <table class="admin-table">
         <thead>
@@ -170,7 +180,6 @@ await load()
         </thead>
         <tbody>
           <tr v-for="s in staff" :key="s.id">
-            <!-- Tên & Email -->
             <td>
               <div style="display: flex; flex-direction: column; gap: 6px">
                 <input
@@ -194,7 +203,6 @@ await load()
               </div>
             </td>
 
-            <!-- Vai trò -->
             <td>
               <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center">
                 <label
@@ -225,7 +233,6 @@ await load()
               </div>
             </td>
 
-            <!-- Trạng thái -->
             <td>
               <span class="badge" :class="s.locked ? 'badge-archived' : 'badge-published'">
                 <span class="badge-dot" />
@@ -233,7 +240,6 @@ await load()
               </span>
             </td>
 
-            <!-- Actions -->
             <td style="text-align: right">
               <button
                 type="button"

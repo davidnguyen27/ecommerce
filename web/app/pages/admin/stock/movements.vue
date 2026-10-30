@@ -60,14 +60,6 @@ const lastPage = computed(() => Math.max(1, Math.ceil((result.value?.total ?? 0)
 /** SKU đang lọc, lấy từ dòng sổ đầu tiên; chưa có dòng nào thì không biết SKU. */
 const filteredSku = computed(() => (filters.variantId ? result.value?.items[0]?.variant.sku : undefined))
 
-const formatTime = (iso: string) =>
-  new Date(iso).toLocaleString('vi-VN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n))
 
 await load()
@@ -105,19 +97,36 @@ await load()
           "
         >
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label" style="font-size: 12px">Loại biến động</label>
-            <select v-model="filters.kind" class="form-select" style="font-size: 12px; padding: 6px 10px">
+            <label class="form-label" for="movements-filters-kind" style="font-size: 12px">Loại biến động</label>
+            <select
+              id="movements-filters-kind"
+              v-model="filters.kind"
+              class="form-select"
+              style="font-size: 12px; padding: 6px 10px"
+            >
               <option value="">-- Tất cả --</option>
               <option v-for="k in StockMovementKind.options" :key="k" :value="k">{{ STOCK_KIND_LABELS[k] }}</option>
             </select>
           </div>
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label" style="font-size: 12px">Từ ngày</label>
-            <input v-model="filters.from" type="date" class="form-input" style="font-size: 12px; padding: 5px 10px" />
+            <label class="form-label" for="movements-filters-from" style="font-size: 12px">Từ ngày</label>
+            <input
+              id="movements-filters-from"
+              v-model="filters.from"
+              type="date"
+              class="form-input"
+              style="font-size: 12px; padding: 5px 10px"
+            />
           </div>
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label" style="font-size: 12px">Đến ngày</label>
-            <input v-model="filters.to" type="date" class="form-input" style="font-size: 12px; padding: 5px 10px" />
+            <label class="form-label" for="movements-filters-to" style="font-size: 12px">Đến ngày</label>
+            <input
+              id="movements-filters-to"
+              v-model="filters.to"
+              type="date"
+              class="form-input"
+              style="font-size: 12px; padding: 5px 10px"
+            />
           </div>
           <button type="submit" class="btn btn-primary btn-sm">Lọc</button>
         </div>
@@ -148,7 +157,7 @@ await load()
             <tbody>
               <tr v-for="m in result.items" :key="m.id">
                 <td style="font-family: var(--adm-mono); font-size: 11px; color: var(--adm-muted); white-space: nowrap">
-                  {{ formatTime(m.createdAt) }}
+                  {{ formatDateTime(m.createdAt) }}
                 </td>
                 <td>
                   <span style="font-family: var(--adm-mono); font-size: 12px; font-weight: 600">{{

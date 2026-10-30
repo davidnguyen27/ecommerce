@@ -1,6 +1,6 @@
 import {
   GENDER_KEY,
-  GENDER_OPTIONS,
+  GENDER_UNISEX,
   PRODUCT_PAGE_SIZE,
   ProductType,
   type AttributeDefinition,
@@ -35,8 +35,7 @@ const FROM = Prisma.sql`FROM "product_search" s JOIN "product_version" v ON v."i
 /** Lọc Nam hoặc Nữ thì gồm cả Unisex (ADR 0004). */
 function filterValues({ definition, values }: AttributeFilter) {
   if (definition.key !== GENDER_KEY) return values
-  const unisex = GENDER_OPTIONS[2]
-  return values.some((v) => v !== unisex) ? [...new Set([...values, unisex])] : values
+  return values.some((v) => v !== GENDER_UNISEX) ? [...new Set([...values, GENDER_UNISEX])] : values
 }
 
 const matches = (json: Prisma.Sql, filter: AttributeFilter) =>

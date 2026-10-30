@@ -18,7 +18,7 @@ import { ProductParams, SORT_ORDER, loadProduct, lockProduct } from '../catalog/
 import { liveImages, loadDraft } from '../catalog/publication.ts'
 import type { Db, DbClient } from '../db.ts'
 import type { ProductImage } from '../generated/prisma/client.ts'
-import { AppError, invalidField } from '../http/errors.ts'
+import { AppError, conflictField, invalidField } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 import { fileError } from '../media/upload.ts'
 import {
@@ -242,8 +242,10 @@ export function adminProductImageRoutes(prisma: Db, storage: Storage) {
           const draft = await loadDraft(tx, id)
           const image = await findImage(tx, id, imageId)
           if (draft.status === 'published' && draft.images.length === 1) {
-            const message = 'Đây là ảnh cuối cùng của sản phẩm đã xuất bản; muốn thôi bán thì lưu trữ sản phẩm'
-            throw new AppError(409, ErrorCode.CONFLICT, message, [{ path: 'imageId', message }])
+            throw conflictField(
+              'imageId',
+              'Đây là ảnh cuối cùng của sản phẩm đã xuất bản; muốn thôi bán thì lưu trữ sản phẩm',
+            )
           }
           await tx.productImage.delete({ where: { id: imageId } })
           await audit({

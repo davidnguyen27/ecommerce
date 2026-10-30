@@ -46,11 +46,10 @@ const heroImages = computed(() => products.value.filter((p) => p.image).slice(0,
     <section class="border-b border-border">
       <div class="mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-2 lg:gap-16">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-highlight">Hàng hiệu nhập khẩu chính hãng</p>
-          <h1 class="mt-4 !text-4xl sm:!text-5xl lg:!text-6xl">Chọn đúng món đồ, biết rõ nguồn gốc</h1>
+          <h1 class="!text-4xl sm:!text-5xl lg:!text-6xl">Chọn đúng món đồ, biết rõ nguồn gốc</h1>
           <p class="mt-6 max-w-lg text-base leading-7 text-muted-foreground">
-            Giày dép, quần áo, đồng hồ, túi xách và nước hoa của các thương hiệu nổi tiếng. Mỗi sản phẩm ghi rõ thông
-            tin nguồn gốc, giá và chính sách áp dụng trước khi bạn quyết định.
+            Giày dép, quần áo, đồng hồ, túi xách và nước hoa. Mỗi sản phẩm ghi rõ thông tin nguồn gốc, giá và chính sách
+            áp dụng trước khi bạn quyết định.
           </p>
           <div class="mt-8 flex flex-wrap gap-3">
             <NuxtLink to="/tim-kiem" class="btn-primary px-6">
@@ -147,8 +146,8 @@ const heroImages = computed(() => products.value.filter((p) => p.image).slice(0,
           <div>
             <h3 class="font-semibold">Chính sách công khai</h3>
             <p class="mt-1.5 text-sm leading-6 text-muted-foreground">
-              Chính sách đổi trả, bảo mật và các điều kiện mua hàng luôn có ở chân trang, kèm phiên bản và ngày cập
-              nhật.
+              Chính sách đổi trả, bảo mật và các điều kiện mua hàng có liên kết ở chân trang; mỗi trang ghi rõ phiên bản
+              và ngày cập nhật.
             </p>
           </div>
         </li>

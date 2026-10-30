@@ -18,7 +18,7 @@ const logger = pino({
   redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
 })
 const prisma = createPrisma(databaseUrl)
-const jobs = new Jobs({ databaseUrl, mailer: mailerFromEnv(process.env, logger), logger })
+const jobs = new Jobs({ databaseUrl, prisma, mailer: mailerFromEnv(process.env, logger), logger })
 await jobs.start()
 
 const app = createApp({

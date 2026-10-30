@@ -8,7 +8,8 @@ export type AttributeLevel = z.infer<typeof AttributeLevel>
 
 /** Thuộc tính giới tính có ở mọi nhóm hàng với đúng ba giá trị này (ADR 0004). */
 export const GENDER_KEY = 'gioi_tinh'
-export const GENDER_OPTIONS = ['Nam', 'Nữ', 'Unisex'] as const
+export const GENDER_UNISEX = 'Unisex'
+export const GENDER_OPTIONS = ['Nam', 'Nữ', GENDER_UNISEX] as const
 
 const Options = z
   .array(z.string().trim().min(1).max(100))
@@ -74,8 +75,10 @@ export const AdminAttributeSchemaList = z.object({ items: z.array(AdminAttribute
 export type AdminAttributeSchemaList = z.infer<typeof AdminAttributeSchemaList>
 
 /** Giá trị thuộc tính đã kiểm, lưu dạng JSONB ở sản phẩm hoặc biến thể. */
-export type AttributeValue = string | string[] | number | boolean
-export type AttributeValues = Record<string, AttributeValue>
+export const AttributeValue = z.union([z.string(), z.array(z.string()), z.number(), z.boolean()])
+export type AttributeValue = z.infer<typeof AttributeValue>
+export const AttributeValues = z.record(z.string(), AttributeValue)
+export type AttributeValues = z.infer<typeof AttributeValues>
 
 export const ValidateAttributesRequest = z.object({
   level: AttributeLevel,
@@ -84,7 +87,7 @@ export const ValidateAttributesRequest = z.object({
 export type ValidateAttributesRequest = z.infer<typeof ValidateAttributesRequest>
 
 export const ValidateAttributesResponse = z.object({
-  attributes: z.record(z.string(), z.union([z.string(), z.array(z.string()), z.number(), z.boolean()])),
+  attributes: AttributeValues,
 })
 export type ValidateAttributesResponse = z.infer<typeof ValidateAttributesResponse>
 

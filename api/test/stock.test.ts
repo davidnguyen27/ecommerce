@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { changeStock } from '../src/stock/stock.ts'
 import { OWNER, bearer, createStaff } from './support/staff.ts'
 import { adjust, movementsOf, onHandOf, warehouse } from './support/stock.ts'
 
@@ -178,6 +179,28 @@ describe('đồng thời', () => {
     expect(results.filter((r) => r.status === 201)).toHaveLength(1)
     expect(results.filter((r) => r.status === 409)).toHaveLength(4)
     expect(await onHandOf(request, token, 'AM90-40')).toBe(2)
+  })
+
+  it('hai lần giảm song song mà cộng lại vượt tồn thì chỉ một lần được ghi, tồn không âm', async () => {
+    // Qua API, lần giảm nào cũng kèm expectedOnHand nên không chạm tới chốt tồn âm; đơn hàng (M3) sẽ giảm không kèm số
+    // này, nên test gọi thẳng changeStock để giữ bất biến đó.
+    const { request, token, prisma, v40 } = await warehouse()
+    await adjust(request, token, { variantId: v40.id, reason: 'stocktake', countedQuantity: 3, expectedOnHand: 0 })
+    const { id: actorId } = await prisma.staff.findUniqueOrThrow({ where: { email: OWNER.email } })
+    const decrease = () =>
+      prisma.$transaction((tx) =>
+        changeStock(tx, actorId, [v40.id], () => [
+          { variantId: v40.id, quantity: -2, kind: 'adjustment', reason: 'lost', path: 'quantity' },
+        ]),
+      )
+
+    const results = await Promise.allSettled([decrease(), decrease()])
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect(results.filter((r) => r.status === 'rejected')).toEqual([
+      expect.objectContaining({ reason: expect.objectContaining({ status: 409 }) }),
+    ])
+    expect(await onHandOf(request, token, 'AM90-40')).toBe(1)
   })
 })
 

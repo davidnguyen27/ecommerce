@@ -10,20 +10,10 @@ const { data, error } = await useAsyncData(`page-${slug.value}`, async () => {
   return PublishedPage.parse(body)
 })
 
-if (error.value) {
-  const notFound = (error.value as { statusCode?: number }).statusCode === 404
-  throw createError({
-    statusCode: notFound ? 404 : 502,
-    message: notFound ? 'Không tìm thấy trang' : 'Không tải được trang',
-    fatal: true,
-  })
-}
+if (error.value) throwPageError(error.value, 'trang')
 
 const html = computed(() => (data.value ? renderMarkdown(data.value.body) : ''))
-// Cố định múi giờ để ngày render ở server và trình duyệt trùng nhau.
-const publishedOn = computed(() =>
-  data.value ? new Date(data.value.publishedAt).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '',
-)
+const publishedOn = computed(() => (data.value ? formatDate(data.value.publishedAt) : ''))
 useSeo({
   title: () => data.value?.title ?? '',
   description: () => (data.value ? excerpt(markdownText(data.value.body)) || data.value.title : ''),

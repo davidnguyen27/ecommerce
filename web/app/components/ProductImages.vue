@@ -131,7 +131,6 @@ await load()
       <span>{{ error }}</span>
     </div>
 
-    <!-- Dropzone -->
     <div
       v-if="canUpload"
       class="admin-dropzone"
@@ -177,7 +176,6 @@ await load()
       Sản phẩm chưa có ảnh. Vui lòng tải ít nhất 1 ảnh trước khi xuất bản.
     </div>
 
-    <!-- Image List -->
     <div v-else style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px">
       <div
         v-for="(row, index) in rows"
@@ -191,7 +189,6 @@ await load()
         @drop.prevent="onDropRow(index)"
       >
         <div style="display: flex; gap: 14px; align-items: flex-start">
-          <!-- Thumbnail -->
           <div style="position: relative">
             <a :href="row.originalUrl" target="_blank" rel="noopener">
               <img
@@ -215,7 +212,6 @@ await load()
             </span>
           </div>
 
-          <!-- Controls -->
           <div style="flex: 1; min-width: 0">
             <div style="display: flex; justify-content: space-between; margin-bottom: 6px">
               <span style="font-size: 11px; color: var(--adm-muted); font-family: var(--adm-mono)">
@@ -240,7 +236,6 @@ await load()
               />
             </div>
 
-            <!-- Gán biến thể -->
             <div v-if="variants.length > 0" style="font-size: 12px">
               <span style="color: var(--adm-muted); font-size: 11px; display: block; margin-bottom: 4px"
                 >Gắn với biến thể:</span

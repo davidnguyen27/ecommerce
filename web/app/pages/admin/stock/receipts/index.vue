@@ -110,17 +110,23 @@ await load()
       <form @submit.prevent="save">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px">
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label">Nhà cung cấp *</label>
-            <input v-model="form.supplierName" class="form-input" required maxlength="200" />
+            <label class="form-label" for="receipt-form-supplier-name">Nhà cung cấp *</label>
+            <input
+              id="receipt-form-supplier-name"
+              v-model="form.supplierName"
+              class="form-input"
+              required
+              maxlength="200"
+            />
             <small class="field-error-msg">{{ errorAt('supplierName') }}</small>
           </div>
           <div class="form-group" style="margin-bottom: 0">
-            <label class="form-label">Ngày hàng về *</label>
-            <input v-model="form.receivedOn" type="date" class="form-input" required />
+            <label class="form-label" for="receipt-form-received-on">Ngày hàng về *</label>
+            <input id="receipt-form-received-on" v-model="form.receivedOn" type="date" class="form-input" required />
           </div>
           <div class="form-group" style="margin-bottom: 0; grid-column: span 2">
-            <label class="form-label">Ghi chú</label>
-            <input v-model="form.note" class="form-input" maxlength="1000" />
+            <label class="form-label" for="receipt-form-note">Ghi chú</label>
+            <input id="receipt-form-note" v-model="form.note" class="form-input" maxlength="1000" />
           </div>
         </div>
 

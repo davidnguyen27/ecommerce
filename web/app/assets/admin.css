@@ -376,7 +376,9 @@
 /* ==========================================================================
    BUTTONS
    ========================================================================== */
+/* `.btn-primary` của website (Tailwind) cũng khớp nút admin; đặt lại chiều cao nó áp vào. */
 .admin-shell .btn {
+  height: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;

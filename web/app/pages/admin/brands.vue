@@ -89,7 +89,6 @@ await load()
 
 <template>
   <div>
-    <!-- Page Header -->
     <div class="admin-page-header">
       <div>
         <h1 class="admin-page-title">Thương hiệu</h1>
@@ -106,12 +105,10 @@ await load()
       </div>
     </div>
 
-    <!-- Alert -->
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <span>{{ error }}</span>
     </div>
 
-    <!-- Form Thêm Thương Hiệu (Slide-down Panel) -->
     <div v-if="showCreatePanel" class="admin-panel" style="border-left: 3px solid var(--adm-dark)">
       <div class="admin-panel-header">
         <div>
@@ -124,13 +121,20 @@ await load()
       <form @submit.prevent="create">
         <div class="form-grid-2">
           <div class="form-group">
-            <label class="form-label">Tên thương hiệu *</label>
-            <input v-model="form.name" class="form-input" placeholder="Ví dụ: Gucci, Seiko, Creed..." required />
+            <label class="form-label" for="brands-form-name">Tên thương hiệu *</label>
+            <input
+              id="brands-form-name"
+              v-model="form.name"
+              class="form-input"
+              placeholder="Ví dụ: Gucci, Seiko, Creed..."
+              required
+            />
           </div>
 
           <div class="form-group">
-            <label class="form-label">Slug URL *</label>
+            <label class="form-label" for="brands-form-slug">Slug URL *</label>
             <input
+              id="brands-form-slug"
               v-model="form.slug"
               class="form-input"
               pattern="[a-z0-9]+(-[a-z0-9]+)*"
@@ -141,8 +145,9 @@ await load()
         </div>
 
         <div class="form-group">
-          <label class="form-label">Mô tả giới thiệu thương hiệu</label>
+          <label class="form-label" for="brands-form-description">Mô tả giới thiệu thương hiệu</label>
           <textarea
+            id="brands-form-description"
             v-model="form.description"
             class="form-textarea"
             rows="3"
@@ -157,7 +162,6 @@ await load()
       </form>
     </div>
 
-    <!-- Bảng Thương hiệu -->
     <div class="admin-table-card">
       <table class="admin-table">
         <thead>
@@ -172,7 +176,6 @@ await load()
         </thead>
         <tbody>
           <tr v-for="brand in brands" :key="brand.id">
-            <!-- Đang sửa -->
             <template v-if="editing?.id === brand.id">
               <td>
                 <img
@@ -202,7 +205,6 @@ await load()
               </td>
             </template>
 
-            <!-- Xem bình thường -->
             <template v-else>
               <td>
                 <img
@@ -256,7 +258,6 @@ await load()
               </td>
               <td style="text-align: right">
                 <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px">
-                  <!-- Logo controls -->
                   <template v-if="canUpload">
                     <label class="btn btn-ghost btn-sm" style="cursor: pointer; padding: 4px 8px">
                       <span>{{ brand.logo ? 'Đổi logo' : '+ Logo' }}</span>
@@ -279,12 +280,10 @@ await load()
                     </button>
                   </template>
 
-                  <!-- Ẩn/Bỏ ẩn -->
                   <button type="button" class="btn btn-secondary btn-sm" @click="setHidden(brand.id, !brand.hidden)">
                     {{ brand.hidden ? 'Bỏ ẩn' : 'Ẩn' }}
                   </button>
 
-                  <!-- Sửa -->
                   <button type="button" class="btn btn-secondary btn-sm" @click="edit(brand)">Sửa</button>
                 </div>
               </td>

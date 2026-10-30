@@ -12,14 +12,7 @@ const { data, error } = await useAsyncData(`product-${slug.value}`, async () => 
   return PublicProduct.parse(body)
 })
 
-if (error.value) {
-  const notFound = (error.value as { statusCode?: number }).statusCode === 404
-  throw createError({
-    statusCode: notFound ? 404 : 502,
-    message: notFound ? 'Không tìm thấy sản phẩm' : 'Không tải được sản phẩm',
-    fatal: true,
-  })
-}
+if (error.value) throwPageError(error.value, 'sản phẩm')
 
 type Variant = PublicProduct['variants'][number]
 

@@ -6,22 +6,18 @@ import {
   DocumentUrl,
   MAX_DOCUMENT_BYTES,
 } from '@ecommerce/shared'
-import { FileText, Upload, Trash2, ExternalLink, ShieldAlert } from 'lucide-vue-next'
-import { Button } from '~/components/ui/button'
-import { Alert, AlertDescription } from '~/components/ui/alert'
+import { ExternalLink, FileText, Trash2, Upload } from 'lucide-vue-next'
 
 /** Chứng từ nguồn hàng private của một sản phẩm: tải lên, mở qua URL ký có hạn, xóa. Cần `document.view`. */
 const props = defineProps<{ productId: string }>()
-const emit = defineEmits<{ change: [documents: AdminProductDocument[]] }>()
+/** Trang cha dùng danh sách này để chọn chứng từ làm bằng chứng cho cam kết. */
+const documents = defineModel<AdminProductDocument[]>({ required: true })
 
 const session = useAdminSession()
 const base = `/api/admin/products/${props.productId}/documents`
 
-const documents = ref<AdminProductDocument[]>([])
 const error = ref<string | null>(null)
 const uploading = ref<string | null>(null)
-
-watch(documents, (value) => emit('change', value), { deep: true })
 
 async function attempt(action: () => Promise<unknown>) {
   error.value = null
@@ -92,66 +88,80 @@ documents.value = AdminProductDocumentList.parse(await session.adminFetch(base))
           Hóa đơn nhập, tờ khai hải quan. Tuyệt đối không công khai với khách; mỗi lần mở URL ký đều ghi Audit log.
         </p>
       </div>
-      <label>
-        <Button variant="secondary" size="sm" as="span" class="cursor-pointer">
-          <Upload class="size-3.5 mr-1" />
-          <span>Tải chứng từ</span>
-        </Button>
+      <label class="btn btn-secondary btn-sm" style="cursor: pointer">
+        <Upload :size="14" aria-hidden="true" />
+        <span>Tải chứng từ</span>
         <input
           type="file"
           multiple
           :accept="DOCUMENT_CONTENT_TYPES.join(',')"
           :disabled="!!uploading"
-          class="hidden"
+          style="display: none"
           @change="upload"
         />
       </label>
     </div>
 
-    <Alert v-if="error" variant="destructive" class="mb-3">
-      <ShieldAlert class="size-4" />
-      <AlertDescription>{{ error }}</AlertDescription>
-    </Alert>
+    <div v-if="error" class="admin-alert admin-alert-danger" role="alert" style="margin-bottom: 12px">
+      <span>{{ error }}</span>
+    </div>
 
-    <Alert v-if="uploading" variant="warning" class="mb-3">
-      <AlertDescription>
-        Đang tải lên: <strong>{{ uploading }}</strong
-        >…
-      </AlertDescription>
-    </Alert>
+    <p v-if="uploading" role="status" style="font-size: 12px; color: var(--adm-draft); margin-bottom: 12px">
+      Đang tải lên: <strong>{{ uploading }}</strong
+      >…
+    </p>
 
     <div
       v-if="documents.length === 0"
-      class="p-6 text-center text-xs text-muted-foreground bg-secondary/30 rounded-md border border-dashed border-border"
+      style="
+        padding: 24px;
+        text-align: center;
+        color: var(--adm-muted);
+        background: var(--adm-surface-subtle);
+        border-radius: 6px;
+      "
     >
       Chưa có chứng từ nào được đính kèm cho sản phẩm này.
     </div>
 
-    <div v-else class="flex flex-col gap-2">
-      <div
+    <ul v-else style="display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none">
+      <li
         v-for="document in documents"
         :key="document.id"
-        class="flex items-center justify-between p-2.5 px-3.5 bg-secondary/30 border border-border rounded-md hover:bg-secondary/50 transition-colors"
+        style="
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 10px 14px;
+          background: var(--adm-surface-subtle);
+          border: 1px solid var(--adm-border);
+          border-radius: 6px;
+        "
       >
-        <div class="min-w-0 flex items-center gap-2.5">
-          <FileText class="size-4 text-muted-foreground shrink-0" />
-          <span class="font-medium text-xs text-foreground truncate">
+        <div style="display: flex; align-items: center; gap: 10px; min-width: 0">
+          <FileText :size="16" style="flex-shrink: 0; color: var(--adm-muted)" aria-hidden="true" />
+          <span
+            style="font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+          >
             {{ document.fileName }}
           </span>
-          <span class="text-[11px] text-muted-foreground font-mono"> ({{ sizeLabel(document.sizeBytes) }}) </span>
+          <span style="font-size: 11px; color: var(--adm-muted); font-family: var(--adm-mono)">
+            ({{ sizeLabel(document.sizeBytes) }})
+          </span>
         </div>
 
-        <div class="flex items-center gap-1.5 shrink-0">
-          <Button variant="outline" size="sm" class="h-7 text-xs" @click="open(document)">
-            <ExternalLink class="size-3 mr-1" />
+        <div style="display: flex; gap: 6px; flex-shrink: 0">
+          <button type="button" class="btn btn-secondary btn-sm" @click="open(document)">
+            <ExternalLink :size="12" aria-hidden="true" />
             Xem (Ký URL)
-          </Button>
-          <Button variant="destructive" size="sm" class="h-7 text-xs" @click="remove(document)">
-            <Trash2 class="size-3 mr-1" />
+          </button>
+          <button type="button" class="btn btn-danger btn-sm" @click="remove(document)">
+            <Trash2 :size="12" aria-hidden="true" />
             Xóa
-          </Button>
+          </button>
         </div>
-      </div>
-    </div>
+      </li>
+    </ul>
   </div>
 </template>

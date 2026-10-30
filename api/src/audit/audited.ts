@@ -3,6 +3,9 @@ import { currentStaff } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 
+/** Nhân viên thực hiện, đúng các trường của `AuditActor` trả cho client. */
+export const ACTOR_SELECT = { id: true, name: true, email: true } as const
+
 export type AuditEntry = {
   action: string
   entityType: string

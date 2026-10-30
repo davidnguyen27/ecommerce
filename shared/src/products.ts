@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AttributeDefinition } from './attributes.ts'
+import { AttributeDefinition, AttributeValues } from './attributes.ts'
 import { ProductType } from './catalog.ts'
 import { PublicCommitment } from './commitments.ts'
 import { ImageRenditions } from './media.ts'
@@ -77,8 +77,6 @@ export const VariantRequest = z.object({
   compareAtPrice: Price.nullable().optional(),
 })
 export type VariantRequest = z.input<typeof VariantRequest>
-
-const AttributeValues = z.record(z.string(), z.union([z.string(), z.array(z.string()), z.number(), z.boolean()]))
 
 export const AdminVariant = z.object({
   id: z.string(),

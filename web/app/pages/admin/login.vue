@@ -37,7 +37,6 @@ async function submit() {
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
       "
     >
-      <!-- Logo Branding -->
       <div style="text-align: center; margin-bottom: 28px">
         <div
           style="
@@ -73,7 +72,6 @@ async function submit() {
         </p>
       </div>
 
-      <!-- Alert Error -->
       <div
         v-if="error"
         class="admin-alert admin-alert-danger"
@@ -83,11 +81,11 @@ async function submit() {
         <span>{{ error }}</span>
       </div>
 
-      <!-- Login Form -->
       <form @submit.prevent="submit">
         <div class="form-group" style="margin-bottom: 16px">
-          <label class="form-label" style="color: #d1d5db">Địa chỉ Email nhân sự</label>
+          <label class="form-label" for="login-email" style="color: #d1d5db">Địa chỉ Email nhân sự</label>
           <input
+            id="login-email"
             v-model="email"
             type="email"
             class="form-input"
@@ -99,8 +97,9 @@ async function submit() {
         </div>
 
         <div class="form-group" style="margin-bottom: 24px">
-          <label class="form-label" style="color: #d1d5db">Mật khẩu xác thực</label>
+          <label class="form-label" for="login-password" style="color: #d1d5db">Mật khẩu xác thực</label>
           <input
+            id="login-password"
             v-model="password"
             type="password"
             class="form-input"

@@ -41,7 +41,7 @@ export async function createTestApp(options: Options = {}) {
   const jwtSecret = randomBytes(32).toString('base64url')
   // Hàng đợi job thật trên DB của test; worker gửi thư vào mailer giả.
   // DB bị ghi đè là DB giả lập hỏng, nên không khởi động worker trên đó.
-  const jobs = new Jobs({ databaseUrl, mailer, logger, maxConnections: 2 })
+  const jobs = new Jobs({ databaseUrl, prisma, mailer, logger, maxConnections: 2 })
   const startJobs = !options.databaseUrl
   if (startJobs) await jobs.start()
   const app = createApp({ prisma, logger, emails: jobs, storage, jwtSecret, siteUrl: SITE_URL })

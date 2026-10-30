@@ -6,6 +6,7 @@ import { currentStaff, hasPermission, requirePermission } from '../auth/staff-co
 import {
   ALREADY_LEDGERED,
   type PlannedOpening,
+  type Reference,
   buildTemplate,
   hasOpeningStock,
   hasPrices,
@@ -13,7 +14,7 @@ import {
   planImport,
   readWorkbook,
 } from '../catalog/import.ts'
-import { priceAuditFields, productAuditFields, variantAuditFields } from '../catalog/products.ts'
+import { productAuditFields, variantCreatedAudits } from '../catalog/products.ts'
 import type { Db } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { AppError, conflictField, rethrowUnique } from '../http/errors.ts'
@@ -29,7 +30,7 @@ const IMPORT_TIMEOUT_MS = 120_000
  * Đọc file và chặn cả file khi có điền giá mà thiếu `price.edit`, hoặc có điền tồn đầu kỳ mà thiếu `stock.adjust`:
  * import không thành cửa sau để đổi giá hay tồn.
  */
-async function readUpload(req: Request, ref: Awaited<ReturnType<typeof loadReference>>) {
+async function readUpload(req: Request, ref: Reference) {
   const file = requiredFile(req, 'Chọn file Excel .xlsx để import')
   const read = await readWorkbook(file.buffer, ref)
   if (hasPrices(read.rows) && !hasPermission(req, 'price.edit')) {
@@ -73,6 +74,18 @@ async function recordOpeningStocks(
     select: { id: true, sku: true },
   })
   const idOf = new Map(variants.map((v) => [v.sku, v.id]))
+  // SKU có thể vừa bị đổi ở trang sản phẩm sau lúc xem trước.
+  const missing = openings.filter((o) => !idOf.has(o.sku))
+  if (missing.length) {
+    throw invalidImportFile(
+      missing.map((o) => ({
+        sheet: o.sheet,
+        row: o.row,
+        column: 'SKU',
+        message: 'SKU không còn tồn tại; hãy xem trước lại',
+      })),
+    )
+  }
   const skuOf = new Map(variants.map((v) => [v.id, v.sku]))
   const { movements } = await changeStock(tx, actorId, [...idOf.values()], async () => {
     const ledgered = await tx.stockMovement.findMany({
@@ -163,21 +176,7 @@ export function adminImportRoutes(prisma: Db) {
               after: productAuditFields(product),
             })
             for (const variant of product.variants) {
-              entries.push({
-                action: 'catalog.variant.create',
-                entityType: 'product_variant',
-                entityId: variant.id,
-                after: variantAuditFields(variant),
-              })
-              if (variant.price !== null || variant.compareAtPrice !== null) {
-                entries.push({
-                  action: 'price.change',
-                  entityType: 'product_variant',
-                  entityId: variant.id,
-                  before: priceAuditFields({ ...variant, price: null, compareAtPrice: null }),
-                  after: priceAuditFields(variant),
-                })
-              }
+              entries.push(...variantCreatedAudits(variant))
             }
           }
           entries.push(...openingEntries)

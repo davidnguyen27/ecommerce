@@ -1,7 +1,9 @@
 import { z } from 'zod'
+import { AttributeValues } from './attributes.ts'
 import { AuditActor } from './audit.ts'
 import { ProductType } from './catalog.ts'
 import { ProductStatus, Sku, VariantStatus } from './products.ts'
+import { PageQuery, pageOf } from './pagination.ts'
 import type { Permission } from './staff.ts'
 
 /** Loại biến động trong sổ xuất nhập. */
@@ -72,7 +74,7 @@ export type StockAdjustmentRequest = z.input<typeof StockAdjustmentRequest>
 export const StockItem = z.object({
   variantId: z.string(),
   sku: z.string(),
-  attributes: z.record(z.string(), z.union([z.string(), z.array(z.string()), z.number(), z.boolean()])),
+  attributes: AttributeValues,
   status: VariantStatus,
   onHand: z.number(),
   product: z.object({ id: z.string(), name: z.string(), productType: ProductType, status: ProductStatus }),
@@ -90,17 +92,11 @@ export const StockQuery = z.object({
   brandId: z.uuid().optional(),
   status: VariantStatus.optional(),
   sort: StockSort.default('name'),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  ...PageQuery.shape,
 })
 export type StockQuery = z.infer<typeof StockQuery>
 
-export const StockPage = z.object({
-  items: z.array(StockItem),
-  total: z.number(),
-  page: z.number(),
-  pageSize: z.number(),
-})
+export const StockPage = pageOf(StockItem)
 export type StockPage = z.infer<typeof StockPage>
 
 /** Một dòng sổ xuất nhập. */
@@ -127,17 +123,11 @@ export const StockMovementQuery = z.object({
   kind: StockMovementKind.optional(),
   from: z.iso.datetime({ offset: true }).optional(),
   to: z.iso.datetime({ offset: true }).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  ...PageQuery.shape,
 })
 export type StockMovementQuery = z.infer<typeof StockMovementQuery>
 
-export const StockMovementPage = z.object({
-  items: z.array(StockMovement),
-  total: z.number(),
-  page: z.number(),
-  pageSize: z.number(),
-})
+export const StockMovementPage = pageOf(StockMovement)
 export type StockMovementPage = z.infer<typeof StockMovementPage>
 
 // Phiếu nhập
@@ -177,16 +167,8 @@ export const StockReceipt = ReceiptHeader.extend({
 })
 export type StockReceipt = z.infer<typeof StockReceipt>
 
-export const StockReceiptQuery = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(50),
-})
+export const StockReceiptQuery = PageQuery
 export type StockReceiptQuery = z.infer<typeof StockReceiptQuery>
 
-export const StockReceiptPage = z.object({
-  items: z.array(ReceiptHeader.extend({ lineCount: z.number(), totalQuantity: z.number() })),
-  total: z.number(),
-  page: z.number(),
-  pageSize: z.number(),
-})
+export const StockReceiptPage = pageOf(ReceiptHeader.extend({ lineCount: z.number(), totalQuantity: z.number() }))
 export type StockReceiptPage = z.infer<typeof StockReceiptPage>

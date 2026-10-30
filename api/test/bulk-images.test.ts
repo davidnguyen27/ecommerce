@@ -119,6 +119,19 @@ describe('tải ảnh theo SKU', () => {
     expect(res.status).toBe(400)
   })
 
+  it('ảnh quá 10 MB bị từ chối với 413 và không có ảnh nào được lưu', async () => {
+    const { request, token, product, storage } = await catalog()
+    const objectsBefore = storage.objects.size
+    const huge = Buffer.concat([await photo(), Buffer.alloc(10 * 1024 * 1024)])
+
+    const res = await uploadBySku(request, token, 'AM90-DEN-40.jpg', huge)
+
+    expect(res.status).toBe(413)
+    expect(res.body.error.fields).toEqual([expect.objectContaining({ path: 'file' })])
+    expect(storage.objects.size).toBe(objectsBefore)
+    expect(await imagesOf(request, token, product.id)).toHaveLength(1)
+  })
+
   it('thiếu media.upload thì 403', async () => {
     const { request, token } = await catalog()
     const accountant = await createStaff(request, token, ['accountant'], 'ke-toan@example.com')

@@ -23,6 +23,6 @@
 - **Thứ tự theo `n` do trình duyệt bảo đảm**: trang quản trị sắp file theo SKU rồi theo `n` trước khi gửi lần lượt; API không lưu `n` mà chỉ nối vào sau. Gọi API trực tiếp theo thứ tự khác thì ảnh theo thứ tự gửi.
 - SKU được phép chứa `_`, nên API thử cả tên file (bỏ đuôi) làm SKU trước, không có mới bỏ `_<n>` ở cuối.
 - Alt text mặc định là tên sản phẩm; sửa ở trang soạn sản phẩm.
-- Chưa có test riêng cho file quá dung lượng ở route này; giới hạn dùng chung `receiveImage` đã có test ở ảnh từng cái.
+- Test file quá dung lượng ở route này được thêm sau review toàn nhánh (2026-10-30).
 - Trang quản trị `/admin/bulk-images` (menu "Ảnh hàng loạt", quyền `media.upload`).
 - Code review (2026-10-29) ghi nhận thứ tự theo `n` do trình duyệt bảo đảm là lệch với câu chữ spec; người dùng quyết **giữ nguyên** (chỉ trang quản trị gọi API này).

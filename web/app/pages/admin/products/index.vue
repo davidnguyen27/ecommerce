@@ -84,9 +84,6 @@ async function create() {
 
 const errorAt = (path: string) => fieldErrors.value.find((f) => f.path === path)?.message
 
-const STATUS_LABELS = { draft: 'Nháp', published: 'Đã xuất bản', archived: 'Lưu trữ' } as const
-const STATUS_BADGES = { draft: 'badge-draft', published: 'badge-published', archived: 'badge-archived' } as const
-
 products.value = AdminProductList.parse(await session.adminFetch('/api/admin/products')).items
 if (canEdit) {
   brands.value = AdminBrandList.parse(await session.adminFetch('/api/admin/brands')).items
@@ -118,7 +115,6 @@ const counts = computed(() => ({
 
 <template>
   <div>
-    <!-- Page Header -->
     <div class="admin-page-header">
       <div>
         <h1 class="admin-page-title">Sản phẩm</h1>
@@ -134,12 +130,10 @@ const counts = computed(() => ({
       </div>
     </div>
 
-    <!-- Alert nếu có lỗi -->
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <span>{{ error }}</span>
     </div>
 
-    <!-- Form tạo sản phẩm mới (Slide-down Panel) -->
     <div v-if="showCreateDrawer && canEdit" class="admin-panel" style="border-left: 3px solid var(--adm-dark)">
       <div class="admin-panel-header">
         <div>
@@ -155,8 +149,8 @@ const counts = computed(() => ({
       <form @submit.prevent="create">
         <div class="form-grid-2">
           <div class="form-group">
-            <label class="form-label">Thương hiệu *</label>
-            <select v-model="form.brandId" class="form-select" required>
+            <label class="form-label" for="products-form-brand-id">Thương hiệu *</label>
+            <select id="products-form-brand-id" v-model="form.brandId" class="form-select" required>
               <option value="" disabled>-- Chọn thương hiệu --</option>
               <option v-for="brand in brands" :key="brand.id" :value="brand.id">{{ brand.name }}</option>
             </select>
@@ -164,8 +158,8 @@ const counts = computed(() => ({
           </div>
 
           <div class="form-group">
-            <label class="form-label">Danh mục phân loại *</label>
-            <select v-model="form.categoryId" class="form-select" required>
+            <label class="form-label" for="products-form-category-id">Danh mục phân loại *</label>
+            <select id="products-form-category-id" v-model="form.categoryId" class="form-select" required>
               <option value="" disabled>-- Chọn danh mục --</option>
               <option v-for="category in categories" :key="category.id" :value="category.id">
                 {{ PRODUCT_TYPE_LABELS[category.productType] }} › {{ category.name }}
@@ -177,14 +171,21 @@ const counts = computed(() => ({
 
         <div class="form-grid-2">
           <div class="form-group">
-            <label class="form-label">Tên sản phẩm *</label>
-            <input v-model="form.name" class="form-input" placeholder="Ví dụ: Giày Sneaker Ace Leather" required />
+            <label class="form-label" for="products-form-name">Tên sản phẩm *</label>
+            <input
+              id="products-form-name"
+              v-model="form.name"
+              class="form-input"
+              placeholder="Ví dụ: Giày Sneaker Ace Leather"
+              required
+            />
             <small v-if="errorAt('name')" class="field-error-msg">{{ errorAt('name') }}</small>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Slug đường dẫn (URL) *</label>
+            <label class="form-label" for="products-form-slug">Slug đường dẫn (URL) *</label>
             <input
+              id="products-form-slug"
               v-model="form.slug"
               class="form-input"
               pattern="[a-z0-9]+(-[a-z0-9]+)*"
@@ -195,7 +196,6 @@ const counts = computed(() => ({
           </div>
         </div>
 
-        <!-- Thuộc tính bắt buộc cấp sản phẩm -->
         <div
           v-if="definitions.length > 0"
           style="margin-top: 10px; padding-top: 16px; border-top: 1px solid var(--adm-border-subtle)"
@@ -205,8 +205,12 @@ const counts = computed(() => ({
           </div>
           <div class="form-grid-2">
             <div v-for="definition in definitions" :key="definition.key" class="form-group">
-              <label class="form-label">{{ definition.label }}</label>
-              <AttributeInput v-model="form.attributes[definition.key]" :definition="definition" />
+              <label class="form-label" :for="`new-product-attr-${definition.key}`">{{ definition.label }}</label>
+              <AttributeInput
+                :id="`new-product-attr-${definition.key}`"
+                v-model="form.attributes[definition.key]"
+                :definition="definition"
+              />
               <small v-if="errorAt(`attributes.${definition.key}`)" class="field-error-msg">
                 {{ errorAt(`attributes.${definition.key}`) }}
               </small>
@@ -221,7 +225,6 @@ const counts = computed(() => ({
       </form>
     </div>
 
-    <!-- Tab filter bar & Search -->
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px">
       <div class="tab-filter-bar" style="margin-bottom: 0">
         <button
@@ -269,7 +272,6 @@ const counts = computed(() => ({
       </div>
     </div>
 
-    <!-- Bảng danh sách sản phẩm -->
     <div class="admin-table-card" style="margin-top: 16px">
       <div v-if="filteredProducts.length === 0" style="padding: 40px; text-align: center; color: var(--adm-muted)">
         Không tìm thấy sản phẩm nào phù hợp với bộ lọc hiện tại.
@@ -316,10 +318,7 @@ const counts = computed(() => ({
               {{ product.variantCount }}
             </td>
             <td>
-              <span class="badge" :class="STATUS_BADGES[product.status]">
-                <span class="badge-dot" />
-                {{ STATUS_LABELS[product.status] }}
-              </span>
+              <ProductStatusBadge :status="product.status" />
             </td>
             <td style="text-align: right">
               <NuxtLink :to="`/admin/products/${product.id}`" class="btn btn-secondary btn-sm"> Chi tiết › </NuxtLink>
