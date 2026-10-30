@@ -12,7 +12,7 @@ import { requirePermission } from '../auth/staff-context.ts'
 import { assertValidParent, lockTree } from '../catalog/categories.ts'
 import type { Db } from '../db.ts'
 import { Prisma, type Category } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError, rethrowUnique } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 
 function toAdmin({ id, productType, parentId, slug, name, hidden }: Category): AdminCategory {
@@ -23,10 +23,6 @@ const slugTaken = () =>
   new AppError(409, ErrorCode.CONFLICT, 'Slug này đã có danh mục khác dùng', [
     { path: 'slug', message: 'Slug đã được dùng' },
   ])
-
-function rethrowSlugTaken(err: unknown): never {
-  throw err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002' ? slugTaken() : err
-}
 
 /** Quản lý cây danh mục; mọi route cần `catalog.edit`. */
 export function adminCategoryRoutes(prisma: Db) {
@@ -50,7 +46,7 @@ export function adminCategoryRoutes(prisma: Db) {
           after: toAdmin(created),
         })
         return created
-      }).catch(rethrowSlugTaken)
+      }).catch(rethrowUnique(slugTaken))
       res.status(201).json(toAdmin(category))
     })
     .put('/:id', async (req, res) => {
@@ -87,10 +83,19 @@ export function adminCategoryRoutes(prisma: Db) {
       await audited(prisma, req, async (tx, audit) => {
         // Cùng khóa với tạo và đổi cha, để không có danh mục con nào được gắn vào giữa lúc kiểm và lúc xóa.
         await lockTree(tx)
+        // Khóa dòng danh mục: sản phẩm đang được gắn vào nó (khóa `FOR KEY SHARE`) thì chờ nhau, không lọt qua bước đếm.
+        await tx.$executeRaw`SELECT 1 FROM "category" WHERE "id" = ${id}::uuid FOR UPDATE`
         const before = await tx.category.findUnique({ where: { id } })
         if (!before) throw categoryNotFound()
         if (await tx.category.count({ where: { parentId: id } })) {
           throw new AppError(409, ErrorCode.CONFLICT, 'Danh mục còn danh mục con nên không xóa được; hãy ẩn nó')
+        }
+        // Phiên bản đã xuất bản (kể cả phiên bản cũ) cũng tham chiếu danh mục, và không sửa được.
+        if (
+          (await tx.product.count({ where: { categoryId: id } })) ||
+          (await tx.productVersion.count({ where: { categoryId: id } }))
+        ) {
+          throw new AppError(409, ErrorCode.CONFLICT, 'Danh mục còn sản phẩm nên không xóa được; hãy ẩn nó')
         }
         await tx.category.delete({ where: { id } })
         await audit({
@@ -125,6 +130,6 @@ async function updateCategory(
     const after = await tx.category.update({ where: { id }, data })
     await audit({ action, entityType: 'category', entityId: id, before: toAdmin(before), after: toAdmin(after) })
     return after
-  }).catch(rethrowSlugTaken)
+  }).catch(rethrowUnique(slugTaken))
   return toAdmin(updated)
 }

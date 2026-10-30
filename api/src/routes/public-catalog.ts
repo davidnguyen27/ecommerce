@@ -2,14 +2,18 @@ import { Router } from 'express'
 import { z } from 'zod'
 import {
   ErrorCode,
+  type AttributeSchema,
   type CategoryNode,
   type CategoryTree,
   type PublicBrand,
   type PublicBrandList,
   type PublicCategory,
 } from '@ecommerce/shared'
+import { ProductTypeParams, loadAttributeSchema } from '../catalog/attribute-schemas.ts'
 import { findVisible, loadVisibleTree, type VisibleCategory } from '../catalog/categories.ts'
+import type { Storage } from '../adapters/storage.ts'
 import type { Db } from '../db.ts'
+import { StoredImage, imageRenditions } from '../media/images.ts'
 import { AppError } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 
@@ -45,8 +49,18 @@ export function publicCategoryRoutes(prisma: Db) {
     })
 }
 
+/** Schema thuộc tính của một nhóm hàng, để website hiển thị nhãn và bộ lọc. */
+export function publicAttributeSchemaRoutes(prisma: Db) {
+  return Router().get('/:productType', async (req, res) => {
+    const { productType } = parse(ProductTypeParams, req.params)
+    const { attributes } = await loadAttributeSchema(prisma, productType)
+    const body: AttributeSchema = { productType, attributes }
+    res.json(body)
+  })
+}
+
 /** Khách duyệt thương hiệu; thương hiệu bị ẩn coi như không có. */
-export function publicBrandRoutes(prisma: Db) {
+export function publicBrandRoutes(prisma: Db, storage: Storage) {
   return Router()
     .get('/', async (_req, res) => {
       const brands = await prisma.brand.findMany({
@@ -59,12 +73,14 @@ export function publicBrandRoutes(prisma: Db) {
     })
     .get('/:slug', async (req, res) => {
       const { slug } = parse(SlugParams, req.params)
-      const brand = await prisma.brand.findFirst({
-        where: { slug, hidden: false },
-        select: { slug: true, name: true, description: true },
-      })
+      const brand = await prisma.brand.findFirst({ where: { slug, hidden: false } })
       if (!brand) throw new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy thương hiệu')
-      const body: PublicBrand = brand
+      const body: PublicBrand = {
+        slug: brand.slug,
+        name: brand.name,
+        description: brand.description,
+        logo: brand.logo === null ? null : imageRenditions(storage, StoredImage.parse(brand.logo)),
+      }
       res.json(body)
     })
 }

@@ -11,6 +11,10 @@ export const Permission = z.enum([
   'document.view',
   'content.edit',
   'audit.view',
+  /** Tạo cam kết có bằng chứng và quản lý loại cam kết; mặc định chỉ owner. */
+  'commitment.edit',
+  /** Nhập kho và điều chỉnh tồn. */
+  'stock.adjust',
 ])
 export type Permission = z.infer<typeof Permission>
 
@@ -36,6 +40,12 @@ export const CreateStaffRequest = z.object({
   roles: Roles,
 })
 export type CreateStaffRequest = z.infer<typeof CreateStaffRequest>
+
+export const UpdateStaffRequest = z.object({
+  email: z.email(),
+  name: z.string().trim().min(1),
+})
+export type UpdateStaffRequest = z.infer<typeof UpdateStaffRequest>
 
 export const ChangeRolesRequest = z.object({ roles: Roles })
 export type ChangeRolesRequest = z.infer<typeof ChangeRolesRequest>

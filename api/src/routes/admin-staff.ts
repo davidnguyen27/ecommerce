@@ -7,6 +7,7 @@ import {
   type StaffList,
   type StaffRole,
   type StaffSummary,
+  UpdateStaffRequest,
 } from '@ecommerce/shared'
 import { audited } from '../audit/audited.ts'
 import { hashPassword } from '../auth/password.ts'
@@ -15,7 +16,7 @@ import { requirePermission } from '../auth/staff-context.ts'
 import { normalizeEmail } from '../auth/staff.ts'
 import type { Db } from '../db.ts'
 import { Prisma, type Staff } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError, isUniqueViolation } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 
 function toSummary(staff: Staff): StaffSummary {
@@ -46,9 +47,7 @@ export function adminStaffRoutes(prisma: Db) {
       const email = normalizeEmail(input.email)
       const passwordHash = await hashPassword(input.password)
 
-      const emailTaken = new AppError(409, ErrorCode.CONFLICT, 'Email này đã có tài khoản nhân viên', [
-        { path: 'email', message: 'Email đã được dùng' },
-      ])
+      const emailTaken = emailTakenError()
       const staff = await audited(prisma, req, async (tx, audit) => {
         if (await tx.staff.findUnique({ where: { email } })) throw emailTaken
         const created = await tx.staff.create({ data: { email, name: input.name, passwordHash, roles: input.roles } })
@@ -56,9 +55,23 @@ export function adminStaffRoutes(prisma: Db) {
         return created
       }).catch((err: unknown) => {
         // Hai request cùng tạo một email lọt qua bước kiểm tra trên thì unique index chặn lại.
-        throw err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002' ? emailTaken : err
+        throw isUniqueViolation(err) ? emailTaken : err
       })
       res.status(201).json(toSummary(staff))
+    })
+    .put('/:id', async (req, res) => {
+      const input = parse(UpdateStaffRequest, req.body)
+      const email = normalizeEmail(input.email)
+      const body: StaffSummary = await updateStaff(prisma, req, 'staff.update', (before) => {
+        const data: Prisma.StaffUpdateInput = {}
+        if (input.name !== before.name) data.name = input.name
+        if (email !== before.email) data.email = email
+        return Object.keys(data).length ? data : null
+      }).catch((err: unknown) => {
+        // Email trùng nhân viên khác thì unique index chặn; transaction rollback nên không còn audit.
+        throw isUniqueViolation(err) ? emailTakenError() : err
+      })
+      res.json(body)
     })
     .put('/:id/roles', async (req, res) => {
       const { roles } = parse(ChangeRolesRequest, req.body)
@@ -82,13 +95,28 @@ export function adminStaffRoutes(prisma: Db) {
 
 const StaffParams = z.object({ id: z.uuid() })
 
+function emailTakenError() {
+  return new AppError(409, ErrorCode.CONFLICT, 'Email này đã có tài khoản nhân viên', [
+    { path: 'email', message: 'Email đã được dùng' },
+  ])
+}
+
 function sameRoles(a: readonly StaffRole[], b: readonly StaffRole[]) {
   return a.length === b.length && a.every((role) => b.includes(role))
 }
 
+/** Thay đổi làm phiên đang có không còn đúng: email đăng nhập, quyền, trạng thái khóa. */
+function affectsSessions(before: Staff, after: Staff) {
+  return (
+    before.email !== after.email ||
+    (before.lockedAt === null) !== (after.lockedAt === null) ||
+    !sameRoles(before.roles, after.roles)
+  )
+}
+
 /**
- * Sửa một nhân viên kèm audit trước/sau, và thu hồi mọi phiên của người đó
- * để quyền mới hay trạng thái khóa áp dụng cả với các thiết bị đang đăng nhập.
+ * Sửa một nhân viên kèm audit trước/sau. Đổi role, khóa/mở khóa hay email thì thu hồi mọi phiên của người đó
+ * để thay đổi áp dụng cả với các thiết bị đang đăng nhập; chỉ đổi tên thì giữ phiên.
  * `change` trả `null` khi không có gì đổi: khi đó không ghi gì và không thu hồi phiên.
  */
 async function updateStaff(
@@ -107,7 +135,7 @@ async function updateStaff(
     if (!data) return before
 
     const after = await tx.staff.update({ where: { id }, data })
-    await revokeAllRefreshTokens(tx, 'staff', id)
+    if (affectsSessions(before, after)) await revokeAllRefreshTokens(tx, 'staff', id)
     await audit({ action, entityType: 'staff', entityId: id, before: toSummary(before), after: toSummary(after) })
 
     const activeOwners = await tx.staff.count({ where: { roles: { has: 'owner' }, lockedAt: null } })
