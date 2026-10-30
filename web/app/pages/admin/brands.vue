@@ -189,9 +189,19 @@ await load()
                   style="width: 32px; height: 32px; background: var(--adm-surface-subtle); border-radius: 4px"
                 />
               </td>
-              <td><input v-model="editing.name" class="form-input" required /></td>
-              <td><input v-model="editing.slug" class="form-input" required pattern="[a-z0-9]+(-[a-z0-9]+)*" /></td>
-              <td><textarea v-model="editing.description" class="form-textarea" rows="2" /></td>
+              <td><input aria-label="Tên thương hiệu" v-model="editing.name" class="form-input" required /></td>
+              <td>
+                <input
+                  aria-label="Slug URL"
+                  v-model="editing.slug"
+                  class="form-input"
+                  required
+                  pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                />
+              </td>
+              <td>
+                <textarea aria-label="Mô tả thương hiệu" v-model="editing.description" class="form-textarea" rows="2" />
+              </td>
               <td>
                 <span class="badge" :class="brand.hidden ? 'badge-draft' : 'badge-published'">
                   {{ brand.hidden ? 'Đang ẩn' : 'Hiển thị' }}

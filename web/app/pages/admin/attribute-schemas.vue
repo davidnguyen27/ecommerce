@@ -240,6 +240,7 @@ await load()
 
                 <td>
                   <select
+                    aria-label="Kiểu dữ liệu"
                     v-model="row.type"
                     class="form-select"
                     style="font-size: 12px; padding: 4px 8px"
@@ -251,6 +252,7 @@ await load()
 
                 <td>
                   <textarea
+                    aria-label="Các lựa chọn, mỗi dòng một giá trị"
                     v-if="row.type === 'enum' || row.type === 'multi_enum'"
                     v-model="row.options"
                     class="form-textarea"
@@ -271,6 +273,7 @@ await load()
 
                 <td>
                   <select
+                    aria-label="Cấp áp dụng"
                     v-model="row.level"
                     class="form-select"
                     style="font-size: 12px; padding: 4px 8px"
@@ -283,11 +286,12 @@ await load()
                 </td>
 
                 <td style="text-align: center">
-                  <input v-model="row.required" type="checkbox" style="cursor: pointer" />
+                  <input aria-label="Bắt buộc" v-model="row.required" type="checkbox" style="cursor: pointer" />
                 </td>
 
                 <td style="text-align: center">
                   <input
+                    aria-label="Dùng làm bộ lọc"
                     v-model="row.filterable"
                     type="checkbox"
                     style="cursor: pointer"

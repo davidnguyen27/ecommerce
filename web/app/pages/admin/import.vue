@@ -113,6 +113,7 @@ const canCommit = computed(
       </ol>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
         <input
+          aria-label="File Excel import"
           type="file"
           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           class="form-input"

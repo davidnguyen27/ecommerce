@@ -192,6 +192,11 @@ type Check = {
   headers?: Record<string, string>
 }
 
+// Lời tự khẳng định nguồn gốc mà không có chứng từ là rủi ro pháp lý (ADR 0005). Trang sản phẩm được miễn vì cam kết
+// có bằng chứng ở đó được phép dùng các chữ này.
+const UNFOUNDED_CLAIMS = ['chính hãng', 'đại lý ủy quyền', 'phân phối độc quyền', 'trực tiếp nhập khẩu']
+const mayClaim = (path: string) => path.startsWith('/san-pham/')
+
 const canonical = (path: string) => `<link rel="canonical" href="${BASE}${path}">`
 const NOINDEX = '<meta name="robots" content="noindex, follow">'
 
@@ -382,6 +387,9 @@ async function runChecks(): Promise<number> {
       ...(res.status === check.status ? [] : [`status ${res.status}, cần ${check.status}`]),
       ...check.contains.filter((text) => !html.includes(text)).map((text) => `thiếu ${text}`),
       ...(check.excludes ?? []).filter((text) => html.includes(text)).map((text) => `không được có ${text}`),
+      ...(mayClaim(check.path) ? [] : UNFOUNDED_CLAIMS)
+        .filter((claim) => html.toLowerCase().includes(claim))
+        .map((claim) => `lời khẳng định không có căn cứ: ${claim}`),
       ...Object.entries(check.headers ?? {})
         .filter(([name, text]) => !res.headers.get(name)?.includes(text))
         .map(([name, text]) => `header ${name} là ${res.headers.get(name)}, cần chứa ${text}`),

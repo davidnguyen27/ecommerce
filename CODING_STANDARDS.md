@@ -28,6 +28,7 @@ Reviewer đọc file này khi chạy `/code-review`. Chỉ ghi các judgement ca
 ## Web
 
 - Trang khách render SSR, gọi API qua `useAsyncData` với `apiBase`, và parse response bằng schema shared. Trang `/admin/**` là SPA, gọi API qua `useAdminSession().adminFetch`.
+- Trang admin hiện link, nút hay số liệu thuộc trang khác thì lọc theo quyền của trang đó, lấy từ `ADMIN_MENU_ITEMS` (`web/app/utils/adminMenu.ts`), không khai lại quyền tại chỗ.
 - Thay đổi làm đổi HTML khách nhận (layout, chân trang, trang mới) thì thêm hoặc sửa kiểm tra tương ứng trong `scripts/smoke.ts`.
 
 ## Comment

@@ -160,6 +160,7 @@ await load()
               <td class="admin-table-num">{{ line.found?.onHand ?? '—' }}</td>
               <td>
                 <input
+                  aria-label="Số lượng"
                   v-model.number="line.quantity"
                   type="number"
                   min="1"

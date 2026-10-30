@@ -66,6 +66,7 @@ const succeeded = computed(() => outcomes.value.filter((o) => o.ok))
     <div class="admin-panel" style="padding: 16px 20px; margin-bottom: 20px">
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
         <input
+          aria-label="Chọn ảnh đặt tên theo SKU"
           type="file"
           multiple
           accept="image/jpeg,image/png,image/webp"
