@@ -277,8 +277,8 @@ function editVariant(request: Request, token: string, productId: string, id: str
 }
 
 describe('chi tiết sản phẩm cho khách', () => {
-  it('trả về thông tin sản phẩm, nhãn thuộc tính theo schema, biến thể đang bán kèm giá và ảnh', async () => {
-    const { request, token, product, white, image } = await readyToPublish()
+  it('trả về thông tin sản phẩm, nhãn thuộc tính theo schema, biến thể đang bán kèm id, giá và ảnh', async () => {
+    const { request, token, product, black, white, image } = await readyToPublish()
     await request
       .put(`/api/admin/products/${product.id}/images/${image.id}`)
       .set(bearer(token))
@@ -300,8 +300,20 @@ describe('chi tiết sản phẩm cho khách', () => {
       originStatement: 'Nhập khẩu từ Nike Mỹ.',
       attributes: { gioi_tinh: 'Nam', he_size: 'EU' },
       variants: [
-        { sku: 'AM90-DEN-40', attributes: { mau: 'Đen', size: '40' }, price: 3_500_000, compareAtPrice: null },
-        { sku: 'AM90-TRANG-41', attributes: { mau: 'Trắng', size: '41' }, price: 3_200_000, compareAtPrice: null },
+        {
+          id: black.id,
+          sku: 'AM90-DEN-40',
+          attributes: { mau: 'Đen', size: '40' },
+          price: 3_500_000,
+          compareAtPrice: null,
+        },
+        {
+          id: white.id,
+          sku: 'AM90-TRANG-41',
+          attributes: { mau: 'Trắng', size: '41' },
+          price: 3_200_000,
+          compareAtPrice: null,
+        },
       ],
       images: [{ alt: 'Màu trắng', skus: ['AM90-TRANG-41'], sizes: expect.any(Array) }],
       policies: [],

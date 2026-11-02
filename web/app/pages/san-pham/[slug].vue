@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { PublicProduct, type AttributeValue } from '@ecommerce/shared'
-import { ChevronRight, FileCheck2, Truck } from 'lucide-vue-next'
+import { MAX_CART_LINES, MAX_QUANTITY_PER_VARIANT, PublicProduct, type AttributeValue } from '@ecommerce/shared'
+import { ChevronRight, FileCheck2, ShoppingBag, Truck } from 'lucide-vue-next'
 
 const route = useRoute()
 const { apiBase } = useRuntimeConfig()
@@ -51,6 +51,30 @@ function closest(key: string, value: AttributeValue): Variant {
   return data
     .value!.variants.filter((v) => same(v.attributes[key], value))
     .reduce((best, v) => (score(v) > score(best) ? v : best))
+}
+
+// Biến thể ngừng bán không có trong `variants`, nên chỉ còn khóa khi hết hàng hoặc đã đủ số cái tối đa trong giỏ.
+const cart = useCart()
+const inCart = computed(() => (cart.ready.value ? cart.quantityOf(selected.value.id) : 0))
+const atLimit = computed(() => inCart.value >= MAX_QUANTITY_PER_VARIANT)
+const canAdd = computed(() => cart.ready.value && selected.value.inStock && !atLimit.value)
+const addLabel = computed(() => {
+  if (!selected.value.inStock) return 'Hết hàng'
+  if (atLimit.value) return `Đã có ${MAX_QUANTITY_PER_VARIANT} cái trong giỏ, tối đa ${MAX_QUANTITY_PER_VARIANT} cái`
+  return 'Thêm vào giỏ'
+})
+const addNotice = ref<string | null>(null)
+const addNoticeLinksCart = ref(false)
+watch(selected, () => (addNotice.value = null))
+
+function addSelected() {
+  const result = cart.add({ variantId: selected.value.id, price: selected.value.price })
+  addNoticeLinksCart.value = result.ok || result.reason === 'full'
+  addNotice.value = result.ok
+    ? `Đã thêm vào giỏ (${inCart.value} cái).`
+    : result.reason === 'full'
+      ? `Giỏ đã đủ ${MAX_CART_LINES} dòng, bỏ bớt dòng để thêm sản phẩm khác.`
+      : `Mỗi biến thể mua tối đa ${MAX_QUANTITY_PER_VARIANT} cái.`
 }
 
 /** Ảnh của biến thể đang chọn trước, rồi tới ảnh chung. */
@@ -188,6 +212,23 @@ useHead({
               </NuxtLink>
             </div>
           </fieldset>
+
+          <div class="mt-6 border-t border-border pt-5">
+            <button
+              type="button"
+              class="btn-primary h-12 w-full"
+              :disabled="!canAdd"
+              data-testid="add-to-cart"
+              @click="addSelected"
+            >
+              <ShoppingBag class="h-5 w-5" aria-hidden="true" />
+              {{ addLabel }}
+            </button>
+            <p v-if="addNotice" class="mt-3 text-sm" role="status" data-testid="add-to-cart-notice">
+              {{ addNotice }}
+              <NuxtLink v-if="addNoticeLinksCart" to="/gio-hang" class="link">Xem giỏ hàng</NuxtLink>
+            </p>
+          </div>
 
           <ul
             v-if="data.commitments.length || data.groundShippingOnly"
