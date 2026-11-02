@@ -7,6 +7,7 @@ import { requireAuth } from './auth/require-auth.ts'
 import { loadStaff } from './auth/staff-context.ts'
 import type { Db } from './db.ts'
 import type { EmailQueue } from './jobs/jobs.ts'
+import type { PaymentGateway } from './payments/gateway.ts'
 import { errorHandler, notFound } from './http/errors.ts'
 import { accountRoutes } from './routes/account.ts'
 import { adminRoutes } from './routes/admin.ts'
@@ -18,6 +19,7 @@ import { publicPageRoutes } from './routes/public-pages.ts'
 import { publicProductRoutes } from './routes/public-products.ts'
 import { publicSitemapRoutes } from './routes/public-sitemap.ts'
 import { checkoutRoutes } from './routes/checkout.ts'
+import { publicOrderRoutes } from './routes/public-orders.ts'
 import { healthRoutes } from './routes/health.ts'
 
 /** Mọi phụ thuộc bên ngoài đi vào app qua đây, để test thay bằng bản giả. */
@@ -31,6 +33,8 @@ export type AppDeps = {
   siteUrl: string
   /** Khóa ký JWT (HS256). */
   jwtSecret: string
+  /** Cổng thanh toán: PayOS, cổng giả lập khi chạy local, bản trong bộ nhớ khi test. */
+  payments: PaymentGateway
 }
 
 const REQUEST_ID = /^[\w.-]{1,128}$/
@@ -66,7 +70,8 @@ export function createApp(deps: AppDeps) {
   api.use('/categories', publicCategoryRoutes(deps.prisma))
   api.use('/attribute-schemas', publicAttributeSchemaRoutes(deps.prisma))
   api.use('/sitemap', publicSitemapRoutes(deps.prisma))
-  api.use('/checkout', checkoutRoutes(deps.prisma, deps.storage))
+  api.use('/checkout', checkoutRoutes(deps))
+  api.use('/orders', publicOrderRoutes(deps.prisma, deps.storage))
   const customerDeps = {
     prisma: deps.prisma,
     emails: deps.emails,

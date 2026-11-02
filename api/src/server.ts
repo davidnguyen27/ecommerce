@@ -4,6 +4,7 @@ import { mailerFromEnv } from './adapters/mailer.ts'
 import { storageFromEnv } from './adapters/storage.ts'
 import { createPrisma } from './db.ts'
 import { Jobs } from './jobs/jobs.ts'
+import { paymentGatewayFromEnv } from './payments/gateway.ts'
 
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) throw new Error('Thiếu biến môi trường DATABASE_URL')
@@ -28,6 +29,7 @@ const app = createApp({
   emails: jobs,
   siteUrl,
   jwtSecret,
+  payments: paymentGatewayFromEnv(process.env, siteUrl),
 })
 
 const server = app.listen(port, () => logger.info({ port }, 'API đang chạy'))

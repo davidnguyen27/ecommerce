@@ -4,7 +4,7 @@ Reviewer đọc file này khi chạy `/code-review`. Chỉ ghi các judgement ca
 
 ## Dữ liệu công khai
 
-- **Snapshot đã xuất bản:** endpoint cho khách chỉ đọc từ bản đã xuất bản (ví dụ `content_page_version`), không đọc trường nào của bản đang soạn, kể cả trường phụ như loại hay slug. Trường nào khách thấy mà sửa được trong bản nháp thì hoặc chép vào snapshot, hoặc cố định từ lúc tạo. Áp dụng cho trang nội dung và cho sản phẩm (ticket 11). Ngoại lệ duy nhất là còn hàng hay hết: đọc trực tiếp từ tồn của các biến thể có trong snapshot, chỉ trả boolean, không bao giờ trả số lượng (ADR 0006).
+- **Snapshot đã xuất bản:** endpoint cho khách chỉ đọc từ bản đã xuất bản (ví dụ `content_page_version`), không đọc trường nào của bản đang soạn, kể cả trường phụ như loại hay slug. Trường nào khách thấy mà sửa được trong bản nháp thì hoặc chép vào snapshot, hoặc cố định từ lúc tạo. Áp dụng cho trang nội dung và cho sản phẩm (ticket 11). Ngoại lệ duy nhất là còn hàng hay hết: đọc trực tiếp từ tồn trừ số đang giữ (`on_hand - reserved > 0`) của các biến thể có trong snapshot, chỉ trả boolean, không bao giờ trả số lượng (ADR 0006, ADR 0007).
 - Thứ cần giữ làm bằng chứng (audit log, phiên bản đã xuất bản) là append-only, chặn bằng trigger trong migration chứ không chỉ bằng việc API thiếu endpoint sửa.
 
 ## Ghi dữ liệu ở API quản trị
