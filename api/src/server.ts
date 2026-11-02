@@ -30,6 +30,7 @@ const app = createApp({
   siteUrl,
   jwtSecret,
   payments: paymentGatewayFromEnv(process.env, siteUrl),
+  payosChecksumKey: process.env.PAYOS_CHECKSUM_KEY || undefined,
 })
 
 const server = app.listen(port, () => logger.info({ port }, 'API đang chạy'))
