@@ -1,0 +1,70 @@
+# CI cho mọi push và PR: lint, typecheck, test API (Testcontainers) và smoke toàn stack (docker compose).
+# Runner ubuntu có sẵn Docker nên không cần secret: test dùng giá trị test, smoke tự sinh JWT_SECRET,
+# email ghi ra log, file giữ trong bộ nhớ, cổng thanh toán là cổng giả lập.
+# Không bật retry: CI Linux là cửa đánh giá test chập chờn trên Docker Desktop (ticket 15 của M0–M1).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  test-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # global-setup dựng Postgres bằng Testcontainers, qua Docker có sẵn trên runner.
+      - run: pnpm --filter @ecommerce/api test
+
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      # Không cài dependency và không cache: scripts/smoke.ts chỉ dùng module có sẵn của Node,
+      # còn image api và web được build trong docker compose.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: pnpm smoke
