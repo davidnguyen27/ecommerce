@@ -20,6 +20,33 @@ const returnPath = computed(() => {
   }
 })
 
+// Số tiền "chuyển": mặc định đúng tổng đơn; sửa để thử trường hợp lệch tiền (đơn vào danh sách cần đối soát).
+const paidAmount = ref<number | null>(null)
+watchEffect(() => {
+  if (paidAmount.value === null && Number.isFinite(amount.value) && amount.value > 0) paidAmount.value = amount.value
+})
+const busy = ref(false)
+const error = ref<string | null>(null)
+const done = ref(false)
+
+async function simulatePaid() {
+  busy.value = true
+  error.value = null
+  try {
+    // API chỉ có khi server dùng cổng giả lập; ghi nhận qua cùng hàm với webhook, nguồn `simulator`.
+    await $fetch('/api/payments/simulator/paid', {
+      method: 'POST',
+      body: { orderCode: Number(orderCode.value), amount: paidAmount.value },
+    })
+    done.value = true
+    if (returnPath.value) await navigateTo(returnPath.value)
+  } catch (err) {
+    error.value = apiErrorMessage(err)
+  } finally {
+    busy.value = false
+  }
+}
+
 useSeo({ title: 'Cổng thanh toán giả lập', description: 'Cổng thanh toán giả lập khi chạy local.', noindex: true })
 </script>
 
@@ -47,13 +74,27 @@ useSeo({ title: 'Cổng thanh toán giả lập', description: 'Cổng thanh to�
       </div>
     </dl>
 
-    <!-- Ticket 05 và 06 nối hai nút này vào ghi nhận thanh toán và hết hạn. -->
-    <div class="mt-6 grid gap-3">
-      <button type="button" class="btn-primary w-full" disabled data-testid="simulate-paid">
+    <!-- Ticket 06 nối nút hết hạn. -->
+    <form class="mt-6 grid gap-3" @submit.prevent="simulatePaid">
+      <label class="field">
+        Số tiền chuyển (VND)
+        <input
+          v-model.number="paidAmount"
+          class="field-input"
+          type="number"
+          min="1"
+          step="1"
+          required
+          data-testid="simulate-amount"
+        />
+      </label>
+      <p v-if="error" class="notice-error" role="alert">{{ error }}</p>
+      <p v-if="done && !returnPath" class="notice-ok" role="status">Đã ghi nhận khoản thanh toán giả lập.</p>
+      <button type="submit" class="btn-primary w-full" :disabled="busy || !orderCode" data-testid="simulate-paid">
         Giả lập đã thanh toán
       </button>
       <button type="button" class="btn-outline w-full" disabled data-testid="simulate-expired">Giả lập hết hạn</button>
-    </div>
+    </form>
 
     <p v-if="returnPath" class="mt-6 text-center text-sm">
       <NuxtLink :to="returnPath" class="link">Quay lại đơn hàng</NuxtLink>
