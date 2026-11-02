@@ -1,7 +1,7 @@
 import { ErrorCode, PublicImage, type AttributeValues, type PublicOrder } from '@ecommerce/shared'
 import { z } from 'zod'
 import type { Storage } from '../adapters/storage.ts'
-import { hashOpaqueToken } from '../auth/opaque-token.ts'
+import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
 import type { DbClient } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
@@ -11,8 +11,11 @@ import { StoredImage, imageRenditions } from '../media/images.ts'
 export const OrderLineImage = StoredImage.extend({ alt: z.string() })
 export type OrderLineImage = z.infer<typeof OrderLineImage>
 
-/** Loại sự kiện trong lịch sử đơn; các ticket sau thêm thanh toán, hủy, hết hạn, giao hàng. */
-export type OrderEventKind = 'created'
+/**
+ * Loại sự kiện trong lịch sử đơn: `paid` khi đủ tiền, `payment_flagged` khi khoản tiền cần đối soát.
+ * Các ticket sau thêm hủy, hết hạn, giao hàng.
+ */
+export type OrderEventKind = 'created' | 'paid' | 'payment_flagged'
 
 /** Ai làm: nhân viên, khách (có id khi đã đăng nhập) hoặc hệ thống. */
 export type OrderEventActor =
@@ -38,11 +41,28 @@ export async function recordOrderEvent(
   })
 }
 
-/** Link tra cứu đơn trên website, gửi khách và dùng làm trang quay về từ cổng thanh toán. */
+/** Link tra cứu đơn trên website, gửi khách qua email. */
 export function orderLookupUrl(siteUrl: string, code: number, token: string) {
   const url = new URL(`/don-hang/${code}`, siteUrl)
   url.searchParams.set('token', token)
   return url
+}
+
+/**
+ * Trang kết quả thanh toán, nơi cổng đưa khách quay về. Không chứa token: cổng không được thấy link xem và hủy đơn;
+ * trình duyệt giữ token từ response đặt mua.
+ */
+export function paymentResultUrl(siteUrl: string, code: number) {
+  const url = new URL(`/don-hang/${code}`, siteUrl)
+  url.searchParams.set('ket-qua', '1')
+  return url
+}
+
+/** Cấp thêm một token tra cứu cho đơn (chỉ lưu hash) và trả link, để gửi trong email. */
+export async function issueOrderLookupUrl(db: DbClient, siteUrl: string, order: { id: string; code: number }) {
+  const token = newOpaqueToken()
+  await db.orderLookupToken.create({ data: { orderId: order.id, tokenHash: hashOpaqueToken(token) } })
+  return orderLookupUrl(siteUrl, order.code, token)
 }
 
 /** Đủ để dựng `PublicOrder`. */
@@ -61,8 +81,9 @@ const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấ
  */
 export async function findOrderByToken(db: DbClient, code: string, token: string | undefined) {
   if (!token || !/^\d{1,9}$/.test(code)) throw notFound()
+  const hash = hashOpaqueToken(token)
   const order = await db.order.findFirst({
-    where: { code: Number(code), lookupTokenHash: hashOpaqueToken(token) },
+    where: { code: Number(code), OR: [{ lookupTokenHash: hash }, { lookupTokens: { some: { tokenHash: hash } } }] },
     include: ORDER_VIEW_INCLUDE,
   })
   if (!order) throw notFound()

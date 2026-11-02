@@ -358,11 +358,13 @@ const CHECKS: Check[] = [
   // Đặt mua và đơn qua token là dữ liệu cá nhân: HTML từ server chỉ có khung trang.
   { path: '/dat-mua', status: 200, contains: ['<h1>Đặt mua</h1>', 'Đang tải', NOINDEX] },
   { path: '/don-hang/100000?token=sai', status: 200, contains: ['Đơn hàng #100000', 'Đang tải', NOINDEX] },
+  // Trang kết quả cổng đưa khách quay về: URL không có token, token nằm ở sessionStorage của trình duyệt.
+  { path: '/don-hang/100000?ket-qua=1', status: 200, contains: ['Đơn hàng #100000', 'Đang tải', NOINDEX] },
   // Stack của smoke không có khóa PayOS nên dùng cổng giả lập.
   {
     path: '/thanh-toan-gia-lap?orderCode=100000&amount=2030000',
     status: 200,
-    contains: ['<h1>Cổng thanh toán giả lập</h1>', '#100000', NOINDEX],
+    contains: ['<h1>Cổng thanh toán giả lập</h1>', '#100000', 'Giả lập đã thanh toán', 'Số tiền chuyển', NOINDEX],
   },
   { path: '/xac-minh-email?token=sai', status: 200, contains: ['Link xác minh không hợp lệ hoặc đã hết hạn'] },
   {
