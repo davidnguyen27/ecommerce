@@ -3,6 +3,7 @@ import {
   CheckoutConflictDetails,
   CheckoutQuote,
   CheckoutResult,
+  PRIVACY_POLICY_SLUG,
   PROVINCES,
   RESERVATION_MINUTES,
   type CheckoutLineChange,
@@ -25,6 +26,17 @@ const form = reactive({
   wardCode: '',
   streetAddress: '',
   note: '',
+})
+const acceptPrivacyPolicy = ref(false)
+const invoice = reactive({ companyName: '', taxCode: '', address: '' })
+// Phần hóa đơn thu gọn mặc định; mở ra khi server báo lỗi ở trường của nó.
+const invoiceOpen = ref(false)
+
+// Khách đã đăng nhập đồng ý chính sách bảo mật lúc đăng ký, nên ô đồng ý chỉ hiện cho khách vãng lai.
+const session = useCustomerSession()
+const signedIn = ref<boolean | null>(null)
+onMounted(async () => {
+  signedIn.value = await session.signedIn()
 })
 
 // Danh mục phường/xã nặng, nên chỉ nạp ở trang này và chỉ ở trình duyệt.
@@ -90,7 +102,9 @@ const rows = computed(() =>
 const submitting = ref(false)
 const error = ref<string | null>(null)
 const fieldErrors = ref(new Map<string, string>())
-const canSubmit = computed(() => rows.value.length > 0 && changes.value.size === 0 && !submitting.value)
+const canSubmit = computed(
+  () => rows.value.length > 0 && changes.value.size === 0 && signedIn.value !== null && !submitting.value,
+)
 
 function acceptPrices() {
   if (quote.value) cart.acceptPrices(quote.value.lines)
@@ -102,15 +116,21 @@ async function submit() {
   fieldErrors.value = new Map()
   try {
     const { note, ...address } = form
+    // Phần hóa đơn bỏ trống thì không gửi; điền dở thì gửi để server báo trường còn thiếu.
+    const wantsInvoice = Object.values(invoice).some((value) => value.trim() !== '')
     const body: CheckoutRequest = {
       lines: cart.lines.value.map(({ variantId, quantity, price }) => ({ variantId, quantity, price })),
       address,
       note,
+      ...(!signedIn.value && { acceptPrivacyPolicy: acceptPrivacyPolicy.value }),
+      ...(wantsInvoice && { invoice: { ...invoice } }),
     }
-    const result = CheckoutResult.parse(await $fetch('/api/checkout', { method: 'POST', body }))
+    const result = CheckoutResult.parse(await session.optionalAuthFetch('/api/checkout', { method: 'POST', body }))
     cart.clear()
     window.location.assign(result.checkoutUrl)
   } catch (err) {
+    // Phiên đăng nhập hết hạn giữa chừng: đặt như khách vãng lai, cần tick đồng ý.
+    if (isUnauthorized(err)) signedIn.value = false
     const details = CheckoutConflictDetails.safeParse(apiErrorDetails(err))
     if (details.success) {
       // Giá, ngừng bán hay hết hàng đã đổi: hiện thay đổi từng dòng, khách phải xác nhận lại.
@@ -119,6 +139,7 @@ async function submit() {
     }
     error.value = apiErrorMessage(err)
     fieldErrors.value = new Map(apiFieldErrors(err).map((f) => [f.path, f.message]))
+    if ([...fieldErrors.value.keys()].some((path) => path.startsWith('invoice.'))) invoiceOpen.value = true
     submitting.value = false
   }
 }
@@ -206,6 +227,44 @@ useSeo({ title: 'Đặt mua', description: 'Thông tin nhận hàng và xác nh�
           Ghi chú cho đơn (không bắt buộc)
           <textarea v-model="form.note" class="field-input min-h-24 py-2" name="note" maxlength="1000" />
         </label>
+
+        <details
+          class="rounded-lg border border-border bg-card"
+          data-testid="invoice"
+          :open="invoiceOpen"
+          @toggle="invoiceOpen = ($event.target as HTMLDetailsElement).open"
+        >
+          <summary class="cursor-pointer px-5 py-4 font-medium">Xuất hóa đơn công ty (không bắt buộc)</summary>
+          <div class="space-y-5 px-5 pb-5">
+            <label class="field">
+              Tên công ty
+              <input v-model="invoice.companyName" class="field-input" name="companyName" autocomplete="organization" />
+              <span v-if="fieldErrors.get('invoice.companyName')" class="text-sm text-red-700">{{
+                fieldErrors.get('invoice.companyName')
+              }}</span>
+            </label>
+            <label class="field">
+              Mã số thuế
+              <input
+                v-model="invoice.taxCode"
+                class="field-input"
+                name="taxCode"
+                inputmode="numeric"
+                placeholder="0101234567 hoặc 0101234567-001"
+              />
+              <span v-if="fieldErrors.get('invoice.taxCode')" class="text-sm text-red-700">{{
+                fieldErrors.get('invoice.taxCode')
+              }}</span>
+            </label>
+            <label class="field">
+              Địa chỉ xuất hóa đơn
+              <input v-model="invoice.address" class="field-input" name="invoiceAddress" />
+              <span v-if="fieldErrors.get('invoice.address')" class="text-sm text-red-700">{{
+                fieldErrors.get('invoice.address')
+              }}</span>
+            </label>
+          </div>
+        </details>
       </section>
 
       <aside class="lg:col-span-5">
@@ -294,7 +353,33 @@ useSeo({ title: 'Đặt mua', description: 'Thông tin nhận hàng và xác nh�
               <Truck class="h-5 w-5 shrink-0" aria-hidden="true" />
               Đơn có sản phẩm chỉ giao bằng đường bộ, thời gian giao lâu hơn.
             </p>
+            <div v-if="quote.policies.length" class="mt-4 text-sm" data-testid="checkout-policies">
+              <p class="text-muted-foreground">Chính sách áp dụng cho đơn này:</p>
+              <ul class="mt-1 space-y-1">
+                <li v-for="p in quote.policies" :key="p.slug">
+                  <NuxtLink :to="`/trang/${p.slug}`" target="_blank" class="link">{{ p.title }}</NuxtLink>
+                </li>
+              </ul>
+            </div>
           </template>
+
+          <label v-if="signedIn === false" class="mt-5 flex items-start gap-3 text-sm leading-6">
+            <input
+              v-model="acceptPrivacyPolicy"
+              type="checkbox"
+              name="acceptPrivacyPolicy"
+              required
+              class="mt-1 h-4 w-4 shrink-0 accent-primary"
+            />
+            <span>
+              Tôi đồng ý với
+              <NuxtLink :to="`/trang/${PRIVACY_POLICY_SLUG}`" target="_blank" class="link">chính sách bảo mật</NuxtLink>
+              về xử lý dữ liệu cá nhân
+              <span v-if="fieldErrors.get('acceptPrivacyPolicy')" class="block text-red-700">{{
+                fieldErrors.get('acceptPrivacyPolicy')
+              }}</span>
+            </span>
+          </label>
 
           <p v-if="error" class="notice-error mt-4" role="alert">{{ error }}</p>
           <button type="submit" class="btn-primary mt-6 w-full" :disabled="!canSubmit">Đặt mua và thanh toán</button>
