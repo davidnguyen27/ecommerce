@@ -1,4 +1,4 @@
-# CI cho mọi push và PR: lint, typecheck, test API (Testcontainers) và smoke toàn stack (docker compose).
+# CI cho mọi push và PR: lint và test web, typecheck, test API (Testcontainers) và smoke toàn stack (docker compose).
 # Runner ubuntu có sẵn Docker nên không cần secret: test dùng giá trị test, smoke tự sinh JWT_SECRET,
 # email ghi ra log, file giữ trong bộ nhớ, cổng thanh toán là cổng giả lập.
 # Không bật retry: CI Linux là cửa đánh giá test chập chờn trên Docker Desktop (ticket 15 của M0–M1).
@@ -28,6 +28,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      # Test logic thuần của web (không cần Docker), chạy ở đây cho gọn.
+      - run: pnpm --filter @ecommerce/web test
 
   typecheck:
     runs-on: ubuntu-latest
