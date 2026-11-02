@@ -47,6 +47,7 @@ model Staff {
   publishedProductVersions ProductVersion[]
   stockMovements           StockMovement[]
   stockReceipts            StockReceipt[]
+  orderEvents              OrderEvent[]
 
   @@map("staff")
 }
@@ -114,8 +115,10 @@ model Customer {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  consents CustomerConsent[]
-  tokens   CustomerToken[]
+  consents    CustomerConsent[]
+  tokens      CustomerToken[]
+  orders      Order[]
+  orderEvents OrderEvent[]
 
   @@map("customer")
 }
@@ -197,6 +200,7 @@ model ContentPageVersion {
   publishedBy   Staff       @relation(fields: [publishedById], references: [id], onDelete: Restrict)
 
   customerConsents CustomerConsent[]
+  orders           OrderPolicyVersion[]
 
   @@unique([pageId, version])
   @@map("content_page_version")
@@ -339,11 +343,14 @@ model ProductVariant {
   sortOrder      Int           @default(0) @map("sort_order")
   /// Tồn trong kho; check constraint `>= 0`. Chỉ module kho ghi (api/src/stock/stock.ts), kèm một dòng sổ.
   onHand         Int           @default(0) @map("on_hand")
+  /// Số đã giữ cho đơn (ADR 0007); check constraint `>= 0` và `<= on_hand`. Còn hàng khi `on_hand - reserved > 0`.
+  reserved       Int           @default(0)
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
   images         ProductImageVariant[]
   stockMovements StockMovement[]
+  orderLines     OrderLine[]
 
   @@map("product_variant")
 }
@@ -603,4 +610,141 @@ model ShippingFeeProvince {
   fee          Int
 
   @@map("shipping_fee_province")
+}
+
+/// Trạng thái đơn hàng (GLOSSARY "Trạng thái đơn hàng"); chỉ chuyển theo các cạnh của spec.
+enum OrderStatus {
+  pending_payment
+  processing
+  completed
+  cancelled
+
+  @@map("order_status")
+}
+
+enum PaymentStatus {
+  unpaid
+  paid
+
+  @@map("payment_status")
+}
+
+enum FulfillmentStatus {
+  not_prepared
+  preparing
+  handed_over
+  delivered
+  failed
+
+  @@map("fulfillment_status")
+}
+
+/// Ai làm một sự kiện đơn: nhân viên (có `staffId`), khách hay hệ thống (job hết hạn, cổng thanh toán).
+enum OrderEventActor {
+  staff
+  customer
+  system
+
+  @@map("order_event_actor")
+}
+
+/// Đơn hàng. Thông tin nhận hàng, tiền và dòng đơn là snapshot lúc đặt mua, không đổi về sau.
+model Order {
+  id                String            @id @default(uuid()) @db.Uuid
+  /// Mã khách thấy và `orderCode` gửi cổng thanh toán; sequence riêng bắt đầu từ 100000.
+  code              Int               @unique @default(dbgenerated("nextval('order_code_seq'::regclass)"))
+  status            OrderStatus       @default(pending_payment)
+  paymentStatus     PaymentStatus     @default(unpaid) @map("payment_status")
+  fulfillmentStatus FulfillmentStatus @default(not_prepared) @map("fulfillment_status")
+  /// Có khi khách đã đăng nhập lúc đặt, hoặc đơn vãng lai được gắn sau khi xác minh email.
+  customerId        String?           @map("customer_id") @db.Uuid
+  customer          Customer?         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  recipientName     String            @map("recipient_name")
+  phone             String
+  /// Luôn lưu dạng chữ thường.
+  email             String
+  provinceCode      String            @map("province_code")
+  provinceName      String            @map("province_name")
+  wardCode          String            @map("ward_code")
+  wardName          String            @map("ward_name")
+  /// Số nhà, đường.
+  streetAddress     String            @map("street_address")
+  note              String            @default("")
+  /// VND. Check constraint: `total = subtotal + shipping_fee`.
+  subtotal          BigInt
+  shippingFee       BigInt            @map("shipping_fee")
+  total             BigInt
+  /// SHA-256 của token tra cứu, hex; token chỉ có trong response đặt mua và link gửi khách.
+  lookupTokenHash   String            @unique @map("lookup_token_hash")
+  /// Hạn giữ hàng khi chưa thanh toán; `null` khi không còn hạn (đã trả hoặc đã hủy).
+  reservedUntil     DateTime?         @map("reserved_until")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  lines          OrderLine[]
+  policyVersions OrderPolicyVersion[]
+  events         OrderEvent[]
+
+  @@index([customerId])
+  @@index([status, reservedUntil])
+  @@index([createdAt])
+  @@map("order")
+}
+
+/// Dòng đơn: snapshot biến thể lúc đặt mua.
+model OrderLine {
+  id          String         @id @default(uuid()) @db.Uuid
+  orderId     String         @map("order_id") @db.Uuid
+  order       Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Thứ tự trong giỏ, từ 0.
+  position    Int
+  variantId   String         @map("variant_id") @db.Uuid
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  sku         String
+  productName String         @map("product_name")
+  attributes  Json
+  /// Ảnh đại diện: `StoredImage` (api/src/media/images.ts) kèm `alt`; `null` khi không có.
+  image       Json?
+  /// VND, giá bán lúc đặt.
+  price       BigInt
+  /// 1–5 (check constraint).
+  quantity    Int
+
+  @@unique([orderId, position])
+  @@index([variantId])
+  @@map("order_line")
+}
+
+/// Phiên bản trang chính sách (đổi trả, bảo hành) gắn với sản phẩm trong đơn tại lúc đặt mua.
+model OrderPolicyVersion {
+  orderId       String             @map("order_id") @db.Uuid
+  order         Order              @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  pageVersionId String             @map("page_version_id") @db.Uuid
+  pageVersion   ContentPageVersion @relation(fields: [pageVersionId], references: [id], onDelete: Restrict)
+
+  @@id([orderId, pageVersionId])
+  @@index([pageVersionId])
+  @@map("order_policy_version")
+}
+
+/// Lịch sử thao tác của đơn. Append-only: trigger trong migration chặn UPDATE, DELETE và TRUNCATE.
+model OrderEvent {
+  id         String          @id @default(uuid()) @db.Uuid
+  seq        BigInt          @unique @default(autoincrement())
+  orderId    String          @map("order_id") @db.Uuid
+  order      Order           @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Loại sự kiện, xem `OrderEventKind` (api/src/orders/orders.ts).
+  kind       String
+  actor      OrderEventActor
+  /// Có đúng khi `actor = staff` (check constraint).
+  staffId    String?         @map("staff_id") @db.Uuid
+  staff      Staff?          @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  /// Chỉ khi `actor = customer` và khách đã đăng nhập; khách dùng token tra cứu thì `null`.
+  customerId String?         @map("customer_id") @db.Uuid
+  customer   Customer?       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  data       Json            @default("{}")
+  createdAt  DateTime        @default(now()) @map("created_at")
+
+  @@index([orderId, seq])
+  @@map("order_event")
 }

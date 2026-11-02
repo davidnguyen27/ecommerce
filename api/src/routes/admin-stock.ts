@@ -36,6 +36,7 @@ function toStockItem(variant: StockRow): StockItem {
     attributes: variant.attributes as AttributeValues,
     status: variant.status,
     onHand: variant.onHand,
+    reserved: variant.reserved,
     product,
     brand,
   }
