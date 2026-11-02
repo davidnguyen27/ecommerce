@@ -211,6 +211,8 @@ const CHECKS: Check[] = [
       'alt="Đã thông báo Bộ Công Thương"',
       '<summary>Danh mục</summary>',
       'href="/tai-khoan"',
+      // Biểu tượng giỏ; số món chỉ có sau khi mount nên HTML từ server không có.
+      'href="/gio-hang"',
       'Giày dép',
       'href="/danh-muc/sneaker-co-thap"',
       'role="search"',
@@ -282,6 +284,8 @@ const CHECKS: Check[] = [
       'data-testid="availability"',
       'Còn hàng',
       'Hết hàng',
+      'data-testid="add-to-cart"',
+      'Thêm vào giỏ',
       // Dữ liệu cấu trúc: khoảng giá VND của hai biến thể đang bán, còn hàng vì Đen còn, thương hiệu, ảnh.
       '<script type="application/ld+json">',
       '"@type":"Product"',
@@ -349,6 +353,8 @@ const CHECKS: Check[] = [
   },
   // Phiên khách chỉ có ở trình duyệt, nên HTML từ server chỉ có khung trang.
   { path: '/tai-khoan', status: 200, contains: ['<h1>Tài khoản</h1>', 'Đang tải'] },
+  // Giỏ hàng ở localStorage của trình duyệt, nên HTML từ server chỉ có khung trang.
+  { path: '/gio-hang', status: 200, contains: ['<h1>Giỏ hàng</h1>', 'Đang tải', NOINDEX] },
   { path: '/xac-minh-email?token=sai', status: 200, contains: ['Link xác minh không hợp lệ hoặc đã hết hạn'] },
   {
     path: '/admin/login',
