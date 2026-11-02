@@ -77,8 +77,16 @@ Số lượng thực có trong kho của một biến thể. Chỉ có một kho
 _Avoid_: tồn kho của sản phẩm (tồn luôn ở cấp biến thể)
 
 **Còn hàng** / **Hết hàng** (In stock / Out of stock):
-Điều khách thấy về tồn của một biến thể: còn hàng khi tồn lớn hơn 0. Sản phẩm còn hàng khi có ít nhất một biến thể đang hiện với khách còn hàng. Khách không thấy số lượng.
+Điều khách thấy về một biến thể: còn hàng khi tồn trừ số đang giữ hàng lớn hơn 0. Sản phẩm còn hàng khi có ít nhất một biến thể đang hiện với khách còn hàng. Khách không thấy số lượng.
 _Avoid_: ngừng bán (khi nói về hết hàng)
+
+**Giữ hàng** (Reservation):
+Số lượng của một biến thể đã thuộc về một đơn nhưng chưa rời kho. Giữ hàng không làm giảm tồn; hàng chỉ rời tồn khi bàn giao vận chuyển.
+_Avoid_: đặt giữ, khóa hàng, trừ kho (khi hàng chưa rời kho)
+
+**Xuất bán** (Sale issue):
+Loại biến động trong sổ xuất nhập khi hàng của một đơn rời kho lúc bàn giao vận chuyển.
+_Avoid_: trừ kho, xuất hàng
 
 **Sổ xuất nhập** (Stock ledger):
 Danh sách chỉ ghi thêm mọi lần tồn thay đổi: biến thể, số lượng tăng hoặc giảm, tồn sau thay đổi, loại biến động, người làm và thời điểm.
@@ -93,6 +101,53 @@ Thay đổi tồn ngoài nhập kho và bán hàng, luôn kèm một lý do: ki�
 
 **Tồn đầu kỳ** (Opening stock):
 Số tồn ghi lần đầu cho một biến thể khi bắt đầu dùng hệ thống; chỉ ghi được khi biến thể chưa có dòng nào trong sổ xuất nhập.
+
+## Mua hàng
+
+**Giỏ hàng** (Cart):
+Danh sách biến thể và số lượng khách định mua, chỉ nằm ở trình duyệt của khách. Giỏ hàng không giữ hàng và không có giá chốt.
+_Avoid_: đơn nháp
+
+**Đặt mua** (Checkout):
+Lần khách xác nhận giỏ hàng cùng thông tin nhận hàng; hệ thống kiểm lại giá và tồn rồi tạo đơn hàng.
+_Avoid_: thanh toán (khi nói về bước tạo đơn)
+
+**Đơn hàng** (Order):
+Cam kết mua của khách, ghi lại các dòng đơn, địa chỉ nhận hàng, phí giao, tổng tiền và phiên bản chính sách tại thời điểm đặt mua; sửa giá hay chính sách sau đó không làm đơn thay đổi.
+_Avoid_: đơn đặt hàng, giao dịch
+
+**Dòng đơn** (Order line):
+Một biến thể trong đơn hàng với số lượng và giá bán tại thời điểm đặt mua.
+
+**Khách vãng lai** (Guest):
+Khách đặt mua mà không đăng nhập; tra cứu đơn qua link gửi tới email đã nhập.
+
+**Phí giao** (Shipping fee):
+Số tiền giao hàng tính theo tỉnh/thành nhận hàng, ghi vào đơn lúc đặt mua.
+_Avoid_: phí ship, phí vận chuyển
+
+**Trạng thái đơn hàng** / **Trạng thái thanh toán** / **Trạng thái giao hàng**:
+Ba khía cạnh theo dõi độc lập của một đơn. Đã trả đủ không có nghĩa là đã giao; đã bàn giao không có nghĩa là đã giao tới khách.
+
+**Cần đối soát** (Needs reconciliation):
+Đơn có khoản tiền về không khớp với đơn: lệch số tiền, hoặc về khi đơn đã hết hạn hay đã hủy. Hệ thống không tự xử lý; nhân viên quyết định giữ lại hàng hay hoàn tiền.
+_Avoid_: lỗi thanh toán, đơn treo
+
+**Hủy đơn** (Order cancellation):
+Kết thúc một đơn chưa thanh toán, do khách tự hủy, nhân viên hủy hoặc đơn hết thời hạn giữ hàng; hàng đang giữ được nhả. Không phải hoàn tiền.
+_Avoid_: hoàn đơn, xóa đơn
+
+**Phiếu soạn hàng** (Packing slip):
+Trang in cho nhân viên kho lấy đúng SKU và số lượng của một đơn, kèm địa chỉ nhận.
+_Avoid_: phiếu xuất kho
+
+**Bàn giao vận chuyển** (Handover):
+Lúc nhân viên kho giao kiện hàng cho đơn vị vận chuyển và ghi mã vận đơn; hàng rời tồn tại thời điểm này.
+_Avoid_: xuất kho, gửi hàng
+
+**Mã vận đơn** (Tracking number):
+Mã của đơn vị vận chuyển cho một kiện hàng, nhân viên nhập tay.
+_Avoid_: mã đơn
 
 ## Nguồn gốc và cam kết
 
