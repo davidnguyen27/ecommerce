@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ATTRIBUTE_FILTER_PREFIX, CategoryTree, GENDER_KEY, LegalInfo, PublishedPageList } from '@ecommerce/shared'
-import { Search, UserRound, X } from 'lucide-vue-next'
+import { Search, ShoppingBag, UserRound, X } from 'lucide-vue-next'
 
 const { apiBase } = useRuntimeConfig()
 const route = useRoute()
+const cart = useCart()
 
 /** Lọc Nam hoặc Nữ thì API gồm cả sản phẩm Unisex. */
 const GENDERS = ['Nam', 'Nữ'] as const
@@ -174,6 +175,23 @@ onBeforeUnmount(() => {
           <UserRound class="h-5 w-5" aria-hidden="true" />
           <span class="hidden sm:inline">Tài khoản</span>
           <span class="sr-only sm:hidden">Tài khoản</span>
+        </NuxtLink>
+
+        <!-- Số món chỉ có sau khi mount (giỏ ở localStorage), nên HTML từ server không lệch với lúc hydrate. -->
+        <NuxtLink
+          to="/gio-hang"
+          class="relative inline-flex h-10 items-center gap-2 rounded-md px-2.5 text-sm font-medium transition-colors hover:bg-secondary lg:order-6"
+          data-testid="cart-link"
+        >
+          <ShoppingBag class="h-5 w-5" aria-hidden="true" />
+          <span class="hidden sm:inline">Giỏ hàng</span>
+          <span class="sr-only sm:hidden">Giỏ hàng</span>
+          <span
+            v-if="cart.count.value"
+            class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold tabular-nums text-primary-foreground sm:static sm:h-5"
+            data-testid="cart-count"
+            ><span class="sr-only">, </span>{{ cart.count.value }}<span class="sr-only"> món</span></span
+          >
         </NuxtLink>
       </div>
     </header>

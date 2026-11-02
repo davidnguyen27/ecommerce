@@ -286,6 +286,8 @@ export const PublicProduct = z.object({
   /** Chỉ biến thể đang bán, theo thứ tự hiển thị. */
   variants: z.array(
     z.object({
+      /** Id biến thể trong phiên bản đang xuất bản; giỏ hàng lưu theo id này. */
+      id: z.string(),
       sku: z.string(),
       attributes: AttributeValues,
       price: z.number(),
