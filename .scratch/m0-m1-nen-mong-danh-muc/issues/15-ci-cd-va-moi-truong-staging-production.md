@@ -26,3 +26,5 @@ Ticket này cần người làm: tạo repo GitHub, có VPS, có tài khoản Cl
 - `pnpm smoke`: đã có kiểm tra lời khẳng định nguồn gốc không có căn cứ trên trang khách (ADR 0005), chỉ có tác dụng khi CI chạy nó.
 - Smoke admin bằng trình duyệt (Playwright) trên stack của `pnpm smoke --keep`: đăng nhập owner, sửa và lưu biến thể, xuất bản; đăng nhập `warehouse` và kiểm dashboard không hiện lối tắt danh mục. Hiện smoke chỉ đọc được phần khung của SPA admin.
 - `knip` để báo file và thư viện không dùng (cần cấu hình cho auto-import của Nuxt).
+
+**Ghi chú (2026-11-02):** Phần CI (lint, typecheck, test API bằng Testcontainers và `pnpm smoke` cho mọi push và PR, không retry) đã chuyển sang ticket 13 của M3 (`.scratch/m3-mua-hang/issues/13-ci-github-actions.md`), workflow ở `.github/workflows/ci.yml`. Mục checkbox CI ở trên do ticket đó đảm nhận. Ticket này còn lại: build image, đẩy GHCR, deploy staging/production lên VPS, Caddy hai tên miền, tài liệu deploy và rollback. Smoke admin bằng Playwright thuộc ticket 14 của M3; `knip` vẫn để sau.
