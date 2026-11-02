@@ -201,6 +201,7 @@ model ContentPageVersion {
 
   customerConsents CustomerConsent[]
   orders           OrderPolicyVersion[]
+  orderConsents    Order[]
 
   @@unique([pageId, version])
   @@map("content_page_version")
@@ -681,6 +682,15 @@ model Order {
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
 
+  /// Khách vãng lai: phiên bản chính sách bảo mật đã đồng ý lúc đặt. Check constraint: có khi không có `customerId`.
+  privacyPolicyVersionId String?             @map("privacy_policy_version_id") @db.Uuid
+  privacyPolicyVersion   ContentPageVersion? @relation(fields: [privacyPolicyVersionId], references: [id], onDelete: Restrict)
+
+  /// Xuất hóa đơn công ty, snapshot lúc đặt. Check constraint: có đủ cả ba hoặc không có gì.
+  invoiceCompanyName String? @map("invoice_company_name")
+  invoiceTaxCode     String? @map("invoice_tax_code")
+  invoiceAddress     String? @map("invoice_address")
+
   lines          OrderLine[]
   policyVersions OrderPolicyVersion[]
   events         OrderEvent[]
@@ -688,6 +698,9 @@ model Order {
   @@index([customerId])
   @@index([status, reservedUntil])
   @@index([createdAt])
+  @@index([privacyPolicyVersionId])
+  @@index([email, status])
+  @@index([phone, status])
   @@map("order")
 }
 
