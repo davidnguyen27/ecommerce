@@ -13,8 +13,8 @@ export type Request = Awaited<ReturnType<typeof createTestApp>>['request']
 export const bearer = (token: string) => ({ Authorization: `Bearer ${token}` })
 
 /** App trên DB sạch, đã có owner tạo bằng lệnh seed. */
-export async function appWithOwner() {
-  const app = await createTestApp()
+export async function appWithOwner(options?: Parameters<typeof createTestApp>[0]) {
+  const app = await createTestApp(options)
   await seedOwner(app.prisma, OWNER)
   return app
 }

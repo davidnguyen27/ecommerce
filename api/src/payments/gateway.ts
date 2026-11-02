@@ -51,6 +51,8 @@ export class InMemoryPaymentGateway implements PaymentGateway {
   readonly payments = new Map<number, PaymentInfo>()
   /** Đặt `true` để mọi lần tạo link sau đó đều lỗi, như cổng không trả lời. */
   failCreate = false
+  /** Đặt `true` để mọi lần truy vấn sau đó đều lỗi. */
+  failGetPayment = false
 
   async createLink(request: PaymentLinkRequest) {
     if (this.failCreate) throw new Error('Cổng thanh toán giả lập lỗi')
@@ -59,6 +61,7 @@ export class InMemoryPaymentGateway implements PaymentGateway {
   }
 
   async getPayment(orderCode: number) {
+    if (this.failGetPayment) throw new Error('Cổng thanh toán giả lập lỗi')
     return this.payments.get(orderCode) ?? PENDING
   }
 

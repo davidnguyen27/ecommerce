@@ -19,7 +19,7 @@ import type { DbClient } from '../db.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 import { imageRenditions } from '../media/images.ts'
-import { orderLookupUrl, recordOrderEvent, type OrderLineImage } from '../orders/orders.ts'
+import { paymentResultUrl, recordOrderEvent, type OrderLineImage } from '../orders/orders.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
 import { inStockIds, reserveStock } from '../stock/stock.ts'
 
@@ -176,7 +176,8 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl }: AppDeps) 
           await recordOrderEvent(tx, order.id, 'created', { type: 'customer' }, { total })
 
           // Gọi cổng sau cùng, khi mọi thứ khác đã ghi được; cổng lỗi thì cả đơn rollback.
-          const returnUrl = orderLookupUrl(siteUrl, order.code, token).toString()
+          // Trang quay về không mang token: cổng không được thấy link xem và hủy đơn.
+          const returnUrl = paymentResultUrl(siteUrl, order.code).toString()
           const link = await payments
             .createLink({
               orderCode: order.code,
