@@ -1,24 +1,44 @@
 <script setup lang="ts">
 import { PublicOrder } from '@ecommerce/shared'
 
-// Đơn là dữ liệu cá nhân, mở bằng token trong link: chỉ nạp ở trình duyệt, HTML từ server không có gì của đơn.
+// Đơn là dữ liệu cá nhân, mở bằng token: chỉ nạp ở trình duyệt, HTML từ server không có gì của đơn.
+// Hai cách vào: link trong email (`?token=…`), hoặc trang kết quả khi cổng thanh toán đưa khách quay về
+// (`?ket-qua=1`, không có token trong URL; token lấy từ sessionStorage của tab đặt mua).
 const route = useRoute()
 const code = computed(() => String(route.params.code))
+const isResult = computed(() => route.query['ket-qua'] === '1')
 const order = ref<PublicOrder | null>(null)
 const error = ref<string | null>(null)
+const missingToken = ref(false)
+const checking = ref(false)
+
+function lookupToken() {
+  return typeof route.query.token === 'string' ? route.query.token : recallOrderToken(code.value)
+}
 
 async function load() {
-  const token = typeof route.query.token === 'string' ? route.query.token : ''
+  const token = lookupToken()
+  if (!token) {
+    missingToken.value = true
+    return
+  }
+  checking.value = true
   try {
-    order.value = PublicOrder.parse(await $fetch(`/api/orders/${encodeURIComponent(code.value)}`, { query: { token } }))
+    // Trang kết quả hỏi cổng thanh toán trước khi trả đơn, phòng khi thông báo của cổng tới chậm.
+    const query = isResult.value ? { token, refresh: '1' } : { token }
+    order.value = PublicOrder.parse(await $fetch(`/api/orders/${encodeURIComponent(code.value)}`, { query }))
     error.value = null
   } catch (err) {
     error.value = apiErrorMessage(err)
+  } finally {
+    checking.value = false
   }
 }
 onMounted(load)
 
-// Token nằm trong URL: không gửi URL này cho trang khác qua Referer.
+const awaitingPayment = computed(() => isResult.value && order.value?.status === 'pending_payment')
+
+// Link email có token trong URL: không gửi URL này cho trang khác qua Referer.
 useHead({ meta: [{ name: 'referrer', content: 'no-referrer' }] })
 useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đơn hàng của bạn.', noindex: true })
 </script>
@@ -26,8 +46,23 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
 <template>
   <main class="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
     <h1>Đơn hàng #{{ code }}</h1>
-    <p v-if="error" class="notice-error mt-8" role="alert">{{ error }}</p>
+    <p v-if="missingToken" class="notice-error mt-8" role="alert" data-testid="order-token-missing">
+      Trình duyệt này không còn thông tin để mở đơn hàng. Nếu bạn đã thanh toán, hãy mở đơn bằng link trong email xác
+      nhận chúng tôi gửi bạn.
+    </p>
+    <p v-else-if="error" class="notice-error mt-8" role="alert">{{ error }}</p>
     <p v-else-if="!order" class="mt-8 text-muted-foreground">Đang tải…</p>
-    <OrderView v-else :order="order" class="mt-8" />
+    <template v-else>
+      <div
+        v-if="awaitingPayment"
+        class="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-card px-4 py-3 text-sm"
+        role="status"
+        data-testid="payment-pending"
+      >
+        <span>Chưa nhận được thanh toán. Nếu bạn vừa chuyển khoản, đợi một lát rồi kiểm tra lại.</span>
+        <button type="button" class="btn-outline" :disabled="checking" @click="load">Kiểm tra lại</button>
+      </div>
+      <OrderView :order="order" class="mt-8" />
+    </template>
   </main>
 </template>

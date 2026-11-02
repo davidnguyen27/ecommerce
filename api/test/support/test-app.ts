@@ -8,14 +8,19 @@ import { createPrisma } from '../../src/db.ts'
 import { InMemoryMailer } from '../../src/adapters/mailer.ts'
 import { InMemoryStorage } from '../../src/adapters/storage.ts'
 import { Jobs } from '../../src/jobs/jobs.ts'
-import { InMemoryPaymentGateway } from '../../src/payments/gateway.ts'
+import { InMemoryPaymentGateway, SimulatorPaymentGateway } from '../../src/payments/gateway.ts'
 
 /** Gốc URL website trong link của email gửi ra từ test. */
 export const SITE_URL = 'https://shop.test'
 
+/** Checksum key PayOS của test; test tự ký webhook bằng key này. */
+export const PAYOS_CHECKSUM_KEY = 'test-checksum-key'
+
 type Options = {
   /** Ghi đè URL DB, ví dụ để giả lập mất kết nối. */
   databaseUrl?: string
+  /** Dùng cổng giả lập như khi chạy local thay cho bản trong bộ nhớ (`payments` khi đó không được app dùng). */
+  simulator?: boolean
 }
 
 /**
@@ -46,7 +51,16 @@ export async function createTestApp(options: Options = {}) {
   const startJobs = !options.databaseUrl
   if (startJobs) await jobs.start()
   const payments = new InMemoryPaymentGateway()
-  const app = createApp({ prisma, logger, emails: jobs, storage, jwtSecret, siteUrl: SITE_URL, payments })
+  const app = createApp({
+    prisma,
+    logger,
+    emails: jobs,
+    storage,
+    jwtSecret,
+    siteUrl: SITE_URL,
+    payments: options.simulator ? new SimulatorPaymentGateway(SITE_URL) : payments,
+    payosChecksumKey: PAYOS_CHECKSUM_KEY,
+  })
 
   onTestFinished(async () => {
     if (startJobs) await jobs.stop()

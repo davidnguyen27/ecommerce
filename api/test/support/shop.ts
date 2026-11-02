@@ -32,8 +32,8 @@ export const ADDRESS = {
  * Cửa hàng sẵn sàng nhận đơn: owner đã đăng nhập, phí giao mặc định 30.000, giày Air Max đã xuất bản kèm trang
  * chính sách đổi trả đã xuất bản. AM-40 giá 2.000.000 còn 3 đôi, AM-41 giá 2.100.000 hết hàng.
  */
-export async function shop() {
-  const app = await appWithOwner()
+export async function shop(options?: Parameters<typeof appWithOwner>[0]) {
+  const app = await appWithOwner(options)
   const { request } = app
   const { accessToken: token } = await login(request, OWNER.email, OWNER.password)
   const brand = await post(request, token, '/api/admin/brands', { name: 'Nike', slug: 'nike' })
