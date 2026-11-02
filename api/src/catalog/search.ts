@@ -100,11 +100,11 @@ function orderBy(c: SearchCriteria, sort: ProductSort | undefined) {
     const { exact, prefix } = skuPatterns(c.text)
     order.push(Prisma.sql`CASE WHEN s."skus" LIKE ${exact} THEN 2 WHEN s."skus" LIKE ${prefix} THEN 1 ELSE 0 END DESC`)
   }
-  // Còn hàng trước hết hàng, đọc tồn trực tiếp của các biến thể trong phiên bản đang xuất bản (ADR 0006).
+  // Còn hàng trước hết hàng, đọc tồn trừ số đang giữ của các biến thể trong phiên bản đang xuất bản (ADR 0006, 0007).
   order.push(Prisma.sql`EXISTS (
     SELECT 1 FROM jsonb_array_elements(v."snapshot"->'variants') x
     JOIN "product_variant" pv ON pv."id" = (x->>'id')::uuid
-    WHERE pv."on_hand" > 0
+    WHERE pv."on_hand" - pv."reserved" > 0
   ) DESC`)
   if (sort === 'price_asc') order.push(Prisma.sql`v."from_price" ASC`)
   else if (sort === 'price_desc') order.push(Prisma.sql`v."from_price" DESC`)

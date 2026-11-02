@@ -44,6 +44,8 @@ export function useCart() {
     setQuantity: (variantId: string, quantity: number) => save(setQuantity(lines.value, variantId, quantity)),
     remove: (variantId: string) => save(removeLine(lines.value, variantId)),
     acceptPrices: (quoted: Parameters<typeof acceptQuotedPrices>[1]) => save(acceptQuotedPrices(lines.value, quoted)),
+    /** Bỏ hết, sau khi đặt mua thành công. */
+    clear: () => save([]),
   }
 }
 

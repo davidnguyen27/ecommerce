@@ -42,12 +42,6 @@ const unavailable = computed(() => [...changes.value.values()].some((change) => 
 const canCheckout = computed(() => rows.value.length > 0 && changes.value.size === 0)
 
 const QUANTITIES = Array.from({ length: MAX_QUANTITY_PER_VARIANT }, (_, i) => i + 1)
-const attributesText = (attributes: Record<string, unknown> | null) =>
-  attributes
-    ? Object.values(attributes)
-        .map((value) => (Array.isArray(value) ? value.join(', ') : String(value)))
-        .join(' · ')
-    : ''
 
 useSeo({ title: 'Giỏ hàng', description: 'Các sản phẩm bạn đã chọn.', noindex: true })
 </script>
@@ -111,7 +105,7 @@ useSeo({ title: 'Giỏ hàng', description: 'Các sản phẩm bạn đã chọn
                     >
                     <p v-else class="font-medium text-muted-foreground">Sản phẩm không còn bán</p>
                     <p v-if="current.attributes" class="mt-0.5 text-sm text-muted-foreground">
-                      {{ attributesText(current.attributes) }}
+                      {{ variantAttributesText(current.attributes) }}
                     </p>
                   </div>
                   <p v-if="current.price !== null" class="text-right font-semibold tabular-nums">

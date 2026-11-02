@@ -8,6 +8,7 @@ import { createPrisma } from '../../src/db.ts'
 import { InMemoryMailer } from '../../src/adapters/mailer.ts'
 import { InMemoryStorage } from '../../src/adapters/storage.ts'
 import { Jobs } from '../../src/jobs/jobs.ts'
+import { InMemoryPaymentGateway } from '../../src/payments/gateway.ts'
 
 /** Gốc URL website trong link của email gửi ra từ test. */
 export const SITE_URL = 'https://shop.test'
@@ -44,7 +45,8 @@ export async function createTestApp(options: Options = {}) {
   const jobs = new Jobs({ databaseUrl, prisma, mailer, logger, maxConnections: 2 })
   const startJobs = !options.databaseUrl
   if (startJobs) await jobs.start()
-  const app = createApp({ prisma, logger, emails: jobs, storage, jwtSecret, siteUrl: SITE_URL })
+  const payments = new InMemoryPaymentGateway()
+  const app = createApp({ prisma, logger, emails: jobs, storage, jwtSecret, siteUrl: SITE_URL, payments })
 
   onTestFinished(async () => {
     if (startJobs) await jobs.stop()
@@ -59,6 +61,8 @@ export async function createTestApp(options: Options = {}) {
     jwtSecret,
     mailer,
     storage,
+    /** Cổng thanh toán giả: link đã tạo, đã hủy, trạng thái truy vấn, lỗi khi tạo link. */
+    payments,
     logs: () => lines.map((line) => JSON.parse(line) as Record<string, unknown>),
   }
 }
