@@ -1,6 +1,7 @@
 import sharp from 'sharp'
 import { expect } from 'vitest'
 import { OWNER, appWithOwner, bearer, login, type Request } from './staff.ts'
+import { publishPrivacyPolicy } from './customer.ts'
 import { adjust } from './stock.ts'
 
 async function post(request: Request, token: string, path: string, body: Record<string, unknown>) {
@@ -30,7 +31,7 @@ export const ADDRESS = {
 
 /**
  * Cửa hàng sẵn sàng nhận đơn: owner đã đăng nhập, phí giao mặc định 30.000, giày Air Max đã xuất bản kèm trang
- * chính sách đổi trả đã xuất bản. AM-40 giá 2.000.000 còn 3 đôi, AM-41 giá 2.100.000 hết hàng.
+ * chính sách đổi trả đã xuất bản, chính sách bảo mật phiên bản 1. AM-40 giá 2.000.000 còn 3 đôi, AM-41 giá 2.100.000 hết hàng.
  */
 export async function shop(options?: Parameters<typeof appWithOwner>[0]) {
   const app = await appWithOwner(options)
@@ -83,12 +84,16 @@ export async function shop(options?: Parameters<typeof appWithOwner>[0]) {
     .set(bearer(token))
     .send({ defaultFee: 30_000, freeShippingThreshold: null, provinceFees: [] })
   expect(fees.status).toBe(200)
+  await publishPrivacyPolicy(request)
 
-  /** Đặt mua AM-40 với giá khách đã thấy là giá hiện tại; `body` ghi đè từng phần. */
+  /** Khách vãng lai đặt mua AM-40 với giá khách đã thấy là giá hiện tại, đã đồng ý chính sách; `body` ghi đè từng phần. */
   const checkout = (body: Record<string, unknown> = {}) =>
-    request
-      .post('/api/checkout')
-      .send({ lines: [{ variantId: v40.id, quantity: 1, price: 2_000_000 }], address: ADDRESS, ...body })
+    request.post('/api/checkout').send({
+      lines: [{ variantId: v40.id, quantity: 1, price: 2_000_000 }],
+      address: ADDRESS,
+      acceptPrivacyPolicy: true,
+      ...body,
+    })
 
   /** Đổi giá (có hiệu lực ngay với khách) hoặc trạng thái của một biến thể. */
   const editVariant = (v: { id: string }, sku: string, size: string, change: Record<string, unknown>) =>
