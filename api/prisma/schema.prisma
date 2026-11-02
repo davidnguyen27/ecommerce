@@ -691,9 +691,12 @@ model Order {
   invoiceTaxCode     String? @map("invoice_tax_code")
   invoiceAddress     String? @map("invoice_address")
 
-  lines          OrderLine[]
-  policyVersions OrderPolicyVersion[]
-  events         OrderEvent[]
+  lines               OrderLine[]
+  policyVersions      OrderPolicyVersion[]
+  events              OrderEvent[]
+  lookupTokens        OrderLookupToken[]
+  paymentTransactions PaymentTransaction[]
+  reconciliationItems ReconciliationItem[]
 
   @@index([customerId])
   @@index([status, reservedUntil])
@@ -760,4 +763,82 @@ model OrderEvent {
 
   @@index([orderId, seq])
   @@map("order_event")
+}
+
+/// Token tra cứu cấp thêm cho đơn, ví dụ cho link trong email; token lúc đặt mua nằm ở `Order.lookupTokenHash`.
+model OrderLookupToken {
+  /// SHA-256 của token, hex.
+  tokenHash String   @id @map("token_hash")
+  orderId   String   @map("order_id") @db.Uuid
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@map("order_lookup_token")
+}
+
+/// Đường báo tiền về: webhook của cổng, truy vấn khi khách quay về, hoặc nút của cổng giả lập.
+enum PaymentSource {
+  webhook
+  query
+  simulator
+
+  @@map("payment_source")
+}
+
+/// Khoản tiền cổng báo về cho đơn. Append-only: trigger trong migration chặn UPDATE, DELETE và TRUNCATE.
+model PaymentTransaction {
+  id        String        @id @default(uuid()) @db.Uuid
+  orderId   String        @map("order_id") @db.Uuid
+  order     Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// VND, > 0.
+  amount    BigInt
+  /// Mã tham chiếu giao dịch của cổng; unique để không ghi một khoản hai lần.
+  reference String        @unique
+  paidAt    DateTime      @map("paid_at")
+  source    PaymentSource
+  /// Dữ liệu gốc cổng gửi, để đối chiếu về sau.
+  payload   Json
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  reconciliationItem ReconciliationItem?
+
+  @@index([orderId])
+  @@map("payment_transaction")
+}
+
+/// Lý do khoản tiền cần đối soát.
+enum ReconciliationReason {
+  amount_mismatch
+  paid_after_cancel
+  extra_payment
+
+  @@map("reconciliation_reason")
+}
+
+enum ReconciliationStatus {
+  open
+  resolved
+
+  @@map("reconciliation_status")
+}
+
+/// Cần đối soát (GLOSSARY): một khoản tiền không khớp với đơn, chờ kế toán quyết định.
+model ReconciliationItem {
+  id            String               @id @default(uuid()) @db.Uuid
+  orderId       String               @map("order_id") @db.Uuid
+  order         Order                @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  transactionId String               @unique @map("transaction_id") @db.Uuid
+  transaction   PaymentTransaction   @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  reason        ReconciliationReason
+  /// VND, số tiền của khoản này.
+  amount        BigInt
+  receivedAt    DateTime             @map("received_at")
+  status        ReconciliationStatus @default(open)
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@index([status, createdAt])
+  @@map("reconciliation_item")
 }

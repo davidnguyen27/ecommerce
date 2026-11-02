@@ -127,6 +127,7 @@ async function submit() {
     }
     const result = CheckoutResult.parse(await session.optionalAuthFetch('/api/checkout', { method: 'POST', body }))
     cart.clear()
+    rememberOrderToken(result.code, result.token)
     window.location.assign(result.checkoutUrl)
   } catch (err) {
     // Phiên đăng nhập hết hạn giữa chừng: đặt như khách vãng lai, cần tick đồng ý.
