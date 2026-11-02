@@ -13,6 +13,7 @@ import {
   Scale,
   ScrollText,
   Tag,
+  Truck,
   Users,
   Warehouse,
   type LucideIcon,
@@ -51,6 +52,10 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
       { to: '/admin/stock/receipts', label: 'Phiếu nhập', icon: PackagePlus, permission: STOCK_VIEW_PERMISSIONS },
       { to: '/admin/stock/movements', label: 'Sổ xuất nhập', icon: ScrollText, permission: STOCK_VIEW_PERMISSIONS },
     ],
+  },
+  {
+    title: 'Bán hàng',
+    items: [{ to: '/admin/shipping-fees', label: 'Phí giao', icon: Truck, permission: 'price.edit' }],
   },
   {
     title: 'Vận hành & Nhân sự',

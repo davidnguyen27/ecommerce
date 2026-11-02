@@ -162,7 +162,7 @@ export type AdminProductDetail = z.infer<typeof AdminProductDetail>
 
 // Website
 
-const PublicImage = ImageRenditions.extend({ alt: z.string() })
+export const PublicImage = ImageRenditions.extend({ alt: z.string() })
 export type PublicImage = z.infer<typeof PublicImage>
 
 /** Thẻ sản phẩm ở trang danh mục, thương hiệu. */
