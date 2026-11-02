@@ -582,3 +582,25 @@ model SystemConfig {
 
   @@map("system_config")
 }
+
+/// Cấu hình phí giao chung, tối đa một dòng (check `id`). Không có dòng là chưa có mức mặc định: chưa nhận đơn.
+model ShippingFeeSetting {
+  id                    Boolean  @id @default(true)
+  /// VND, `>= 0`.
+  defaultFee            Int      @map("default_fee")
+  /// Tổng tiền hàng từ mức này trở lên thì miễn phí giao; `null` là không có miễn phí. VND, `>= 0`.
+  freeShippingThreshold Int?     @map("free_shipping_threshold")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@map("shipping_fee_setting")
+}
+
+/// Mức phí giao riêng của một tỉnh/thành, thắng mức mặc định.
+model ShippingFeeProvince {
+  /// Mã tỉnh/thành theo danh mục hành chính trong `@ecommerce/shared`.
+  provinceCode String @id @map("province_code")
+  /// VND, `>= 0`.
+  fee          Int
+
+  @@map("shipping_fee_province")
+}
