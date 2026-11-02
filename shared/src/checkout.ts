@@ -20,20 +20,24 @@ export const CartLine = z.object({
 })
 export type CartLine = z.infer<typeof CartLine>
 
-/** Các dòng giỏ hàng; mỗi biến thể một dòng (giỏ đã cộng dồn). Dùng chung cho `quote` và đặt mua. */
-export const CartLines = z
-  .array(CartLine)
-  .min(1, 'Giỏ hàng đang trống')
-  .max(MAX_CART_LINES)
-  .superRefine((lines, ctx) => {
-    const seen = new Set<string>()
-    lines.forEach((line, index) => {
-      if (seen.has(line.variantId)) {
-        ctx.addIssue({ code: 'custom', path: [index, 'variantId'], message: 'Biến thể bị lặp trong giỏ' })
-      }
-      seen.add(line.variantId)
+/** Danh sách dòng giỏ 1–`MAX_CART_LINES` dòng, mỗi biến thể một dòng (giỏ đã cộng dồn). */
+const linesOf = <T extends z.ZodType<{ variantId: string }>>(line: T) =>
+  z
+    .array(line)
+    .min(1, 'Giỏ hàng đang trống')
+    .max(MAX_CART_LINES)
+    .superRefine((lines, ctx) => {
+      const seen = new Set<string>()
+      lines.forEach((line, index) => {
+        if (seen.has(line.variantId)) {
+          ctx.addIssue({ code: 'custom', path: [index, 'variantId'], message: 'Biến thể bị lặp trong giỏ' })
+        }
+        seen.add(line.variantId)
+      })
     })
-  })
+
+/** Các dòng giỏ hàng gửi lên `quote`. */
+export const CartLines = linesOf(CartLine)
 
 /** Body của `POST /api/checkout/quote`. Thiếu `provinceCode` (trang giỏ hàng) thì không tính phí giao. */
 export const CheckoutQuoteRequest = z.object({
@@ -80,3 +84,64 @@ export const CheckoutQuote = z.object({
   total: z.number().nullable(),
 })
 export type CheckoutQuote = z.infer<typeof CheckoutQuote>
+
+/** Thời hạn giữ hàng của đơn chưa thanh toán, cũng là thời hạn của link thanh toán. Chờ chủ doanh nghiệp xác nhận. */
+export const RESERVATION_MINUTES = 15
+
+/** Một dòng đặt mua: dòng giỏ kèm giá khách đã thấy, để server từ chối khi giá đã đổi. */
+export const CheckoutLine = CartLine.extend({ price: z.number().int().positive() })
+export type CheckoutLine = z.infer<typeof CheckoutLine>
+
+/** Số điện thoại Việt Nam 10 số bắt đầu bằng 0; nhận cả `+84`, dấu cách, chấm, gạch và lưu về dạng `0xxxxxxxxx`. */
+export const PhoneNumber = z
+  .string()
+  .transform((value) => value.replace(/[\s.-]/g, '').replace(/^\+84/, '0'))
+  .pipe(z.string().regex(/^0\d{9}$/, 'Số điện thoại gồm 10 số, bắt đầu bằng 0'))
+
+/** Thông tin nhận hàng. Phường/xã được API kiểm thuộc đúng tỉnh/thành (danh mục ở `@ecommerce/shared/wards`). */
+export const ShippingAddress = z.object({
+  recipientName: z.string().trim().min(1, 'Cần tên người nhận').max(200),
+  phone: PhoneNumber,
+  email: z
+    .email('Email không hợp lệ')
+    .max(254)
+    .transform((email) => email.toLowerCase()),
+  provinceCode: ProvinceCode,
+  wardCode: z.string().regex(/^\d{5}$/, 'Phường/xã không hợp lệ'),
+  streetAddress: z.string().trim().min(1, 'Cần số nhà, tên đường').max(500),
+})
+export type ShippingAddress = z.input<typeof ShippingAddress>
+
+/** Body của `POST /api/checkout`. */
+export const CheckoutRequest = z.object({
+  lines: linesOf(CheckoutLine),
+  address: ShippingAddress,
+  note: z.string().trim().max(1000).default(''),
+})
+export type CheckoutRequest = z.input<typeof CheckoutRequest>
+
+/** Vì sao một dòng không đặt được như khách đã thấy; cùng dạng với thay đổi dòng ở trang giỏ. */
+export const CheckoutLineChange = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('price'), from: z.number(), to: z.number() }),
+  z.object({ kind: z.literal('discontinued') }),
+  /** Không còn đủ số lượng đã chọn; không bao giờ kèm số còn lại (ADR 0006). */
+  z.object({ kind: z.literal('out_of_stock') }),
+])
+export type CheckoutLineChange = z.infer<typeof CheckoutLineChange>
+
+/** `error.details` của 409 khi đặt mua: thay đổi của từng dòng có vấn đề. Không có gì được ghi. */
+export const CheckoutConflictDetails = z.object({
+  lines: z.array(z.object({ variantId: z.string(), change: CheckoutLineChange })),
+})
+export type CheckoutConflictDetails = z.infer<typeof CheckoutConflictDetails>
+
+/** Response 201 của `POST /api/checkout`. `token` chỉ có trong response này; server chỉ lưu hash. */
+export const CheckoutResult = z.object({
+  code: z.number(),
+  token: z.string(),
+  /** Trang thanh toán của cổng (cổng giả lập khi chạy local). */
+  checkoutUrl: z.string(),
+  /** Quá thời điểm này mà chưa thanh toán thì đơn bị hủy, hàng được nhả. */
+  reservedUntil: z.string(),
+})
+export type CheckoutResult = z.infer<typeof CheckoutResult>

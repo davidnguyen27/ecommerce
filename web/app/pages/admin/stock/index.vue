@@ -294,6 +294,7 @@ await load()
                 <th>Thuộc tính</th>
                 <th>Trạng thái</th>
                 <th class="admin-table-num">Tồn</th>
+                <th class="admin-table-num" title="Đã giữ cho đơn, vẫn nằm trong tồn">Đang giữ</th>
                 <th style="text-align: right">Thao tác</th>
               </tr>
             </thead>
@@ -315,6 +316,7 @@ await load()
                   </span>
                 </td>
                 <td class="admin-table-num" style="font-weight: 600">{{ item.onHand }}</td>
+                <td class="admin-table-num" data-testid="reserved">{{ item.reserved || '—' }}</td>
                 <td style="text-align: right; white-space: nowrap">
                   <NuxtLink :to="`/admin/stock/movements?variantId=${item.variantId}`" class="btn btn-secondary btn-sm">
                     Sổ

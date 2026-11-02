@@ -77,6 +77,8 @@ export const StockItem = z.object({
   attributes: AttributeValues,
   status: VariantStatus,
   onHand: z.number(),
+  /** Số đang giữ cho đơn (ADR 0007), nằm trong `onHand`. */
+  reserved: z.number(),
   product: z.object({ id: z.string(), name: z.string(), productType: ProductType, status: ProductStatus }),
   brand: z.object({ id: z.string(), name: z.string() }),
 })
