@@ -52,6 +52,8 @@ const ORDER_EVENT_LABELS: Record<string, string> = {
   reconciliation_resolved: 'Đối soát: đã xử lý ngoài hệ thống',
   preparing: 'Bắt đầu chuẩn bị',
   handed_over: 'Bàn giao vận chuyển',
+  delivered: 'Đã giao',
+  delivery_failed: 'Giao thất bại',
 }
 export const orderEventLabel = (kind: string) => ORDER_EVENT_LABELS[kind] ?? kind
 

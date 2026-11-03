@@ -43,6 +43,8 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'reconciliation.resolve': 'Đóng mục đối soát: đã xử lý ngoài hệ thống',
   'order.prepare': 'Bắt đầu chuẩn bị đơn',
   'order.hand_over': 'Bàn giao vận chuyển',
+  'order.deliver': 'Đánh dấu đã giao',
+  'order.delivery_failed': 'Đánh dấu giao thất bại',
 }
 
 const AUDIT_ENTITY_LABELS: Record<string, string> = {
