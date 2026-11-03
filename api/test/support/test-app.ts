@@ -47,18 +47,20 @@ export async function createTestApp(options: Options = {}) {
   const jwtSecret = randomBytes(32).toString('base64url')
   // Hàng đợi job thật trên DB của test; worker gửi thư vào mailer giả.
   // DB bị ghi đè là DB giả lập hỏng, nên không khởi động worker trên đó.
-  const jobs = new Jobs({ databaseUrl, prisma, mailer, logger, maxConnections: 2 })
+  const payments = new InMemoryPaymentGateway()
+  const gateway = options.simulator ? new SimulatorPaymentGateway(SITE_URL) : payments
+  const jobs = new Jobs({ databaseUrl, prisma, mailer, logger, payments: gateway, maxConnections: 2 })
   const startJobs = !options.databaseUrl
   if (startJobs) await jobs.start()
-  const payments = new InMemoryPaymentGateway()
   const app = createApp({
     prisma,
     logger,
     emails: jobs,
+    orderExpiry: jobs,
     storage,
     jwtSecret,
     siteUrl: SITE_URL,
-    payments: options.simulator ? new SimulatorPaymentGateway(SITE_URL) : payments,
+    payments: gateway,
     payosChecksumKey: PAYOS_CHECKSUM_KEY,
   })
 
@@ -77,6 +79,8 @@ export async function createTestApp(options: Options = {}) {
     storage,
     /** Cổng thanh toán giả: link đã tạo, đã hủy, trạng thái truy vấn, lỗi khi tạo link. */
     payments,
+    /** Logger của app, để test gọi thẳng hàm job. */
+    logger,
     logs: () => lines.map((line) => JSON.parse(line) as Record<string, unknown>),
   }
 }

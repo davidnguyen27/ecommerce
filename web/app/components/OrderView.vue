@@ -5,7 +5,27 @@ import type { PublicOrder } from '@ecommerce/shared'
  * Một đơn như khách thấy: trạng thái, thời gian giữ hàng còn lại, dòng đơn, tiền và địa chỉ nhận.
  * Dùng chung cho trang đơn qua token và trang đơn trong tài khoản; nút thao tác đặt qua slot `actions`.
  */
-const props = defineProps<{ order: PublicOrder }>()
+const props = defineProps<{
+  order: PublicOrder
+  /** Nơi dùng có đường hủy đơn (token hay tài khoản): hiện nút hủy khi đơn còn chờ thanh toán. */
+  cancellable?: boolean
+  cancelling?: boolean
+}>()
+const emit = defineEmits<{ cancel: [] }>()
+
+function requestCancel() {
+  if (confirm(`Hủy đơn hàng #${props.order.code}? Hàng đang giữ cho bạn sẽ được nhả cho khách khác.`)) emit('cancel')
+}
+
+// Giỏ đã được làm trống lúc đặt mua: đơn hết hạn thì đưa các dòng đơn trở lại giỏ để khách đặt lại.
+// Giá là giá lúc đặt; trang giỏ tự báo nếu giá hay tồn đã đổi.
+const cart = useCart()
+async function backToCart() {
+  for (const line of props.order.lines) {
+    for (let i = 0; i < line.quantity; i++) cart.add({ variantId: line.variantId, price: line.price })
+  }
+  await navigateTo('/gio-hang')
+}
 
 // Đồng hồ chỉ chạy ở trình duyệt; trang đơn không SSR dữ liệu đơn nên không lệch lúc hydrate.
 const now = ref(Date.now())
@@ -58,6 +78,39 @@ const remainingText = computed(() => {
         >. Thanh toán trước khi hết giờ để giữ đơn.
       </template>
       <template v-else>Đã hết thời gian giữ hàng.</template>
+    </div>
+
+    <div
+      v-if="order.status === 'cancelled' && order.cancelReason === 'expired'"
+      class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-card px-4 py-3 text-sm"
+      role="status"
+      data-testid="order-expired"
+    >
+      <span>Đơn đã hết hạn vì chưa thanh toán trong thời gian giữ hàng. Bạn có thể đặt mua lại từ giỏ hàng.</span>
+      <button type="button" class="btn-outline" data-testid="order-back-to-cart" @click="backToCart">
+        Quay lại giỏ hàng
+      </button>
+    </div>
+    <p
+      v-else-if="order.status === 'cancelled'"
+      class="rounded-md border border-border bg-card px-4 py-3 text-sm"
+      role="status"
+      data-testid="order-cancelled"
+    >
+      Đơn đã được hủy{{ order.cancelledAt ? ` lúc ${formatDateTime(order.cancelledAt)}` : '' }}. Hàng giữ cho đơn đã
+      được nhả.
+    </p>
+
+    <div v-if="cancellable && order.status === 'pending_payment'">
+      <button
+        type="button"
+        class="btn-outline"
+        :disabled="cancelling"
+        data-testid="order-cancel"
+        @click="requestCancel"
+      >
+        {{ cancelling ? 'Đang hủy…' : 'Hủy đơn' }}
+      </button>
     </div>
 
     <slot name="actions" />

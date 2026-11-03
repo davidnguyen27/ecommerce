@@ -42,7 +42,7 @@ async function livePolicyVersionIds(db: DbClient, pageIds: readonly string[]) {
 }
 
 /** Đặt mua của khách, không cần đăng nhập. */
-export function checkoutRoutes({ prisma, storage, payments, siteUrl }: AppDeps) {
+export function checkoutRoutes({ prisma, storage, payments, siteUrl, orderExpiry }: AppDeps) {
   return Router()
     .post('/quote', async (req, res) => {
       const input = parse(CheckoutQuoteRequest, req.body)
@@ -174,6 +174,7 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl }: AppDeps) 
             },
           })
           await recordOrderEvent(tx, order.id, 'created', { type: 'customer' }, { total })
+          await orderExpiry.scheduleOrderExpiry(tx, order.id, reservedUntil)
 
           // Gọi cổng sau cùng, khi mọi thứ khác đã ghi được; cổng lỗi thì cả đơn rollback.
           // Trang quay về không mang token: cổng không được thấy link xem và hủy đơn.
