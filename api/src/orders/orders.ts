@@ -15,7 +15,7 @@ export type OrderLineImage = z.infer<typeof OrderLineImage>
  * Loại sự kiện trong lịch sử đơn: `paid` khi đủ tiền, `payment_flagged` khi khoản tiền cần đối soát.
  * `cancelled` khi đơn chưa thanh toán bị hủy (`data.reason` là `OrderCancelReason`, kể cả hết hạn).
  * `preparing` khi nhân viên kho bắt đầu soạn, `handed_over` khi bàn giao vận chuyển (`data` có `carrier`,
- * `trackingNumber`).
+ * `trackingNumber`). `delivered` khi đã giao (đơn hoàn tất), `delivery_failed` khi giao thất bại (đơn vẫn xử lý).
  */
 export type OrderEventKind =
   | 'created'
@@ -28,6 +28,8 @@ export type OrderEventKind =
   | 'restored'
   /** Kế toán đóng mục cần đối soát vì đã xử lý ngoài hệ thống. */
   | 'reconciliation_resolved'
+  | 'delivered'
+  | 'delivery_failed'
 
 /** Ai làm: nhân viên, khách (có id khi đã đăng nhập) hoặc hệ thống. */
 export type OrderEventActor =

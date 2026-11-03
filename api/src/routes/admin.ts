@@ -3,6 +3,7 @@ import type { StaffProfile } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
 import { currentStaff } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
+import type { FulfillmentMail } from '../orders/fulfill-order.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 import { adminOrderRoutes } from './admin-orders.ts'
 import { adminReconciliationRoutes, type ReconciliationDeps } from './admin-reconciliation.ts'
@@ -29,7 +30,8 @@ export function adminRoutes(
   prisma: Db,
   storage: Storage,
   payments: PaymentGateway,
-  reconciliation: ReconciliationDeps,
+  /** Hàng đợi thư và địa chỉ website: email giao hàng (ticket 09) và khôi phục đơn khi đối soát (ticket 10). */
+  mail: FulfillmentMail & ReconciliationDeps,
 ) {
   return (
     Router()
@@ -56,7 +58,7 @@ export function adminRoutes(
       .use('/import', adminImportRoutes(prisma))
       .use('/images', adminBulkImageRoutes(prisma, storage))
       .use('/shipping-fees', adminShippingFeeRoutes(prisma))
-      .use('/orders', adminOrderRoutes(prisma, storage, payments))
-      .use('/reconciliation', adminReconciliationRoutes(prisma, storage, reconciliation))
+      .use('/orders', adminOrderRoutes(prisma, storage, payments, mail))
+      .use('/reconciliation', adminReconciliationRoutes(prisma, storage, mail))
   )
 }
