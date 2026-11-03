@@ -2,7 +2,8 @@
 import type { AdminOrder, FieldError } from '@ecommerce/shared'
 
 /**
- * Xử lý giao hàng ở trang chi tiết đơn: chuẩn bị, rồi bàn giao vận chuyển kèm đơn vị vận chuyển và mã vận đơn.
+ * Xử lý giao hàng ở trang chi tiết đơn: chuẩn bị, bàn giao vận chuyển kèm đơn vị vận chuyển và mã vận đơn, rồi
+ * đánh dấu đã giao hoặc giao thất bại.
  * Thành công thì emit `update` với `AdminOrder` mà API trả; lỗi thì emit `reload` để trang nạp lại trạng thái mới.
  */
 const props = defineProps<{ order: AdminOrder; canFulfill: boolean }>()
@@ -35,6 +36,14 @@ async function run(path: string, body?: Record<string, unknown>) {
 
 const prepare = () => run('prepare')
 const handOver = () => run('hand-over', { ...form })
+const deliver = () => {
+  if (confirm(`Đánh dấu đơn #${props.order.code} đã giao tới khách? Đơn sẽ hoàn tất.`)) void run('deliver')
+}
+const failDelivery = () => {
+  if (confirm(`Đánh dấu đơn #${props.order.code} giao thất bại? Khách sẽ nhận email báo shop sẽ liên hệ.`)) {
+    void run('delivery-failed')
+  }
+}
 </script>
 
 <template>
@@ -57,6 +66,36 @@ const handOver = () => run('hand-over', { ...form })
       <dt style="color: var(--adm-muted)">Bàn giao lúc</dt>
       <dd style="margin: 0">{{ formatDateTime(order.shipment.handedOverAt) }}</dd>
     </dl>
+
+    <div
+      v-if="order.shipment && order.fulfillmentStatus === 'handed_over' && canFulfill"
+      style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px"
+    >
+      <button
+        type="button"
+        class="btn btn-primary btn-sm"
+        data-testid="admin-order-deliver"
+        :disabled="busy"
+        @click="deliver"
+      >
+        Đã giao
+      </button>
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm"
+        data-testid="admin-order-delivery-failed"
+        :disabled="busy"
+        @click="failDelivery"
+      >
+        Giao thất bại
+      </button>
+    </div>
+    <p
+      v-else-if="order.fulfillmentStatus === 'failed'"
+      style="margin: 12px 0 0; font-size: 13px; color: var(--adm-muted)"
+    >
+      Giao thất bại, khách đã nhận email báo shop sẽ liên hệ. Nhập lại kho và hoàn tiền chưa có (M6).
+    </p>
 
     <template v-else-if="order.fulfillmentStatus === 'not_prepared'">
       <p style="margin: 0 0 12px; font-size: 13px; color: var(--adm-muted)">

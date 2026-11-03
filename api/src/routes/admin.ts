@@ -3,6 +3,7 @@ import type { StaffProfile } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
 import { currentStaff } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
+import type { FulfillmentMail } from '../orders/fulfill-order.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 import { adminOrderRoutes } from './admin-orders.ts'
 import { adminAttributeSchemaRoutes } from './admin-attribute-schemas.ts'
@@ -24,7 +25,7 @@ import { adminStockReceiptRoutes } from './admin-stock-receipts.ts'
 import { adminShippingFeeRoutes } from './admin-shipping-fees.ts'
 
 /** Các route quản trị; đã đi qua `requireAuth` audience staff và `loadStaff`. */
-export function adminRoutes(prisma: Db, storage: Storage, payments: PaymentGateway) {
+export function adminRoutes(prisma: Db, storage: Storage, payments: PaymentGateway, mail: FulfillmentMail) {
   return (
     Router()
       .get('/me', (req, res) => {
@@ -50,6 +51,6 @@ export function adminRoutes(prisma: Db, storage: Storage, payments: PaymentGatew
       .use('/import', adminImportRoutes(prisma))
       .use('/images', adminBulkImageRoutes(prisma, storage))
       .use('/shipping-fees', adminShippingFeeRoutes(prisma))
-      .use('/orders', adminOrderRoutes(prisma, storage, payments))
+      .use('/orders', adminOrderRoutes(prisma, storage, payments, mail))
   )
 }

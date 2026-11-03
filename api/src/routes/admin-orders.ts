@@ -10,7 +10,13 @@ import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
 import { loadAdminOrder } from '../orders/admin-order.ts'
 import { assertCancellable, cancelInTransaction, cancelPaymentLink } from '../orders/cancel-order.ts'
-import { handOverOrder, prepareOrder } from '../orders/fulfill-order.ts'
+import {
+  deliverOrder,
+  failDelivery,
+  handOverOrder,
+  prepareOrder,
+  type FulfillmentMail,
+} from '../orders/fulfill-order.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đơn hàng')
@@ -25,7 +31,7 @@ function searchWhere(q: string): Prisma.OrderWhereInput {
 }
 
 /** Đơn hàng ở trang quản trị: xem cần `order.view`, xử lý đơn cần `order.fulfill`. */
-export function adminOrderRoutes(prisma: Db, storage: Storage, payments: PaymentGateway) {
+export function adminOrderRoutes(prisma: Db, storage: Storage, payments: PaymentGateway, mail: FulfillmentMail) {
   const findOrder = async (code: string) => {
     const order = /^\d{1,9}$/.test(code)
       ? await prisma.order.findUnique({ where: { code: Number(code) }, select: { id: true, code: true } })
@@ -120,13 +126,45 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       const order = await findOrder(code)
       const shipment = parse(HandoverRequest, req.body)
       await audited(prisma, req, async (tx, audit) => {
-        await handOverOrder(tx, order.id, currentStaff(req).id, shipment)
+        await handOverOrder(tx, mail, order.id, currentStaff(req).id, shipment)
         await audit({
           action: 'order.hand_over',
           entityType: 'order',
           entityId: order.id,
           before: { fulfillmentStatus: 'preparing' },
           after: { fulfillmentStatus: 'handed_over', ...shipment },
+        })
+      })
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
+      res.json(body)
+    })
+    .post('/:code/deliver', requirePermission('order.fulfill'), async (req, res) => {
+      const code = String(req.params.code)
+      const order = await findOrder(code)
+      await audited(prisma, req, async (tx, audit) => {
+        await deliverOrder(tx, order.id, currentStaff(req).id)
+        await audit({
+          action: 'order.deliver',
+          entityType: 'order',
+          entityId: order.id,
+          before: { status: 'processing', fulfillmentStatus: 'handed_over' },
+          after: { status: 'completed', fulfillmentStatus: 'delivered' },
+        })
+      })
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
+      res.json(body)
+    })
+    .post('/:code/delivery-failed', requirePermission('order.fulfill'), async (req, res) => {
+      const code = String(req.params.code)
+      const order = await findOrder(code)
+      await audited(prisma, req, async (tx, audit) => {
+        await failDelivery(tx, mail.emails, order.id, currentStaff(req).id)
+        await audit({
+          action: 'order.delivery_failed',
+          entityType: 'order',
+          entityId: order.id,
+          before: { fulfillmentStatus: 'handed_over' },
+          after: { fulfillmentStatus: 'failed' },
         })
       })
       const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
