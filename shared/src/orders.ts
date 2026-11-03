@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { AttributeValues } from './attributes.ts'
+import { PageQuery, pageOf } from './pagination.ts'
 import { PublicImage } from './products.ts'
 
 /** Trạng thái đơn hàng (GLOSSARY "Trạng thái đơn hàng"). */
@@ -62,3 +63,25 @@ export const PublicOrder = z.object({
   invoice: z.object({ companyName: z.string(), taxCode: z.string(), address: z.string() }).nullable(),
 })
 export type PublicOrder = z.infer<typeof PublicOrder>
+
+/** Một đơn trong lịch sử mua của khách (`GET /api/account/orders`). */
+export const AccountOrderSummary = z.object({
+  code: z.number(),
+  status: OrderStatus,
+  paymentStatus: PaymentStatus,
+  fulfillmentStatus: FulfillmentStatus,
+  createdAt: z.string(),
+  total: z.number(),
+  /** Tổng số món (cộng số lượng các dòng). */
+  itemCount: z.number(),
+})
+export type AccountOrderSummary = z.infer<typeof AccountOrderSummary>
+
+/** Query string của `GET /api/account/orders`, mới nhất trước. */
+export const AccountOrderQuery = PageQuery.extend({
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+})
+export type AccountOrderQuery = z.infer<typeof AccountOrderQuery>
+
+export const AccountOrderPage = pageOf(AccountOrderSummary)
+export type AccountOrderPage = z.infer<typeof AccountOrderPage>

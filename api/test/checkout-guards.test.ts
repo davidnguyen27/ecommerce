@@ -31,7 +31,7 @@ describe('đồng ý chính sách bảo mật khi đặt mua', () => {
   })
 
   it('khách đã đăng nhập không cần tick lại: đơn gắn với tài khoản, không ghi đồng ý mới trên đơn', async () => {
-    const { request, prisma, checkout } = await shop()
+    const { request, checkout } = await shop()
     const signedUp = await register(request)
     expect(signedUp.status).toBe(201)
 
@@ -40,10 +40,8 @@ describe('đồng ý chính sách bảo mật khi đặt mua', () => {
     expect(placed.status).toBe(201)
     const order = await request.get(`/api/orders/${placed.body.code}`).query({ token: placed.body.token })
     expect(order.body.privacyConsent).toBeNull()
-    // Chưa có API đơn trong tài khoản (ticket 11), nên đọc customer_id bằng prisma.
-    const stored = await prisma.order.findUniqueOrThrow({ where: { code: placed.body.code } })
-    const customer = await prisma.customer.findFirstOrThrow()
-    expect(stored.customerId).toBe(customer.id)
+    const mine = await request.get(`/api/account/orders/${placed.body.code}`).set(bearer(signedUp.body.accessToken))
+    expect(mine.status).toBe(200)
   })
 
   it('token đăng nhập không hợp lệ thì 401, không coi như khách vãng lai', async () => {

@@ -91,6 +91,17 @@ export async function findOrderByToken(db: DbClient, code: string, token: string
   return order
 }
 
+/**
+ * Đơn theo mã của khách đang đăng nhập. Đơn của người khác cũng là 404, như mã lạ, để không lộ đơn nào tồn tại.
+ * `code` là chuỗi từ URL.
+ */
+export async function findCustomerOrder(db: DbClient, code: string, customerId: string) {
+  if (!/^\d{1,9}$/.test(code)) throw notFound()
+  const order = await db.order.findFirst({ where: { code: Number(code), customerId }, include: ORDER_VIEW_INCLUDE })
+  if (!order) throw notFound()
+  return order
+}
+
 export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrder {
   const image = (value: Prisma.JsonValue): PublicImage | null => {
     if (value === null) return null
