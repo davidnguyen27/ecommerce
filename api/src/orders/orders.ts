@@ -14,13 +14,16 @@ export type OrderLineImage = z.infer<typeof OrderLineImage>
 /**
  * Loại sự kiện trong lịch sử đơn: `paid` khi đủ tiền, `payment_flagged` khi khoản tiền cần đối soát.
  * `cancelled` khi đơn chưa thanh toán bị hủy (`data.reason` là `OrderCancelReason`, kể cả hết hạn).
- * Các ticket sau thêm giao hàng.
+ * `preparing` khi nhân viên kho bắt đầu soạn, `handed_over` khi bàn giao vận chuyển (`data` có `carrier`,
+ * `trackingNumber`).
  */
 export type OrderEventKind =
   | 'created'
   | 'paid'
   | 'payment_flagged'
   | 'cancelled'
+  | 'preparing'
+  | 'handed_over'
   /** Kế toán khôi phục đơn đã hủy khi tiền về đủ (đối soát). */
   | 'restored'
   /** Kế toán đóng mục cần đối soát vì đã xử lý ngoài hệ thống. */
@@ -165,5 +168,13 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
       order.invoiceCompanyName === null || order.invoiceTaxCode === null || order.invoiceAddress === null
         ? null
         : { companyName: order.invoiceCompanyName, taxCode: order.invoiceTaxCode, address: order.invoiceAddress },
+    shipment:
+      order.carrier === null || order.trackingNumber === null || order.handedOverAt === null
+        ? null
+        : {
+            carrier: order.carrier,
+            trackingNumber: order.trackingNumber,
+            handedOverAt: order.handedOverAt.toISOString(),
+          },
   }
 }

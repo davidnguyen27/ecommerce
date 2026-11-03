@@ -363,6 +363,8 @@ enum StockMovementKind {
   receipt
   adjustment
   opening
+  /// Xuất bán: hàng của một đơn rời kho lúc bàn giao vận chuyển (ADR 0007).
+  sale
 
   @@map("stock_movement_kind")
 }
@@ -393,13 +395,17 @@ model StockMovement {
   /// Chỉ có, và luôn có, ở dòng nhập kho (check constraint).
   receiptId   String?                @map("receipt_id") @db.Uuid
   receipt     StockReceipt?          @relation(fields: [receiptId], references: [id], onDelete: Restrict)
-  actorId     String                 @map("actor_id") @db.Uuid
+  /// Chỉ có, và luôn có, ở dòng xuất bán (check constraint).
+  orderId     String?                @map("order_id") @db.Uuid
+  order       Order?                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  actorId    String                 @map("actor_id") @db.Uuid
   actor       Staff                  @relation(fields: [actorId], references: [id], onDelete: Restrict)
   createdAt   DateTime               @default(now()) @map("created_at")
 
   @@index([variantId, seq])
   @@index([createdAt])
   @@index([receiptId])
+  @@index([orderId])
   @@map("stock_movement")
 }
 
@@ -706,7 +712,14 @@ model Order {
   invoiceTaxCode     String? @map("invoice_tax_code")
   invoiceAddress     String? @map("invoice_address")
 
+  /// Bàn giao vận chuyển. Check constraint `order_handover_check`: có đủ cả ba khi và chỉ khi giao hàng đã tới
+  /// `handed_over` (kể cả `delivered`, `failed`).
+  carrier        String?
+  trackingNumber String?   @map("tracking_number")
+  handedOverAt   DateTime? @map("handed_over_at")
+
   lines               OrderLine[]
+  stockMovements      StockMovement[]
   policyVersions      OrderPolicyVersion[]
   events              OrderEvent[]
   lookupTokens        OrderLookupToken[]

@@ -68,6 +68,8 @@ export const PublicOrder = z.object({
   privacyConsent: z.object({ policyVersion: z.number(), consentedAt: z.string() }).nullable(),
   /** Thông tin xuất hóa đơn công ty như lúc đặt; `null` khi không xuất hóa đơn công ty. */
   invoice: z.object({ companyName: z.string(), taxCode: z.string(), address: z.string() }).nullable(),
+  /** Bàn giao vận chuyển: đơn vị vận chuyển, mã vận đơn, lúc bàn giao; `null` khi chưa bàn giao. */
+  shipment: z.object({ carrier: z.string(), trackingNumber: z.string(), handedOverAt: z.string() }).nullable(),
 })
 export type PublicOrder = z.infer<typeof PublicOrder>
 
@@ -184,3 +186,10 @@ export const AdminOrder = PublicOrder.extend({
   history: z.array(OrderHistoryEntry),
 })
 export type AdminOrder = z.infer<typeof AdminOrder>
+
+/** Body của `POST /api/admin/orders/:code/hand-over`: một đơn là một kiện, một mã vận đơn. */
+export const HandoverRequest = z.object({
+  carrier: z.string().trim().min(1, 'Cần đơn vị vận chuyển').max(100),
+  trackingNumber: z.string().trim().min(1, 'Cần mã vận đơn').max(100),
+})
+export type HandoverRequest = z.infer<typeof HandoverRequest>
