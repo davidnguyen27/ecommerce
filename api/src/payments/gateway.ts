@@ -20,17 +20,24 @@ export type PaymentTransaction = {
   reference: string
   amount: number
   paidAt: Date
+  /** Bản ghi gốc của cổng, lưu làm payload của giao dịch. */
+  payload?: object
 }
 
-/** Trạng thái thanh toán của một đơn khi hỏi cổng. */
+/** Trạng thái thanh toán của một đơn khi hỏi cổng; `underpaid` là đã về một phần. */
 export type PaymentInfo = {
-  status: 'pending' | 'paid' | 'cancelled' | 'expired'
+  status: 'pending' | 'paid' | 'underpaid' | 'cancelled' | 'expired' | 'failed'
   amountPaid: number
   transactions: PaymentTransaction[]
 }
 
+/** Cổng không trả lời, trả lỗi hoặc trả dữ liệu không tin được; checkout đổi thành 502. */
+export class PaymentGatewayError extends Error {
+  override name = 'PaymentGatewayError'
+}
+
 /**
- * Cổng thanh toán (ADR 0008). Bản thật là PayOS (ticket 12); local dùng cổng giả lập; test dùng bản trong bộ nhớ.
+ * Cổng thanh toán (ADR 0008). Bản thật là PayOS (`payos.ts`), chọn ở `gateway-from-env.ts`; local dùng cổng giả lập; test dùng bản trong bộ nhớ.
  * Kiểm chữ ký webhook không nằm ở đây: đó là hàm thuần trên checksum key.
  */
 export interface PaymentGateway {
@@ -96,12 +103,4 @@ export class SimulatorPaymentGateway implements PaymentGateway {
   }
 
   async cancelLink() {}
-}
-
-/**
- * Chọn cổng thanh toán. Chưa có PayOS (ticket 12) nên luôn là cổng giả lập; ticket 12 thêm PayOS khi có đủ khóa
- * và chặn khởi động ở production khi thiếu khóa.
- */
-export function paymentGatewayFromEnv(_env: NodeJS.ProcessEnv, siteUrl: string): PaymentGateway {
-  return new SimulatorPaymentGateway(siteUrl)
 }
