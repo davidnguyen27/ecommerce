@@ -1,4 +1,5 @@
-# CI cho mọi push và PR: lint và test web, typecheck, test API (Testcontainers) và smoke toàn stack (docker compose).
+# CI cho mọi push và PR: lint và test web, typecheck, test API (Testcontainers), smoke toàn stack (docker compose)
+# và E2E bằng Playwright trên stack đó.
 # Runner ubuntu có sẵn Docker nên không cần secret: test dùng giá trị test, smoke tự sinh JWT_SECRET,
 # email ghi ra log, file giữ trong bộ nhớ, cổng thanh toán là cổng giả lập.
 # Không bật retry: CI Linux là cửa đánh giá test chập chờn trên Docker Desktop (ticket 15 của M0–M1).
@@ -70,3 +71,29 @@ jobs:
         with:
           node-version-file: .nvmrc
       - run: pnpm smoke
+
+  # Luồng mua hàng bằng trình duyệt thật (ticket 14 của M3), trên stack của smoke. Chạy sau khi smoke đạt,
+  # tự dựng lại stack bằng `pnpm smoke --keep` (job riêng, máy riêng). Đỏ thì tải trace của Playwright trong artifact.
+  e2e:
+    needs: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ecommerce/e2e exec playwright install --with-deps chromium
+      - run: pnpm smoke --keep
+      - run: pnpm e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-trace
+          path: |
+            e2e/test-results/
+            e2e/playwright-report/
+          retention-days: 7
