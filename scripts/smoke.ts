@@ -21,6 +21,11 @@ const env = {
   // Không theo .env local: bỏ SeaweedFS (sẽ tranh cổng 9000 với stack dev), giữ file trong bộ nhớ.
   COMPOSE_PROFILES: '',
   STORAGE_PROVIDER: 'memory',
+  // Luôn cổng giả lập, kể cả khi .env local có khóa PayOS: smoke không được tạo link thanh toán thật.
+  PAYOS_CLIENT_ID: '',
+  PAYOS_API_KEY: '',
+  PAYOS_CHECKSUM_KEY: '',
+  PAYMENT_SIMULATOR: 'allow',
 }
 
 function compose(...args: string[]) {
