@@ -16,13 +16,20 @@ export const RATE_LIMITS = {
   forgotPasswordPerEmail: { name: 'forgot-password:email', max: 3, windowMs: 60 * MINUTE },
   forgotPasswordPerIp: { name: 'forgot-password:ip', max: 20, windowMs: 60 * MINUTE },
   verificationEmailPerCustomer: { name: 'verification-email:customer', max: 3, windowMs: 60 * MINUTE },
+  // Số tạm, chờ chủ doanh nghiệp xác nhận. Tính cả lần bị 409 vì mỗi lần thử đều giữ hàng trong chốc lát.
+  checkoutPerIp: { name: 'checkout:ip', max: 5, windowMs: 60 * MINUTE },
 } satisfies Record<string, RateLimit>
 
 /**
  * Tính một lần thử vào mỗi bộ đếm; bộ đếm nào vượt `max` thì đặt `Retry-After` và ném 429.
  * `subject` là IP, email hoặc id, tùy giới hạn. Đếm trong Postgres để mọi instance API dùng chung.
  */
-export async function enforceRateLimits(db: DbClient, res: Response, hits: { limit: RateLimit; subject: string }[]) {
+export async function enforceRateLimits(
+  db: DbClient,
+  res: Response,
+  hits: { limit: RateLimit; subject: string }[],
+  message = 'Bạn đã thử quá nhiều lần, vui lòng thử lại sau',
+) {
   let retryAfter = 0
   for (const { limit, subject } of hits) {
     // Băm khóa để bảng đếm không chứa email hay IP dạng đọc được.
@@ -41,6 +48,6 @@ export async function enforceRateLimits(db: DbClient, res: Response, hits: { lim
   }
   if (retryAfter > 0) {
     res.setHeader('Retry-After', String(retryAfter))
-    throw new AppError(429, ErrorCode.RATE_LIMITED, 'Bạn đã thử quá nhiều lần, vui lòng thử lại sau')
+    throw new AppError(429, ErrorCode.RATE_LIMITED, message)
   }
 }

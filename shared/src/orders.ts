@@ -63,5 +63,9 @@ export const PublicOrder = z.object({
   total: z.number(),
   /** Phiên bản chính sách đổi trả, bảo hành gắn với sản phẩm trong đơn lúc đặt mua. */
   policies: z.array(z.object({ slug: z.string(), title: z.string(), version: z.number() })),
+  /** Lời đồng ý chính sách bảo mật của khách vãng lai lúc đặt; `null` khi khách đặt lúc đã đăng nhập. */
+  privacyConsent: z.object({ policyVersion: z.number(), consentedAt: z.string() }).nullable(),
+  /** Thông tin xuất hóa đơn công ty như lúc đặt; `null` khi không xuất hóa đơn công ty. */
+  invoice: z.object({ companyName: z.string(), taxCode: z.string(), address: z.string() }).nullable(),
 })
 export type PublicOrder = z.infer<typeof PublicOrder>

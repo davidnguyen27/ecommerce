@@ -19,6 +19,16 @@ async function accountFetch(path: string, options?: Parameters<typeof tokens.aut
   return tokens.authorizedFetch(path, options)
 }
 
+/** Khách đã đăng nhập chưa; chưa có access token thì thử refresh. Không ném lỗi. */
+async function signedIn(): Promise<boolean> {
+  return tokens.accessToken.value !== null || tokens.refresh()
+}
+
+/** Gọi API mở cho cả khách vãng lai (ví dụ đặt mua): đã đăng nhập thì kèm access token, chưa thì gửi không kèm. */
+async function optionalAuthFetch(path: string, options?: Parameters<typeof tokens.authorizedFetch>[1]) {
+  return (await signedIn()) ? tokens.authorizedFetch(path, options) : $fetch(path, options)
+}
+
 async function loadProfile(): Promise<CustomerProfile> {
   return CustomerProfile.parse(await accountFetch('/api/account/me'))
 }
@@ -29,5 +39,15 @@ async function changePassword(input: ChangePasswordRequest) {
 }
 
 export function useCustomerSession() {
-  return { refresh: tokens.refresh, login, register, logout, accountFetch, loadProfile, changePassword }
+  return {
+    refresh: tokens.refresh,
+    signedIn,
+    login,
+    register,
+    logout,
+    accountFetch,
+    optionalAuthFetch,
+    loadProfile,
+    changePassword,
+  }
 }

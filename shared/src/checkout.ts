@@ -82,6 +82,8 @@ export const CheckoutQuote = z.object({
   shippingFee: z.number().nullable(),
   /** Tổng phải trả = tổng tiền hàng + phí giao; `null` khi chưa chọn tỉnh/thành. */
   total: z.number().nullable(),
+  /** Chính sách đổi trả, bảo hành đang xuất bản của các sản phẩm còn bán trong giỏ, để trang đặt mua hiện link. */
+  policies: z.array(z.object({ slug: z.string(), title: z.string() })),
 })
 export type CheckoutQuote = z.infer<typeof CheckoutQuote>
 
@@ -112,11 +114,29 @@ export const ShippingAddress = z.object({
 })
 export type ShippingAddress = z.input<typeof ShippingAddress>
 
-/** Body của `POST /api/checkout`. */
+/** Mã số thuế: 10 số, hoặc 13 số có gạch nối trước 3 số cuối (chi nhánh), ví dụ `0101234567-001`. */
+export const TaxCode = z
+  .string()
+  .trim()
+  .regex(/^\d{10}(-\d{3})?$/, 'Mã số thuế gồm 10 số, hoặc 13 số dạng 0101234567-001')
+
+/** Thông tin xuất hóa đơn công ty; đã gửi thì cần đủ cả ba trường. */
+export const InvoiceInfo = z.object({
+  companyName: z.string().trim().min(1, 'Cần tên công ty').max(300),
+  taxCode: TaxCode,
+  address: z.string().trim().min(1, 'Cần địa chỉ xuất hóa đơn').max(500),
+})
+export type InvoiceInfo = z.infer<typeof InvoiceInfo>
+
+/** Body của `POST /api/checkout`. Kèm access token của khách thì đơn gắn với tài khoản. */
 export const CheckoutRequest = z.object({
   lines: linesOf(CheckoutLine),
   address: ShippingAddress,
   note: z.string().trim().max(1000).default(''),
+  /** Ô "Tôi đồng ý với chính sách bảo mật": khách vãng lai phải tick; khách đã đăng nhập đã đồng ý lúc đăng ký. */
+  acceptPrivacyPolicy: z.boolean().optional(),
+  /** Xuất hóa đơn công ty, không bắt buộc. */
+  invoice: InvoiceInfo.optional(),
 })
 export type CheckoutRequest = z.input<typeof CheckoutRequest>
 

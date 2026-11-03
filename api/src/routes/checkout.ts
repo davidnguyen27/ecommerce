@@ -14,9 +14,13 @@ import {
 import { wardName } from '@ecommerce/shared/wards'
 import type { AppDeps } from '../app.ts'
 import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
+import { optionalAuth } from '../auth/require-auth.ts'
+import { findCurrentPrivacyPolicy } from '../content/pages.ts'
 import { cartVariants, type CartVariant } from '../checkout/live-variants.ts'
+import { enforcePendingOrderLimit } from '../checkout/pending-orders.ts'
 import type { DbClient } from '../db.ts'
 import { AppError, invalidField } from '../http/errors.ts'
+import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { parse } from '../http/validation.ts'
 import { imageRenditions } from '../media/images.ts'
 import { paymentResultUrl, recordOrderEvent, type OrderLineImage } from '../orders/orders.ts'
@@ -33,22 +37,26 @@ function storedImageOf({ snapshot, variant }: CartVariant): OrderLineImage | nul
 }
 
 /** Phiên bản đang xuất bản của các trang chính sách gắn với sản phẩm trong đơn. */
-async function livePolicyVersionIds(db: DbClient, pageIds: readonly string[]) {
+async function livePolicyVersions(db: DbClient, variants: Iterable<CartVariant>) {
+  const pageIds = new Set([...variants].flatMap((v) => (v.variant ? (v.snapshot?.policyPageIds ?? []) : [])))
   const pages = await db.contentPage.findMany({
     where: { id: { in: [...pageIds] }, kind: 'policy' },
-    select: { versions: { orderBy: { version: 'desc' }, take: 1, select: { id: true } } },
+    select: { slug: true, versions: { orderBy: { version: 'desc' }, take: 1, select: { id: true, title: true } } },
+    orderBy: { slug: 'asc' },
   })
-  return pages.flatMap((page) => page.versions.map((v) => v.id))
+  return pages.flatMap(({ slug, versions }) => versions.map(({ id, title }) => ({ id, slug, title })))
 }
 
-/** Đặt mua của khách, không cần đăng nhập. */
-export function checkoutRoutes({ prisma, storage, payments, siteUrl, orderExpiry }: AppDeps) {
+/** Đặt mua của khách, không cần đăng nhập; kèm access token khách thì đơn gắn với tài khoản. */
+export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, orderExpiry }: AppDeps) {
+  const customerSession = optionalAuth(new TextEncoder().encode(jwtSecret), 'customer')
   return Router()
     .post('/quote', async (req, res) => {
       const input = parse(CheckoutQuoteRequest, req.body)
       const config = await requireShippingFeeConfig(prisma)
       const ids = input.lines.map((l) => l.variantId)
       const [variants, stocked] = await Promise.all([cartVariants(prisma, ids), inStockIds(prisma, ids)])
+      const policies = await livePolicyVersions(prisma, variants.values())
 
       const lines = input.lines.map(({ variantId, quantity }): QuoteLine => {
         const found = variants.get(variantId) ?? { snapshot: null, variant: null }
@@ -79,20 +87,41 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, orderExpiry
         freeShippingThreshold: config.freeShippingThreshold,
         shippingFee,
         total: shippingFee === null ? null : subtotal + shippingFee,
+        policies: policies.map(({ slug, title }) => ({ slug, title })),
       }
       res.json(body)
     })
-    .post('/', async (req, res) => {
+    .post('/', customerSession, async (req, res) => {
       const input = parse(CheckoutRequest, req.body)
-      const { address } = input
+      const { address, invoice } = input
+      const customerId = req.auth?.subjectId ?? null
+      if (!customerId && input.acceptPrivacyPolicy !== true) {
+        throw invalidField('acceptPrivacyPolicy', 'Cần đồng ý với chính sách bảo mật để đặt mua')
+      }
       const ward = wardName(address.provinceCode, address.wardCode)
       if (!ward) throw invalidField('address.wardCode', 'Phường/xã không thuộc tỉnh/thành đã chọn')
+      await enforceRateLimits(
+        prisma,
+        res,
+        [{ limit: RATE_LIMITS.checkoutPerIp, subject: String(req.ip) }],
+        'Bạn đã đặt mua quá nhiều lần, vui lòng thử lại sau',
+      )
       const token = newOpaqueToken()
 
       // Một transaction: dòng sai, thiếu hàng hay cổng lỗi đều rollback, không còn đơn hay hàng giữ nào.
       const body = await prisma.$transaction(
         async (tx): Promise<CheckoutResult> => {
           const config = await requireShippingFeeConfig(tx)
+          await enforcePendingOrderLimit(tx, res, address)
+          // Khách vãng lai đồng ý với phiên bản hiện hành, đọc trong cùng transaction như lúc đăng ký.
+          const privacyPolicy = customerId ? null : await findCurrentPrivacyPolicy(tx)
+          if (!customerId && !privacyPolicy) {
+            throw new AppError(
+              503,
+              ErrorCode.SERVICE_UNAVAILABLE,
+              'Chưa thể đặt mua vì chính sách bảo mật chưa được công bố',
+            )
+          }
           const variants = await cartVariants(
             tx,
             input.lines.map((l) => l.variantId),
@@ -149,12 +178,16 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, orderExpiry
           const subtotal = lines.reduce((sum, line) => sum + line.price * line.quantity, 0)
           const shippingFee = shippingFeeFor(config, address.provinceCode, subtotal)
           const total = subtotal + shippingFee
-          const pageIds = new Set([...variants.values()].flatMap((v) => v.snapshot?.policyPageIds ?? []))
-          const policyVersionIds = await livePolicyVersionIds(tx, [...pageIds])
+          const policies = await livePolicyVersions(tx, variants.values())
           const reservedUntil = new Date(Date.now() + RESERVATION_MINUTES * 60_000)
 
           const order = await tx.order.create({
             data: {
+              customerId,
+              privacyPolicyVersionId: privacyPolicy?.id ?? null,
+              invoiceCompanyName: invoice?.companyName ?? null,
+              invoiceTaxCode: invoice?.taxCode ?? null,
+              invoiceAddress: invoice?.address ?? null,
               recipientName: address.recipientName,
               phone: address.phone,
               email: address.email,
@@ -170,10 +203,16 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, orderExpiry
               lookupTokenHash: hashOpaqueToken(token),
               reservedUntil,
               lines: { create: lines },
-              policyVersions: { create: policyVersionIds.map((pageVersionId) => ({ pageVersionId })) },
+              policyVersions: { create: policies.map(({ id }) => ({ pageVersionId: id })) },
             },
           })
-          await recordOrderEvent(tx, order.id, 'created', { type: 'customer' }, { total })
+          await recordOrderEvent(
+            tx,
+            order.id,
+            'created',
+            { type: 'customer', customerId: customerId ?? undefined },
+            { total },
+          )
           await orderExpiry.scheduleOrderExpiry(tx, order.id, reservedUntil)
 
           // Gọi cổng sau cùng, khi mọi thứ khác đã ghi được; cổng lỗi thì cả đơn rollback.

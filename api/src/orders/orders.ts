@@ -70,6 +70,7 @@ export async function issueOrderLookupUrl(db: DbClient, siteUrl: string, order: 
 export const ORDER_VIEW_INCLUDE = {
   lines: { orderBy: { position: 'asc' } },
   policyVersions: { include: { pageVersion: { include: { page: { select: { slug: true } } } } } },
+  privacyPolicyVersion: { select: { version: true } },
 } as const satisfies Prisma.OrderInclude
 
 export type OrderForView = Prisma.OrderGetPayload<{ include: typeof ORDER_VIEW_INCLUDE }>
@@ -137,5 +138,13 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
         version: pageVersion.version,
       }))
       .sort((a, b) => a.slug.localeCompare(b.slug)),
+    privacyConsent: order.privacyPolicyVersion && {
+      policyVersion: order.privacyPolicyVersion.version,
+      consentedAt: order.createdAt.toISOString(),
+    },
+    invoice:
+      order.invoiceCompanyName === null || order.invoiceTaxCode === null || order.invoiceAddress === null
+        ? null
+        : { companyName: order.invoiceCompanyName, taxCode: order.invoiceTaxCode, address: order.invoiceAddress },
   }
 }
