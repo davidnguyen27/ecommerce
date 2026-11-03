@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AdminBrandList, AdminProductList, AuditPage } from '@ecommerce/shared'
+import { AdminBrandList, AdminOrderPage, AdminProductList, AuditPage, ReconciliationPage } from '@ecommerce/shared'
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth' })
 
@@ -9,17 +9,40 @@ const canPrice = session.can('price.edit')
 const canAudit = session.can('audit.view')
 const canSeeProducts = canCatalog || canPrice
 
-// Lối tắt lấy quyền từ menu nên chỉ hiện trang người dùng mở được.
+// Lối tắt và số đếm lấy quyền từ menu nên chỉ hiện trang người dùng mở được.
+const canOpen = (to: string) => {
+  const permission = ADMIN_MENU_ITEMS.find((item) => item.to === to)?.permission
+  return !permission || session.can(permission)
+}
+
 const SHORTCUTS = [
   { to: '/admin/products', label: 'Sản phẩm & Biến thể' },
   { to: '/admin/brands', label: 'Quản lý Thương hiệu & Logo' },
   { to: '/admin/categories', label: 'Cây Danh mục 5 Nhóm hàng' },
   { to: '/admin/pages', label: 'Soạn Chính sách Đổi trả / Bảo hành' },
 ]
-const shortcuts = SHORTCUTS.filter((shortcut) => {
-  const permission = ADMIN_MENU_ITEMS.find((item) => item.to === shortcut.to)?.permission
-  return !permission || session.can(permission)
-})
+const shortcuts = SHORTCUTS.filter((shortcut) => canOpen(shortcut.to))
+
+// Mặc định của hai danh sách là hàng chờ soạn và mục còn mở, nên số đếm là `total` với `pageSize` 1 và link không cần query.
+const ORDER_COUNTS = [
+  {
+    to: '/admin/orders',
+    label: 'Đơn chờ soạn',
+    sub: 'Đã trả đủ, chưa chuẩn bị hàng',
+    testid: 'dashboard-to-pick',
+    load: async () =>
+      AdminOrderPage.parse(await session.adminFetch('/api/admin/orders', { query: { pageSize: 1 } })).total,
+  },
+  {
+    to: '/admin/reconciliation',
+    label: 'Cần đối soát',
+    sub: 'Khoản tiền chưa xử lý',
+    testid: 'dashboard-reconciliation',
+    load: async () =>
+      ReconciliationPage.parse(await session.adminFetch('/api/admin/reconciliation', { query: { pageSize: 1 } })).total,
+  },
+].filter((item) => canOpen(item.to))
+const orderCounts = ref<Record<string, number>>({})
 
 const stats = reactive({
   publishedCount: 0,
@@ -34,6 +57,9 @@ const loading = ref(true)
 
 onMounted(async () => {
   try {
+    const counts = await Promise.all(ORDER_COUNTS.map(async (item) => [item.to, await item.load()] as const))
+    orderCounts.value = Object.fromEntries(counts)
+
     if (canSeeProducts) {
       const prodRes = AdminProductList.parse(await session.adminFetch('/api/admin/products'))
       stats.publishedCount = prodRes.items.filter((p) => p.status === 'published').length
@@ -64,7 +90,7 @@ onMounted(async () => {
     <div class="admin-page-header">
       <div>
         <h1 class="admin-page-title">Bảng điều khiển trung tâm</h1>
-        <p class="admin-page-desc">Tổng quan hàng hóa, trạng thái xuất bản và lịch sử kiểm toán.</p>
+        <p class="admin-page-desc">Tổng quan đơn hàng, hàng hóa, trạng thái xuất bản và lịch sử kiểm toán.</p>
       </div>
 
       <div v-if="canCatalog" class="admin-topbar-actions">
@@ -72,6 +98,21 @@ onMounted(async () => {
           <span>+ Thêm sản phẩm mới</span>
         </NuxtLink>
       </div>
+    </div>
+
+    <div v-if="ORDER_COUNTS.length" class="stat-grid">
+      <NuxtLink
+        v-for="item in ORDER_COUNTS"
+        :key="item.to"
+        :to="item.to"
+        class="stat-card"
+        :data-testid="item.testid"
+        style="text-decoration: none; color: inherit"
+      >
+        <div class="stat-label">{{ item.label }}</div>
+        <div class="stat-value">{{ orderCounts[item.to] ?? '–' }}</div>
+        <div class="stat-sub">{{ item.sub }}</div>
+      </NuxtLink>
     </div>
 
     <div v-if="canSeeProducts" class="stat-grid">
