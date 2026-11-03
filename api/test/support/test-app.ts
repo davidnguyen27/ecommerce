@@ -8,7 +8,7 @@ import { createPrisma } from '../../src/db.ts'
 import { InMemoryMailer } from '../../src/adapters/mailer.ts'
 import { InMemoryStorage } from '../../src/adapters/storage.ts'
 import { Jobs } from '../../src/jobs/jobs.ts'
-import { InMemoryPaymentGateway, SimulatorPaymentGateway } from '../../src/payments/gateway.ts'
+import { InMemoryPaymentGateway, SimulatorPaymentGateway, type PaymentGateway } from '../../src/payments/gateway.ts'
 
 /** Gốc URL website trong link của email gửi ra từ test. */
 export const SITE_URL = 'https://shop.test'
@@ -21,6 +21,8 @@ type Options = {
   databaseUrl?: string
   /** Dùng cổng giả lập như khi chạy local thay cho bản trong bộ nhớ (`payments` khi đó không được app dùng). */
   simulator?: boolean
+  /** Cổng thanh toán khác cho app dùng, ví dụ PayOS trên HTTP giả (`payments` khi đó không được app dùng). */
+  gateway?: PaymentGateway
 }
 
 /**
@@ -48,7 +50,7 @@ export async function createTestApp(options: Options = {}) {
   // Hàng đợi job thật trên DB của test; worker gửi thư vào mailer giả.
   // DB bị ghi đè là DB giả lập hỏng, nên không khởi động worker trên đó.
   const payments = new InMemoryPaymentGateway()
-  const gateway = options.simulator ? new SimulatorPaymentGateway(SITE_URL) : payments
+  const gateway = options.gateway ?? (options.simulator ? new SimulatorPaymentGateway(SITE_URL) : payments)
   const jobs = new Jobs({ databaseUrl, prisma, mailer, logger, payments: gateway, maxConnections: 2 })
   const startJobs = !options.databaseUrl
   if (startJobs) await jobs.start()

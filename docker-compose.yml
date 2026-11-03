@@ -50,6 +50,12 @@ services:
       R2_PUBLIC_BUCKET: ${R2_PUBLIC_BUCKET:-}
       R2_PRIVATE_BUCKET: ${R2_PRIVATE_BUCKET:-}
       MEDIA_PUBLIC_URL: ${MEDIA_PUBLIC_URL:-}
+      # Đủ ba khóa PayOS thì thanh toán thật. Image chạy NODE_ENV=production nên thiếu khóa thì API không khởi động,
+      # trừ khi bật rõ cổng giả lập bằng PAYMENT_SIMULATOR=allow (chỉ local và smoke; không bao giờ đặt ở production).
+      PAYOS_CLIENT_ID: ${PAYOS_CLIENT_ID:-}
+      PAYOS_API_KEY: ${PAYOS_API_KEY:-}
+      PAYOS_CHECKSUM_KEY: ${PAYOS_CHECKSUM_KEY:-}
+      PAYMENT_SIMULATOR: ${PAYMENT_SIMULATOR:-}
     depends_on:
       migrate: { condition: service_completed_successfully }
       # Chỉ có khi bật profile local; staging/production bỏ qua.
