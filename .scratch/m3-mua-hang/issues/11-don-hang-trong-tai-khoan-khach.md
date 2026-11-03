@@ -34,7 +34,7 @@
   - Trang chi tiết `/tai-khoan/don-hang/[code]`: nạp ở client qua `accountFetch`, chưa đăng nhập thì về `/dang-nhap`, dùng `OrderView`, `noindex`. Smoke thêm khung trang này.
   - `OrderView` hiện khối "Xuất hóa đơn công ty" (`data-testid="order-invoice"`) khi `order.invoice` khác `null`; hiện ở cả trang đơn qua token.
   - `/dat-mua`: khách đã đăng nhập thì gọi `/api/account/shipping-address` và điền sẵn, chỉ khi khách chưa gõ gì vào form; phường/xã điền sau `nextTick` vì watcher tỉnh/thành xóa phường/xã.
-- **Nút hủy chưa gắn:** ticket 06 (`ticket/m3-06-het-han-huy`) chưa merge vào `spec/m3-mua-hang` lúc xong ticket này. Ticket 06 (hoặc người merge) đặt nút hủy vào slot `actions` của `OrderView` trên `/tai-khoan/don-hang/[code].vue`, gọi `POST /api/account/orders/:code/cancel` qua `session.accountFetch`, rồi nạp lại đơn.
+- **Nút hủy (người merge gắn khi merge ticket 06):** `POST /api/account/orders/:code/cancel` gộp vào `accountOrderRoutes` (`api/src/routes/account-orders.ts`), dùng `findCustomerOrder`; bỏ `account-order-cancel.ts`. Trang `/tai-khoan/don-hang/[code].vue` dùng nút hủy có sẵn của `OrderView` (prop `cancellable`, sự kiện `cancel`, như trang đơn qua token) thay vì slot `actions`, gọi route qua `session.accountFetch`, rồi nạp lại đơn (cả khi lỗi, để thấy trạng thái mới).
 - `checkout-guards.test.ts`: test khách đã đăng nhập giờ kiểm đơn gắn tài khoản qua `GET /api/account/orders/:code` thay vì prisma.
 - Test: `api/test/account-orders.test.ts` (5 test). Chưa xem các trang mới bằng trình duyệt (ticket 14).
 - Cần chủ doanh nghiệp xác nhận: đơn vãng lai cùng email được gắn vào tài khoản ngay khi xác minh email, khách không được hỏi trước; đơn vãng lai đặt sau khi đã xác minh thì không tự gắn.

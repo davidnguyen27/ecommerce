@@ -10,7 +10,6 @@ import type { EmailQueue, OrderExpiryQueue } from './jobs/jobs.ts'
 import type { PaymentGateway } from './payments/gateway.ts'
 import { errorHandler, notFound } from './http/errors.ts'
 import { accountOrderRoutes } from './routes/account-orders.ts'
-import { accountOrderCancelRoutes } from './routes/account-order-cancel.ts'
 import { accountRoutes } from './routes/account.ts'
 import { adminRoutes } from './routes/admin.ts'
 import { adminAuthRoutes } from './routes/admin-auth.ts'
@@ -88,7 +87,6 @@ export function createApp(deps: AppDeps) {
   }
   api.use('/auth', customerAuthRoutes(customerDeps))
   api.use('/account/orders', requireAuth(secret, 'customer'), accountOrderRoutes(deps))
-  api.use('/account/orders', requireAuth(secret, 'customer'), accountOrderCancelRoutes(deps))
   api.use('/account', requireAuth(secret, 'customer'), accountRoutes(customerDeps))
   api.use('/admin/auth', adminAuthRoutes(deps.prisma, secret, '/api/admin/auth'))
   api.use(
