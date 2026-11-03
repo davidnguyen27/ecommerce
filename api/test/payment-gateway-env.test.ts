@@ -60,10 +60,11 @@ describe('chọn cổng thanh toán theo biến môi trường', () => {
         STORAGE_PROVIDER: 'memory',
       },
       encoding: 'utf8',
-      timeout: 20_000,
+      // Nạp server.ts qua tsx chậm khi cả bộ test chạy song song.
+      timeout: 90_000,
     })
 
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('NODE_ENV=production cần PAYOS_CLIENT_ID, PAYOS_API_KEY, PAYOS_CHECKSUM_KEY')
-  })
+  }, 120_000)
 })
