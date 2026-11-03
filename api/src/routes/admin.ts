@@ -50,6 +50,6 @@ export function adminRoutes(prisma: Db, storage: Storage, payments: PaymentGatew
       .use('/import', adminImportRoutes(prisma))
       .use('/images', adminBulkImageRoutes(prisma, storage))
       .use('/shipping-fees', adminShippingFeeRoutes(prisma))
-      .use('/orders', adminOrderRoutes(prisma, payments))
+      .use('/orders', adminOrderRoutes(prisma, storage, payments))
   )
 }

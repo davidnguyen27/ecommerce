@@ -30,6 +30,7 @@ describe('phân quyền', () => {
       'document.view',
       'media.upload',
       'order.fulfill',
+      'order.view',
       'stock.adjust',
     ])
   })
