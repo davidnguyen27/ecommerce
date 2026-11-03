@@ -213,6 +213,14 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret }
             { type: 'customer', customerId: customerId ?? undefined },
             { total },
           )
+          // Trang đặt mua lần sau tự điền; cùng transaction nên đặt hỏng thì địa chỉ cũ giữ nguyên.
+          if (customerId) {
+            const { recipientName, phone, email, provinceCode, wardCode, streetAddress } = address
+            await tx.customer.update({
+              where: { id: customerId },
+              data: { lastShippingAddress: { recipientName, phone, email, provinceCode, wardCode, streetAddress } },
+            })
+          }
 
           // Gọi cổng sau cùng, khi mọi thứ khác đã ghi được; cổng lỗi thì cả đơn rollback.
           // Trang quay về không mang token: cổng không được thấy link xem và hủy đơn.

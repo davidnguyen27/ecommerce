@@ -112,6 +112,12 @@ const remainingText = computed(() => {
         <p class="text-muted-foreground">{{ order.address.email }}</p>
         <p v-if="order.note" class="mt-2">Ghi chú: {{ order.note }}</p>
       </div>
+      <div v-if="order.invoice" data-testid="order-invoice">
+        <h2 class="text-base">Xuất hóa đơn công ty</h2>
+        <p class="mt-2">{{ order.invoice.companyName }}</p>
+        <p class="text-muted-foreground">Mã số thuế {{ order.invoice.taxCode }}</p>
+        <p class="text-muted-foreground">{{ order.invoice.address }}</p>
+      </div>
       <div v-if="order.policies.length">
         <h2 class="text-base">Chính sách áp dụng</h2>
         <ul class="mt-2 space-y-1">
