@@ -39,6 +39,8 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'catalog.import': 'Import hàng hóa từ Excel',
   'shipping.fee.update': 'Sửa phí giao',
   'order.cancel': 'Hủy đơn chưa thanh toán',
+  'order.prepare': 'Bắt đầu chuẩn bị đơn',
+  'order.hand_over': 'Bàn giao vận chuyển',
 }
 
 const AUDIT_ENTITY_LABELS: Record<string, string> = {
