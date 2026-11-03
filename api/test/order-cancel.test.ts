@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { expireOverdueOrders } from '../src/orders/cancel-order.ts'
-import { CUSTOMER, publishPrivacyPolicy, register } from './support/customer.ts'
+import { CUSTOMER, register } from './support/customer.ts'
 import { signedWebhook, webhookData } from './support/payos.ts'
 import { shop } from './support/shop.ts'
 import { bearer, createStaff } from './support/staff.ts'
@@ -194,17 +194,17 @@ describe('khách hủy đơn chưa thanh toán', () => {
   })
 
   it('trong tài khoản: hủy được đơn của mình, đơn của người khác là 404', async () => {
-    const { code, request, prisma, order, checkout, reserved } = await pendingOrder()
-    await publishPrivacyPolicy(request)
+    // Đơn vãng lai của `pendingOrder` đứng cạnh đơn đặt khi đăng nhập.
+    const { code: guestCode, request, prisma, checkout, reserved } = await pendingOrder()
     const mine = (await register(request)).body.accessToken as string
     const other = (await register(request, { email: 'nguoi-khac@example.com' })).body.accessToken as string
     const customer = await prisma.customer.findUniqueOrThrow({ where: { email: CUSTOMER.email } })
-    // Đặt mua chưa gắn khách đăng nhập vào đơn (ticket 04, 11): gắn đơn vào tài khoản bằng prisma.
-    await prisma.order.update({ where: { code }, data: { customerId: customer.id } })
-    const guest = await checkout()
+    const placed = await checkout().set(bearer(mine))
+    expect(placed.status).toBe(201)
+    const { code, token: orderToken } = placed.body as { code: number; token: string }
 
     const byOther = await request.post(`/api/account/orders/${code}/cancel`).set(bearer(other))
-    const guestOrder = await request.post(`/api/account/orders/${guest.body.code}/cancel`).set(bearer(mine))
+    const guestOrder = await request.post(`/api/account/orders/${guestCode}/cancel`).set(bearer(mine))
     const signedOut = await request.post(`/api/account/orders/${code}/cancel`)
     expect(byOther.status).toBe(404)
     expect(guestOrder.status).toBe(404)
@@ -215,7 +215,8 @@ describe('khách hủy đơn chưa thanh toán', () => {
 
     expect(res.status).toBe(200)
     expect(res.body).toMatchObject({ code, status: 'cancelled', cancelReason: 'customer' })
-    expect((await order()).body).toMatchObject({ status: 'cancelled' })
+    const viaToken = await request.get(`/api/orders/${code}`).query({ token: orderToken })
+    expect(viaToken.body).toMatchObject({ status: 'cancelled' })
     expect(await reserved()).toBe(1)
     const events = await prisma.orderEvent.findMany({ where: { kind: 'cancelled' } })
     expect(events).toEqual([expect.objectContaining({ actor: 'customer', customerId: customer.id })])
