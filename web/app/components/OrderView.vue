@@ -2,7 +2,8 @@
 import type { PublicOrder } from '@ecommerce/shared'
 
 /**
- * Một đơn như khách thấy: trạng thái, thời gian giữ hàng còn lại, dòng đơn, tiền và địa chỉ nhận.
+ * Một đơn như khách thấy: trạng thái đơn, thanh toán và giao hàng tách riêng, thời gian giữ hàng còn lại,
+ * đơn vị vận chuyển và mã vận đơn khi đã bàn giao, dòng đơn, tiền và địa chỉ nhận.
  * Dùng chung cho trang đơn qua token và trang đơn trong tài khoản; nút thao tác đặt qua slot `actions`.
  */
 const props = defineProps<{
@@ -99,6 +100,35 @@ const remainingText = computed(() => {
     >
       Đơn đã được hủy{{ order.cancelledAt ? ` lúc ${formatDateTime(order.cancelledAt)}` : '' }}. Hàng giữ cho đơn đã
       được nhả.
+    </p>
+
+    <dl
+      v-if="order.shipment"
+      class="grid gap-4 rounded-lg border border-border bg-card p-5 text-sm sm:grid-cols-3"
+      data-testid="order-shipment"
+    >
+      <div>
+        <dt class="text-muted-foreground">Đơn vị vận chuyển</dt>
+        <dd class="mt-1 font-semibold">{{ order.shipment.carrier }}</dd>
+      </div>
+      <div>
+        <dt class="text-muted-foreground">Mã vận đơn</dt>
+        <dd class="mt-1 font-semibold tabular-nums" data-testid="order-tracking-number">
+          {{ order.shipment.trackingNumber }}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-muted-foreground">Bàn giao lúc</dt>
+        <dd class="mt-1">{{ formatDateTime(order.shipment.handedOverAt) }}</dd>
+      </div>
+    </dl>
+    <p
+      v-if="order.fulfillmentStatus === 'failed'"
+      class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+      role="status"
+      data-testid="delivery-failed"
+    >
+      Đơn vị vận chuyển chưa giao được đơn này. Shop sẽ liên hệ với bạn để sắp xếp lại việc giao hàng.
     </p>
 
     <div v-if="cancellable && order.status === 'pending_payment'">

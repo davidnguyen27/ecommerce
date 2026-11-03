@@ -1,8 +1,12 @@
 import { ErrorCode, type FulfillmentStatus, type HandoverRequest } from '@ecommerce/shared'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
+import type { EmailQueue } from '../jobs/jobs.ts'
 import { changeStock } from '../stock/stock.ts'
-import { recordOrderEvent } from './orders.ts'
+import { issueOrderLookupUrl, recordOrderEvent } from './orders.ts'
+
+/** Gửi email cho khách khi xử lý giao hàng: hàng đợi thư và địa chỉ website để dựng link tra cứu. */
+export type FulfillmentMail = { emails: EmailQueue; siteUrl: string }
 
 /**
  * Khóa đơn `FOR UPDATE` (cùng khóa với hủy đơn và ghi nhận thanh toán) rồi kiểm đơn đã trả đủ và đang ở `from`.
@@ -35,6 +39,7 @@ export async function prepareOrder(tx: Prisma.TransactionClient, orderId: string
  */
 export async function handOverOrder(
   tx: Prisma.TransactionClient,
+  { emails, siteUrl }: FulfillmentMail,
   orderId: string,
   staffId: string,
   shipment: HandoverRequest,
@@ -59,10 +64,55 @@ export async function handOverOrder(
         path: `lines.${i}`,
       })),
   )
-  await tx.order.update({
+  const order = await tx.order.update({
     where: { id: orderId },
     data: { fulfillmentStatus: 'handed_over', ...shipment, handedOverAt: new Date() },
   })
   await recordOrderEvent(tx, orderId, 'handed_over', { type: 'staff', staffId }, shipment)
-  // Ticket 09: xếp email "đã bàn giao vận chuyển" ở đây, trong cùng transaction, để rollback thì không gửi.
+  // Trong cùng transaction: bàn giao rollback thì không có thư.
+  const link = await issueOrderLookupUrl(tx, siteUrl, order)
+  // Bản nháp, chờ chủ doanh nghiệp duyệt nội dung.
+  await emails.sendEmail(tx, {
+    to: order.email,
+    subject: `Đơn hàng #${order.code} đã được giao cho đơn vị vận chuyển`,
+    text: [
+      `Chào ${order.recipientName},`,
+      '',
+      `Đơn hàng #${order.code} đã được giao cho đơn vị vận chuyển.`,
+      '',
+      `Đơn vị vận chuyển: ${shipment.carrier}`,
+      `Mã vận đơn: ${shipment.trackingNumber}`,
+      '',
+      `Xem đơn hàng: ${link}`,
+    ].join('\n'),
+  })
+}
+
+/** `handed_over` → `delivered`: đã giao tới khách, đơn hoàn tất. Gọi trong transaction của `audited()`. */
+export async function deliverOrder(tx: Prisma.TransactionClient, orderId: string, staffId: string) {
+  await lockForTransition(tx, orderId, 'handed_over')
+  await tx.order.update({ where: { id: orderId }, data: { status: 'completed', fulfillmentStatus: 'delivered' } })
+  await recordOrderEvent(tx, orderId, 'delivered', { type: 'staff', staffId })
+}
+
+/**
+ * `handed_over` → `failed`: giao không thành công. Đơn vẫn `processing` (nhập lại kho, hoàn tiền là việc của M6);
+ * khách nhận email báo shop sẽ liên hệ, xếp trong cùng transaction. Gọi trong transaction của `audited()`.
+ */
+export async function failDelivery(tx: Prisma.TransactionClient, emails: EmailQueue, orderId: string, staffId: string) {
+  await lockForTransition(tx, orderId, 'handed_over')
+  const order = await tx.order.update({ where: { id: orderId }, data: { fulfillmentStatus: 'failed' } })
+  await recordOrderEvent(tx, orderId, 'delivery_failed', { type: 'staff', staffId })
+  // Bản nháp, chờ chủ doanh nghiệp duyệt nội dung.
+  await emails.sendEmail(tx, {
+    to: order.email,
+    subject: `Giao hàng chưa thành công đơn hàng #${order.code}`,
+    text: [
+      `Chào ${order.recipientName},`,
+      '',
+      `Đơn vị vận chuyển báo chưa giao được đơn hàng #${order.code} (${order.carrier}, mã vận đơn ${order.trackingNumber}).`,
+      '',
+      'Shop sẽ liên hệ với bạn qua số điện thoại hoặc email để sắp xếp lại việc giao hàng.',
+    ].join('\n'),
+  })
 }

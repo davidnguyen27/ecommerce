@@ -41,6 +41,8 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'order.cancel': 'Hủy đơn chưa thanh toán',
   'order.prepare': 'Bắt đầu chuẩn bị đơn',
   'order.hand_over': 'Bàn giao vận chuyển',
+  'order.deliver': 'Đánh dấu đã giao',
+  'order.delivery_failed': 'Đánh dấu giao thất bại',
 }
 
 const AUDIT_ENTITY_LABELS: Record<string, string> = {

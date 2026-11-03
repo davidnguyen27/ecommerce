@@ -93,7 +93,7 @@ export function createApp(deps: AppDeps) {
     '/admin',
     requireAuth(secret, 'staff'),
     loadStaff(deps.prisma),
-    adminRoutes(deps.prisma, deps.storage, deps.payments),
+    adminRoutes(deps.prisma, deps.storage, deps.payments, { emails: deps.emails, siteUrl: deps.siteUrl }),
   )
   app.use('/api', api)
 
