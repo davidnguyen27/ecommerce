@@ -19,6 +19,22 @@ async function load() {
 }
 onMounted(load)
 
+// Khách hủy đơn chưa thanh toán của chính mình; lỗi (ví dụ đơn vừa được thanh toán) thì nạp lại để thấy trạng thái mới.
+const cancelling = ref(false)
+const cancelError = ref<string | null>(null)
+async function cancel() {
+  cancelling.value = true
+  cancelError.value = null
+  try {
+    await session.accountFetch(`/api/account/orders/${encodeURIComponent(code.value)}/cancel`, { method: 'POST' })
+  } catch (err) {
+    cancelError.value = apiErrorMessage(err)
+  } finally {
+    await load()
+    cancelling.value = false
+  }
+}
+
 useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đơn hàng của bạn.', noindex: true })
 </script>
 
@@ -28,6 +44,9 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
     <h1 class="mt-2">Đơn hàng #{{ code }}</h1>
     <p v-if="error" class="notice-error mt-8" role="alert">{{ error }}</p>
     <p v-else-if="!order" class="mt-8 text-muted-foreground">Đang tải…</p>
-    <OrderView v-else :order="order" class="mt-8" />
+    <template v-else>
+      <p v-if="cancelError" class="notice-error mt-8" role="alert">{{ cancelError }}</p>
+      <OrderView :order="order" class="mt-8" cancellable :cancelling="cancelling" @cancel="cancel" />
+    </template>
   </main>
 </template>
