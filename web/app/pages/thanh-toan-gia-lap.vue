@@ -28,6 +28,7 @@ watchEffect(() => {
 const busy = ref(false)
 const error = ref<string | null>(null)
 const done = ref(false)
+const expired = ref(false)
 
 async function simulatePaid() {
   busy.value = true
@@ -39,6 +40,21 @@ async function simulatePaid() {
       body: { orderCode: Number(orderCode.value), amount: paidAmount.value },
     })
     done.value = true
+    if (returnPath.value) await navigateTo(returnPath.value)
+  } catch (err) {
+    error.value = apiErrorMessage(err)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function simulateExpired() {
+  busy.value = true
+  error.value = null
+  try {
+    // Cùng hàm với job hết hạn, chỉ không chờ hết 15 phút.
+    await $fetch('/api/payments/simulator/expired', { method: 'POST', body: { orderCode: Number(orderCode.value) } })
+    expired.value = true
     if (returnPath.value) await navigateTo(returnPath.value)
   } catch (err) {
     error.value = apiErrorMessage(err)
@@ -74,7 +90,6 @@ useSeo({ title: 'Cổng thanh toán giả lập', description: 'Cổng thanh to�
       </div>
     </dl>
 
-    <!-- Ticket 06 nối nút hết hạn. -->
     <form class="mt-6 grid gap-3" @submit.prevent="simulatePaid">
       <label class="field">
         Số tiền chuyển (VND)
@@ -90,10 +105,19 @@ useSeo({ title: 'Cổng thanh toán giả lập', description: 'Cổng thanh to�
       </label>
       <p v-if="error" class="notice-error" role="alert">{{ error }}</p>
       <p v-if="done && !returnPath" class="notice-ok" role="status">Đã ghi nhận khoản thanh toán giả lập.</p>
+      <p v-if="expired && !returnPath" class="notice-ok" role="status">Đơn đã hết hạn và được hủy.</p>
       <button type="submit" class="btn-primary w-full" :disabled="busy || !orderCode" data-testid="simulate-paid">
         Giả lập đã thanh toán
       </button>
-      <button type="button" class="btn-outline w-full" disabled data-testid="simulate-expired">Giả lập hết hạn</button>
+      <button
+        type="button"
+        class="btn-outline w-full"
+        :disabled="busy || !orderCode"
+        data-testid="simulate-expired"
+        @click="simulateExpired"
+      >
+        Giả lập hết hạn
+      </button>
     </form>
 
     <p v-if="returnPath" class="mt-6 text-center text-sm">

@@ -193,14 +193,17 @@ describe('cần đối soát', () => {
   })
 
   it('tiền về cho đơn đã hủy: gắn cờ paid_after_cancel, đơn vẫn hủy', async () => {
-    const { code, order, webhook, prisma } = await pendingOrder()
-    // Chưa có đường hủy đơn (ticket 06), nên dựng đơn đã hủy bằng prisma.
-    await prisma.order.update({ where: { code }, data: { status: 'cancelled', reservedUntil: null } })
+    const { code, token, order, webhook, prisma, request } = await pendingOrder()
+    expect((await request.post(`/api/orders/${code}/cancel`).query({ token })).status).toBe(200)
 
     const res = await webhook(signedWebhook(webhookData(code, TOTAL)))
 
     expect(res.status).toBe(200)
-    expect((await order()).body).toMatchObject({ status: 'cancelled', paymentStatus: 'unpaid' })
+    expect((await order()).body).toMatchObject({
+      status: 'cancelled',
+      cancelReason: 'customer',
+      paymentStatus: 'unpaid',
+    })
     expect(await reconciliation(prisma)).toEqual([expect.objectContaining({ reason: 'paid_after_cancel' })])
   })
 })

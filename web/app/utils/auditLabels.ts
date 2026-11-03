@@ -38,6 +38,7 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'stock.opening': 'Ghi tồn đầu kỳ',
   'catalog.import': 'Import hàng hóa từ Excel',
   'shipping.fee.update': 'Sửa phí giao',
+  'order.cancel': 'Hủy đơn chưa thanh toán',
 }
 
 const AUDIT_ENTITY_LABELS: Record<string, string> = {
@@ -56,6 +57,7 @@ const AUDIT_ENTITY_LABELS: Record<string, string> = {
   import: 'Lần import',
   stock_receipt: 'Phiếu nhập kho',
   shipping_fee: 'Phí giao',
+  order: 'Đơn hàng',
 }
 
 export const AUDIT_ENTITY_TYPES = Object.keys(AUDIT_ENTITY_LABELS)

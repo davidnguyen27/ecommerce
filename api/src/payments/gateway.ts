@@ -53,6 +53,8 @@ export class InMemoryPaymentGateway implements PaymentGateway {
   failCreate = false
   /** Đặt `true` để mọi lần truy vấn sau đó đều lỗi. */
   failGetPayment = false
+  /** Đặt `true` để mọi lần hủy link sau đó đều lỗi. */
+  failCancel = false
 
   async createLink(request: PaymentLinkRequest) {
     if (this.failCreate) throw new Error('Cổng thanh toán giả lập lỗi')
@@ -66,6 +68,7 @@ export class InMemoryPaymentGateway implements PaymentGateway {
   }
 
   async cancelLink(orderCode: number) {
+    if (this.failCancel) throw new Error('Cổng thanh toán giả lập lỗi')
     this.cancelled.push(orderCode)
   }
 }

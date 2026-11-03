@@ -13,9 +13,10 @@ export type OrderLineImage = z.infer<typeof OrderLineImage>
 
 /**
  * Loại sự kiện trong lịch sử đơn: `paid` khi đủ tiền, `payment_flagged` khi khoản tiền cần đối soát.
- * Các ticket sau thêm hủy, hết hạn, giao hàng.
+ * `cancelled` khi đơn chưa thanh toán bị hủy (`data.reason` là `OrderCancelReason`, kể cả hết hạn).
+ * Các ticket sau thêm giao hàng.
  */
-export type OrderEventKind = 'created' | 'paid' | 'payment_flagged'
+export type OrderEventKind = 'created' | 'paid' | 'payment_flagged' | 'cancelled'
 
 /** Ai làm: nhân viên, khách (có id khi đã đăng nhập) hoặc hệ thống. */
 export type OrderEventActor =
@@ -103,6 +104,8 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
     fulfillmentStatus: order.fulfillmentStatus,
     createdAt: order.createdAt.toISOString(),
     reservedUntil: order.reservedUntil?.toISOString() ?? null,
+    cancelReason: order.cancelReason,
+    cancelledAt: order.cancelledAt?.toISOString() ?? null,
     address: {
       recipientName: order.recipientName,
       phone: order.phone,
