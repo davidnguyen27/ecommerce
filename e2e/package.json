@@ -1,0 +1,15 @@
+{
+  "name": "@ecommerce/e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@ecommerce/shared": "workspace:*",
+    "@playwright/test": "1.64.1",
+    "@types/node": "^24.19.2",
+    "typescript": "^6.0.3"
+  }
+}
