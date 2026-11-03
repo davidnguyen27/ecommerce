@@ -127,6 +127,25 @@ export type PaymentSource = z.infer<typeof PaymentSource>
 export const ReconciliationReason = z.enum(['amount_mismatch', 'paid_after_cancel', 'extra_payment'])
 export type ReconciliationReason = z.infer<typeof ReconciliationReason>
 
+export const ReconciliationStatus = z.enum(['open', 'resolved'])
+export type ReconciliationStatus = z.infer<typeof ReconciliationStatus>
+
+/** Cách đóng mục cần đối soát: khôi phục đơn, hoặc đã xử lý ngoài hệ thống (hoàn tiền tay…). */
+export const ReconciliationResolution = z.enum(['restored', 'handled_externally'])
+export type ReconciliationResolution = z.infer<typeof ReconciliationResolution>
+
+/** Mục cần đối soát của một khoản tiền; `resolution`, `resolvedBy`, `resolvedAt` có khi đã đóng. */
+export const ReconciliationDetail = z.object({
+  id: z.string(),
+  reason: ReconciliationReason,
+  status: ReconciliationStatus,
+  resolution: ReconciliationResolution.nullable(),
+  note: z.string().nullable(),
+  resolvedBy: z.object({ id: z.string(), name: z.string(), email: z.string() }).nullable(),
+  resolvedAt: z.string().nullable(),
+})
+export type ReconciliationDetail = z.infer<typeof ReconciliationDetail>
+
 /** Khoản tiền cổng báo về cho đơn; `reconciliation` có khi khoản đó bị gắn cờ cần đối soát. */
 export const AdminPaymentTransaction = z.object({
   id: z.string(),
@@ -134,7 +153,7 @@ export const AdminPaymentTransaction = z.object({
   reference: z.string(),
   paidAt: z.string(),
   source: PaymentSource,
-  reconciliation: z.object({ reason: ReconciliationReason, status: z.enum(['open', 'resolved']) }).nullable(),
+  reconciliation: ReconciliationDetail.nullable(),
 })
 export type AdminPaymentTransaction = z.infer<typeof AdminPaymentTransaction>
 

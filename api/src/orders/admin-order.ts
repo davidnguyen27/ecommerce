@@ -17,7 +17,10 @@ export async function loadAdminOrder(db: DbClient, storage: Storage, code: strin
     where: { code: Number(code) },
     include: {
       ...ORDER_VIEW_INCLUDE,
-      paymentTransactions: { include: { reconciliationItem: true }, orderBy: { createdAt: 'asc' } },
+      paymentTransactions: {
+        include: { reconciliationItem: { include: { resolvedBy: { select: ACTOR_SELECT } } } },
+        orderBy: { createdAt: 'asc' },
+      },
       events: {
         include: { staff: { select: ACTOR_SELECT }, customer: { select: { id: true, email: true } } },
         orderBy: { seq: 'asc' },
@@ -66,8 +69,13 @@ export async function loadAdminOrder(db: DbClient, storage: Storage, code: strin
       paidAt: t.paidAt.toISOString(),
       source: t.source,
       reconciliation: t.reconciliationItem && {
+        id: t.reconciliationItem.id,
         reason: t.reconciliationItem.reason,
         status: t.reconciliationItem.status,
+        resolution: t.reconciliationItem.resolution,
+        note: t.reconciliationItem.note,
+        resolvedBy: t.reconciliationItem.resolvedBy,
+        resolvedAt: t.reconciliationItem.resolvedAt?.toISOString() ?? null,
       },
     })),
     history,
