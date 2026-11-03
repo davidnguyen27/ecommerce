@@ -90,6 +90,7 @@ useSeo({ title: 'Tài khoản', description: 'Thông tin tài khoản khách hà
           {{ consentedOn }}.
         </p>
       </section>
+      <AccountOrders class="mt-6" />
       <form class="mt-6 space-y-5 rounded-lg border border-border bg-card p-6 sm:p-8" @submit.prevent="changePassword">
         <h2>Đổi mật khẩu</h2>
         <label class="field">

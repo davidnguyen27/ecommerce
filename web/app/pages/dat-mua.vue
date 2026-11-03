@@ -3,6 +3,7 @@ import {
   CheckoutConflictDetails,
   CheckoutQuote,
   CheckoutResult,
+  LastShippingAddress,
   PRIVACY_POLICY_SLUG,
   PROVINCES,
   RESERVATION_MINUTES,
@@ -37,7 +38,26 @@ const session = useCustomerSession()
 const signedIn = ref<boolean | null>(null)
 onMounted(async () => {
   signedIn.value = await session.signedIn()
+  if (signedIn.value) await fillLastAddress()
 })
+
+/** Khách đã đăng nhập: điền sẵn địa chỉ lần đặt mua trước, chỉ khi khách chưa gõ gì vào form. */
+async function fillLastAddress() {
+  try {
+    const { address } = LastShippingAddress.parse(await session.accountFetch('/api/account/shipping-address'))
+    const untouched = [form.recipientName, form.phone, form.email, form.provinceCode, form.streetAddress].every(
+      (value) => value === '',
+    )
+    if (!address || !untouched) return
+    const { wardCode, ...rest } = address
+    Object.assign(form, rest)
+    // Đổi tỉnh/thành thì watcher xóa phường/xã; đợi watcher chạy xong rồi mới điền.
+    await nextTick()
+    form.wardCode = wardCode
+  } catch {
+    // Không điền được thì khách tự nhập như bình thường.
+  }
+}
 
 // Danh mục phường/xã nặng, nên chỉ nạp ở trang này và chỉ ở trình duyệt.
 const wardsOf = shallowRef<((provinceCode: string) => Ward[]) | null>(null)

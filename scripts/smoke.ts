@@ -353,6 +353,7 @@ const CHECKS: Check[] = [
   },
   // Phiên khách chỉ có ở trình duyệt, nên HTML từ server chỉ có khung trang.
   { path: '/tai-khoan', status: 200, contains: ['<h1>Tài khoản</h1>', 'Đang tải'] },
+  { path: '/tai-khoan/don-hang/100000', status: 200, contains: ['Đơn hàng #100000', 'Đang tải', NOINDEX] },
   // Giỏ hàng ở localStorage của trình duyệt, nên HTML từ server chỉ có khung trang.
   { path: '/gio-hang', status: 200, contains: ['<h1>Giỏ hàng</h1>', 'Đang tải', NOINDEX] },
   // Đặt mua và đơn qua token là dữ liệu cá nhân: HTML từ server chỉ có khung trang.

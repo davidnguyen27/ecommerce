@@ -105,15 +105,17 @@ model RefreshToken {
 
 /// Khách tự đăng ký; tách hẳn khỏi `staff` (ADR 0001), nên có thể trùng email với một nhân viên.
 model Customer {
-  id              String    @id @default(uuid()) @db.Uuid
+  id                  String    @id @default(uuid()) @db.Uuid
   /// Luôn lưu dạng chữ thường.
-  email           String    @unique
+  email               String    @unique
   /// argon2id, dạng chuỗi PHC.
-  passwordHash    String    @map("password_hash")
+  passwordHash        String    @map("password_hash")
   /// Chưa xác minh không chặn việc dùng tài khoản.
-  emailVerifiedAt DateTime? @map("email_verified_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  emailVerifiedAt     DateTime? @map("email_verified_at")
+  /// Địa chỉ nhận hàng (`ShippingAddress`) của lần đặt mua thành công gần nhất; trang đặt mua tự điền.
+  lastShippingAddress Json?     @map("last_shipping_address")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   consents    CustomerConsent[]
   tokens      CustomerToken[]
