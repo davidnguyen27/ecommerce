@@ -48,6 +48,7 @@ model Staff {
   stockMovements           StockMovement[]
   stockReceipts            StockReceipt[]
   orderEvents              OrderEvent[]
+  resolvedReconciliations  ReconciliationItem[]
 
   @@map("staff")
 }
@@ -837,6 +838,13 @@ enum ReconciliationStatus {
   @@map("reconciliation_status")
 }
 
+enum ReconciliationResolution {
+  restored
+  handled_externally
+
+  @@map("reconciliation_resolution")
+}
+
 /// Cần đối soát (GLOSSARY): một khoản tiền không khớp với đơn, chờ kế toán quyết định.
 model ReconciliationItem {
   id            String               @id @default(uuid()) @db.Uuid
@@ -849,6 +857,13 @@ model ReconciliationItem {
   amount        BigInt
   receivedAt    DateTime             @map("received_at")
   status        ReconciliationStatus @default(open)
+  /// Cách đóng mục; có khi và chỉ khi `status = resolved`.
+  resolution    ReconciliationResolution?
+  /// Bắt buộc khi `handled_externally`: số tiền, mã giao dịch ngân hàng.
+  note          String?
+  resolvedById  String?              @map("resolved_by_id") @db.Uuid
+  resolvedBy    Staff?               @relation(fields: [resolvedById], references: [id], onDelete: Restrict)
+  resolvedAt    DateTime?            @map("resolved_at")
   createdAt     DateTime             @default(now()) @map("created_at")
   updatedAt     DateTime             @updatedAt @map("updated_at")
 

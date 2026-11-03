@@ -78,32 +78,7 @@ async function recordInTransaction(
       data: { status: 'processing', paymentStatus: 'paid', reservedUntil: null },
     })
     await recordOrderEvent(tx, order.id, 'paid', { type: 'system' }, eventData)
-    const link = await issueOrderLookupUrl(tx, siteUrl, order)
-    const lines = order.lines.map((line) => {
-      const attributes = Object.values(line.attributes as Record<string, unknown>)
-        .map((v) => (Array.isArray(v) ? v.join(', ') : String(v)))
-        .join(' · ')
-      const name = attributes ? `${line.productName} (${attributes})` : line.productName
-      return `- ${name} x ${line.quantity}: ${vnd(line.price * BigInt(line.quantity))}`
-    })
-    // Bản nháp, chờ chủ doanh nghiệp duyệt nội dung.
-    await emails.sendEmail(tx, {
-      to: order.email,
-      subject: `Đã nhận thanh toán đơn hàng #${order.code}`,
-      text: [
-        `Chào ${order.recipientName},`,
-        '',
-        `Chúng tôi đã nhận đủ thanh toán cho đơn hàng #${order.code}.`,
-        '',
-        ...lines,
-        `Phí giao: ${vnd(order.shippingFee)}`,
-        `Tổng cộng: ${vnd(order.total)}`,
-        '',
-        `Xem đơn hàng: ${link}`,
-        '',
-        'Chúng tôi sẽ báo cho bạn khi đơn được giao cho đơn vị vận chuyển.',
-      ].join('\n'),
-    })
+    await queuePaymentReceivedEmail(tx, { emails, siteUrl }, order)
     return 'paid'
   }
 
@@ -124,4 +99,43 @@ async function recordInTransaction(
   })
   await recordOrderEvent(tx, order.id, 'payment_flagged', { type: 'system' }, { ...eventData, reason })
   return 'flagged'
+}
+
+type OrderWithLines = Prisma.OrderGetPayload<{ include: { lines: true } }>
+
+/**
+ * Xếp email "đã nhận thanh toán" (tóm tắt đơn, tổng tiền, link tra cứu có token mới) trong transaction của thay đổi
+ * trạng thái. Dùng chung cho thanh toán bình thường và khôi phục đơn khi đối soát. `order.lines` xếp theo `position`.
+ */
+export async function queuePaymentReceivedEmail(
+  tx: DbClient,
+  { emails, siteUrl }: Pick<RecordPaymentDeps, 'emails' | 'siteUrl'>,
+  order: OrderWithLines,
+) {
+  const link = await issueOrderLookupUrl(tx, siteUrl, order)
+  const lines = order.lines.map((line) => {
+    const attributes = Object.values(line.attributes as Record<string, unknown>)
+      .map((v) => (Array.isArray(v) ? v.join(', ') : String(v)))
+      .join(' · ')
+    const name = attributes ? `${line.productName} (${attributes})` : line.productName
+    return `- ${name} x ${line.quantity}: ${vnd(line.price * BigInt(line.quantity))}`
+  })
+  // Bản nháp, chờ chủ doanh nghiệp duyệt nội dung.
+  await emails.sendEmail(tx, {
+    to: order.email,
+    subject: `Đã nhận thanh toán đơn hàng #${order.code}`,
+    text: [
+      `Chào ${order.recipientName},`,
+      '',
+      `Chúng tôi đã nhận đủ thanh toán cho đơn hàng #${order.code}.`,
+      '',
+      ...lines,
+      `Phí giao: ${vnd(order.shippingFee)}`,
+      `Tổng cộng: ${vnd(order.total)}`,
+      '',
+      `Xem đơn hàng: ${link}`,
+      '',
+      'Chúng tôi sẽ báo cho bạn khi đơn được giao cho đơn vị vận chuyển.',
+    ].join('\n'),
+  })
 }

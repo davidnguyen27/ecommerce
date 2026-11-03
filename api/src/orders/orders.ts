@@ -16,7 +16,15 @@ export type OrderLineImage = z.infer<typeof OrderLineImage>
  * `cancelled` khi đơn chưa thanh toán bị hủy (`data.reason` là `OrderCancelReason`, kể cả hết hạn).
  * Các ticket sau thêm giao hàng.
  */
-export type OrderEventKind = 'created' | 'paid' | 'payment_flagged' | 'cancelled'
+export type OrderEventKind =
+  | 'created'
+  | 'paid'
+  | 'payment_flagged'
+  | 'cancelled'
+  /** Kế toán khôi phục đơn đã hủy khi tiền về đủ (đối soát). */
+  | 'restored'
+  /** Kế toán đóng mục cần đối soát vì đã xử lý ngoài hệ thống. */
+  | 'reconciliation_resolved'
 
 /** Ai làm: nhân viên, khách (có id khi đã đăng nhập) hoặc hệ thống. */
 export type OrderEventActor =
