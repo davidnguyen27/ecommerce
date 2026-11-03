@@ -6,6 +6,7 @@ import type { Db } from '../db.ts'
 import type { FulfillmentMail } from '../orders/fulfill-order.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 import { adminOrderRoutes } from './admin-orders.ts'
+import { adminReconciliationRoutes, type ReconciliationDeps } from './admin-reconciliation.ts'
 import { adminAttributeSchemaRoutes } from './admin-attribute-schemas.ts'
 import { adminAuditRoutes } from './admin-audit.ts'
 import { adminBrandRoutes } from './admin-brands.ts'
@@ -25,7 +26,13 @@ import { adminStockReceiptRoutes } from './admin-stock-receipts.ts'
 import { adminShippingFeeRoutes } from './admin-shipping-fees.ts'
 
 /** Các route quản trị; đã đi qua `requireAuth` audience staff và `loadStaff`. */
-export function adminRoutes(prisma: Db, storage: Storage, payments: PaymentGateway, mail: FulfillmentMail) {
+export function adminRoutes(
+  prisma: Db,
+  storage: Storage,
+  payments: PaymentGateway,
+  /** Hàng đợi thư và địa chỉ website: email giao hàng (ticket 09) và khôi phục đơn khi đối soát (ticket 10). */
+  mail: FulfillmentMail & ReconciliationDeps,
+) {
   return (
     Router()
       .get('/me', (req, res) => {
@@ -52,5 +59,6 @@ export function adminRoutes(prisma: Db, storage: Storage, payments: PaymentGatew
       .use('/images', adminBulkImageRoutes(prisma, storage))
       .use('/shipping-fees', adminShippingFeeRoutes(prisma))
       .use('/orders', adminOrderRoutes(prisma, storage, payments, mail))
+      .use('/reconciliation', adminReconciliationRoutes(prisma, storage, mail))
   )
 }

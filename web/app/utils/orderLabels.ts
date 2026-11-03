@@ -5,6 +5,7 @@ import type {
   PaymentSource,
   PaymentStatus,
   ReconciliationReason,
+  ReconciliationResolution,
 } from '@ecommerce/shared'
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
@@ -47,6 +48,8 @@ const ORDER_EVENT_LABELS: Record<string, string> = {
   paid: 'Đã nhận đủ tiền',
   payment_flagged: 'Khoản tiền cần đối soát',
   cancelled: 'Hủy đơn',
+  restored: 'Khôi phục đơn sau đối soát',
+  reconciliation_resolved: 'Đối soát: đã xử lý ngoài hệ thống',
   preparing: 'Bắt đầu chuẩn bị',
   handed_over: 'Bàn giao vận chuyển',
   delivered: 'Đã giao',
@@ -58,6 +61,11 @@ export const PAYMENT_SOURCE_LABELS: Record<PaymentSource, string> = {
   webhook: 'Webhook cổng',
   query: 'Truy vấn cổng',
   simulator: 'Cổng giả lập',
+}
+
+export const RECONCILIATION_RESOLUTION_LABELS: Record<ReconciliationResolution, string> = {
+  restored: 'Đã khôi phục đơn',
+  handled_externally: 'Đã xử lý ngoài hệ thống',
 }
 
 export const RECONCILIATION_REASON_LABELS: Record<ReconciliationReason, string> = {

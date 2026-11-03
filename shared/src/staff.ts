@@ -19,6 +19,8 @@ export const Permission = z.enum([
   'order.view',
   /** Xử lý đơn: chuẩn bị, bàn giao, đã giao, giao thất bại, hủy đơn chưa thanh toán. */
   'order.fulfill',
+  /** Đối soát tiền: khôi phục đơn, đóng mục đã xử lý ngoài hệ thống. */
+  'payment.reconcile',
 ])
 export type Permission = z.infer<typeof Permission>
 

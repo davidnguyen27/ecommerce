@@ -117,7 +117,7 @@ describe('chi tiết đơn ở trang quản trị', () => {
       expect.objectContaining({
         amount: 2_030_000,
         source: 'simulator',
-        reconciliation: { reason: 'paid_after_cancel', status: 'open' },
+        reconciliation: expect.objectContaining({ reason: 'paid_after_cancel', status: 'open', resolution: null }),
       }),
     ])
   })
