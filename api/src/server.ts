@@ -19,7 +19,8 @@ const logger = pino({
   redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
 })
 const prisma = createPrisma(databaseUrl)
-const jobs = new Jobs({ databaseUrl, prisma, mailer: mailerFromEnv(process.env, logger), logger })
+const payments = paymentGatewayFromEnv(process.env, siteUrl)
+const jobs = new Jobs({ databaseUrl, prisma, mailer: mailerFromEnv(process.env, logger), logger, payments })
 await jobs.start()
 
 const app = createApp({
@@ -27,9 +28,10 @@ const app = createApp({
   logger,
   storage: storageFromEnv(process.env, logger),
   emails: jobs,
+  orderExpiry: jobs,
   siteUrl,
   jwtSecret,
-  payments: paymentGatewayFromEnv(process.env, siteUrl),
+  payments,
   payosChecksumKey: process.env.PAYOS_CHECKSUM_KEY || undefined,
 })
 

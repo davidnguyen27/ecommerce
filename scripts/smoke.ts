@@ -365,7 +365,14 @@ const CHECKS: Check[] = [
   {
     path: '/thanh-toan-gia-lap?orderCode=100000&amount=2030000',
     status: 200,
-    contains: ['<h1>Cổng thanh toán giả lập</h1>', '#100000', 'Giả lập đã thanh toán', 'Số tiền chuyển', NOINDEX],
+    contains: [
+      '<h1>Cổng thanh toán giả lập</h1>',
+      '#100000',
+      'Giả lập đã thanh toán',
+      'Giả lập hết hạn',
+      'Số tiền chuyển',
+      NOINDEX,
+    ],
   },
   { path: '/xac-minh-email?token=sai', status: 200, contains: ['Link xác minh không hợp lệ hoặc đã hết hạn'] },
   {

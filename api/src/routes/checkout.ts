@@ -48,7 +48,7 @@ async function livePolicyVersions(db: DbClient, variants: Iterable<CartVariant>)
 }
 
 /** Đặt mua của khách, không cần đăng nhập; kèm access token khách thì đơn gắn với tài khoản. */
-export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret }: AppDeps) {
+export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, orderExpiry }: AppDeps) {
   const customerSession = optionalAuth(new TextEncoder().encode(jwtSecret), 'customer')
   return Router()
     .post('/quote', async (req, res) => {
@@ -213,6 +213,7 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret }
             { type: 'customer', customerId: customerId ?? undefined },
             { total },
           )
+          await orderExpiry.scheduleOrderExpiry(tx, order.id, reservedUntil)
           // Trang đặt mua lần sau tự điền; cùng transaction nên đặt hỏng thì địa chỉ cũ giữ nguyên.
           if (customerId) {
             const { recipientName, phone, email, provinceCode, wardCode, streetAddress } = address

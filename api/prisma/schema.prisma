@@ -642,6 +642,15 @@ enum FulfillmentStatus {
   @@map("fulfillment_status")
 }
 
+/// Vì sao đơn chưa thanh toán bị hủy: quá hạn giữ hàng, khách tự hủy hay nhân viên hủy.
+enum OrderCancelReason {
+  expired
+  customer
+  staff
+
+  @@map("order_cancel_reason")
+}
+
 /// Ai làm một sự kiện đơn: nhân viên (có `staffId`), khách hay hệ thống (job hết hạn, cổng thanh toán).
 enum OrderEventActor {
   staff
@@ -681,6 +690,9 @@ model Order {
   lookupTokenHash   String            @unique @map("lookup_token_hash")
   /// Hạn giữ hàng khi chưa thanh toán; `null` khi không còn hạn (đã trả hoặc đã hủy).
   reservedUntil     DateTime?         @map("reserved_until")
+  /// Có khi và chỉ khi đơn `cancelled` (check constraint `order_cancellation_check`).
+  cancelReason      OrderCancelReason? @map("cancel_reason")
+  cancelledAt       DateTime?         @map("cancelled_at")
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
 

@@ -15,6 +15,10 @@ export type PaymentStatus = z.infer<typeof PaymentStatus>
 export const FulfillmentStatus = z.enum(['not_prepared', 'preparing', 'handed_over', 'delivered', 'failed'])
 export type FulfillmentStatus = z.infer<typeof FulfillmentStatus>
 
+/** Vì sao đơn chưa thanh toán bị hủy: quá hạn giữ hàng, khách tự hủy, hay nhân viên hủy. */
+export const OrderCancelReason = z.enum(['expired', 'customer', 'staff'])
+export type OrderCancelReason = z.infer<typeof OrderCancelReason>
+
 /** Dòng đơn như lúc đặt mua. */
 export const OrderLineView = z.object({
   variantId: z.string(),
@@ -40,6 +44,9 @@ export const PublicOrder = z.object({
   createdAt: z.string(),
   /** Hạn giữ hàng khi đơn còn chờ thanh toán; `null` khi không còn hạn. */
   reservedUntil: z.string().nullable(),
+  /** Có khi đơn `cancelled`. */
+  cancelReason: OrderCancelReason.nullable(),
+  cancelledAt: z.string().nullable(),
   address: z.object({
     recipientName: z.string(),
     phone: z.string(),

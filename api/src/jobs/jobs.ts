@@ -2,10 +2,14 @@ import { PgBoss, fromPrisma } from 'pg-boss'
 import type { Logger } from 'pino'
 import type { Mail, Mailer } from '../adapters/mailer.ts'
 import type { Db, DbClient } from '../db.ts'
+import { expireOrder, expireOverdueOrders } from '../orders/cancel-order.ts'
+import type { PaymentGateway } from '../payments/gateway.ts'
 import { deleteExpiredRecords } from './cleanup.ts'
 
 const SEND_EMAIL = 'send-email'
 const DELETE_EXPIRED = 'delete-expired'
+const EXPIRE_ORDER = 'expire-order'
+const EXPIRE_OVERDUE_ORDERS = 'expire-overdue-orders'
 
 /** Xếp thư vào hàng đợi; route chỉ cần phần này của `Jobs`. */
 export interface EmailQueue {
@@ -13,16 +17,34 @@ export interface EmailQueue {
   sendEmail(db: DbClient, mail: Mail): Promise<void>
 }
 
-/** Hàng đợi job nền trên Postgres (pg-boss); worker gửi email qua `mailer` và dọn token hết hạn mỗi đêm. */
-export class Jobs implements EmailQueue {
+/** Hẹn job hết hạn cho đơn vừa đặt; route đặt mua chỉ cần phần này của `Jobs`. */
+export interface OrderExpiryQueue {
+  /** Ghi job bằng `db` (transaction đặt mua): đơn rollback thì không còn job. */
+  scheduleOrderExpiry(db: DbClient, orderId: string, at: Date): Promise<void>
+}
+
+/**
+ * Hàng đợi job nền trên Postgres (pg-boss); worker gửi email qua `mailer`, hủy đơn hết hạn giữ hàng (hủy link qua
+ * `payments`) và dọn token hết hạn mỗi đêm.
+ */
+export class Jobs implements EmailQueue, OrderExpiryQueue {
   readonly #boss: PgBoss
   readonly #mailer: Mailer
   readonly #prisma: Db
   readonly #logger: Logger
+  readonly #payments: PaymentGateway
 
-  constructor(options: { databaseUrl: string; prisma: Db; mailer: Mailer; logger: Logger; maxConnections?: number }) {
+  constructor(options: {
+    databaseUrl: string
+    prisma: Db
+    mailer: Mailer
+    logger: Logger
+    payments: PaymentGateway
+    maxConnections?: number
+  }) {
     this.#mailer = options.mailer
     this.#prisma = options.prisma
+    this.#payments = options.payments
     this.#logger = options.logger
     this.#boss = new PgBoss({
       connectionString: options.databaseUrl,
@@ -47,6 +69,23 @@ export class Jobs implements EmailQueue {
       const deleted = await deleteExpiredRecords(this.#prisma)
       this.#logger.info({ deleted }, 'Đã dọn token và bộ đếm hết hạn')
     })
+
+    const cancelDeps = { prisma: this.#prisma, payments: this.#payments, logger: this.#logger }
+    await this.#boss.createQueue(EXPIRE_ORDER, { notify: true })
+    await this.#boss.work<{ orderId: string }>(EXPIRE_ORDER, async ([job]) => {
+      if (job) await expireOrder(cancelDeps, job.data.orderId)
+    })
+    // Lưới an toàn khi job của từng đơn bị mất hay chạy sớm: quét đơn quá hạn mỗi phút.
+    await this.#boss.createQueue(EXPIRE_OVERDUE_ORDERS)
+    await this.#boss.schedule(EXPIRE_OVERDUE_ORDERS, '* * * * *')
+    await this.#boss.work(EXPIRE_OVERDUE_ORDERS, async () => {
+      const expired = await expireOverdueOrders(cancelDeps)
+      if (expired > 0) this.#logger.info({ expired }, 'Đã hủy đơn hết hạn giữ hàng')
+    })
+  }
+
+  async scheduleOrderExpiry(db: DbClient, orderId: string, at: Date) {
+    await this.#boss.send(EXPIRE_ORDER, { orderId }, { db: fromPrisma(db), startAfter: at })
   }
 
   async sendEmail(db: DbClient, mail: Mail) {
