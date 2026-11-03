@@ -41,6 +41,8 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'order.cancel': 'Hủy đơn chưa thanh toán',
   'reconciliation.restore': 'Khôi phục đơn (đối soát)',
   'reconciliation.resolve': 'Đóng mục đối soát: đã xử lý ngoài hệ thống',
+  'order.prepare': 'Bắt đầu chuẩn bị đơn',
+  'order.hand_over': 'Bàn giao vận chuyển',
 }
 
 const AUDIT_ENTITY_LABELS: Record<string, string> = {

@@ -171,6 +171,9 @@ await load()
                   <NuxtLink v-if="m.receiptId" :to="`/admin/stock/receipts/${m.receiptId}`" style="margin-left: 4px"
                     >· xem phiếu</NuxtLink
                   >
+                  <NuxtLink v-if="m.orderCode" :to="`/admin/orders/${m.orderCode}`" style="margin-left: 4px"
+                    >· đơn #{{ m.orderCode }}</NuxtLink
+                  >
                 </td>
                 <td class="admin-table-num" :style="{ fontWeight: 600, color: m.quantity < 0 ? '#b91c1c' : '#15803d' }">
                   {{ signed(m.quantity) }}

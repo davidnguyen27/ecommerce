@@ -62,7 +62,14 @@ function historyTitle(entry: OrderHistoryEntry) {
 /** Chi tiết ngắn cho các sự kiện có dữ liệu đáng xem. */
 function historyDetail(entry: OrderHistoryEntry) {
   if (entry.source !== 'event') return ''
-  const data = (entry.data ?? {}) as { reason?: string; amount?: number; total?: number }
+  const data = (entry.data ?? {}) as {
+    reason?: string
+    amount?: number
+    total?: number
+    carrier?: string
+    trackingNumber?: string
+  }
+  if (entry.action === 'handed_over' && data.carrier) return `${data.carrier} · ${data.trackingNumber}`
   if (entry.action === 'cancelled' && data.reason) {
     return CANCEL_REASON_LABELS[data.reason as keyof typeof CANCEL_REASON_LABELS] ?? data.reason
   }
@@ -230,6 +237,8 @@ await load()
         </div>
 
         <div>
+          <AdminFulfillmentPanel :order="order" :can-fulfill="canFulfill" @update="setOrder" @reload="load" />
+
           <div class="admin-panel">
             <h2 class="admin-section-title">Trạng thái</h2>
             <dl style="margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 13px">
