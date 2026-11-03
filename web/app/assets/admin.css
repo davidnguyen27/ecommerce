@@ -729,3 +729,34 @@
   font-weight: 600;
   border-bottom-color: var(--adm-ink);
 }
+
+/* ==========================================================================
+   PRINT
+   Trang chỉ in một phần (ví dụ phiếu soạn hàng): phần in đặt `.admin-print-only`, phần màn hình đặt `.admin-no-print`.
+   ========================================================================== */
+.admin-print-only {
+  display: none;
+}
+
+@media print {
+  .admin-sidebar,
+  .admin-topbar,
+  .admin-no-print {
+    display: none !important;
+  }
+
+  .admin-print-only {
+    display: block;
+  }
+
+  .admin-shell {
+    display: block;
+    min-height: 0;
+    background: #fff;
+  }
+
+  .admin-content-area {
+    padding: 0;
+    max-width: none;
+  }
+}

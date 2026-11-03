@@ -92,3 +92,76 @@ export type AccountOrderQuery = z.infer<typeof AccountOrderQuery>
 
 export const AccountOrderPage = pageOf(AccountOrderSummary)
 export type AccountOrderPage = z.infer<typeof AccountOrderPage>
+
+/**
+ * Query string của `GET /api/admin/orders`. Không truyền gì thì là hàng chờ soạn: đơn đã trả đủ, chưa chuẩn bị, cũ
+ * trước. Mỗi bộ lọc trạng thái nhận `all` để bỏ lọc. `q` tìm theo mã đơn, số điện thoại hoặc email.
+ */
+export const AdminOrderQuery = PageQuery.extend({
+  status: z.union([OrderStatus, z.literal('all')]).default('processing'),
+  paymentStatus: z.union([PaymentStatus, z.literal('all')]).default('paid'),
+  fulfillmentStatus: z.union([FulfillmentStatus, z.literal('all')]).default('not_prepared'),
+  q: z.string().trim().max(200).optional(),
+  sort: z.enum(['oldest', 'newest']).default('oldest'),
+})
+export type AdminOrderQuery = z.infer<typeof AdminOrderQuery>
+
+export const AdminOrderSummary = AccountOrderSummary.extend({
+  recipientName: z.string(),
+  phone: z.string(),
+  email: z.string(),
+  provinceName: z.string(),
+})
+export type AdminOrderSummary = z.infer<typeof AdminOrderSummary>
+
+export const AdminOrderPage = pageOf(AdminOrderSummary)
+export type AdminOrderPage = z.infer<typeof AdminOrderPage>
+
+/** Đường báo tiền về (`payment_source`). */
+export const PaymentSource = z.enum(['webhook', 'query', 'simulator'])
+export type PaymentSource = z.infer<typeof PaymentSource>
+
+/** Lý do khoản tiền cần đối soát. */
+export const ReconciliationReason = z.enum(['amount_mismatch', 'paid_after_cancel', 'extra_payment'])
+export type ReconciliationReason = z.infer<typeof ReconciliationReason>
+
+/** Khoản tiền cổng báo về cho đơn; `reconciliation` có khi khoản đó bị gắn cờ cần đối soát. */
+export const AdminPaymentTransaction = z.object({
+  id: z.string(),
+  amount: z.number(),
+  reference: z.string(),
+  paidAt: z.string(),
+  source: PaymentSource,
+  reconciliation: z.object({ reason: ReconciliationReason, status: z.enum(['open', 'resolved']) }).nullable(),
+})
+export type AdminPaymentTransaction = z.infer<typeof AdminPaymentTransaction>
+
+/** Ai làm một việc trong lịch sử đơn. Khách có `email` khi đã đăng nhập; người cầm link tra cứu thì `null`. */
+export const OrderHistoryActor = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('staff'), id: z.string(), name: z.string(), email: z.string() }),
+  z.object({ type: z.literal('customer'), id: z.string().nullable(), email: z.string().nullable() }),
+  z.object({ type: z.literal('system') }),
+])
+export type OrderHistoryActor = z.infer<typeof OrderHistoryActor>
+
+/**
+ * Một dòng lịch sử thao tác, cũ trước: sự kiện đơn (`source: event`, `action` là loại sự kiện như `paid`), hoặc bản
+ * audit của nhân viên trên đơn (`source: audit`, `action` như `order.cancel`, `data` là `{ before, after }`).
+ */
+export const OrderHistoryEntry = z.object({
+  source: z.enum(['event', 'audit']),
+  action: z.string(),
+  actor: OrderHistoryActor,
+  data: z.unknown(),
+  at: z.string(),
+})
+export type OrderHistoryEntry = z.infer<typeof OrderHistoryEntry>
+
+/** Chi tiết đơn ở trang quản trị: mọi thứ khách thấy, thêm giao dịch thanh toán và lịch sử thao tác. */
+export const AdminOrder = PublicOrder.extend({
+  /** Tài khoản khách đặt hoặc được gắn đơn; `null` với đơn vãng lai. */
+  customerId: z.string().nullable(),
+  payments: z.array(AdminPaymentTransaction),
+  history: z.array(OrderHistoryEntry),
+})
+export type AdminOrder = z.infer<typeof AdminOrder>

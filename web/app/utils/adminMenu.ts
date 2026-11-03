@@ -12,6 +12,7 @@ import {
   PackagePlus,
   Scale,
   ScrollText,
+  ShoppingBag,
   Tag,
   Truck,
   Users,
@@ -55,7 +56,10 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
   },
   {
     title: 'Bán hàng',
-    items: [{ to: '/admin/shipping-fees', label: 'Phí giao', icon: Truck, permission: 'price.edit' }],
+    items: [
+      { to: '/admin/orders', label: 'Đơn hàng', icon: ShoppingBag, permission: 'order.view' },
+      { to: '/admin/shipping-fees', label: 'Phí giao', icon: Truck, permission: 'price.edit' },
+    ],
   },
   {
     title: 'Vận hành & Nhân sự',
