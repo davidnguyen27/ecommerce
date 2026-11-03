@@ -15,6 +15,8 @@ export const Permission = z.enum([
   'commitment.edit',
   /** Nhập kho và điều chỉnh tồn. */
   'stock.adjust',
+  /** Xem danh sách và chi tiết đơn hàng. */
+  'order.view',
   /** Xử lý đơn: chuẩn bị, bàn giao, đã giao, giao thất bại, hủy đơn chưa thanh toán. */
   'order.fulfill',
 ])
