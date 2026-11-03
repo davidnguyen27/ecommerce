@@ -36,3 +36,21 @@ export function signedWebhook(data: Record<string, unknown>, key = PAYOS_CHECKSU
   const signature = createHmac('sha256', key).update(text).digest('hex')
   return { code: '00', desc: 'success', success: true, data, signature }
 }
+
+/**
+ * Chữ ký PayOS đặt trên `data` của response API, như SDK `@payos/node` kiểm: `key=value` theo alphabet,
+ * mảng thành JSON với key mỗi phần tử theo alphabet, `null` thành rỗng.
+ */
+export function payosResponseSignature(data: Record<string, unknown>, key: string) {
+  const sorted = (o: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : 1)))
+  const text = Object.keys(data)
+    .sort()
+    .map((k) => {
+      const v = data[k]
+      if (Array.isArray(v)) return `${k}=${JSON.stringify(v.map((item) => sorted(item as Record<string, unknown>)))}`
+      return `${k}=${v === null || v === undefined ? '' : String(v)}`
+    })
+    .join('&')
+  return createHmac('sha256', key).update(text).digest('hex')
+}

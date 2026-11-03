@@ -24,7 +24,7 @@ export function publicOrderRoutes({ prisma, storage, emails, siteUrl, payments }
               reference: t.reference,
               paidAt: t.paidAt,
               source: 'query',
-              payload: { ...t, paidAt: t.paidAt.toISOString() },
+              payload: t.payload ?? { reference: t.reference, amount: t.amount, paidAt: t.paidAt.toISOString() },
             },
           )
         }
