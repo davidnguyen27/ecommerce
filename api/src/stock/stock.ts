@@ -91,13 +91,21 @@ export type StockChange = {
   note?: string
   /** Phiếu nhập; bắt buộc với loại `receipt` (check constraint). */
   receiptId?: string
+  /** Đơn của dòng xuất bán; bắt buộc với loại `sale` (check constraint). */
+  orderId?: string
+  /**
+   * Số đang giữ nhả cùng lúc với thay đổi này (dương): bàn giao vận chuyển trừ tồn và số giữ của đơn cùng nhau, nên
+   * chốt "tồn không thấp hơn số đang giữ" tính trên số giữ còn lại.
+   */
+  releaseReserved?: number
   path: string
 }
 
 /**
  * Đường duy nhất để đổi tồn: khóa các biến thể `FOR UPDATE` theo thứ tự id (nhiều request trên cùng nhóm biến thể
  * không deadlock), để `plan` quyết định thay đổi dựa trên tồn đã khóa, rồi cập nhật tồn và ghi sổ xuất nhập.
- * Gọi trong transaction của `audited()`; tồn âm thì ném 409 và transaction rollback.
+ * Gọi trong transaction của `audited()`; tồn âm, hoặc tồn thấp hơn số còn giữ sau `releaseReserved`, thì ném 409 và
+ * transaction rollback.
  */
 export async function changeStock(
   tx: Prisma.TransactionClient,
@@ -110,6 +118,7 @@ export async function changeStock(
   const changes = await plan(locked)
 
   const onHand = new Map([...locked.values()].map((row) => [row.id, row.onHand]))
+  const reserved = new Map([...locked.values()].map((row) => [row.id, row.reserved]))
   const movements = []
   for (const change of changes) {
     const variant = locked.get(change.variantId)
@@ -117,24 +126,31 @@ export async function changeStock(
     // Biến thể đã bị xóa giữa lúc đọc ngoài transaction và lúc khóa.
     if (!variant) throw conflictField(change.path, 'Biến thể không còn tồn tại, hãy tải lại trang')
     const after = onHand.get(variant.id)! + change.quantity
+    const reservedAfter = reserved.get(variant.id)! - (change.releaseReserved ?? 0)
+    if (reservedAfter < 0) throw new Error(`Nhả ${change.releaseReserved} của ${variant.sku} nhiều hơn số đang giữ`)
     if (after < 0) {
       throw conflictField(change.path, `Tồn của ${variant.sku} không đủ: hiện còn ${onHand.get(variant.id)}`)
     }
     // Hàng đang giữ cho đơn đã thuộc về khách; hạ tồn xuống dưới số đó phải xử lý các đơn trước (ADR 0007).
-    if (change.quantity < 0 && after < variant.reserved) {
+    if (change.quantity < 0 && after < reservedAfter) {
       const orderCodes = await ordersHoldingVariant(tx, variant.id)
       throw conflictField(
         change.path,
-        `Tồn của ${variant.sku} không thể thấp hơn ${variant.reserved} đang giữ cho đơn ${orderCodes.map((c) => `#${c}`).join(', ')}`,
-        { reserved: variant.reserved, orderCodes },
+        `Tồn của ${variant.sku} không thể thấp hơn ${reservedAfter} đang giữ cho đơn ${orderCodes.map((c) => `#${c}`).join(', ')}`,
+        { reserved: reservedAfter, orderCodes },
       )
     }
     onHand.set(variant.id, after)
+    reserved.set(variant.id, reservedAfter)
     movements.push({ ...change, onHandAfter: after })
   }
 
   for (const [id, value] of onHand) {
-    if (value !== locked.get(id)!.onHand) await tx.productVariant.update({ where: { id }, data: { onHand: value } })
+    const before = locked.get(id)!
+    const reservedValue = reserved.get(id)!
+    if (value !== before.onHand || reservedValue !== before.reserved) {
+      await tx.productVariant.update({ where: { id }, data: { onHand: value, reserved: reservedValue } })
+    }
   }
   const created = []
   for (const m of movements) {
@@ -148,6 +164,7 @@ export async function changeStock(
           reason: m.reason ?? null,
           note: m.note ?? '',
           receiptId: m.receiptId ?? null,
+          orderId: m.orderId ?? null,
           actorId,
         },
       }),

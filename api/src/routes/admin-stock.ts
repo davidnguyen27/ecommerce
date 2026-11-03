@@ -100,6 +100,7 @@ export function adminStockRoutes(prisma: Db) {
           include: {
             variant: { select: { id: true, sku: true, product: { select: { id: true, name: true } } } },
             actor: { select: ACTOR_SELECT },
+            order: { select: { code: true } },
           },
           orderBy: { seq: 'desc' },
           ...pageWindow(query),
@@ -114,6 +115,7 @@ export function adminStockRoutes(prisma: Db) {
           onHandAfter: m.onHandAfter,
           reason: m.reason,
           receiptId: m.receiptId,
+          orderCode: m.order?.code ?? null,
           note: m.note,
           variant,
           product,
