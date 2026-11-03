@@ -208,6 +208,8 @@ await load()
             </div>
           </div>
 
+          <AdminReconciliationPanel :order="order" style="margin-bottom: 24px" @update="setOrder" />
+
           <h2 class="admin-section-title">Lịch sử thao tác</h2>
           <div class="admin-table-card">
             <table class="admin-table">
