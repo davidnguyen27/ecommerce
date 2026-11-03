@@ -6,10 +6,11 @@ import type { Storage } from './adapters/storage.ts'
 import { requireAuth } from './auth/require-auth.ts'
 import { loadStaff } from './auth/staff-context.ts'
 import type { Db } from './db.ts'
-import type { EmailQueue } from './jobs/jobs.ts'
+import type { EmailQueue, OrderExpiryQueue } from './jobs/jobs.ts'
 import type { PaymentGateway } from './payments/gateway.ts'
 import { errorHandler, notFound } from './http/errors.ts'
 import { accountOrderRoutes } from './routes/account-orders.ts'
+import { accountOrderCancelRoutes } from './routes/account-order-cancel.ts'
 import { accountRoutes } from './routes/account.ts'
 import { adminRoutes } from './routes/admin.ts'
 import { adminAuthRoutes } from './routes/admin-auth.ts'
@@ -31,6 +32,8 @@ export type AppDeps = {
   storage: Storage
   /** Email đi qua hàng đợi job; worker gửi bằng mailer. */
   emails: EmailQueue
+  /** Job hủy đơn khi hết hạn giữ hàng, xếp lúc đặt mua. */
+  orderExpiry: OrderExpiryQueue
   /** Gốc URL của website, ví dụ `https://shop.vn`, để dựng link trong email. */
   siteUrl: string
   /** Khóa ký JWT (HS256). */
@@ -85,9 +88,15 @@ export function createApp(deps: AppDeps) {
   }
   api.use('/auth', customerAuthRoutes(customerDeps))
   api.use('/account/orders', requireAuth(secret, 'customer'), accountOrderRoutes(deps))
+  api.use('/account/orders', requireAuth(secret, 'customer'), accountOrderCancelRoutes(deps))
   api.use('/account', requireAuth(secret, 'customer'), accountRoutes(customerDeps))
   api.use('/admin/auth', adminAuthRoutes(deps.prisma, secret, '/api/admin/auth'))
-  api.use('/admin', requireAuth(secret, 'staff'), loadStaff(deps.prisma), adminRoutes(deps.prisma, deps.storage))
+  api.use(
+    '/admin',
+    requireAuth(secret, 'staff'),
+    loadStaff(deps.prisma),
+    adminRoutes(deps.prisma, deps.storage, deps.payments),
+  )
   app.use('/api', api)
 
   app.use(notFound)

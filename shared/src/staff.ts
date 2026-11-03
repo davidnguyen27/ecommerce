@@ -15,6 +15,8 @@ export const Permission = z.enum([
   'commitment.edit',
   /** Nhập kho và điều chỉnh tồn. */
   'stock.adjust',
+  /** Xử lý đơn: chuẩn bị, bàn giao, đã giao, giao thất bại, hủy đơn chưa thanh toán. */
+  'order.fulfill',
 ])
 export type Permission = z.infer<typeof Permission>
 

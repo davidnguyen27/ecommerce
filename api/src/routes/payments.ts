@@ -1,18 +1,21 @@
 import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
-import { ErrorCode, PayosWebhook, SimulatedPaymentRequest } from '@ecommerce/shared'
+import { ErrorCode, PayosWebhook, SimulatedExpiryRequest, SimulatedPaymentRequest } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
 import { AppError } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
+import { assertCancellable, cancelOrder } from '../orders/cancel-order.ts'
 import { SimulatorPaymentGateway } from '../payments/gateway.ts'
 import { isValidPayosSignature, parsePayosDateTime } from '../payments/payos.ts'
 import { recordPayment } from '../payments/record-payment.ts'
+
+const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đơn hàng')
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
 /** Cổng thanh toán báo tiền về, không cần đăng nhập. */
-export function paymentRoutes({ prisma, emails, siteUrl, payments, payosChecksumKey }: AppDeps) {
+export function paymentRoutes({ prisma, emails, siteUrl, payments, payosChecksumKey, logger }: AppDeps) {
   const router = Router()
   const recordDeps = { prisma, emails, siteUrl }
 
@@ -56,7 +59,16 @@ export function paymentRoutes({ prisma, emails, siteUrl, payments, payosChecksum
         source: 'simulator',
         payload: input,
       })
-      if (outcome === 'unknown_order') throw new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đơn hàng')
+      if (outcome === 'unknown_order') throw notFound()
+      res.status(204).end()
+    })
+
+    // Hết hạn ngay, không chờ 15 phút: cùng hàm với job hết hạn, chỉ bỏ điều kiện đã quá hạn.
+    router.post('/simulator/expired', async (req, res) => {
+      const { orderCode } = parse(SimulatedExpiryRequest, req.body)
+      const order = await prisma.order.findUnique({ where: { code: orderCode }, select: { id: true } })
+      if (!order) throw notFound()
+      assertCancellable(await cancelOrder({ prisma, payments, logger }, order.id, { reason: 'expired' }))
       res.status(204).end()
     })
   }

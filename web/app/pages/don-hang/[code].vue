@@ -36,6 +36,27 @@ async function load() {
 }
 onMounted(load)
 
+// Token cho xem và hủy đơn chưa thanh toán; không gửi email khi khách tự hủy.
+const cancelling = ref(false)
+const cancelError = ref<string | null>(null)
+async function cancel() {
+  const token = lookupToken()
+  if (!token) return
+  cancelling.value = true
+  cancelError.value = null
+  try {
+    order.value = PublicOrder.parse(
+      await $fetch(`/api/orders/${encodeURIComponent(code.value)}/cancel`, { method: 'POST', query: { token } }),
+    )
+  } catch (err) {
+    cancelError.value = apiErrorMessage(err)
+    // Đơn có thể vừa được thanh toán: nạp lại để khách thấy trạng thái mới.
+    await load()
+  } finally {
+    cancelling.value = false
+  }
+}
+
 const awaitingPayment = computed(() => isResult.value && order.value?.status === 'pending_payment')
 
 // Link email có token trong URL: không gửi URL này cho trang khác qua Referer.
@@ -62,7 +83,8 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
         <span>Chưa nhận được thanh toán. Nếu bạn vừa chuyển khoản, đợi một lát rồi kiểm tra lại.</span>
         <button type="button" class="btn-outline" :disabled="checking" @click="load">Kiểm tra lại</button>
       </div>
-      <OrderView :order="order" class="mt-8" />
+      <p v-if="cancelError" class="notice-error mt-8" role="alert">{{ cancelError }}</p>
+      <OrderView :order="order" class="mt-8" cancellable :cancelling="cancelling" @cancel="cancel" />
     </template>
   </main>
 </template>

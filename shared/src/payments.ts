@@ -25,3 +25,7 @@ export const SimulatedPaymentRequest = z.object({
   amount: z.number().int().positive('Số tiền phải lớn hơn 0'),
 })
 export type SimulatedPaymentRequest = z.infer<typeof SimulatedPaymentRequest>
+
+/** Nút "Giả lập hết hạn" của cổng giả lập: đơn hết hạn giữ hàng ngay. */
+export const SimulatedExpiryRequest = z.object({ orderCode: z.number().int().positive() })
+export type SimulatedExpiryRequest = z.infer<typeof SimulatedExpiryRequest>
