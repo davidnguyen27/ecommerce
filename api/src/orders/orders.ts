@@ -17,7 +17,17 @@ export type OrderLineImage = z.infer<typeof OrderLineImage>
  * `preparing` khi nhân viên kho bắt đầu soạn, `handed_over` khi bàn giao vận chuyển (`data` có `carrier`,
  * `trackingNumber`).
  */
-export type OrderEventKind = 'created' | 'paid' | 'payment_flagged' | 'cancelled' | 'preparing' | 'handed_over'
+export type OrderEventKind =
+  | 'created'
+  | 'paid'
+  | 'payment_flagged'
+  | 'cancelled'
+  | 'preparing'
+  | 'handed_over'
+  /** Kế toán khôi phục đơn đã hủy khi tiền về đủ (đối soát). */
+  | 'restored'
+  /** Kế toán đóng mục cần đối soát vì đã xử lý ngoài hệ thống. */
+  | 'reconciliation_resolved'
 
 /** Ai làm: nhân viên, khách (có id khi đã đăng nhập) hoặc hệ thống. */
 export type OrderEventActor =

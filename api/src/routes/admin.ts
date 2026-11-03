@@ -5,6 +5,7 @@ import { currentStaff } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 import { adminOrderRoutes } from './admin-orders.ts'
+import { adminReconciliationRoutes, type ReconciliationDeps } from './admin-reconciliation.ts'
 import { adminAttributeSchemaRoutes } from './admin-attribute-schemas.ts'
 import { adminAuditRoutes } from './admin-audit.ts'
 import { adminBrandRoutes } from './admin-brands.ts'
@@ -24,7 +25,12 @@ import { adminStockReceiptRoutes } from './admin-stock-receipts.ts'
 import { adminShippingFeeRoutes } from './admin-shipping-fees.ts'
 
 /** Các route quản trị; đã đi qua `requireAuth` audience staff và `loadStaff`. */
-export function adminRoutes(prisma: Db, storage: Storage, payments: PaymentGateway) {
+export function adminRoutes(
+  prisma: Db,
+  storage: Storage,
+  payments: PaymentGateway,
+  reconciliation: ReconciliationDeps,
+) {
   return (
     Router()
       .get('/me', (req, res) => {
@@ -51,5 +57,6 @@ export function adminRoutes(prisma: Db, storage: Storage, payments: PaymentGatew
       .use('/images', adminBulkImageRoutes(prisma, storage))
       .use('/shipping-fees', adminShippingFeeRoutes(prisma))
       .use('/orders', adminOrderRoutes(prisma, storage, payments))
+      .use('/reconciliation', adminReconciliationRoutes(prisma, storage, reconciliation))
   )
 }
