@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { AdminOrderQuery, ErrorCode, type AdminOrder, type AdminOrderPage } from '@ecommerce/shared'
+import { AdminOrderQuery, ErrorCode, HandoverRequest, type AdminOrder, type AdminOrderPage } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
 import { audited } from '../audit/audited.ts'
 import { currentStaff, requirePermission } from '../auth/staff-context.ts'
@@ -10,6 +10,7 @@ import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
 import { loadAdminOrder } from '../orders/admin-order.ts'
 import { assertCancellable, cancelInTransaction, cancelPaymentLink } from '../orders/cancel-order.ts'
+import { handOverOrder, prepareOrder } from '../orders/fulfill-order.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đơn hàng')
@@ -25,6 +26,14 @@ function searchWhere(q: string): Prisma.OrderWhereInput {
 
 /** Đơn hàng ở trang quản trị: xem cần `order.view`, xử lý đơn cần `order.fulfill`. */
 export function adminOrderRoutes(prisma: Db, storage: Storage, payments: PaymentGateway) {
+  const findOrder = async (code: string) => {
+    const order = /^\d{1,9}$/.test(code)
+      ? await prisma.order.findUnique({ where: { code: Number(code) }, select: { id: true, code: true } })
+      : null
+    if (!order) throw notFound()
+    return order
+  }
+
   return Router()
     .get('/', requirePermission('order.view'), async (req, res) => {
       const query = parse(AdminOrderQuery, req.query)
@@ -70,11 +79,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       res.json(body)
     })
     .post('/:code/cancel', requirePermission('order.fulfill'), async (req, res) => {
-      const code = String(req.params.code)
-      const order = /^\d{1,9}$/.test(code)
-        ? await prisma.order.findUnique({ where: { code: Number(code) }, select: { id: true, code: true } })
-        : null
-      if (!order) throw notFound()
+      const order = await findOrder(String(req.params.code))
 
       // Khách gọi điện báo thôi: nhân viên hủy hộ, cùng hàm với hết hạn và khách tự hủy, audit trong cùng transaction.
       const outcome = await audited(prisma, req, async (tx, audit) => {
@@ -93,5 +98,38 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       assertCancellable(outcome)
       if (outcome === 'cancelled') await cancelPaymentLink({ payments, logger: req.log }, order.code)
       res.status(204).end()
+    })
+    .post('/:code/prepare', requirePermission('order.fulfill'), async (req, res) => {
+      const code = String(req.params.code)
+      const order = await findOrder(code)
+      await audited(prisma, req, async (tx, audit) => {
+        await prepareOrder(tx, order.id, currentStaff(req).id)
+        await audit({
+          action: 'order.prepare',
+          entityType: 'order',
+          entityId: order.id,
+          before: { fulfillmentStatus: 'not_prepared' },
+          after: { fulfillmentStatus: 'preparing' },
+        })
+      })
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
+      res.json(body)
+    })
+    .post('/:code/hand-over', requirePermission('order.fulfill'), async (req, res) => {
+      const code = String(req.params.code)
+      const order = await findOrder(code)
+      const shipment = parse(HandoverRequest, req.body)
+      await audited(prisma, req, async (tx, audit) => {
+        await handOverOrder(tx, order.id, currentStaff(req).id, shipment)
+        await audit({
+          action: 'order.hand_over',
+          entityType: 'order',
+          entityId: order.id,
+          before: { fulfillmentStatus: 'preparing' },
+          after: { fulfillmentStatus: 'handed_over', ...shipment },
+        })
+      })
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
+      res.json(body)
     })
 }

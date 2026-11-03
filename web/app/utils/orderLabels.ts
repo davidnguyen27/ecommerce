@@ -47,6 +47,8 @@ const ORDER_EVENT_LABELS: Record<string, string> = {
   paid: 'Đã nhận đủ tiền',
   payment_flagged: 'Khoản tiền cần đối soát',
   cancelled: 'Hủy đơn',
+  preparing: 'Bắt đầu chuẩn bị',
+  handed_over: 'Bàn giao vận chuyển',
 }
 export const orderEventLabel = (kind: string) => ORDER_EVENT_LABELS[kind] ?? kind
 
