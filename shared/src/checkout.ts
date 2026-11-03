@@ -114,6 +114,10 @@ export const ShippingAddress = z.object({
 })
 export type ShippingAddress = z.input<typeof ShippingAddress>
 
+/** `GET /api/account/shipping-address`: địa chỉ của lần đặt mua thành công gần nhất; `null` khi chưa đặt lần nào. */
+export const LastShippingAddress = z.object({ address: ShippingAddress.nullable() })
+export type LastShippingAddress = z.infer<typeof LastShippingAddress>
+
 /** Mã số thuế: 10 số, hoặc 13 số có gạch nối trước 3 số cuối (chi nhánh), ví dụ `0101234567-001`. */
 export const TaxCode = z
   .string()
