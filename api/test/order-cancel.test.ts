@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { expireOverdueOrders } from '../src/orders/cancel-order.ts'
 import { CUSTOMER, register } from './support/customer.ts'
-import { signedWebhook, webhookData } from './support/payos.ts'
+import { callbackData, signedCallback } from './support/zalopay.ts'
 import { shop } from './support/shop.ts'
 import { bearer, createStaff } from './support/staff.ts'
 
@@ -20,8 +20,7 @@ async function pendingOrder(options?: Parameters<typeof shop>[0]) {
     return (stock.body.items as { reserved: number }[])[0]!.reserved
   }
   // Job hết hạn không có endpoint: test gọi thẳng hàm job chạy với `now` ở tương lai, rồi kiểm qua HTTP.
-  const expire = (now: Date) =>
-    expireOverdueOrders({ prisma: app.prisma, payments: app.payments, logger: app.logger }, now)
+  const expire = (now: Date) => expireOverdueOrders(app.expireDeps, now)
   /** Sự kiện "cancelled" trong lịch sử đơn ở trang quản trị. */
   const cancelEvents = async (orderCode = code) => {
     const res = await app.request.get(`/api/admin/orders/${orderCode}`).set(bearer(app.token))
@@ -58,7 +57,7 @@ describe('hết hạn giữ hàng', () => {
       reservedUntil: null,
     })
     expect(await reserved()).toBe(0)
-    expect(payments.cancelled).toEqual([code])
+    expect(payments.cancelled).toEqual([String(code)])
   })
 
   it('chạy lại thì không đổi gì: không nhả thêm hàng, không hủy link lần nữa, không thêm sự kiện', async () => {
@@ -71,14 +70,14 @@ describe('hết hạn giữ hàng', () => {
     expect(await expire(inMinutes(17))).toBe(0)
 
     expect((await order()).body).toEqual(before)
-    expect(payments.cancelled).toEqual([code, code + 1])
+    expect(payments.cancelled).toEqual([String(code), String(code + 1)])
     expect(await reserved()).toBe(0)
     expect(await cancelEvents(code)).toHaveLength(1)
     expect(await cancelEvents(code + 1)).toHaveLength(1)
   })
 
   it('không động tới đơn chưa quá hạn hay đơn đã trả', async () => {
-    const { code, order, reserved, expire, payments, request, checkout } = await pendingOrder({ simulator: true })
+    const { order, reserved, expire, request, checkout } = await pendingOrder({ simulator: true })
     const paid = await checkout()
     const pay = await request
       .post('/api/payments/simulator/paid')
@@ -94,7 +93,6 @@ describe('hết hạn giữ hàng', () => {
     expect(paidView.body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
     // Đơn đã trả vẫn giữ hàng tới khi bàn giao: chỉ phần của đơn hết hạn được nhả.
     expect(await reserved()).toBe(1)
-    expect(payments.cancelled).toEqual([code])
   })
 
   it('cổng lỗi khi hủy link thì chỉ log, đơn vẫn hủy và nhả hàng', async () => {
@@ -107,6 +105,36 @@ describe('hết hạn giữ hàng', () => {
     expect(await reserved()).toBe(0)
     expect(logs()).toContainEqual(expect.objectContaining({ orderCode: code, msg: 'Không hủy được link thanh toán' }))
   })
+
+  it('cổng báo đơn đã trả khi sắp hủy: ghi nhận khoản đó (nguồn query), đơn thành đã trả và không bị hủy', async () => {
+    const { code, order, reserved, expire, payments, cancelEvents, request, token } = await pendingOrder()
+    payments.payments.set(String(code), {
+      status: 'paid',
+      transactions: [{ reference: 'ZP-1', amount: 2_030_000, paidAt: new Date('2026-11-02T03:20:00Z') }],
+    })
+
+    expect(await expire(inMinutes(16))).toBe(0)
+
+    expect((await order()).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
+    expect(await reserved()).toBe(1)
+    expect(await cancelEvents()).toEqual([])
+    expect(payments.cancelled).toEqual([])
+    const detail = await request.get(`/api/admin/orders/${code}`).set(bearer(token))
+    expect(detail.body.payments).toEqual([expect.objectContaining({ reference: 'ZP-1', source: 'query' })])
+  })
+
+  it('cổng lỗi khi hỏi trước khi hủy thì log rồi vẫn hủy', async () => {
+    const { code, order, reserved, expire, payments, logs } = await pendingOrder()
+    payments.failGetPayment = true
+
+    expect(await expire(inMinutes(16))).toBe(1)
+
+    expect((await order()).body).toMatchObject({ status: 'cancelled', cancelReason: 'expired' })
+    expect(await reserved()).toBe(0)
+    expect(logs()).toContainEqual(
+      expect.objectContaining({ orderCode: code, msg: 'Không hỏi được cổng trước khi hủy đơn hết hạn' }),
+    )
+  })
 })
 
 describe('tiền về sau khi đơn đã hết hạn', () => {
@@ -114,7 +142,7 @@ describe('tiền về sau khi đơn đã hết hạn', () => {
     const { code, order, reserved, expire, request, token } = await pendingOrder()
     await expire(inMinutes(16))
 
-    const res = await request.post('/api/payments/payos/webhook').send(signedWebhook(webhookData(code, 2_030_000)))
+    const res = await request.post('/api/payments/zalopay/callback').send(signedCallback(callbackData(code, 2_030_000)))
 
     expect(res.status).toBe(200)
     expect((await order()).body).toMatchObject({
@@ -171,7 +199,7 @@ describe('khách hủy đơn chưa thanh toán', () => {
     expect(again.status).toBe(200)
     expect(again.body).toEqual(res.body)
     expect(await reserved()).toBe(0)
-    expect(payments.cancelled).toEqual([code])
+    expect(payments.cancelled).toEqual([String(code)])
     expect(await cancelEvents()).toEqual([
       expect.objectContaining({ actor: { type: 'customer', id: null, email: null }, data: { reason: 'customer' } }),
     ])
@@ -250,7 +278,7 @@ describe('nhân viên hủy đơn chưa thanh toán', () => {
     expect(unknown.status).toBe(404)
     expect((await order()).body).toMatchObject({ status: 'cancelled', cancelReason: 'staff' })
     expect(await reserved()).toBe(0)
-    expect(payments.cancelled).toEqual([code])
+    expect(payments.cancelled).toEqual([String(code)])
     const audit = await request.get('/api/admin/audit').query({ entityType: 'order' }).set(bearer(token))
     expect(audit.body.items).toEqual([
       expect.objectContaining({
@@ -277,7 +305,7 @@ describe('nhân viên hủy đơn chưa thanh toán', () => {
     expect(again.status).toBe(200)
     expect(again.body).toEqual(res.body)
     expect((res.body.history as { action: string }[]).filter((e) => e.action === 'cancelled')).toHaveLength(1)
-    expect(payments.cancelled).toEqual([code])
+    expect(payments.cancelled).toEqual([String(code)])
     const audit = await request.get('/api/admin/audit').query({ entityType: 'order' }).set(bearer(token))
     expect(audit.body.items).toEqual([])
   })

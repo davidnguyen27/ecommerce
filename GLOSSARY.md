@@ -129,6 +129,10 @@ _Avoid_: phí ship, phí vận chuyển
 **Trạng thái đơn hàng** / **Trạng thái thanh toán** / **Trạng thái giao hàng**:
 Ba khía cạnh theo dõi độc lập của một đơn. Đã trả đủ không có nghĩa là đã giao; đã bàn giao không có nghĩa là đã giao tới khách.
 
+**Cổng thanh toán** (Payment gateway):
+Dịch vụ bên ngoài nhận tiền của khách cho đơn và báo lại cho hệ thống; hiện là ZaloPay (ADR 0009). Local dùng cổng giả lập.
+_Avoid_: ví, ngân hàng (khi nói về cổng)
+
 **Cần đối soát** (Needs reconciliation):
 Đơn có khoản tiền về không khớp với đơn: lệch số tiền, hoặc về khi đơn đã hết hạn hay đã hủy. Hệ thống không tự xử lý; nhân viên quyết định giữ lại hàng hay hoàn tiền.
 _Avoid_: lỗi thanh toán, đơn treo

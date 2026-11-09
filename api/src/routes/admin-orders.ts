@@ -34,7 +34,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
   const findOrder = async (code: string) => {
     const order = await prisma.order.findUnique({
       where: { code: parseOrderCode(code) },
-      select: { id: true, code: true },
+      select: { id: true, code: true, gatewayReference: true },
     })
     if (!order) throw orderNotFound()
     return order
@@ -119,7 +119,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
         return result
       })
       assertCancellable(outcome)
-      if (outcome === 'cancelled') await cancelPaymentLink({ payments, logger: req.log }, order.code)
+      if (outcome === 'cancelled') await cancelPaymentLink({ payments, logger: req.log }, order)
       // Đơn đã hủy từ trước cũng trả đơn hiện tại, không ghi gì.
       const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
       res.json(body)

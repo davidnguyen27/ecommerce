@@ -13,15 +13,15 @@ import { InMemoryPaymentGateway, SimulatorPaymentGateway, type PaymentGateway } 
 /** Gốc URL website trong link của email gửi ra từ test. */
 export const SITE_URL = 'https://shop.test'
 
-/** Checksum key PayOS của test; test tự ký webhook bằng key này. */
-export const PAYOS_CHECKSUM_KEY = 'test-checksum-key'
+/** Key2 ZaloPay của test (không phải khóa thật hay khóa sandbox); test tự ký callback bằng key này. */
+export const ZALOPAY_KEY2 = 'test-zalopay-key2'
 
 type Options = {
   /** Ghi đè URL DB, ví dụ để giả lập mất kết nối. */
   databaseUrl?: string
   /** Dùng cổng giả lập như khi chạy local thay cho bản trong bộ nhớ (`payments` khi đó không được app dùng). */
   simulator?: boolean
-  /** Cổng thanh toán khác cho app dùng, ví dụ PayOS trên HTTP giả (`payments` khi đó không được app dùng). */
+  /** Cổng thanh toán khác cho app dùng, ví dụ ZaloPay trên HTTP giả (`payments` khi đó không được app dùng). */
   gateway?: PaymentGateway
 }
 
@@ -51,7 +51,15 @@ export async function createTestApp(options: Options = {}) {
   // DB bị ghi đè là DB giả lập hỏng, nên không khởi động worker trên đó.
   const payments = new InMemoryPaymentGateway()
   const gateway = options.gateway ?? (options.simulator ? new SimulatorPaymentGateway(SITE_URL) : payments)
-  const jobs = new Jobs({ databaseUrl, prisma, mailer, logger, payments: gateway, maxConnections: 2 })
+  const jobs = new Jobs({
+    databaseUrl,
+    prisma,
+    mailer,
+    logger,
+    payments: gateway,
+    siteUrl: SITE_URL,
+    maxConnections: 2,
+  })
   const startJobs = !options.databaseUrl
   if (startJobs) await jobs.start()
   const app = createApp({
@@ -63,7 +71,7 @@ export async function createTestApp(options: Options = {}) {
     jwtSecret,
     siteUrl: SITE_URL,
     payments: gateway,
-    payosChecksumKey: PAYOS_CHECKSUM_KEY,
+    zalopayCallbackKey: ZALOPAY_KEY2,
   })
 
   onTestFinished(async () => {
@@ -83,6 +91,8 @@ export async function createTestApp(options: Options = {}) {
     payments,
     /** Logger của app, để test gọi thẳng hàm job. */
     logger,
+    /** Phụ thuộc của hàm hết hạn, để test gọi thẳng job với `now` tương lai. */
+    expireDeps: { prisma, payments: gateway, logger, emails: jobs, siteUrl: SITE_URL },
     logs: () => lines.map((line) => JSON.parse(line) as Record<string, unknown>),
   }
 }

@@ -1,49 +1,60 @@
 import { randomUUID } from 'node:crypto'
-import { Router } from 'express'
-import { ErrorCode, PayosWebhook, SimulatedExpiryRequest, SimulatedPaymentRequest } from '@ecommerce/shared'
+import { Router, type Response } from 'express'
+import {
+  ErrorCode,
+  SimulatedExpiryRequest,
+  SimulatedPaymentRequest,
+  ZaloPayCallback,
+  ZaloPayCallbackData,
+  type ZaloPayCallbackResult,
+} from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
 import { AppError } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
-import { assertCancellable, cancelOrder } from '../orders/cancel-order.ts'
+import { assertCancellable, expireOrder } from '../orders/cancel-order.ts'
 import { SimulatorPaymentGateway } from '../payments/gateway.ts'
-import { isValidPayosSignature, parsePayosDateTime } from '../payments/payos.ts'
 import { recordPayment } from '../payments/record-payment.ts'
+import { isValidZaloPayCallback, orderCodeFromAppTransId } from '../payments/zalopay.ts'
 
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đơn hàng')
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
+/** ZaloPay đọc kết quả trong body, luôn với HTTP 200. */
+const reply = (res: Response, body: ZaloPayCallbackResult) => res.json(body)
 
 /** Cổng thanh toán báo tiền về, không cần đăng nhập. */
-export function paymentRoutes({ prisma, emails, siteUrl, payments, payosChecksumKey, logger }: AppDeps) {
+export function paymentRoutes({ prisma, emails, siteUrl, payments, zalopayCallbackKey, logger }: AppDeps) {
   const router = Router()
   const recordDeps = { prisma, emails, siteUrl }
 
-  if (payosChecksumKey) {
-    router.post('/payos/webhook', async (req, res) => {
-      const raw: unknown = req.body
-      // Kiểm chữ ký trên `data` gốc, đủ mọi trường PayOS gửi, trước khi đọc gì khác.
-      const signed =
-        isRecord(raw) &&
-        isRecord(raw.data) &&
-        typeof raw.signature === 'string' &&
-        isValidPayosSignature(raw.data, raw.signature, payosChecksumKey)
-      if (!signed) throw new AppError(400, ErrorCode.VALIDATION_ERROR, 'Chữ ký webhook không hợp lệ')
-      const { code, data } = parse(PayosWebhook, raw)
-
-      if (code === '00' && data.code === '00') {
-        const outcome = await recordPayment(recordDeps, {
-          orderCode: data.orderCode,
-          amount: data.amount,
-          reference: data.reference,
-          paidAt: parsePayosDateTime(data.transactionDateTime) ?? new Date(),
-          source: 'webhook',
-          payload: raw as object,
-        })
-        req.log.info({ orderCode: data.orderCode, reference: data.reference, outcome }, 'Webhook thanh toán')
+  if (zalopayCallbackKey) {
+    router.post('/zalopay/callback', async (req, res) => {
+      const callback = ZaloPayCallback.safeParse(req.body)
+      // Kiểm MAC trên chuỗi `data` gốc trước khi đọc gì khác.
+      if (!callback.success || !isValidZaloPayCallback(callback.data.data, callback.data.mac, zalopayCallbackKey)) {
+        req.log.warn('Callback ZaloPay sai MAC')
+        return reply(res, { return_code: -1, return_message: 'mac not equal' })
       }
-      // PayOS cần 2xx, kể cả khi khoản này đã ghi từ trước hay là webhook thử với mã đơn lạ.
-      res.json({ success: true })
+      try {
+        const raw: unknown = JSON.parse(callback.data.data)
+        const data = ZaloPayCallbackData.parse(raw)
+        const orderCode = orderCodeFromAppTransId(data.app_trans_id)
+        const outcome = orderCode
+          ? await recordPayment(recordDeps, {
+              orderCode,
+              amount: data.amount,
+              reference: String(data.zp_trans_id),
+              paidAt: new Date(data.server_time),
+              source: 'webhook',
+              payload: raw as object,
+            })
+          : 'unknown_order'
+        req.log.info({ appTransId: data.app_trans_id, zpTransId: data.zp_trans_id, outcome }, 'Callback thanh toán')
+        // Đã ghi từ trước hay mã đơn lạ cũng là đã nhận: ZaloPay không cần gửi lại.
+        return reply(res, { return_code: 1, return_message: 'success' })
+      } catch (err) {
+        req.log.error({ err }, 'Không ghi nhận được callback ZaloPay')
+        return reply(res, { return_code: 0, return_message: 'retry' })
+      }
     })
   }
 
@@ -68,7 +79,7 @@ export function paymentRoutes({ prisma, emails, siteUrl, payments, payosChecksum
       const { orderCode } = parse(SimulatedExpiryRequest, req.body)
       const order = await prisma.order.findUnique({ where: { code: orderCode }, select: { id: true } })
       if (!order) throw notFound()
-      assertCancellable(await cancelOrder({ prisma, payments, logger }, order.id, { reason: 'expired' }))
+      assertCancellable(await expireOrder({ ...recordDeps, payments, logger }, order.id))
       res.status(204).end()
     })
   }

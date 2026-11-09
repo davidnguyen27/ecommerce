@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { InMemoryMailer } from '../src/adapters/mailer.ts'
 import type { PaymentInfo } from '../src/payments/gateway.ts'
-import { signedWebhook, webhookData } from './support/payos.ts'
+import { callbackData, signedCallback } from './support/zalopay.ts'
 import { shop } from './support/shop.ts'
 import { bearer } from './support/staff.ts'
 
@@ -40,7 +40,6 @@ async function reconciliation({ request, token }: App) {
 /** Cổng trả lời truy vấn: đơn đã nhận một khoản. */
 const paidInfo = (amount: number, reference: string): PaymentInfo => ({
   status: 'paid',
-  amountPaid: amount,
   transactions: [{ reference, amount, paidAt: new Date('2026-11-02T03:20:00Z') }],
 })
 
@@ -51,7 +50,7 @@ async function pendingOrder() {
   expect(res.status).toBe(201)
   const { code, token } = res.body as { code: number; token: string }
   const order = () => app.request.get(`/api/orders/${code}`).query({ token })
-  const webhook = (body: unknown) => app.request.post('/api/payments/payos/webhook').send(body as object)
+  const callback = (body: unknown) => app.request.post('/api/payments/zalopay/callback').send(body as object)
   const transactionCount = async () => (await transactions(app, code)).length
   return {
     ...app,
@@ -59,19 +58,20 @@ async function pendingOrder() {
     code,
     token,
     order,
-    webhook,
+    callback,
     transactionCount,
     reconciliation: () => reconciliation(app),
   }
 }
 
-describe('ghi nhận thanh toán qua webhook', () => {
-  it('webhook đúng chữ ký, đúng tiền: đơn thành đã trả đủ, hết hạn giữ hàng và khách nhận email một lần', async () => {
-    const { code, order, webhook, mailer, request } = await pendingOrder()
+describe('ghi nhận thanh toán qua callback', () => {
+  it('callback đúng MAC, đúng tiền: trả 1, đơn thành đã trả đủ, hết hạn giữ hàng và khách nhận email một lần', async () => {
+    const { code, order, callback, mailer, request } = await pendingOrder()
 
-    const res = await webhook(signedWebhook(webhookData(code, TOTAL)))
+    const res = await callback(signedCallback(callbackData(code, TOTAL)))
 
     expect(res.status).toBe(200)
+    expect(res.body).toEqual({ return_code: 1, return_message: 'success' })
     const after = await order()
     expect(after.body).toMatchObject({
       status: 'processing',
@@ -90,28 +90,32 @@ describe('ghi nhận thanh toán qua webhook', () => {
     expect(viaMail.status).toBe(200)
   })
 
-  it('sai chữ ký thì 400 và không ghi gì', async () => {
-    const { code, order, webhook, transactionCount } = await pendingOrder()
-    const body = signedWebhook(webhookData(code, TOTAL))
+  it('sai MAC thì HTTP 200 với return_code -1 và không ghi gì', async () => {
+    const { code, order, callback, transactionCount } = await pendingOrder()
+    const body = signedCallback(callbackData(code, TOTAL))
 
-    const tampered = await webhook({ ...body, data: { ...body.data, amount: 1 } })
-    const otherKey = await webhook(signedWebhook(webhookData(code, TOTAL), 'khoa-khac'))
-    const unsigned = await webhook({ data: webhookData(code, TOTAL) })
+    const tampered = await callback({ ...body, data: body.data.replace(String(TOTAL), '1') })
+    const otherKey = await callback(signedCallback(callbackData(code, TOTAL), 'khoa-khac'))
+    const unsigned = await callback({ data: body.data })
+    const notHex = await callback({ ...body, mac: 'z'.repeat(64) })
 
-    for (const res of [tampered, otherKey, unsigned]) expect(res.status).toBe(400)
+    for (const res of [tampered, otherKey, unsigned, notHex]) {
+      expect(res.status).toBe(200)
+      expect(res.body.return_code).toBe(-1)
+    }
     expect((await order()).body).toMatchObject({ status: 'pending_payment', paymentStatus: 'unpaid' })
     expect(await transactionCount()).toBe(0)
   })
 
-  it('cùng một webhook gửi hai lần: chỉ ghi một giao dịch và gửi một email', async () => {
-    const { code, order, webhook, transactionCount, mailer } = await pendingOrder()
-    const body = signedWebhook(webhookData(code, TOTAL))
+  it('cùng một callback gửi hai lần: chỉ ghi một giao dịch và gửi một email', async () => {
+    const { code, order, callback, transactionCount, mailer } = await pendingOrder()
+    const body = signedCallback(callbackData(code, TOTAL))
 
-    const first = await webhook(body)
-    const second = await webhook(body)
+    const first = await callback(body)
+    const second = await callback(body)
 
-    expect(first.status).toBe(200)
-    expect(second.status).toBe(200)
+    expect(first.body.return_code).toBe(1)
+    expect(second.body.return_code).toBe(1)
     expect((await order()).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
     expect(await transactionCount()).toBe(1)
     await paymentMails(mailer, code)
@@ -119,20 +123,31 @@ describe('ghi nhận thanh toán qua webhook', () => {
     expect(await paymentMails(mailer, code)).toHaveLength(1)
   })
 
-  it('webhook cho mã đơn không có (như webhook thử của PayOS) vẫn trả 2xx và không ghi gì', async () => {
-    const { webhook, transactionCount } = await pendingOrder()
+  it('callback cho mã đơn không có hay app_trans_id lạ vẫn trả 1 để ZaloPay thôi gửi, không ghi gì', async () => {
+    const { callback, transactionCount } = await pendingOrder()
 
-    const res = await webhook(signedWebhook(webhookData(123, 3_000)))
+    const unknown = await callback(signedCallback(callbackData(123, 3_000)))
+    const foreign = await callback(signedCallback(callbackData(123, 3_000, { app_trans_id: 'khac' })))
+
+    for (const res of [unknown, foreign]) expect(res.body.return_code).toBe(1)
+    expect(await transactionCount()).toBe(0)
+  })
+
+  it('đúng MAC mà data không đọc được thì trả 0 để ZaloPay gửi lại, không ghi gì', async () => {
+    const { code, callback, transactionCount } = await pendingOrder()
+
+    const res = await callback(signedCallback(callbackData(code, TOTAL, { amount: 'nhiều' })))
 
     expect(res.status).toBe(200)
+    expect(res.body.return_code).toBe(0)
     expect(await transactionCount()).toBe(0)
   })
 })
 
 describe('ghi nhận thanh toán khi khách quay về', () => {
-  it('refresh=1 hỏi cổng và ghi nhận được khi chưa có webhook', async () => {
+  it('refresh=1 hỏi cổng và ghi nhận được khi chưa có callback', async () => {
     const { code, order, payments, token, request } = await pendingOrder()
-    payments.payments.set(code, paidInfo(TOTAL, 'FT-Q1'))
+    payments.payments.set(String(code), paidInfo(TOTAL, 'FT-Q1'))
 
     const plain = await order()
     const refreshed = await request.get(`/api/orders/${code}`).query({ token, refresh: '1' })
@@ -154,7 +169,7 @@ describe('ghi nhận thanh toán khi khách quay về', () => {
 
   it('refresh=1 với token sai là 404 và không hỏi cổng', async () => {
     const { code, payments, request, transactionCount } = await pendingOrder()
-    payments.payments.set(code, paidInfo(TOTAL, 'FT-Q1'))
+    payments.payments.set(String(code), paidInfo(TOTAL, 'FT-Q1'))
 
     const res = await request.get(`/api/orders/${code}`).query({ token: 'sai', refresh: '1' })
 
@@ -162,12 +177,12 @@ describe('ghi nhận thanh toán khi khách quay về', () => {
     expect(await transactionCount()).toBe(0)
   })
 
-  it('webhook và truy vấn cùng về một khoản: chỉ ghi một lần, email một lần', async () => {
-    const { code, order, webhook, payments, token, request, transactionCount, mailer } = await pendingOrder()
-    payments.payments.set(code, paidInfo(TOTAL, `FT${code}A`))
+  it('callback và truy vấn cùng về một khoản: chỉ ghi một lần, email một lần', async () => {
+    const { code, order, callback, payments, token, request, transactionCount, mailer } = await pendingOrder()
+    payments.payments.set(String(code), paidInfo(TOTAL, String(251102000000000 + code)))
 
     const [hook, query] = await Promise.all([
-      webhook(signedWebhook(webhookData(code, TOTAL))),
+      callback(signedCallback(callbackData(code, TOTAL))),
       request.get(`/api/orders/${code}`).query({ token, refresh: '1' }),
     ])
 
@@ -183,9 +198,9 @@ describe('ghi nhận thanh toán khi khách quay về', () => {
 
 describe('cần đối soát', () => {
   it('lệch tiền: gắn cờ amount_mismatch, đơn vẫn chưa thanh toán', async () => {
-    const { code, order, webhook, reconciliation } = await pendingOrder()
+    const { code, order, callback, reconciliation } = await pendingOrder()
 
-    const res = await webhook(signedWebhook(webhookData(code, 2_000_000)))
+    const res = await callback(signedCallback(callbackData(code, 2_000_000)))
 
     expect(res.status).toBe(200)
     expect((await order()).body).toMatchObject({ status: 'pending_payment', paymentStatus: 'unpaid' })
@@ -195,10 +210,10 @@ describe('cần đối soát', () => {
   })
 
   it('trả thiếu rồi chuyển nốt phần còn lại: đơn đã trả đủ, mục lệch tiền tự đóng vì đã đủ tiền', async () => {
-    const { code, order, webhook, reconciliation, request, adminToken } = await pendingOrder()
-    await webhook(signedWebhook(webhookData(code, 2_000_000)))
+    const { code, order, callback, reconciliation, request, adminToken } = await pendingOrder()
+    await callback(signedCallback(callbackData(code, 2_000_000)))
 
-    const res = await webhook(signedWebhook(webhookData(code, 30_000, { reference: 'FT-NOT' })))
+    const res = await callback(signedCallback(callbackData(code, 30_000, { zp_trans_id: 1 })))
 
     expect(res.status).toBe(200)
     expect((await order()).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
@@ -220,10 +235,10 @@ describe('cần đối soát', () => {
   })
 
   it('tiền về thêm cho đơn đã trả: gắn cờ extra_payment, đơn giữ nguyên đã trả', async () => {
-    const { code, order, webhook, reconciliation } = await pendingOrder()
-    await webhook(signedWebhook(webhookData(code, TOTAL)))
+    const { code, order, callback, reconciliation } = await pendingOrder()
+    await callback(signedCallback(callbackData(code, TOTAL)))
 
-    const res = await webhook(signedWebhook(webhookData(code, 50_000, { reference: 'FT-THEM' })))
+    const res = await callback(signedCallback(callbackData(code, 50_000, { zp_trans_id: 2 })))
 
     expect(res.status).toBe(200)
     expect((await order()).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
@@ -231,10 +246,10 @@ describe('cần đối soát', () => {
   })
 
   it('tiền về cho đơn đã hủy: gắn cờ paid_after_cancel, đơn vẫn hủy', async () => {
-    const { code, token, order, webhook, reconciliation, request } = await pendingOrder()
+    const { code, token, order, callback, reconciliation, request } = await pendingOrder()
     expect((await request.post(`/api/orders/${code}/cancel`).query({ token })).status).toBe(200)
 
-    const res = await webhook(signedWebhook(webhookData(code, TOTAL)))
+    const res = await callback(signedCallback(callbackData(code, TOTAL)))
 
     expect(res.status).toBe(200)
     expect((await order()).body).toMatchObject({
@@ -283,8 +298,8 @@ describe('cổng giả lập', () => {
 
 describe('bảng giao dịch thanh toán', () => {
   it('không sửa, không xóa được', async () => {
-    const { code, webhook, prisma } = await pendingOrder()
-    await webhook(signedWebhook(webhookData(code, TOTAL)))
+    const { code, callback, prisma } = await pendingOrder()
+    await callback(signedCallback(callbackData(code, TOTAL)))
 
     // Không có API nào sửa giao dịch; thử thẳng bằng SQL để chắc trigger chặn.
     await expect(prisma.$executeRaw`UPDATE "payment_transaction" SET "amount" = 1`).rejects.toThrow(
@@ -305,7 +320,7 @@ describe('trang quay về từ cổng thanh toán', () => {
     expect(payments.created).toHaveLength(1)
     expect(payments.created[0]).toMatchObject({
       returnUrl: 'https://shop.test/don-hang/100000?ket-qua=1',
-      cancelUrl: 'https://shop.test/don-hang/100000?ket-qua=1',
+      description: 'Thanh toán đơn hàng #100000',
     })
     expect(JSON.stringify(payments.created)).not.toContain(res.body.token)
   })
