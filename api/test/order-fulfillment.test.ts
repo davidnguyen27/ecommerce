@@ -116,31 +116,36 @@ describe('chuẩn bị và bàn giao vận chuyển', () => {
     expect((await handOver(code, SHIPMENT, warehouse.accessToken)).status).toBe(200)
   })
 
-  it('mỗi thao tác ghi audit và sự kiện đơn, hiện trong lịch sử thao tác', async () => {
+  it('mỗi thao tác ghi audit và một sự kiện đơn, lịch sử thao tác hiện một dòng mỗi thao tác', async () => {
     const { paidOrder, prepare, handOver, request, token } = await fulfillment()
     const code = await paidOrder()
     await prepare(code)
     const res = await handOver(code)
 
     const staffActor = expect.objectContaining({ type: 'staff', email: OWNER.email })
-    expect(res.body.history.slice(-4)).toEqual([
-      expect.objectContaining({ source: 'event', action: 'preparing', actor: staffActor }),
-      expect.objectContaining({
-        source: 'audit',
-        action: 'order.prepare',
-        actor: staffActor,
-        data: { before: { fulfillmentStatus: 'not_prepared' }, after: { fulfillmentStatus: 'preparing' } },
-      }),
-      expect.objectContaining({ source: 'event', action: 'handed_over', actor: staffActor, data: SHIPMENT }),
-      expect.objectContaining({
-        source: 'audit',
-        action: 'order.hand_over',
-        actor: staffActor,
-        data: { before: { fulfillmentStatus: 'preparing' }, after: { fulfillmentStatus: 'handed_over', ...SHIPMENT } },
-      }),
+    expect(res.body.history.map((e: { action: string }) => e.action)).toEqual([
+      'created',
+      'paid',
+      'preparing',
+      'handed_over',
+    ])
+    expect(res.body.history.slice(-2)).toEqual([
+      expect.objectContaining({ action: 'preparing', actor: staffActor }),
+      expect.objectContaining({ action: 'handed_over', actor: staffActor, data: SHIPMENT }),
     ])
     const audit = await request.get('/api/admin/audit').query({ entityType: 'order' }).set(bearer(token))
-    expect(audit.body.items.map((a: { action: string }) => a.action)).toEqual(['order.hand_over', 'order.prepare'])
+    expect(audit.body.items).toEqual([
+      expect.objectContaining({
+        action: 'order.hand_over',
+        before: { fulfillmentStatus: 'preparing' },
+        after: { fulfillmentStatus: 'handed_over', ...SHIPMENT },
+      }),
+      expect.objectContaining({
+        action: 'order.prepare',
+        before: { fulfillmentStatus: 'not_prepared' },
+        after: { fulfillmentStatus: 'preparing' },
+      }),
+    ])
   })
 
   it('đơn đã bàn giao không còn giữ hàng: hạ tồn về 0 bằng kiểm kê được', async () => {

@@ -62,3 +62,6 @@
 - Ticket 02 cần thêm `id` của biến thể vào `PublicProduct.variants`, vì trang sản phẩm hiện chỉ trả `sku` mà giỏ lưu theo variant id. Ticket này không làm phần đó.
 - Trang admin `/admin/shipping-fees` ("Phí giao") nằm trong nhóm menu mới "Bán hàng" của `ADMIN_MENU_GROUPS`, quyền `price.edit`. Các ticket 07 và 10 thêm "Đơn hàng" và "Cần đối soát" vào nhóm này. Nhãn audit đã thêm vào `auditLabels.ts`. Chưa xem trang bằng mắt trong app đang chạy.
 - Hàm `shippingFeeFor` chỉ được test qua HTTP, vì shared chưa có bộ chạy test.
+
+**Sửa sau code review toàn nhánh (xem `implement-spec/review-fixes.md`):**
+- `inStock` của dòng `POST /api/checkout/quote` giờ tính theo số lượng của dòng (`on_hand - reserved >= quantity`, hàm `enoughStockIds`), không còn là "còn ít nhất một". Dòng không đủ hàng có `lineTotal: null` và không tính vào tạm tính. Vẫn chỉ trả boolean.

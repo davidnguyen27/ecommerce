@@ -182,15 +182,16 @@ onBeforeUnmount(() => {
           to="/gio-hang"
           class="relative inline-flex h-10 items-center gap-2 rounded-md px-2.5 text-sm font-medium transition-colors hover:bg-secondary lg:order-6"
           data-testid="cart-link"
+          :aria-label="cart.count.value ? `Giỏ hàng, ${cart.count.value} món` : 'Giỏ hàng'"
         >
           <ShoppingBag class="h-5 w-5" aria-hidden="true" />
           <span class="hidden sm:inline">Giỏ hàng</span>
-          <span class="sr-only sm:hidden">Giỏ hàng</span>
+          <!-- Tên truy cập ở aria-label: ghép từ các span trong flex thì trình duyệt chèn dấu cách trước dấu phẩy. -->
           <span
             v-if="cart.count.value"
             class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold tabular-nums text-primary-foreground sm:static sm:h-5"
             data-testid="cart-count"
-            ><span class="sr-only">, </span>{{ cart.count.value }}<span class="sr-only"> món</span></span
+            >{{ cart.count.value }}</span
           >
         </NuxtLink>
       </div>
