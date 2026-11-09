@@ -1,18 +1,19 @@
 /** Yêu cầu tạo link thanh toán cho một đơn. */
 export type PaymentLinkRequest = {
-  /** Mã đơn, cũng là `orderCode` của PayOS. */
+  /** Mã đơn khách thấy. */
   orderCode: number
   /** VND, tổng phải trả. */
   amount: number
-  /** Nội dung chuyển khoản; PayOS giới hạn 25 ký tự. */
+  /** Mô tả khách thấy ở trang thanh toán. */
   description: string
-  /** Trang khách quay về sau khi thanh toán. */
+  /** Trang khách quay về sau khi thanh toán (hay bỏ ngang). */
   returnUrl: string
-  /** Trang khách quay về khi bấm hủy ở cổng. */
-  cancelUrl: string
   /** Link hết hạn cùng lúc với hạn giữ hàng. */
   expiresAt: Date
 }
+
+/** Link vừa tạo: trang khách tới để trả tiền, và mã đơn bên cổng để truy vấn sau (`order.gateway_reference`). */
+export type PaymentLink = { checkoutUrl: string; gatewayReference: string }
 
 /** Một khoản tiền đã về cho đơn, theo cổng thanh toán. */
 export type PaymentTransaction = {
@@ -24,10 +25,9 @@ export type PaymentTransaction = {
   payload?: object
 }
 
-/** Trạng thái thanh toán của một đơn khi hỏi cổng; `underpaid` là đã về một phần. */
+/** Trạng thái thanh toán của một đơn khi hỏi cổng. */
 export type PaymentInfo = {
-  status: 'pending' | 'paid' | 'underpaid' | 'cancelled' | 'expired' | 'failed'
-  amountPaid: number
+  status: 'pending' | 'paid' | 'failed'
   transactions: PaymentTransaction[]
 }
 
@@ -37,25 +37,29 @@ export class PaymentGatewayError extends Error {
 }
 
 /**
- * Cổng thanh toán (ADR 0008). Bản thật là PayOS (`payos.ts`), chọn ở `gateway-from-env.ts`; local dùng cổng giả lập; test dùng bản trong bộ nhớ.
- * Kiểm chữ ký webhook không nằm ở đây: đó là hàm thuần trên checksum key.
+ * Cổng thanh toán (ADR 0009). Bản thật là ZaloPay (`zalopay.ts`), chọn ở `gateway-from-env.ts`; local dùng cổng giả
+ * lập; test dùng bản trong bộ nhớ. Kiểm MAC của callback không nằm ở đây: đó là hàm thuần trên khóa callback.
  */
 export interface PaymentGateway {
   /** Tạo link thanh toán; lỗi thì ném để đơn không được tạo. */
-  createLink(request: PaymentLinkRequest): Promise<{ checkoutUrl: string }>
-  /** Hỏi cổng các khoản đã về cho đơn. */
-  getPayment(orderCode: number): Promise<PaymentInfo>
+  createLink(request: PaymentLinkRequest): Promise<PaymentLink>
+  /** Hỏi cổng các khoản đã về cho đơn mang mã `gatewayReference`. */
+  getPayment(gatewayReference: string): Promise<PaymentInfo>
   /** Hủy link của đơn; lỗi chỉ cần log, không chặn việc hủy đơn. */
-  cancelLink(orderCode: number): Promise<void>
+  cancelLink(gatewayReference: string): Promise<void>
 }
 
-const PENDING: PaymentInfo = { status: 'pending', amountPaid: 0, transactions: [] }
+const PENDING: PaymentInfo = { status: 'pending', transactions: [] }
 
-/** Bản giả cho test: ghi lại link đã tạo, đã hủy; trạng thái truy vấn do test đặt; giả lập được lỗi tạo link. */
+/**
+ * Bản giả cho test: ghi lại link đã tạo, đã hủy; trạng thái truy vấn do test đặt; giả lập được lỗi. Mã đơn bên cổng
+ * là `String(orderCode)`.
+ */
 export class InMemoryPaymentGateway implements PaymentGateway {
   readonly created: PaymentLinkRequest[] = []
-  readonly cancelled: number[] = []
-  readonly payments = new Map<number, PaymentInfo>()
+  readonly cancelled: string[] = []
+  /** Trạng thái truy vấn theo mã đơn bên cổng. */
+  readonly payments = new Map<string, PaymentInfo>()
   /** Đặt `true` để mọi lần tạo link sau đó đều lỗi, như cổng không trả lời. */
   failCreate = false
   /** Đặt `true` để mọi lần truy vấn sau đó đều lỗi. */
@@ -66,17 +70,17 @@ export class InMemoryPaymentGateway implements PaymentGateway {
   async createLink(request: PaymentLinkRequest) {
     if (this.failCreate) throw new Error('Cổng thanh toán giả lập lỗi')
     this.created.push(request)
-    return { checkoutUrl: `https://pay.test/${request.orderCode}` }
+    return { checkoutUrl: `https://pay.test/${request.orderCode}`, gatewayReference: String(request.orderCode) }
   }
 
-  async getPayment(orderCode: number) {
+  async getPayment(gatewayReference: string) {
     if (this.failGetPayment) throw new Error('Cổng thanh toán giả lập lỗi')
-    return this.payments.get(orderCode) ?? PENDING
+    return this.payments.get(gatewayReference) ?? PENDING
   }
 
-  async cancelLink(orderCode: number) {
+  async cancelLink(gatewayReference: string) {
     if (this.failCancel) throw new Error('Cổng thanh toán giả lập lỗi')
-    this.cancelled.push(orderCode)
+    this.cancelled.push(gatewayReference)
   }
 }
 
@@ -84,9 +88,9 @@ export class InMemoryPaymentGateway implements PaymentGateway {
 export const SIMULATOR_PATH = '/thanh-toan-gia-lap'
 
 /**
- * Cổng giả lập cho local và smoke, khi chưa có khóa PayOS (spec "Thanh toán"): link trỏ tới trang
- * `/thanh-toan-gia-lap` của chính website, mang mã đơn, số tiền và trang quay về trong query.
- * Chưa có khoản nào về; ticket 05 và 06 thêm nút giả lập đã thanh toán và hết hạn.
+ * Cổng giả lập cho local và smoke, khi chưa có khóa ZaloPay (spec "Thanh toán"): link trỏ tới trang
+ * `/thanh-toan-gia-lap` của chính website, mang mã đơn, số tiền, hạn và trang quay về trong query. Truy vấn luôn là
+ * chưa trả: tiền giả lập về qua nút "Giả lập đã thanh toán", ghi nhận thẳng.
  */
 export class SimulatorPaymentGateway implements PaymentGateway {
   constructor(private readonly siteUrl: string) {}
@@ -97,8 +101,7 @@ export class SimulatorPaymentGateway implements PaymentGateway {
     url.searchParams.set('amount', String(request.amount))
     url.searchParams.set('expiresAt', request.expiresAt.toISOString())
     url.searchParams.set('returnUrl', request.returnUrl)
-    url.searchParams.set('cancelUrl', request.cancelUrl)
-    return { checkoutUrl: url.toString() }
+    return { checkoutUrl: url.toString(), gatewayReference: String(request.orderCode) }
   }
 
   async getPayment() {

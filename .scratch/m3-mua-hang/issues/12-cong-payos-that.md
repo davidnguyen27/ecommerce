@@ -1,3 +1,5 @@
+> Đã được thay bằng ticket 17 (ZaloPay).
+
 # 12: Cổng PayOS thật (khung, chưa có khóa)
 
 **What to build:**

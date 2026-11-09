@@ -3,7 +3,7 @@ import type { PublicOrder } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
 import { assertCancellable, cancelOrder } from '../orders/cancel-order.ts'
 import { findOrderByToken, toPublicOrder } from '../orders/orders.ts'
-import { recordPayment } from '../payments/record-payment.ts'
+import { recordGatewayPayments } from '../payments/record-payment.ts'
 
 /** Đơn hàng qua link có token tra cứu, không cần đăng nhập. Token cho xem và hủy đơn chưa thanh toán. */
 export function publicOrderRoutes({ prisma, storage, emails, siteUrl, payments, logger }: AppDeps) {
@@ -15,26 +15,13 @@ export function publicOrderRoutes({ prisma, storage, emails, siteUrl, payments, 
       const code = String(req.params.code)
       let order = await findOrderByToken(prisma, code, token)
 
-      // Trang kết quả thanh toán: hỏi cổng các khoản đã về, phòng khi webhook tới chậm hoặc không tới.
-      if (req.query.refresh === '1') {
+      // Trang kết quả thanh toán: hỏi cổng các khoản đã về, phòng khi callback tới chậm hoặc không tới.
+      if (req.query.refresh === '1' && order.gatewayReference) {
         try {
-          const info = await payments.getPayment(order.code)
-          for (const t of info.transactions) {
-            await recordPayment(
-              { prisma, emails, siteUrl },
-              {
-                orderCode: order.code,
-                amount: t.amount,
-                reference: t.reference,
-                paidAt: t.paidAt,
-                source: 'query',
-                payload: t.payload ?? { reference: t.reference, amount: t.amount, paidAt: t.paidAt.toISOString() },
-              },
-            )
-          }
+          await recordGatewayPayments({ prisma, emails, siteUrl, payments }, order)
           order = await findOrderByToken(prisma, code, token)
         } catch (err) {
-          // Cổng lỗi thì khách vẫn thấy đơn như hiện có; webhook hoặc lần tải sau sẽ ghi nhận.
+          // Cổng lỗi thì khách vẫn thấy đơn như hiện có; callback hoặc lần tải sau sẽ ghi nhận.
           req.log.error({ err, orderCode: order.code }, 'Không truy vấn được cổng thanh toán')
         }
       }

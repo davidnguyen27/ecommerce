@@ -21,10 +21,10 @@ const env = {
   // Không theo .env local: bỏ SeaweedFS (sẽ tranh cổng 9000 với stack dev), giữ file trong bộ nhớ.
   COMPOSE_PROFILES: '',
   STORAGE_PROVIDER: 'memory',
-  // Luôn cổng giả lập, kể cả khi .env local có khóa PayOS: smoke không được tạo link thanh toán thật.
-  PAYOS_CLIENT_ID: '',
-  PAYOS_API_KEY: '',
-  PAYOS_CHECKSUM_KEY: '',
+  // Luôn cổng giả lập, kể cả khi .env local có khóa ZaloPay: smoke không được tạo đơn ở ZaloPay.
+  ZALOPAY_APP_ID: '',
+  ZALOPAY_KEY1: '',
+  ZALOPAY_KEY2: '',
   PAYMENT_SIMULATOR: 'allow',
 }
 
@@ -366,7 +366,7 @@ const CHECKS: Check[] = [
   { path: '/don-hang/100000?token=sai', status: 200, contains: ['Đơn hàng #100000', 'Đang tải', NOINDEX] },
   // Trang kết quả cổng đưa khách quay về: URL không có token, token nằm ở sessionStorage của trình duyệt.
   { path: '/don-hang/100000?ket-qua=1', status: 200, contains: ['Đơn hàng #100000', 'Đang tải', NOINDEX] },
-  // Stack của smoke không có khóa PayOS nên dùng cổng giả lập.
+  // Stack của smoke không có khóa ZaloPay nên dùng cổng giả lập.
   {
     path: '/thanh-toan-gia-lap?orderCode=100000&amount=2030000',
     status: 200,
