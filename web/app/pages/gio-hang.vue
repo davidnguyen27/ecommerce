@@ -132,7 +132,7 @@ useSeo({ title: 'Giỏ hàng', description: 'Các sản phẩm bạn đã chọn
                   class="text-sm font-medium text-red-700"
                   data-testid="line-change"
                 >
-                  Hết hàng, hãy bỏ khỏi giỏ
+                  Không đủ hàng, hãy giảm số lượng hoặc bỏ khỏi giỏ
                 </p>
 
                 <div class="mt-auto flex items-center gap-3">

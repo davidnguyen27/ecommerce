@@ -1,11 +1,10 @@
-import { Router } from 'express'
-import { AdminOrderQuery, ErrorCode, HandoverRequest, type AdminOrder, type AdminOrderPage } from '@ecommerce/shared'
+import { Router, type Request, type Response } from 'express'
+import { AdminOrderQuery, HandoverRequest, type AdminOrder, type AdminOrderPage } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
 import { audited } from '../audit/audited.ts'
 import { currentStaff, requirePermission } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
 import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
 import { loadAdminOrder } from '../orders/admin-order.ts'
@@ -15,11 +14,11 @@ import {
   failDelivery,
   handOverOrder,
   prepareOrder,
+  type FulfillmentAudit,
   type FulfillmentMail,
 } from '../orders/fulfill-order.ts'
+import { orderNotFound, parseOrderCode } from '../orders/orders.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
-
-const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đơn hàng')
 
 /** Ô tìm kiếm: mã đơn đúng bằng, số điện thoại (nhận cả `+84`, dấu cách, chấm, gạch) hoặc email chứa chuỗi đã gõ. */
 function searchWhere(q: string): Prisma.OrderWhereInput {
@@ -33,12 +32,29 @@ function searchWhere(q: string): Prisma.OrderWhereInput {
 /** Đơn hàng ở trang quản trị: xem cần `order.view`, xử lý đơn cần `order.fulfill`. */
 export function adminOrderRoutes(prisma: Db, storage: Storage, payments: PaymentGateway, mail: FulfillmentMail) {
   const findOrder = async (code: string) => {
-    const order = /^\d{1,9}$/.test(code)
-      ? await prisma.order.findUnique({ where: { code: Number(code) }, select: { id: true, code: true } })
-      : null
-    if (!order) throw notFound()
+    const order = await prisma.order.findUnique({
+      where: { code: parseOrderCode(code) },
+      select: { id: true, code: true },
+    })
+    if (!order) throw orderNotFound()
     return order
   }
+
+  /** Route chuyển trạng thái giao hàng: chạy trong `audited()`, ghi bản audit hàm trả về, trả lại chi tiết đơn. */
+  const transition =
+    (
+      run: (tx: Prisma.TransactionClient, orderId: string, staffId: string, req: Request) => Promise<FulfillmentAudit>,
+    ) =>
+    async (req: Request, res: Response) => {
+      const code = String(req.params.code)
+      const order = await findOrder(code)
+      await audited(prisma, req, async (tx, audit) => {
+        const entry = await run(tx, order.id, currentStaff(req).id, req)
+        await audit({ ...entry, entityType: 'order', entityId: order.id })
+      })
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
+      res.json(body)
+    }
 
   return Router()
     .get('/', requirePermission('order.view'), async (req, res) => {
@@ -85,7 +101,8 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       res.json(body)
     })
     .post('/:code/cancel', requirePermission('order.fulfill'), async (req, res) => {
-      const order = await findOrder(String(req.params.code))
+      const code = String(req.params.code)
+      const order = await findOrder(code)
 
       // Khách gọi điện báo thôi: nhân viên hủy hộ, cùng hàm với hết hạn và khách tự hủy, audit trong cùng transaction.
       const outcome = await audited(prisma, req, async (tx, audit) => {
@@ -103,71 +120,30 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       })
       assertCancellable(outcome)
       if (outcome === 'cancelled') await cancelPaymentLink({ payments, logger: req.log }, order.code)
-      res.status(204).end()
-    })
-    .post('/:code/prepare', requirePermission('order.fulfill'), async (req, res) => {
-      const code = String(req.params.code)
-      const order = await findOrder(code)
-      await audited(prisma, req, async (tx, audit) => {
-        await prepareOrder(tx, order.id, currentStaff(req).id)
-        await audit({
-          action: 'order.prepare',
-          entityType: 'order',
-          entityId: order.id,
-          before: { fulfillmentStatus: 'not_prepared' },
-          after: { fulfillmentStatus: 'preparing' },
-        })
-      })
+      // Đơn đã hủy từ trước cũng trả đơn hiện tại, không ghi gì.
       const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
       res.json(body)
     })
-    .post('/:code/hand-over', requirePermission('order.fulfill'), async (req, res) => {
-      const code = String(req.params.code)
-      const order = await findOrder(code)
-      const shipment = parse(HandoverRequest, req.body)
-      await audited(prisma, req, async (tx, audit) => {
-        await handOverOrder(tx, mail, order.id, currentStaff(req).id, shipment)
-        await audit({
-          action: 'order.hand_over',
-          entityType: 'order',
-          entityId: order.id,
-          before: { fulfillmentStatus: 'preparing' },
-          after: { fulfillmentStatus: 'handed_over', ...shipment },
-        })
-      })
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
-      res.json(body)
-    })
-    .post('/:code/deliver', requirePermission('order.fulfill'), async (req, res) => {
-      const code = String(req.params.code)
-      const order = await findOrder(code)
-      await audited(prisma, req, async (tx, audit) => {
-        await deliverOrder(tx, order.id, currentStaff(req).id)
-        await audit({
-          action: 'order.deliver',
-          entityType: 'order',
-          entityId: order.id,
-          before: { status: 'processing', fulfillmentStatus: 'handed_over' },
-          after: { status: 'completed', fulfillmentStatus: 'delivered' },
-        })
-      })
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
-      res.json(body)
-    })
-    .post('/:code/delivery-failed', requirePermission('order.fulfill'), async (req, res) => {
-      const code = String(req.params.code)
-      const order = await findOrder(code)
-      await audited(prisma, req, async (tx, audit) => {
-        await failDelivery(tx, mail.emails, order.id, currentStaff(req).id)
-        await audit({
-          action: 'order.delivery_failed',
-          entityType: 'order',
-          entityId: order.id,
-          before: { fulfillmentStatus: 'handed_over' },
-          after: { fulfillmentStatus: 'failed' },
-        })
-      })
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
-      res.json(body)
-    })
+    .post(
+      '/:code/prepare',
+      requirePermission('order.fulfill'),
+      transition((tx, orderId, staffId) => prepareOrder(tx, orderId, staffId)),
+    )
+    .post(
+      '/:code/hand-over',
+      requirePermission('order.fulfill'),
+      transition((tx, orderId, staffId, req) =>
+        handOverOrder(tx, mail, orderId, staffId, parse(HandoverRequest, req.body)),
+      ),
+    )
+    .post(
+      '/:code/deliver',
+      requirePermission('order.fulfill'),
+      transition((tx, orderId, staffId) => deliverOrder(tx, orderId, staffId)),
+    )
+    .post(
+      '/:code/delivery-failed',
+      requirePermission('order.fulfill'),
+      transition((tx, orderId, staffId) => failDelivery(tx, mail.emails, orderId, staffId)),
+    )
 }

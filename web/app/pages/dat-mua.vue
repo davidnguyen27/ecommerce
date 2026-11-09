@@ -222,23 +222,31 @@ useSeo({ title: 'Đặt mua', description: 'Thông tin nhận hàng và xác nh�
           </label>
         </div>
         <div class="grid gap-5 sm:grid-cols-2">
-          <label class="field">
-            Tỉnh/thành
-            <select v-model="form.provinceCode" class="field-input" name="province" required>
+          <!-- Label tách khỏi select: bọc thì tên truy cập của ô lẫn chữ của các option. -->
+          <div class="field">
+            <label for="checkout-province">Tỉnh/thành</label>
+            <select id="checkout-province" v-model="form.provinceCode" class="field-input" name="province" required>
               <option value="" disabled>Chọn tỉnh/thành</option>
               <option v-for="p in PROVINCES" :key="p.code" :value="p.code">{{ p.name }}</option>
             </select>
-          </label>
-          <label class="field">
-            Phường/xã
-            <select v-model="form.wardCode" class="field-input" name="ward" required :disabled="!wards.length">
+          </div>
+          <div class="field">
+            <label for="checkout-ward">Phường/xã</label>
+            <select
+              id="checkout-ward"
+              v-model="form.wardCode"
+              class="field-input"
+              name="ward"
+              required
+              :disabled="!wards.length"
+            >
               <option value="" disabled>{{ form.provinceCode ? 'Chọn phường/xã' : 'Chọn tỉnh/thành trước' }}</option>
               <option v-for="w in wards" :key="w.code" :value="w.code">{{ w.name }}</option>
             </select>
             <span v-if="fieldErrors.get('address.wardCode')" class="text-sm text-red-700">{{
               fieldErrors.get('address.wardCode')
             }}</span>
-          </label>
+          </div>
         </div>
         <label class="field">
           Số nhà, tên đường

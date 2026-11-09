@@ -41,7 +41,7 @@ async function delivery() {
 
 describe('đã giao và giao thất bại', () => {
   it('đã giao: đơn hoàn tất, ghi sự kiện và audit', async () => {
-    const { handedOverOrder, deliver } = await delivery()
+    const { handedOverOrder, deliver, request, token } = await delivery()
     const code = await handedOverOrder()
 
     const res = await deliver(code)
@@ -56,20 +56,19 @@ describe('đã giao và giao thất bại', () => {
     })
     const staffActor = expect.objectContaining({ type: 'staff', email: OWNER.email })
     expect(res.body.history.slice(-2)).toEqual([
-      expect.objectContaining({ source: 'event', action: 'delivered', actor: staffActor }),
-      expect.objectContaining({
-        source: 'audit',
-        action: 'order.deliver',
-        data: {
-          before: { status: 'processing', fulfillmentStatus: 'handed_over' },
-          after: { status: 'completed', fulfillmentStatus: 'delivered' },
-        },
-      }),
+      expect.objectContaining({ action: 'handed_over' }),
+      expect.objectContaining({ action: 'delivered', actor: staffActor }),
     ])
+    const audit = await request.get('/api/admin/audit').query({ entityType: 'order' }).set(bearer(token))
+    expect(audit.body.items[0]).toMatchObject({
+      action: 'order.deliver',
+      before: { status: 'processing', fulfillmentStatus: 'handed_over' },
+      after: { status: 'completed', fulfillmentStatus: 'delivered' },
+    })
   })
 
   it('giao thất bại: đơn vẫn đang xử lý, khách nhận email báo shop sẽ liên hệ đúng một lần', async () => {
-    const { handedOverOrder, fail, mailer } = await delivery()
+    const { handedOverOrder, fail, mailer, request, token } = await delivery()
     const code = await handedOverOrder()
 
     const res = await fail(code)
@@ -77,13 +76,15 @@ describe('đã giao và giao thất bại', () => {
     expect(res.status).toBe(200)
     expect(res.body).toMatchObject({ code, status: 'processing', fulfillmentStatus: 'failed' })
     expect(res.body.history.slice(-2)).toEqual([
-      expect.objectContaining({ source: 'event', action: 'delivery_failed' }),
-      expect.objectContaining({
-        source: 'audit',
-        action: 'order.delivery_failed',
-        data: { before: { fulfillmentStatus: 'handed_over' }, after: { fulfillmentStatus: 'failed' } },
-      }),
+      expect.objectContaining({ action: 'handed_over' }),
+      expect.objectContaining({ action: 'delivery_failed' }),
     ])
+    const audit = await request.get('/api/admin/audit').query({ entityType: 'order' }).set(bearer(token))
+    expect(audit.body.items[0]).toMatchObject({
+      action: 'order.delivery_failed',
+      before: { fulfillmentStatus: 'handed_over' },
+      after: { fulfillmentStatus: 'failed' },
+    })
     const [mail] = await mails(mailer, `Giao hàng chưa thành công đơn hàng #${code}`)
     expect(mail).toMatchObject({ to: 'an@example.com' })
     expect(mail!.text).toContain('Nguyễn Văn An')

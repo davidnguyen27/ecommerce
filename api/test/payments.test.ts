@@ -3,6 +3,7 @@ import type { InMemoryMailer } from '../src/adapters/mailer.ts'
 import type { PaymentInfo } from '../src/payments/gateway.ts'
 import { signedWebhook, webhookData } from './support/payos.ts'
 import { shop } from './support/shop.ts'
+import { bearer } from './support/staff.ts'
 
 const TOTAL = 2_030_000
 
@@ -18,18 +19,22 @@ async function paymentMails(mailer: InMemoryMailer, code: number, count = 1) {
   )
 }
 
-type Prisma = Awaited<ReturnType<typeof shop>>['prisma']
+type App = Awaited<ReturnType<typeof shop>>
 
-// Danh sách giao dịch và cần đối soát chưa có API đọc (ticket 07, 10), nên đếm bằng SQL trực tiếp.
-async function transactionCount(prisma: Prisma) {
-  const [row] = await prisma.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM "payment_transaction"`
-  return row!.n
+/** Giao dịch thanh toán của đơn, đọc ở chi tiết đơn trang quản trị. */
+async function transactions({ request, token }: App, code: number) {
+  const res = await request.get(`/api/admin/orders/${code}`).set(bearer(token))
+  expect(res.status).toBe(200)
+  return res.body.payments as { amount: number; reference: string; source: string }[]
 }
 
-function reconciliation(prisma: Prisma) {
-  return prisma.$queryRaw<{ reason: string; amount: bigint; receivedAt: Date; status: string }[]>`
-    SELECT "reason"::text AS reason, "amount", "received_at" AS "receivedAt", "status"::text AS status
-    FROM "reconciliation_item" ORDER BY "created_at"`
+/** Mọi mục cần đối soát, cũ trước. */
+async function reconciliation({ request, token }: App) {
+  const res = await request.get('/api/admin/reconciliation').query({ status: 'all' }).set(bearer(token))
+  expect(res.status).toBe(200)
+  return (res.body.items as { reason: string; amount: number; receivedAt: string; status: string }[]).map(
+    ({ reason, amount, receivedAt, status }) => ({ reason, amount, receivedAt, status }),
+  )
 }
 
 /** Cổng trả lời truy vấn: đơn đã nhận một khoản. */
@@ -47,7 +52,17 @@ async function pendingOrder() {
   const { code, token } = res.body as { code: number; token: string }
   const order = () => app.request.get(`/api/orders/${code}`).query({ token })
   const webhook = (body: unknown) => app.request.post('/api/payments/payos/webhook').send(body as object)
-  return { ...app, code, token, order, webhook }
+  const transactionCount = async () => (await transactions(app, code)).length
+  return {
+    ...app,
+    adminToken: app.token,
+    code,
+    token,
+    order,
+    webhook,
+    transactionCount,
+    reconciliation: () => reconciliation(app),
+  }
 }
 
 describe('ghi nhận thanh toán qua webhook', () => {
@@ -76,7 +91,7 @@ describe('ghi nhận thanh toán qua webhook', () => {
   })
 
   it('sai chữ ký thì 400 và không ghi gì', async () => {
-    const { code, order, webhook, prisma } = await pendingOrder()
+    const { code, order, webhook, transactionCount } = await pendingOrder()
     const body = signedWebhook(webhookData(code, TOTAL))
 
     const tampered = await webhook({ ...body, data: { ...body.data, amount: 1 } })
@@ -85,11 +100,11 @@ describe('ghi nhận thanh toán qua webhook', () => {
 
     for (const res of [tampered, otherKey, unsigned]) expect(res.status).toBe(400)
     expect((await order()).body).toMatchObject({ status: 'pending_payment', paymentStatus: 'unpaid' })
-    expect(await transactionCount(prisma)).toBe(0)
+    expect(await transactionCount()).toBe(0)
   })
 
   it('cùng một webhook gửi hai lần: chỉ ghi một giao dịch và gửi một email', async () => {
-    const { code, order, webhook, prisma, mailer } = await pendingOrder()
+    const { code, order, webhook, transactionCount, mailer } = await pendingOrder()
     const body = signedWebhook(webhookData(code, TOTAL))
 
     const first = await webhook(body)
@@ -98,19 +113,19 @@ describe('ghi nhận thanh toán qua webhook', () => {
     expect(first.status).toBe(200)
     expect(second.status).toBe(200)
     expect((await order()).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
-    expect(await transactionCount(prisma)).toBe(1)
+    expect(await transactionCount()).toBe(1)
     await paymentMails(mailer, code)
     await new Promise((resolve) => setTimeout(resolve, 1_000))
     expect(await paymentMails(mailer, code)).toHaveLength(1)
   })
 
   it('webhook cho mã đơn không có (như webhook thử của PayOS) vẫn trả 2xx và không ghi gì', async () => {
-    const { webhook, prisma } = await pendingOrder()
+    const { webhook, transactionCount } = await pendingOrder()
 
     const res = await webhook(signedWebhook(webhookData(123, 3_000)))
 
     expect(res.status).toBe(200)
-    expect(await transactionCount(prisma)).toBe(0)
+    expect(await transactionCount()).toBe(0)
   })
 })
 
@@ -138,17 +153,17 @@ describe('ghi nhận thanh toán khi khách quay về', () => {
   })
 
   it('refresh=1 với token sai là 404 và không hỏi cổng', async () => {
-    const { code, payments, request, prisma } = await pendingOrder()
+    const { code, payments, request, transactionCount } = await pendingOrder()
     payments.payments.set(code, paidInfo(TOTAL, 'FT-Q1'))
 
     const res = await request.get(`/api/orders/${code}`).query({ token: 'sai', refresh: '1' })
 
     expect(res.status).toBe(404)
-    expect(await transactionCount(prisma)).toBe(0)
+    expect(await transactionCount()).toBe(0)
   })
 
   it('webhook và truy vấn cùng về một khoản: chỉ ghi một lần, email một lần', async () => {
-    const { code, order, webhook, payments, token, request, prisma, mailer } = await pendingOrder()
+    const { code, order, webhook, payments, token, request, transactionCount, mailer } = await pendingOrder()
     payments.payments.set(code, paidInfo(TOTAL, `FT${code}A`))
 
     const [hook, query] = await Promise.all([
@@ -159,7 +174,7 @@ describe('ghi nhận thanh toán khi khách quay về', () => {
     expect(hook.status).toBe(200)
     expect(query.status).toBe(200)
     expect((await order()).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
-    expect(await transactionCount(prisma)).toBe(1)
+    expect(await transactionCount()).toBe(1)
     await paymentMails(mailer, code)
     await new Promise((resolve) => setTimeout(resolve, 1_000))
     expect(await paymentMails(mailer, code)).toHaveLength(1)
@@ -168,32 +183,55 @@ describe('ghi nhận thanh toán khi khách quay về', () => {
 
 describe('cần đối soát', () => {
   it('lệch tiền: gắn cờ amount_mismatch, đơn vẫn chưa thanh toán', async () => {
-    const { code, order, webhook, prisma } = await pendingOrder()
+    const { code, order, webhook, reconciliation } = await pendingOrder()
 
     const res = await webhook(signedWebhook(webhookData(code, 2_000_000)))
 
     expect(res.status).toBe(200)
     expect((await order()).body).toMatchObject({ status: 'pending_payment', paymentStatus: 'unpaid' })
-    expect(await reconciliation(prisma)).toEqual([
-      { reason: 'amount_mismatch', amount: 2_000_000n, receivedAt: new Date('2026-11-02T03:15:30Z'), status: 'open' },
+    expect(await reconciliation()).toEqual([
+      { reason: 'amount_mismatch', amount: 2_000_000, receivedAt: '2026-11-02T03:15:30.000Z', status: 'open' },
     ])
   })
 
+  it('trả thiếu rồi chuyển nốt phần còn lại: đơn đã trả đủ, mục lệch tiền tự đóng vì đã đủ tiền', async () => {
+    const { code, order, webhook, reconciliation, request, adminToken } = await pendingOrder()
+    await webhook(signedWebhook(webhookData(code, 2_000_000)))
+
+    const res = await webhook(signedWebhook(webhookData(code, 30_000, { reference: 'FT-NOT' })))
+
+    expect(res.status).toBe(200)
+    expect((await order()).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
+    expect(await reconciliation()).toEqual([expect.objectContaining({ reason: 'amount_mismatch', status: 'resolved' })])
+    const open = await request.get('/api/admin/reconciliation').set(bearer(adminToken))
+    expect(open.body.total).toBe(0)
+    const detail = await request.get(`/api/admin/orders/${code}`).set(bearer(adminToken))
+    expect(detail.body.payments[0].reconciliation).toMatchObject({
+      status: 'resolved',
+      resolution: 'settled_by_payment',
+      resolvedBy: null,
+      resolvedAt: expect.any(String),
+    })
+    expect(detail.body.history.at(-1)).toMatchObject({
+      action: 'paid',
+      actor: { type: 'system' },
+      data: { amount: 30_000, settledReconciliationItemIds: [detail.body.payments[0].reconciliation.id] },
+    })
+  })
+
   it('tiền về thêm cho đơn đã trả: gắn cờ extra_payment, đơn giữ nguyên đã trả', async () => {
-    const { code, order, webhook, prisma } = await pendingOrder()
+    const { code, order, webhook, reconciliation } = await pendingOrder()
     await webhook(signedWebhook(webhookData(code, TOTAL)))
 
     const res = await webhook(signedWebhook(webhookData(code, 50_000, { reference: 'FT-THEM' })))
 
     expect(res.status).toBe(200)
     expect((await order()).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
-    expect(await reconciliation(prisma)).toEqual([
-      expect.objectContaining({ reason: 'extra_payment', amount: 50_000n }),
-    ])
+    expect(await reconciliation()).toEqual([expect.objectContaining({ reason: 'extra_payment', amount: 50_000 })])
   })
 
   it('tiền về cho đơn đã hủy: gắn cờ paid_after_cancel, đơn vẫn hủy', async () => {
-    const { code, token, order, webhook, prisma, request } = await pendingOrder()
+    const { code, token, order, webhook, reconciliation, request } = await pendingOrder()
     expect((await request.post(`/api/orders/${code}/cancel`).query({ token })).status).toBe(200)
 
     const res = await webhook(signedWebhook(webhookData(code, TOTAL)))
@@ -204,7 +242,7 @@ describe('cần đối soát', () => {
       cancelReason: 'customer',
       paymentStatus: 'unpaid',
     })
-    expect(await reconciliation(prisma)).toEqual([expect.objectContaining({ reason: 'paid_after_cancel' })])
+    expect(await reconciliation()).toEqual([expect.objectContaining({ reason: 'paid_after_cancel' })])
   })
 })
 
@@ -229,10 +267,9 @@ describe('cổng giả lập', () => {
     const view = (res: typeof first) => app.request.get(`/api/orders/${res.body.code}`).query({ token: res.body.token })
     expect((await view(first)).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
     expect((await view(second)).body).toMatchObject({ status: 'pending_payment', paymentStatus: 'unpaid' })
-    expect(await reconciliation(app.prisma)).toEqual([expect.objectContaining({ reason: 'amount_mismatch' })])
-    const sources = await app.prisma.$queryRaw<{ source: string }[]>`
-      SELECT "source"::text AS source FROM "payment_transaction"`
-    expect(sources).toEqual([{ source: 'simulator' }, { source: 'simulator' }])
+    expect(await reconciliation(app)).toEqual([expect.objectContaining({ reason: 'amount_mismatch' })])
+    expect(await transactions(app, first.body.code)).toEqual([expect.objectContaining({ source: 'simulator' })])
+    expect(await transactions(app, second.body.code)).toEqual([expect.objectContaining({ source: 'simulator' })])
   })
 
   it('không có cổng giả lập thì không có API giả lập thanh toán', async () => {

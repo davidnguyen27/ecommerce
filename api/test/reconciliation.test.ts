@@ -41,7 +41,7 @@ async function reconciliation() {
       paymentStatus: string
       cancelReason: string | null
       payments: { reconciliation: { id: string; status: string; resolution: string | null } | null }[]
-      history: { source: string; action: string; data: unknown }[]
+      history: { action: string; data: unknown }[]
     }
   }
   /** Id các mục cần đối soát của đơn, theo thứ tự tiền về. */
@@ -140,7 +140,6 @@ describe('khôi phục đơn', () => {
     const order = await detail(code)
     expect(order.history).toContainEqual(
       expect.objectContaining({
-        source: 'event',
         action: 'restored',
         actor: expect.objectContaining({ id: accountant.id }),
       }),
@@ -251,9 +250,7 @@ describe('đã xử lý ngoài hệ thống', () => {
       note: 'Hoàn 2.030.000 qua VCB, mã FT999',
       resolvedBy: { id: accountant.id },
     })
-    expect((await detail(code)).history).toContainEqual(
-      expect.objectContaining({ source: 'event', action: 'reconciliation_resolved' }),
-    )
+    expect((await detail(code)).history).toContainEqual(expect.objectContaining({ action: 'reconciliation_resolved' }))
     expect(await audits()).toEqual([
       expect.objectContaining({
         action: 'reconciliation.resolve',
