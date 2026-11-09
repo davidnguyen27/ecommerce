@@ -1,9 +1,13 @@
 import { ErrorCode, type FulfillmentStatus, type HandoverRequest } from '@ecommerce/shared'
+import type { AuditEntry } from '../audit/audited.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
 import { changeStock } from '../stock/stock.ts'
 import { issueOrderLookupUrl, recordOrderEvent } from './orders.ts'
+
+/** Bản audit của một lần chuyển trạng thái giao hàng; hàm chuyển trạng thái biết nguồn và đích nên tự khai. */
+export type FulfillmentAudit = Pick<AuditEntry, 'action' | 'before' | 'after'>
 
 /** Gửi email cho khách khi xử lý giao hàng: hàng đợi thư và địa chỉ website để dựng link tra cứu. */
 export type FulfillmentMail = { emails: EmailQueue; siteUrl: string }
@@ -27,10 +31,19 @@ async function lockForTransition(tx: Prisma.TransactionClient, orderId: string, 
 }
 
 /** `not_prepared` → `preparing`: nhân viên kho bắt đầu soạn hàng. Gọi trong transaction của `audited()`. */
-export async function prepareOrder(tx: Prisma.TransactionClient, orderId: string, staffId: string) {
+export async function prepareOrder(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  staffId: string,
+): Promise<FulfillmentAudit> {
   await lockForTransition(tx, orderId, 'not_prepared')
   await tx.order.update({ where: { id: orderId }, data: { fulfillmentStatus: 'preparing' } })
   await recordOrderEvent(tx, orderId, 'preparing', { type: 'staff', staffId })
+  return {
+    action: 'order.prepare',
+    before: { fulfillmentStatus: 'not_prepared' },
+    after: { fulfillmentStatus: 'preparing' },
+  }
 }
 
 /**
@@ -43,7 +56,7 @@ export async function handOverOrder(
   orderId: string,
   staffId: string,
   shipment: HandoverRequest,
-) {
+): Promise<FulfillmentAudit> {
   await lockForTransition(tx, orderId, 'preparing')
   const lines = await tx.orderLine.findMany({
     where: { orderId },
@@ -86,20 +99,39 @@ export async function handOverOrder(
       `Xem đơn hàng: ${link}`,
     ].join('\n'),
   })
+  return {
+    action: 'order.hand_over',
+    before: { fulfillmentStatus: 'preparing' },
+    after: { fulfillmentStatus: 'handed_over', ...shipment },
+  }
 }
 
 /** `handed_over` → `delivered`: đã giao tới khách, đơn hoàn tất. Gọi trong transaction của `audited()`. */
-export async function deliverOrder(tx: Prisma.TransactionClient, orderId: string, staffId: string) {
+export async function deliverOrder(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  staffId: string,
+): Promise<FulfillmentAudit> {
   await lockForTransition(tx, orderId, 'handed_over')
   await tx.order.update({ where: { id: orderId }, data: { status: 'completed', fulfillmentStatus: 'delivered' } })
   await recordOrderEvent(tx, orderId, 'delivered', { type: 'staff', staffId })
+  return {
+    action: 'order.deliver',
+    before: { status: 'processing', fulfillmentStatus: 'handed_over' },
+    after: { status: 'completed', fulfillmentStatus: 'delivered' },
+  }
 }
 
 /**
  * `handed_over` → `failed`: giao không thành công. Đơn vẫn `processing` (nhập lại kho, hoàn tiền là việc của M6);
  * khách nhận email báo shop sẽ liên hệ, xếp trong cùng transaction. Gọi trong transaction của `audited()`.
  */
-export async function failDelivery(tx: Prisma.TransactionClient, emails: EmailQueue, orderId: string, staffId: string) {
+export async function failDelivery(
+  tx: Prisma.TransactionClient,
+  emails: EmailQueue,
+  orderId: string,
+  staffId: string,
+): Promise<FulfillmentAudit> {
   await lockForTransition(tx, orderId, 'handed_over')
   const order = await tx.order.update({ where: { id: orderId }, data: { fulfillmentStatus: 'failed' } })
   await recordOrderEvent(tx, orderId, 'delivery_failed', { type: 'staff', staffId })
@@ -115,4 +147,9 @@ export async function failDelivery(tx: Prisma.TransactionClient, emails: EmailQu
       'Shop sẽ liên hệ với bạn qua số điện thoại hoặc email để sắp xếp lại việc giao hàng.',
     ].join('\n'),
   })
+  return {
+    action: 'order.delivery_failed',
+    before: { fulfillmentStatus: 'handed_over' },
+    after: { fulfillmentStatus: 'failed' },
+  }
 }

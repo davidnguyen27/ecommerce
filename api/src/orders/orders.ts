@@ -88,20 +88,27 @@ export const ORDER_VIEW_INCLUDE = {
 
 export type OrderForView = Prisma.OrderGetPayload<{ include: typeof ORDER_VIEW_INCLUDE }>
 
-const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đơn hàng')
+export const orderNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đơn hàng')
+
+/** Mã đơn từ URL thành số; chuỗi không phải mã đơn là 404, như mã không có đơn nào. */
+export function parseOrderCode(code: string) {
+  if (!/^\d{1,9}$/.test(code)) throw orderNotFound()
+  return Number(code)
+}
 
 /**
  * Đơn theo mã và token tra cứu. Mã lạ, thiếu token hay token sai đều là 404 như nhau, để không lộ đơn nào tồn tại.
  * `code` là chuỗi từ URL.
  */
 export async function findOrderByToken(db: DbClient, code: string, token: string | undefined) {
-  if (!token || !/^\d{1,9}$/.test(code)) throw notFound()
+  if (!token) throw orderNotFound()
+  const orderCode = parseOrderCode(code)
   const hash = hashOpaqueToken(token)
   const order = await db.order.findFirst({
-    where: { code: Number(code), OR: [{ lookupTokenHash: hash }, { lookupTokens: { some: { tokenHash: hash } } }] },
+    where: { code: orderCode, OR: [{ lookupTokenHash: hash }, { lookupTokens: { some: { tokenHash: hash } } }] },
     include: ORDER_VIEW_INCLUDE,
   })
-  if (!order) throw notFound()
+  if (!order) throw orderNotFound()
   return order
 }
 
@@ -110,9 +117,11 @@ export async function findOrderByToken(db: DbClient, code: string, token: string
  * `code` là chuỗi từ URL.
  */
 export async function findCustomerOrder(db: DbClient, code: string, customerId: string) {
-  if (!/^\d{1,9}$/.test(code)) throw notFound()
-  const order = await db.order.findFirst({ where: { code: Number(code), customerId }, include: ORDER_VIEW_INCLUDE })
-  if (!order) throw notFound()
+  const order = await db.order.findFirst({
+    where: { code: parseOrderCode(code), customerId },
+    include: ORDER_VIEW_INCLUDE,
+  })
+  if (!order) throw orderNotFound()
   return order
 }
 

@@ -58,3 +58,7 @@
 - Email "Đã nhận thanh toán đơn hàng #<mã>": chào tên người nhận, từng dòng (tên, thuộc tính, số lượng, thành tiền), phí giao, tổng, link tra cứu có token mới, câu báo sẽ thông báo khi bàn giao vận chuyển. **Cần chủ doanh nghiệp xác nhận** nội dung (bản nháp).
 - Smoke thêm `/don-hang/100000?ket-qua=1` (khung, `noindex`) và kiểm trang giả lập có nút và ô số tiền. Chưa đi luồng bằng trình duyệt (ticket 14).
 - Test: `api/test/payments.test.ts` (15 test), helper `api/test/support/payos.ts` (`webhookData`, `signedWebhook` ký độc lập bằng `PAYOS_CHECKSUM_KEY` của `test-app.ts`). Có thêm: webhook mã đơn lạ, tiền về cho đơn đã hủy (dựng đơn hủy bằng prisma vì chưa có đường hủy), cổng lỗi khi `refresh=1`, token sai với `refresh=1`.
+
+**Sửa sau code review toàn nhánh (xem `implement-spec/review-fixes.md`):**
+- Khi một khoản làm đơn chuyển `paid`, các mục `amount_mismatch` còn mở của đơn tự đóng với `resolution: settled_by_payment`, không có `resolvedBy` (hệ thống đóng). Sự kiện `paid` có thêm `settledReconciliationItemIds` khi có mục được đóng. Migration `20261103000100_reconciliation_settled_by_payment` thêm giá trị enum và nới CHECK: chỉ `restored`, `handled_externally` mới có người đóng.
+- `api/test/payments.test.ts` đọc kết quả qua `GET /api/admin/orders/:code` và `GET /api/admin/reconciliation`, không còn SQL trừ phần thử trigger.

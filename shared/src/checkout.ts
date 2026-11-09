@@ -65,7 +65,7 @@ export const QuoteLine = z.object({
   /** Giá × số lượng; `null` khi dòng không mua được. */
   lineTotal: z.number().nullable(),
   discontinued: z.boolean(),
-  /** Còn hàng hay hết, không bao giờ kèm số lượng (ADR 0006). */
+  /** Còn đủ hàng cho số lượng của dòng hay không, không bao giờ kèm số lượng (ADR 0006). */
   inStock: z.boolean(),
 })
 export type QuoteLine = z.infer<typeof QuoteLine>

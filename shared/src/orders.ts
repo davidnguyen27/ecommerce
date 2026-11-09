@@ -130,8 +130,11 @@ export type ReconciliationReason = z.infer<typeof ReconciliationReason>
 export const ReconciliationStatus = z.enum(['open', 'resolved'])
 export type ReconciliationStatus = z.infer<typeof ReconciliationStatus>
 
-/** Cách đóng mục cần đối soát: khôi phục đơn, hoặc đã xử lý ngoài hệ thống (hoàn tiền tay…). */
-export const ReconciliationResolution = z.enum(['restored', 'handled_externally'])
+/**
+ * Cách đóng mục cần đối soát: khôi phục đơn, đã xử lý ngoài hệ thống (hoàn tiền tay…), hoặc hệ thống tự đóng mục lệch
+ * tiền khi khoản sau làm đơn đủ tiền (`settled_by_payment`, không có người đóng).
+ */
+export const ReconciliationResolution = z.enum(['restored', 'handled_externally', 'settled_by_payment'])
 export type ReconciliationResolution = z.infer<typeof ReconciliationResolution>
 
 /** Mục cần đối soát của một khoản tiền; `resolution`, `resolvedBy`, `resolvedAt` có khi đã đóng. */
@@ -166,11 +169,10 @@ export const OrderHistoryActor = z.discriminatedUnion('type', [
 export type OrderHistoryActor = z.infer<typeof OrderHistoryActor>
 
 /**
- * Một dòng lịch sử thao tác, cũ trước: sự kiện đơn (`source: event`, `action` là loại sự kiện như `paid`), hoặc bản
- * audit của nhân viên trên đơn (`source: audit`, `action` như `order.cancel`, `data` là `{ before, after }`).
+ * Một dòng lịch sử thao tác, cũ trước: một sự kiện đơn (`action` là loại sự kiện như `paid`, `cancelled`). Mỗi thao tác
+ * một dòng; bản audit của thao tác nhân viên xem ở trang Nhật ký kiểm toán.
  */
 export const OrderHistoryEntry = z.object({
-  source: z.enum(['event', 'audit']),
   action: z.string(),
   actor: OrderHistoryActor,
   data: z.unknown(),

@@ -247,5 +247,7 @@ Không gửi email khi đơn mới tạo, khi hết hạn hay khi khách tự h�
   - giới hạn 5 lần đặt mua/giờ/IP và 3 đơn chờ thanh toán mỗi email hoặc số điện thoại;
   - biểu phí giao theo tỉnh/thành, mức mặc định và ngưỡng miễn phí giao;
   - nội dung ba email gửi khách (agent viết bản nháp ở ticket 05 và 09).
+  - tiền về sau hạn giữ hàng nhưng trước khi job hết hạn chạy (tối đa khoảng 1 phút) thì đơn vẫn thành đã trả (ticket 05 đã chọn, hàng vẫn đang giữ);
+  - khách trả thiếu rồi chuyển lại đủ tiền: tổng nhận lớn hơn tổng đơn nên đơn bị gắn cờ và hết hạn, không khôi phục được vì spec đòi "tổng đã nhận bằng đúng tổng phải trả"; kế toán xử lý ngoài hệ thống.
 - Chia ticket (2026-11-02): 16 ticket trong `issues/`, chạy bằng `/implement-spec`. Thứ tự bắt đầu: 01 → 02 → 03; ticket 13 (CI) không phụ thuộc gì nên chạy song song được. Người dùng dừng lại tự thử luồng giỏ → đặt mua → giả lập thanh toán sau ticket 05.
 - **M3 xong khi:** ticket 01–15 đã resolved, test và E2E xanh, và ticket 16 (chuyển khoản thật qua PayOS) đã làm xong.

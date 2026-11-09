@@ -72,6 +72,22 @@ describe('đặt mua', () => {
     expect(quote.body.lines[0]).toMatchObject({ inStock: false })
   })
 
+  it('báo giá báo dòng không đủ hàng theo số lượng khách muốn mua, không lộ số tồn', async () => {
+    const { request, checkout, v40 } = await shop()
+    // Tồn 3, giữ 1 cho đơn khác: còn bán được 2.
+    expect((await checkout()).status).toBe(201)
+    const quote = (quantity: number) =>
+      request.post('/api/checkout/quote').send({ lines: [{ variantId: v40.id, quantity }] })
+
+    const enough = await quote(2)
+    const short = await quote(3)
+
+    expect(enough.body.lines[0]).toMatchObject({ inStock: true, lineTotal: 4_000_000 })
+    expect(short.body.lines[0]).toMatchObject({ inStock: false, lineTotal: null })
+    expect(short.body.subtotal).toBe(0)
+    expect(JSON.stringify(short.body)).not.toMatch(/onHand|reserved|available/)
+  })
+
   it('đơn lưu thông tin nhận hàng đã chuẩn hóa: số điện thoại dạng 0xxxxxxxxx, email chữ thường', async () => {
     const { request, checkout } = await shop()
 
@@ -318,13 +334,14 @@ describe('kho khi có hàng đang giữ', () => {
 
 describe('lịch sử đơn', () => {
   it('đặt mua ghi sự kiện tạo đơn; bảng sự kiện không sửa, không xóa được', async () => {
-    const { prisma, checkout } = await shop()
-    await checkout()
+    const { prisma, checkout, request, token } = await shop()
+    const placed = await checkout()
 
-    // Chưa có API đọc lịch sử đơn (ticket 07), nên đọc và thử sửa bằng SQL trực tiếp.
-    const events = await prisma.$queryRaw<{ kind: string; actor: string }[]>`
-      SELECT "kind", "actor"::text AS actor FROM "order_event"`
-    expect(events).toEqual([{ kind: 'created', actor: 'customer' }])
+    const detail = await request.get(`/api/admin/orders/${placed.body.code}`).set(bearer(token))
+    expect(detail.body.history).toEqual([
+      expect.objectContaining({ action: 'created', actor: { type: 'customer', id: null, email: null } }),
+    ])
+    // Không có API nào sửa lịch sử đơn; thử thẳng bằng SQL để chắc trigger chặn.
     await expect(prisma.$executeRaw`UPDATE "order_event" SET "kind" = 'x'`).rejects.toThrow(/chỉ cho phép thêm mới/)
     await expect(prisma.$executeRaw`DELETE FROM "order_event"`).rejects.toThrow(/chỉ cho phép thêm mới/)
     await expect(prisma.$executeRaw`TRUNCATE "order_event" CASCADE`).rejects.toThrow(/chỉ cho phép thêm mới/)

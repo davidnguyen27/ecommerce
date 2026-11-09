@@ -66,6 +66,7 @@ export const PAYMENT_SOURCE_LABELS: Record<PaymentSource, string> = {
 export const RECONCILIATION_RESOLUTION_LABELS: Record<ReconciliationResolution, string> = {
   restored: 'Đã khôi phục đơn',
   handled_externally: 'Đã xử lý ngoài hệ thống',
+  settled_by_payment: 'Đã đủ tiền nhờ khoản sau',
 }
 
 export const RECONCILIATION_REASON_LABELS: Record<ReconciliationReason, string> = {

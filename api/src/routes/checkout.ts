@@ -25,7 +25,7 @@ import { parse } from '../http/validation.ts'
 import { imageRenditions } from '../media/images.ts'
 import { paymentResultUrl, recordOrderEvent, type OrderLineImage } from '../orders/orders.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
-import { inStockIds, reserveStock } from '../stock/stock.ts'
+import { enoughStockIds, reserveStock } from '../stock/stock.ts'
 
 /** Ảnh gắn với biến thể, không có thì ảnh đầu tiên của sản phẩm. */
 function storedImageOf({ snapshot, variant }: CartVariant): OrderLineImage | null {
@@ -55,7 +55,7 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
       const input = parse(CheckoutQuoteRequest, req.body)
       const config = await requireShippingFeeConfig(prisma)
       const ids = input.lines.map((l) => l.variantId)
-      const [variants, stocked] = await Promise.all([cartVariants(prisma, ids), inStockIds(prisma, ids)])
+      const [variants, stocked] = await Promise.all([cartVariants(prisma, ids), enoughStockIds(prisma, input.lines)])
       const policies = await livePolicyVersions(prisma, variants.values())
 
       const lines = input.lines.map(({ variantId, quantity }): QuoteLine => {
