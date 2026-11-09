@@ -47,6 +47,7 @@ export default async function setup(project: TestProject) {
     mailer: new InMemoryMailer(),
     logger: pino({ enabled: false }),
     payments: new InMemoryPaymentGateway(),
+    siteUrl: 'https://shop.test',
   })
   await jobs.start()
   await jobs.stop()

@@ -24,8 +24,8 @@ export interface OrderExpiryQueue {
 }
 
 /**
- * Hàng đợi job nền trên Postgres (pg-boss); worker gửi email qua `mailer`, hủy đơn hết hạn giữ hàng (hủy link qua
- * `payments`) và dọn token hết hạn mỗi đêm.
+ * Hàng đợi job nền trên Postgres (pg-boss); worker gửi email qua `mailer`, hủy đơn hết hạn giữ hàng (hỏi cổng
+ * `payments` trước) và dọn token hết hạn mỗi đêm.
  */
 export class Jobs implements EmailQueue, OrderExpiryQueue {
   readonly #boss: PgBoss
@@ -33,6 +33,7 @@ export class Jobs implements EmailQueue, OrderExpiryQueue {
   readonly #prisma: Db
   readonly #logger: Logger
   readonly #payments: PaymentGateway
+  readonly #siteUrl: string
 
   constructor(options: {
     databaseUrl: string
@@ -40,8 +41,11 @@ export class Jobs implements EmailQueue, OrderExpiryQueue {
     mailer: Mailer
     logger: Logger
     payments: PaymentGateway
+    /** Gốc URL website, cho link trong email khi job hết hạn ghi nhận được tiền về. */
+    siteUrl: string
     maxConnections?: number
   }) {
+    this.#siteUrl = options.siteUrl
     this.#mailer = options.mailer
     this.#prisma = options.prisma
     this.#payments = options.payments
@@ -70,16 +74,22 @@ export class Jobs implements EmailQueue, OrderExpiryQueue {
       this.#logger.info({ deleted }, 'Đã dọn token và bộ đếm hết hạn')
     })
 
-    const cancelDeps = { prisma: this.#prisma, payments: this.#payments, logger: this.#logger }
+    const expireDeps = {
+      prisma: this.#prisma,
+      payments: this.#payments,
+      logger: this.#logger,
+      emails: this,
+      siteUrl: this.#siteUrl,
+    }
     await this.#boss.createQueue(EXPIRE_ORDER, { notify: true })
     await this.#boss.work<{ orderId: string }>(EXPIRE_ORDER, async ([job]) => {
-      if (job) await expireOrder(cancelDeps, job.data.orderId)
+      if (job) await expireOrder(expireDeps, job.data.orderId, new Date())
     })
     // Lưới an toàn khi job của từng đơn bị mất hay chạy sớm: quét đơn quá hạn mỗi phút.
     await this.#boss.createQueue(EXPIRE_OVERDUE_ORDERS)
     await this.#boss.schedule(EXPIRE_OVERDUE_ORDERS, '* * * * *')
     await this.#boss.work(EXPIRE_OVERDUE_ORDERS, async () => {
-      const expired = await expireOverdueOrders(cancelDeps)
+      const expired = await expireOverdueOrders(expireDeps)
       if (expired > 0) this.#logger.info({ expired }, 'Đã hủy đơn hết hạn giữ hàng')
     })
   }

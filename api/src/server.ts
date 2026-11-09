@@ -4,7 +4,7 @@ import { mailerFromEnv } from './adapters/mailer.ts'
 import { storageFromEnv } from './adapters/storage.ts'
 import { createPrisma } from './db.ts'
 import { Jobs } from './jobs/jobs.ts'
-import { payosKeysFromEnv, paymentGatewayFromEnv } from './payments/gateway-from-env.ts'
+import { paymentGatewayFromEnv, zalopayKeysFromEnv } from './payments/gateway-from-env.ts'
 
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) throw new Error('Thiếu biến môi trường DATABASE_URL')
@@ -13,7 +13,7 @@ if (!jwtSecret || jwtSecret.length < 32) throw new Error('Thiếu JWT_SECRET ho�
 const siteUrl = process.env.SITE_URL
 if (!siteUrl || !URL.canParse(siteUrl)) throw new Error('Thiếu SITE_URL hợp lệ, ví dụ https://shop.vn')
 const port = Number(process.env.PORT ?? 3001)
-// Kiểm trước khi kết nối DB: production thiếu khóa PayOS thì dừng ngay.
+// Kiểm trước khi kết nối DB: production thiếu khóa ZaloPay (hay dùng khóa sandbox) thì dừng ngay.
 const payments = paymentGatewayFromEnv(process.env, siteUrl)
 
 const logger = pino({
@@ -21,7 +21,7 @@ const logger = pino({
   redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
 })
 const prisma = createPrisma(databaseUrl)
-const jobs = new Jobs({ databaseUrl, prisma, mailer: mailerFromEnv(process.env, logger), logger, payments })
+const jobs = new Jobs({ databaseUrl, prisma, mailer: mailerFromEnv(process.env, logger), logger, payments, siteUrl })
 await jobs.start()
 
 const app = createApp({
@@ -33,8 +33,8 @@ const app = createApp({
   siteUrl,
   jwtSecret,
   payments,
-  // Webhook PayOS chỉ mở khi đang dùng PayOS.
-  payosChecksumKey: payosKeysFromEnv(process.env)?.checksumKey,
+  // Callback ZaloPay chỉ mở khi đang dùng ZaloPay.
+  zalopayCallbackKey: zalopayKeysFromEnv(process.env)?.key2,
 })
 
 const server = app.listen(port, () => logger.info({ port, payments: payments.constructor.name }, 'API đang chạy'))
