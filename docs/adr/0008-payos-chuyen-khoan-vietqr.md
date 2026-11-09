@@ -1,5 +1,7 @@
 # Thanh toán qua PayOS (chuyển khoản VietQR)
 
+**Đã được thay bằng ADR 0009 (ZaloPay), ngày 2026-11-09.**
+
 Chủ doanh nghiệp chọn PayOS làm cổng thanh toán duy nhất; tài liệu VNPAY trong overview chỉ dùng tham khảo cách xử lý IPN, truy vấn và hoàn tiền. PayOS chỉ nhận chuyển khoản Napas qua VietQR (không có thẻ), không có môi trường sandbox và không có API hoàn tiền, nên: PayOS nằm sau một interface cổng thanh toán để test tự động dùng bản giả lập và webhook tự ký; thử thật bằng chuyển khoản số nhỏ trên tài khoản của doanh nghiệp; hoàn tiền là nhân viên chuyển khoản tay rồi ghi nhận vào hệ thống.
 
 ## Consequences
