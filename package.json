@@ -8,6 +8,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "smoke": "node scripts/smoke.ts",
+    "e2e": "pnpm --filter @ecommerce/e2e e2e",
     "demo-seed": "node scripts/demo-seed.ts",
     "generate-regions": "node scripts/generate-regions.ts",
     "prepare": "husky"
