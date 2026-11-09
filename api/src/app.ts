@@ -37,10 +37,10 @@ export type AppDeps = {
   siteUrl: string
   /** Khóa ký JWT (HS256). */
   jwtSecret: string
-  /** Cổng thanh toán: PayOS, cổng giả lập khi chạy local, bản trong bộ nhớ khi test. */
+  /** Cổng thanh toán: ZaloPay, cổng giả lập khi chạy local, bản trong bộ nhớ khi test. */
   payments: PaymentGateway
-  /** Checksum key PayOS để kiểm chữ ký webhook; không có thì không mở route webhook. */
-  payosChecksumKey?: string
+  /** Key2 của ZaloPay để kiểm MAC callback; không có thì không mở route callback. */
+  zalopayCallbackKey?: string
 }
 
 const REQUEST_ID = /^[\w.-]{1,128}$/

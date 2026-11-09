@@ -50,11 +50,14 @@ services:
       R2_PUBLIC_BUCKET: ${R2_PUBLIC_BUCKET:-}
       R2_PRIVATE_BUCKET: ${R2_PRIVATE_BUCKET:-}
       MEDIA_PUBLIC_URL: ${MEDIA_PUBLIC_URL:-}
-      # Đủ ba khóa PayOS thì thanh toán thật. Image chạy NODE_ENV=production nên thiếu khóa thì API không khởi động,
-      # trừ khi bật rõ cổng giả lập bằng PAYMENT_SIMULATOR=allow (chỉ local và smoke; không bao giờ đặt ở production).
-      PAYOS_CLIENT_ID: ${PAYOS_CLIENT_ID:-}
-      PAYOS_API_KEY: ${PAYOS_API_KEY:-}
-      PAYOS_CHECKSUM_KEY: ${PAYOS_CHECKSUM_KEY:-}
+      # Đủ ba khóa ZaloPay thì dùng ZaloPay (ZALOPAY_ENV mặc định sandbox). Image chạy NODE_ENV=production nên thiếu
+      # khóa hay dùng sandbox thì API không khởi động, trừ khi đặt PAYMENT_SIMULATOR=allow (chỉ local và smoke; không
+      # bao giờ đặt ở production).
+      ZALOPAY_APP_ID: ${ZALOPAY_APP_ID:-}
+      ZALOPAY_KEY1: ${ZALOPAY_KEY1:-}
+      ZALOPAY_KEY2: ${ZALOPAY_KEY2:-}
+      ZALOPAY_ENV: ${ZALOPAY_ENV:-}
+      ZALOPAY_CALLBACK_URL: ${ZALOPAY_CALLBACK_URL:-}
       PAYMENT_SIMULATOR: ${PAYMENT_SIMULATOR:-}
     depends_on:
       migrate: { condition: service_completed_successfully }

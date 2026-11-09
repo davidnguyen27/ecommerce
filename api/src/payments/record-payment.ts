@@ -2,8 +2,9 @@ import type { Db, DbClient } from '../db.ts'
 import { Prisma, type PaymentSource, type ReconciliationReason } from '../generated/prisma/client.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
 import { issueOrderLookupUrl, recordOrderEvent } from '../orders/orders.ts'
+import type { PaymentGateway } from './gateway.ts'
 
-/** Một khoản tiền cổng báo về, từ webhook, truy vấn hay cổng giả lập. */
+/** Một khoản tiền cổng báo về, từ callback (nguồn `webhook`), truy vấn hay cổng giả lập. */
 export type PaymentReceipt = {
   orderCode: number
   /** VND. */
@@ -18,7 +19,7 @@ export type PaymentReceipt = {
 
 /**
  * `paid`: đơn vừa thành đã trả đủ. `flagged`: khoản tiền cần đối soát. `duplicate`: khoản này đã ghi từ trước.
- * `unknown_order`: không có đơn mang mã này (ví dụ webhook thử của PayOS).
+ * `unknown_order`: không có đơn mang mã này.
  */
 export type RecordPaymentOutcome = 'paid' | 'flagged' | 'duplicate' | 'unknown_order'
 
@@ -28,7 +29,7 @@ const VND = new Intl.NumberFormat('vi-VN')
 const vnd = (amount: bigint | number) => `${VND.format(amount)} ₫`
 
 /**
- * Hàm duy nhất ghi nhận tiền về cho đơn (ADR 0008), chạy nhiều lần vẫn một kết quả. Khóa đơn `FOR UPDATE` nên webhook
+ * Hàm duy nhất ghi nhận tiền về cho đơn (ADR 0009), chạy nhiều lần vẫn một kết quả. Khóa đơn `FOR UPDATE` nên callback
  * và truy vấn cùng về thì lần sau thấy giao dịch lần trước đã ghi. Đơn chờ thanh toán mà tổng đã nhận bằng đúng tổng
  * phải trả thì thành đã trả đủ; mọi trường hợp khác gắn cờ cần đối soát, không đổi trạng thái đơn.
  */
@@ -116,6 +117,28 @@ async function recordInTransaction(
   })
   await recordOrderEvent(tx, order.id, 'payment_flagged', { type: 'system' }, { ...eventData, reason })
   return 'flagged'
+}
+
+/**
+ * Hỏi cổng các khoản đã về cho đơn và ghi nhận từng khoản (nguồn `query`), phòng khi callback tới chậm hoặc không tới.
+ * Đơn không có mã bên cổng thì không hỏi. Cổng lỗi thì ném; nơi gọi quyết định log rồi đi tiếp.
+ */
+export async function recordGatewayPayments(
+  deps: RecordPaymentDeps & { payments: PaymentGateway },
+  order: { code: number; gatewayReference: string | null },
+) {
+  if (!order.gatewayReference) return
+  const info = await deps.payments.getPayment(order.gatewayReference)
+  for (const t of info.transactions) {
+    await recordPayment(deps, {
+      orderCode: order.code,
+      amount: t.amount,
+      reference: t.reference,
+      paidAt: t.paidAt,
+      source: 'query',
+      payload: t.payload ?? { reference: t.reference, amount: t.amount, paidAt: t.paidAt.toISOString() },
+    })
+  }
 }
 
 type OrderWithLines = Prisma.OrderGetPayload<{ include: { lines: true } }>

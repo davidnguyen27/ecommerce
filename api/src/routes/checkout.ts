@@ -230,15 +230,16 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
             .createLink({
               orderCode: order.code,
               amount: total,
-              description: `DH${order.code}`,
+              description: `Thanh toán đơn hàng #${order.code}`,
               returnUrl,
-              cancelUrl: returnUrl,
               expiresAt: reservedUntil,
             })
             .catch((err: unknown) => {
               req.log.error({ err, orderCode: order.code }, 'Không tạo được link thanh toán')
               throw new AppError(502, ErrorCode.BAD_GATEWAY, 'Chưa tạo được thanh toán, thử lại')
             })
+          // Mã đơn bên cổng, để truy vấn sau (refresh=1, job hết hạn).
+          await tx.order.update({ where: { id: order.id }, data: { gatewayReference: link.gatewayReference } })
 
           return { code: order.code, token, checkoutUrl: link.checkoutUrl, reservedUntil: reservedUntil.toISOString() }
         },

@@ -4,6 +4,7 @@ import type { Db } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
+import { recordGatewayPayments, type RecordPaymentDeps } from '../payments/record-payment.ts'
 import { releaseStock } from '../stock/stock.ts'
 import { recordOrderEvent, type OrderEventActor } from './orders.ts'
 
@@ -70,12 +71,19 @@ export async function cancelInTransaction(
   return 'cancelled'
 }
 
-/** Hủy link thanh toán của đơn vừa hủy. Lỗi chỉ log: đơn đã hủy, tiền về sau đó thành cần đối soát. */
-export async function cancelPaymentLink({ payments, logger }: Omit<CancelDeps, 'prisma'>, orderCode: number) {
+/**
+ * Hủy link thanh toán của đơn vừa hủy; đơn không có mã bên cổng thì bỏ qua. Lỗi chỉ log: đơn đã hủy, tiền về sau đó
+ * thành cần đối soát.
+ */
+export async function cancelPaymentLink(
+  { payments, logger }: Omit<CancelDeps, 'prisma'>,
+  order: { code: number; gatewayReference: string | null },
+) {
+  if (!order.gatewayReference) return
   try {
-    await payments.cancelLink(orderCode)
+    await payments.cancelLink(order.gatewayReference)
   } catch (err) {
-    logger.error({ err, orderCode }, 'Không hủy được link thanh toán')
+    logger.error({ err, orderCode: order.code }, 'Không hủy được link thanh toán')
   }
 }
 
@@ -83,10 +91,38 @@ export async function cancelPaymentLink({ payments, logger }: Omit<CancelDeps, '
 export async function cancelOrder(deps: CancelDeps, orderId: string, cancellation: Cancellation) {
   const outcome = await deps.prisma.$transaction((tx) => cancelInTransaction(tx, orderId, cancellation))
   if (outcome === 'cancelled') {
-    const { code } = await deps.prisma.order.findUniqueOrThrow({ where: { id: orderId }, select: { code: true } })
-    await cancelPaymentLink(deps, code)
+    const order = await deps.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      select: { code: true, gatewayReference: true },
+    })
+    await cancelPaymentLink(deps, order)
   }
   return outcome
+}
+
+/** Hủy vì hết hạn cần ghi nhận được tiền cổng báo về. */
+export type ExpireDeps = CancelDeps & Pick<RecordPaymentDeps, 'emails' | 'siteUrl'>
+
+/**
+ * Hủy đơn vì hết hạn giữ hàng (job hẹn giờ, job quét, nút giả lập). Có `overdueAt` thì chỉ hủy nếu hạn đã qua tính tới
+ * lúc đó; không có thì hủy ngay. Trước khi hủy hỏi cổng một lần (ADR 0009: merchant tự truy vấn khi không thấy
+ * callback): đã trả thì ghi nhận và đơn không bị hủy; cổng lỗi thì log rồi vẫn hủy, tiền về sau thành cần đối soát.
+ */
+export async function expireOrder(deps: ExpireDeps, orderId: string, overdueAt?: Date) {
+  const order = await deps.prisma.order.findUnique({
+    where: { id: orderId },
+    select: { code: true, status: true, reservedUntil: true, gatewayReference: true },
+  })
+  const due =
+    order?.status === 'pending_payment' && !(overdueAt && order.reservedUntil && order.reservedUntil > overdueAt)
+  if (order && due) {
+    try {
+      await recordGatewayPayments(deps, order)
+    } catch (err) {
+      deps.logger.error({ err, orderCode: order.code }, 'Không hỏi được cổng trước khi hủy đơn hết hạn')
+    }
+  }
+  return cancelOrder(deps, orderId, { reason: 'expired', overdueAt })
 }
 
 /** Nơi gọi qua HTTP: đơn đã trả thì 409. */
@@ -96,13 +132,8 @@ export function assertCancellable(outcome: CancelOutcome) {
   }
 }
 
-/** Job `expire-order` của một đơn: hủy nếu đã quá hạn tính tới `now`. */
-export function expireOrder(deps: CancelDeps, orderId: string, now = new Date()) {
-  return cancelOrder(deps, orderId, { reason: 'expired', overdueAt: now })
-}
-
 /** Job quét mỗi phút: hủy mọi đơn chờ thanh toán đã quá hạn tính tới `now`, phòng khi job của từng đơn bị mất. */
-export async function expireOverdueOrders(deps: CancelDeps, now = new Date()) {
+export async function expireOverdueOrders(deps: ExpireDeps, now = new Date()) {
   const overdue = await deps.prisma.order.findMany({
     where: { status: 'pending_payment', reservedUntil: { lte: now } },
     select: { id: true },
