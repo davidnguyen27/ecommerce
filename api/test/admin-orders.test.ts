@@ -87,11 +87,11 @@ describe('chi tiết đơn ở trang quản trị', () => {
     })
   })
 
-  it('lịch sử gộp sự kiện đơn với audit theo thời gian, đủ khách, nhân viên và hệ thống', async () => {
+  it('lịch sử mỗi thao tác một dòng theo thời gian, đủ khách, nhân viên và hệ thống', async () => {
     const { place, request, token } = await orders()
     const warehouse = await createStaff(request, token, ['warehouse'], 'kho@example.com')
     const { code } = await place()
-    expect((await request.post(`/api/admin/orders/${code}/cancel`).set(bearer(warehouse.accessToken))).status).toBe(204)
+    expect((await request.post(`/api/admin/orders/${code}/cancel`).set(bearer(warehouse.accessToken))).status).toBe(200)
     // Tiền về sau khi đơn đã hủy: hệ thống ghi giao dịch và gắn cờ cần đối soát.
     await request.post('/api/payments/simulator/paid').send({ orderCode: code, amount: 2_030_000 })
 
@@ -99,19 +99,9 @@ describe('chi tiết đơn ở trang quản trị', () => {
 
     const staffActor = { type: 'staff', id: warehouse.id, name: 'Nhân Viên', email: 'kho@example.com' }
     expect(res.body.history).toEqual([
-      expect.objectContaining({
-        source: 'event',
-        action: 'created',
-        actor: { type: 'customer', id: null, email: null },
-      }),
-      expect.objectContaining({ source: 'event', action: 'cancelled', actor: staffActor, data: { reason: 'staff' } }),
-      expect.objectContaining({
-        source: 'audit',
-        action: 'order.cancel',
-        actor: staffActor,
-        data: { before: { status: 'pending_payment' }, after: { status: 'cancelled', cancelReason: 'staff' } },
-      }),
-      expect.objectContaining({ source: 'event', action: 'payment_flagged', actor: { type: 'system' } }),
+      expect.objectContaining({ action: 'created', actor: { type: 'customer', id: null, email: null } }),
+      expect.objectContaining({ action: 'cancelled', actor: staffActor, data: { reason: 'staff' } }),
+      expect.objectContaining({ action: 'payment_flagged', actor: { type: 'system' } }),
     ])
     expect(res.body.payments).toEqual([
       expect.objectContaining({
@@ -120,6 +110,19 @@ describe('chi tiết đơn ở trang quản trị', () => {
         reconciliation: expect.objectContaining({ reason: 'paid_after_cancel', status: 'open', resolution: null }),
       }),
     ])
+  })
+
+  it('thiếu order.view thì 403', async () => {
+    const { place, request, token, prisma } = await orders()
+    const staff = await createStaff(request, token, ['sales'], 'khong-quyen@example.com')
+    // Mọi vai trò hiện có đều có order.view; nhân viên chưa được gán vai trò nào thì không có.
+    await prisma.staff.update({ where: { id: staff.id }, data: { roles: [] } })
+    const { code } = await place()
+
+    const res = await request.get(`/api/admin/orders/${code}`).set(bearer(staff.accessToken))
+
+    expect(res.status).toBe(403)
+    expect(res.body.error.code).toBe('FORBIDDEN')
   })
 
   it('khách đã đăng nhập hiện bằng email tài khoản', async () => {

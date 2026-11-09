@@ -45,3 +45,6 @@
   - trang sản phẩm có nút thêm vào giỏ.
 - Đã xem SSR của `/gio-hang` bằng `nuxt dev` (khung trang, `noindex`, link giỏ ở header). Chưa thử luồng thêm vào giỏ bằng trình duyệt; ticket 14 phủ phần này.
 - Cần chủ doanh nghiệp xác nhận: chặn "Đặt mua" ở trang giỏ khi có dòng ngừng bán, hết hàng hoặc giá đổi chưa đồng ý. Khách phải bỏ dòng hoặc đồng ý giá trước.
+
+**Sửa sau code review toàn nhánh (xem `implement-spec/review-fixes.md`):**
+- `inStock` của báo giá nay theo số lượng khách muốn mua, nên trang giỏ báo thiếu hàng ngay khi tăng số lượng. Nhãn đổi thành "Không đủ hàng, hãy giảm số lượng hoặc bỏ khỏi giỏ", vì không lộ số tồn nên không phân biệt hết hẳn với không đủ. Quyết định chặn "Đặt mua" ở trên áp dụng cho cả dòng không đủ hàng.

@@ -77,7 +77,24 @@ async function recordInTransaction(
       where: { id: order.id },
       data: { status: 'processing', paymentStatus: 'paid', reservedUntil: null },
     })
-    await recordOrderEvent(tx, order.id, 'paid', { type: 'system' }, eventData)
+    // Khoản trước bị gắn lệch tiền mà nay đủ: các mục đó không còn gì để kế toán xử lý.
+    const settled = await tx.reconciliationItem.findMany({
+      where: { orderId: order.id, status: 'open', reason: 'amount_mismatch' },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    const settledReconciliationItemIds = settled.map((item) => item.id)
+    await tx.reconciliationItem.updateMany({
+      where: { id: { in: settledReconciliationItemIds } },
+      data: { status: 'resolved', resolution: 'settled_by_payment', resolvedAt: new Date() },
+    })
+    await recordOrderEvent(
+      tx,
+      order.id,
+      'paid',
+      { type: 'system' },
+      settledReconciliationItemIds.length ? { ...eventData, settledReconciliationItemIds } : eventData,
+    )
     await queuePaymentReceivedEmail(tx, { emails, siteUrl }, order)
     return 'paid'
   }

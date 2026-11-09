@@ -57,3 +57,8 @@
 - Smoke không đổi: chỉ thêm trang admin (SPA). Chưa xem hai trang bằng trình duyệt và chưa in thử (ticket 14).
 - Test: `api/test/admin-orders.test.ts` (6 test). `staff-management.test.ts` cập nhật quyền của warehouse.
 - Cần chủ doanh nghiệp xác nhận: sales và accountant xem được toàn bộ đơn, gồm số điện thoại, email, địa chỉ khách (theo ticket); phiếu soạn hàng không in giá.
+
+**Sửa sau code review toàn nhánh (xem `implement-spec/review-fixes.md`):**
+- Lịch sử đơn (`history`) chỉ còn sự kiện đơn, mỗi thao tác một dòng, vẫn có tên nhân viên; `OrderHistoryEntry` bỏ trường `source`. Thay đổi trước/sau của thao tác nhân viên xem ở Nhật ký kiểm toán. Lý do: mọi thao tác của nhân viên trên đơn đều ghi cả sự kiện lẫn audit nên gộp thì trùng dòng.
+- `POST /api/admin/orders/:code/cancel` trả `AdminOrder` 200 thay vì 204, kể cả đơn đã hủy từ trước (không ghi gì, không hủy link lần nữa). Chuyển trạng thái giao hàng lặp lại vẫn 409.
+- Hàm chuyển trạng thái ở `fulfill-order.ts` trả bản audit (`FulfillmentAudit`), bốn route dùng chung helper `transition`. `orderNotFound`, `parseOrderCode` nằm ở `orders/orders.ts`; `routes/payments.ts` giữ `notFound` riêng vì route đó sẽ được thay khi đổi cổng.

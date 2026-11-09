@@ -15,6 +15,23 @@ export async function inStockIds(db: DbClient, variantIds: readonly string[]): P
   return new Set(rows.map((r) => r.id))
 }
 
+/**
+ * Những dòng giỏ mua được đủ số lượng: tồn trừ số đang giữ không ít hơn số khách muốn mua. Như `inStockIds`, chỉ trả
+ * id, không bao giờ trả số lượng.
+ */
+export async function enoughStockIds(
+  db: DbClient,
+  lines: readonly { variantId: string; quantity: number }[],
+): Promise<Set<string>> {
+  const rows = await db.$queryRaw<{ id: string }[]>`
+    SELECT v."id"::text AS id
+    FROM "product_variant" v
+    JOIN unnest(${lines.map((l) => l.variantId)}::uuid[], ${lines.map((l) => l.quantity)}::int[]) AS l("id", "quantity")
+      ON l."id" = v."id"
+    WHERE v."on_hand" - v."reserved" >= l."quantity"`
+  return new Set(rows.map((r) => r.id))
+}
+
 /** Biến thể đang bị khóa để đổi tồn hoặc giữ hàng. */
 export type LockedVariant = { id: string; sku: string; productId: string; onHand: number; reserved: number }
 

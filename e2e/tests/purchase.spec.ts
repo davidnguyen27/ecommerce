@@ -42,8 +42,7 @@ test('khách đặt mua, thanh toán giả lập, kho chuẩn bị, bàn giao v�
   // 1. Khách thêm vào giỏ.
   await page.goto(PRODUCT_PATH)
   await page.getByRole('button', { name: 'Thêm vào giỏ' }).click()
-  // Tên đọc được của link là "Giỏ hàng , 1 món": trình duyệt chèn dấu cách giữa các span.
-  const cartLink = page.getByRole('link', { name: /^Giỏ hàng\s*, 1 món$/ })
+  const cartLink = page.getByRole('link', { name: 'Giỏ hàng, 1 món', exact: true })
   await expect(cartLink).toBeVisible()
 
   await cartLink.click()

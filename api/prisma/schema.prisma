@@ -854,6 +854,8 @@ enum ReconciliationStatus {
 enum ReconciliationResolution {
   restored
   handled_externally
+  /// Hệ thống đóng mục lệch tiền khi khoản sau làm đơn đủ tiền; không có `resolvedBy`.
+  settled_by_payment
 
   @@map("reconciliation_resolution")
 }

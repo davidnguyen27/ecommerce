@@ -5,7 +5,7 @@ definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'order.v
 
 /*
  * Trang chi tiết đơn. Mỗi phần xử lý đơn là một panel đọc `order`; thao tác đổi trạng thái gọi API rồi `setOrder` bằng
- * `AdminOrder` mà API trả về (hoặc `load()` khi API trả 204). Ticket sau thêm panel vào cột phải (xử lý giao hàng) hay
+ * `AdminOrder` mà API trả về. Ticket sau thêm panel vào cột phải (xử lý giao hàng) hay
  * cột trái (đối soát), không cần sửa các phần có sẵn.
  */
 
@@ -37,13 +37,13 @@ async function cancelOrder() {
   error.value = null
   notice.value = null
   try {
-    await session.adminFetch(`/api/admin/orders/${code}/cancel`, { method: 'POST' })
+    setOrder(await session.adminFetch(`/api/admin/orders/${code}/cancel`, { method: 'POST' }))
     notice.value = 'Đã hủy đơn'
   } catch (err) {
     error.value = apiErrorMessage(err)
-  } finally {
-    // Cả khi lỗi (ví dụ đơn vừa được trả tiền): nạp lại để thấy trạng thái mới.
+    // Ví dụ đơn vừa được trả tiền: nạp lại để thấy trạng thái mới.
     await load()
+  } finally {
     busy.value = false
   }
 }
@@ -55,13 +55,8 @@ function actorText(entry: OrderHistoryEntry) {
   return 'Hệ thống'
 }
 
-function historyTitle(entry: OrderHistoryEntry) {
-  return entry.source === 'event' ? orderEventLabel(entry.action) : auditActionLabel(entry.action)
-}
-
 /** Chi tiết ngắn cho các sự kiện có dữ liệu đáng xem. */
 function historyDetail(entry: OrderHistoryEntry) {
-  if (entry.source !== 'event') return ''
   const data = (entry.data ?? {}) as {
     reason?: string
     amount?: number
@@ -224,7 +219,7 @@ await load()
                 <tr v-for="(entry, index) in order.history" :key="index" data-testid="admin-order-history">
                   <td style="white-space: nowrap">{{ formatDateTime(entry.at, { seconds: true }) }}</td>
                   <td>
-                    <div>{{ historyTitle(entry) }}</div>
+                    <div>{{ orderEventLabel(entry.action) }}</div>
                     <div v-if="historyDetail(entry)" style="font-size: 12px; color: var(--adm-muted)">
                       {{ historyDetail(entry) }}
                     </div>
