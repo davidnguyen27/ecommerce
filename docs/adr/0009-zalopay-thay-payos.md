@@ -9,7 +9,7 @@ Chủ doanh nghiệp đổi cổng thanh toán từ PayOS sang ZaloPay (thay ADR
 
 ## Consequences
 
-- Mã giao dịch của ZaloPay (`app_trans_id`) phải bắt đầu bằng ngày `yymmdd` theo GMT+7, nên không dùng thẳng mã đơn được. Cổng trả mã này khi tạo link, đơn lưu lại (`order.gateway_reference`) để truy vấn sau.
+- Mã giao dịch của ZaloPay (`app_trans_id`) phải bắt đầu bằng ngày `yymmdd` theo GMT+7, nên không dùng thẳng mã đơn được. Cổng trả mã này khi tạo link, đơn lưu lại (`order.gateway_reference`) để truy vấn sau. Mã có dạng `yymmdd_<mã đơn>_<8 hex ngẫu nhiên>` (bổ sung 2026-11-10): mã đơn chỉ duy nhất trong một DB, reset DB thì đánh lại, còn merchant sandbox công khai dùng chung cho mọi người, mà ZaloPay từ chối `app_trans_id` trùng (-68).
 - ZaloPay không có API hủy đơn chưa thanh toán: hủy đơn ở hệ thống không hủy được trang thanh toán bên ZaloPay. Tiền về cho đơn đã hủy đi vào danh sách cần đối soát như trước.
 - Callback luôn trả HTTP 200, kết quả nằm trong `return_code`. Sai MAC trả `-1` và không ghi gì; lỗi phía hệ thống trả `0` để ZaloPay gửi lại.
 - ZaloPay yêu cầu merchant tự truy vấn khi không thấy callback, nên trước khi hủy đơn quá hạn, job hết hạn hỏi cổng một lần: đã trả thì ghi nhận, không hủy.

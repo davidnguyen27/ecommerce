@@ -17,8 +17,10 @@ Image Docker của API luôn chạy `NODE_ENV=production`. Vì vậy `docker com
 
 ## Lấy khóa sandbox
 
-1. Đăng nhập https://sbmc.zalopay.vn (trang merchant sandbox), tạo hoặc mở app sandbox.
-2. Chép **App ID**, **Key1**, **Key2** vào `.env` (không commit, kể cả khóa sandbox; khóa sandbox công khai trong repo mẫu cũng không commit):
+Cách nhanh nhất là dùng **merchant dùng thử công khai** ZaloPay đăng ở https://developer.zalopay.vn/start/ (mục "Merchant dùng thử", App ID `554`). Đã thử ngày 2026-11-10: tạo đơn và truy vấn chạy được. Bộ khóa App ID `2553` trong code mẫu của trang tổng quan thì bị ZaloPay từ chối ("Chữ ký không hợp lệ"), đừng dùng. Muốn có app riêng thì đăng nhập https://sbmc.zalopay.vn.
+
+1. Lấy **App ID**, **Key1**, **Key2** từ một trong hai nguồn trên.
+2. Chép vào `.env` (không commit, kể cả khóa sandbox công khai):
 
    ```
    ZALOPAY_APP_ID=...
@@ -31,6 +33,15 @@ Image Docker của API luôn chạy `NODE_ENV=production`. Vì vậy `docker com
 3. `docker compose up --build`. Log `API đang chạy` có `payments: "ZaloPayPaymentGateway"` là đã dùng ZaloPay.
 
 Key1 ký request gửi ZaloPay (tạo đơn, truy vấn); Key2 kiểm MAC của callback ZaloPay gửi về.
+
+## Trả tiền trên sandbox
+
+Với merchant `554`, trang thanh toán sandbox (`qcgateway.zalopay.vn`) chỉ hiện mã QR, dù đặt `bank_code` hay `preferred_payment_method` thế nào (đã thử `''`, `CC`, `ATM`, `zalopayapp`). Phải quét QR bằng **app ZaloPay sandbox** trên điện thoại:
+
+- Android: https://dev.zalopay.com.vn/qrcode/public/app/android/merchant.html
+- iOS: https://stcstg.zalopay.com.vn/ps_res/ios/enterprise/sandboxmer/6.8.2/install.html
+
+Ví trong app sandbox nạp tiền ảo theo hướng dẫn ở https://developer.zalopay.vn/start/. Thẻ thử (ATM SBI `9704540000000062`, Visa `4111111111111111`) chỉ dùng được khi app sandbox của merchant bật cổng thẻ.
 
 ## Tunnel tới callback
 
@@ -51,8 +62,8 @@ Callback luôn nhận HTTP 200, kết quả nằm trong `return_code`: `1` đã 
 
 Tài liệu chưa nói rõ những điểm dưới đây; code chọn cách có khả năng nhất và để riêng trong `api/src/payments/zalopay.ts`. Ticket 16 (`.scratch/m3-mua-hang/issues/16-thu-zalopay-sandbox.md`) kiểm:
 
-- Request gửi `application/x-www-form-urlencoded`; tài liệu nhận form, JSON và XML, repo mẫu gửi query string với body rỗng.
-- Response truy vấn khi đã trả: tài liệu liệt kê `amount`, `discount_amount`, `zp_trans_id`, `is_processing`; code đọc thêm `server_time` nếu có, không có thì lấy giờ truy vấn làm giờ trả.
+- ~~Request gửi `application/x-www-form-urlencoded`~~: đã xác minh 2026-11-10, sandbox nhận cho cả tạo đơn và truy vấn.
+- Response truy vấn khi đã trả: tài liệu liệt kê `amount`, `discount_amount`, `zp_trans_id`, `is_processing`, không có `server_time` (đơn chưa trả trên sandbox đúng như vậy). Code đọc `server_time` nếu có, không có thì lấy giờ truy vấn làm giờ trả.
 - `amount` của callback có tính `discount_amount`/`user_fee_amount` không. Khác tổng đơn thì khoản đó vào danh sách cần đối soát.
 - Callback có đến cho đơn đã hết hạn không.
 
