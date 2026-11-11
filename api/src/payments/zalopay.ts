@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { z } from 'zod'
 import { PaymentGatewayError, type PaymentGateway, type PaymentInfo, type PaymentLinkRequest } from './gateway.ts'
 
@@ -38,17 +38,19 @@ export function isValidZaloPayCallback(data: string, mac: string, key2: string) 
 const VN_OFFSET_MS = 7 * 60 * 60_000
 
 /**
- * `app_trans_id` của đơn: `yymmdd` theo GMT+7 của lúc tạo, `_`, mã đơn. ZaloPay đòi tiền tố ngày hiện tại và không
- * cho trùng trong app; mã đơn đã duy nhất nên ghép thêm là đủ. Tối đa 40 ký tự.
+ * `app_trans_id` của đơn: `yymmdd` theo GMT+7 của lúc tạo, `_`, mã đơn, `_`, đoạn ngẫu nhiên. ZaloPay đòi tiền tố ngày
+ * hiện tại và không cho trùng trong app (lỗi -68). Mã đơn chỉ duy nhất trong một DB: reset DB thì đánh lại từ đầu, và
+ * merchant sandbox công khai dùng chung cho mọi người, nên cần thêm đoạn ngẫu nhiên. Tối đa 6+1+15+1+8 = 31 ký tự
+ * (ZaloPay cho 40). Truy vấn dùng `gateway_reference` đã lưu, nên không cần dựng lại chuỗi này.
  */
-export function appTransId(orderCode: number, now: Date) {
+export function appTransId(orderCode: number, now: Date, nonce = randomBytes(4).toString('hex')) {
   const vn = new Date(now.getTime() + VN_OFFSET_MS).toISOString()
-  return `${vn.slice(2, 4)}${vn.slice(5, 7)}${vn.slice(8, 10)}_${orderCode}`
+  return `${vn.slice(2, 4)}${vn.slice(5, 7)}${vn.slice(8, 10)}_${orderCode}_${nonce}`
 }
 
-/** Mã đơn trong `app_trans_id` do `appTransId` tạo; mã lạ thì `null`. */
+/** Mã đơn trong `app_trans_id` do `appTransId` tạo (nhận cả dạng cũ không có đoạn ngẫu nhiên); mã lạ thì `null`. */
 export function orderCodeFromAppTransId(id: string): number | null {
-  const match = /^\d{6}_(\d{1,15})$/.exec(id)
+  const match = /^\d{6}_(\d{1,15})(?:_[0-9a-f]{8})?$/.exec(id)
   return match ? Number(match[1]) : null
 }
 
@@ -63,8 +65,8 @@ const Result = z.looseObject({
   sub_return_message: z.string().optional(),
 })
 const Created = z.looseObject({ order_url: z.url() })
-// Kiểm trên sandbox: tài liệu liệt kê `amount`, `discount_amount`, `zp_trans_id`, `is_processing`; `server_time` chưa
-// chắc có, thiếu thì lấy giờ truy vấn.
+// Tài liệu liệt kê `amount`, `discount_amount`, `zp_trans_id`, `is_processing`, không có `server_time`; sandbox
+// (2026-11-10, đơn chưa trả) trả đúng các trường đó. Phòng khi có thì đọc, thiếu thì lấy giờ truy vấn.
 const Paid = z.looseObject({
   zp_trans_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]),
   amount: z.number().int().positive(),
@@ -86,6 +88,8 @@ export class ZaloPayPaymentGateway implements PaymentGateway {
       fetch?: typeof globalThis.fetch
       baseUrl?: string
       now?: () => Date
+      /** Đoạn ngẫu nhiên cuối `app_trans_id`; test truyền giá trị cố định. */
+      nonce?: () => string
     },
   ) {
     this.fetch = options.fetch ?? globalThis.fetch
@@ -96,7 +100,7 @@ export class ZaloPayPaymentGateway implements PaymentGateway {
     const now = this.now()
     const order = {
       app_id: this.options.appId,
-      app_trans_id: appTransId(request.orderCode, now),
+      app_trans_id: appTransId(request.orderCode, now, this.options.nonce?.()),
       app_user: String(request.orderCode),
       app_time: String(now.getTime()),
       amount: String(request.amount),
@@ -174,7 +178,7 @@ export class ZaloPayPaymentGateway implements PaymentGateway {
     return result.data
   }
 
-  /** POST form-urlencoded (kiểm trên sandbox: repo mẫu gửi query string, tài liệu nhận form/JSON); mọi lỗi thành `PaymentGatewayError`. */
+  /** POST form-urlencoded (đã thử trên sandbox 2026-11-10: tạo đơn và truy vấn đều nhận); mọi lỗi thành `PaymentGatewayError`. */
   private async call(path: string, form: Record<string, string>) {
     let res: Response
     try {

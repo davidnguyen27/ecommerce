@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto'
 import { ZALOPAY_KEY2 } from './test-app.ts'
 
 /** `app_trans_id` như đặt mua gửi ZaloPay cho đơn tạo ngày 2026-11-02 giờ Việt Nam. */
-export const transId = (orderCode: number) => `261102_${orderCode}`
+export const transId = (orderCode: number) => `261102_${orderCode}_a1b2c3d4`
 
 /** `data` của callback ZaloPay cho một khoản tiền về, đủ các trường tài liệu liệt kê; `data` ghi đè từng trường. */
 export function callbackData(orderCode: number, amount: number, data: Record<string, unknown> = {}) {

@@ -41,6 +41,7 @@ function fakeZaloPay(
     callbackUrl: 'https://shop.test/api/payments/zalopay/callback',
     fetch,
     now: options.now,
+    nonce: () => 'a1b2c3d4',
   })
   return { calls, gateway }
 }
@@ -69,19 +70,29 @@ const LINK = {
 describe('mã đơn bên ZaloPay', () => {
   it('app_trans_id bắt đầu bằng yymmdd theo giờ Việt Nam, cả sát nửa đêm', () => {
     // 23:59 ngày 02/11 giờ Việt Nam là 16:59 UTC cùng ngày; 00:00 ngày 03/11 giờ Việt Nam là 17:00 UTC ngày 02/11.
-    expect(appTransId(100123, new Date('2026-11-02T16:59:00Z'))).toBe('261102_100123')
-    expect(appTransId(100123, new Date('2026-11-02T17:00:00Z'))).toBe('261103_100123')
-    expect(appTransId(100123, new Date('2026-12-31T17:00:00Z'))).toBe('270101_100123')
+    expect(appTransId(100123, new Date('2026-11-02T16:59:00Z'), 'a1b2c3d4')).toBe('261102_100123_a1b2c3d4')
+    expect(appTransId(100123, new Date('2026-11-02T17:00:00Z'), 'a1b2c3d4')).toBe('261103_100123_a1b2c3d4')
+    expect(appTransId(100123, new Date('2026-12-31T17:00:00Z'), 'a1b2c3d4')).toBe('270101_100123_a1b2c3d4')
   })
 
-  it('đọc lại mã đơn từ app_trans_id; mã lạ thì không có', () => {
+  it('cùng mã đơn, cùng ngày vẫn ra app_trans_id khác nhau (reset DB, merchant sandbox dùng chung)', () => {
+    const first = appTransId(100000, NOW)
+    const second = appTransId(100000, NOW)
+    expect(first).toMatch(/^261102_100000_[0-9a-f]{8}$/)
+    expect(second).not.toBe(first)
+    expect(orderCodeFromAppTransId(first)).toBe(100000)
+  })
+
+  it('đọc lại mã đơn từ app_trans_id, cả dạng cũ không có đoạn ngẫu nhiên; mã lạ thì không có', () => {
+    expect(orderCodeFromAppTransId('261102_100123_a1b2c3d4')).toBe(100123)
     expect(orderCodeFromAppTransId('261102_100123')).toBe(100123)
+    expect(orderCodeFromAppTransId('261102_100123_xyz')).toBeNull()
     expect(orderCodeFromAppTransId('100123')).toBeNull()
     expect(orderCodeFromAppTransId('261102_abc')).toBeNull()
   })
 
   it('MAC callback là HMAC-SHA256 bằng key2 trên chuỗi data', () => {
-    const data = '{"app_trans_id":"261102_100123","amount":2030000}'
+    const data = '{"app_trans_id":"261102_100123_a1b2c3d4","amount":2030000}'
     expect(isValidZaloPayCallback(data, hmac(data, 'test-key2'), 'test-key2')).toBe(true)
     expect(isValidZaloPayCallback(data, hmac(data, 'test-key1'), 'test-key2')).toBe(false)
     expect(isValidZaloPayCallback(data, 'abc', 'test-key2')).toBe(false)
@@ -96,7 +107,7 @@ describe('cổng ZaloPay', () => {
 
     expect(link).toEqual({
       checkoutUrl: 'https://qcgateway.zalopay.vn/openinapp?order=abc',
-      gatewayReference: '261102_100123',
+      gatewayReference: '261102_100123_a1b2c3d4',
     })
     expect(calls).toHaveLength(1)
     const call = calls[0]!
@@ -105,10 +116,10 @@ describe('cổng ZaloPay', () => {
     expect(call.contentType).toBe('application/x-www-form-urlencoded')
     const embedData = '{"redirecturl":"https://shop.test/don-hang/100123?ket-qua=1"}'
     // Theo tài liệu: app_id|app_trans_id|app_user|amount|app_time|embed_data|item.
-    const signed = `9999|261102_100123|100123|2030000|1793588400000|${embedData}|[]`
+    const signed = `9999|261102_100123_a1b2c3d4|100123|2030000|1793588400000|${embedData}|[]`
     expect(call.form).toEqual({
       app_id: '9999',
-      app_trans_id: '261102_100123',
+      app_trans_id: '261102_100123_a1b2c3d4',
       app_user: '100123',
       app_time: '1793588400000',
       amount: '2030000',
@@ -174,13 +185,13 @@ describe('cổng ZaloPay', () => {
     }
     const { calls, gateway } = fakeZaloPay({ now: () => NOW }, Response.json(body))
 
-    const info = await gateway.getPayment('261102_100123')
+    const info = await gateway.getPayment('261102_100123_a1b2c3d4')
 
     expect(calls[0]!.url).toBe(`${SANDBOX}/v2/query`)
     expect(calls[0]!.form).toEqual({
       app_id: '9999',
-      app_trans_id: '261102_100123',
-      mac: hmac('9999|261102_100123|test-key1', 'test-key1'),
+      app_trans_id: '261102_100123_a1b2c3d4',
+      mac: hmac('9999|261102_100123_a1b2c3d4|test-key1', 'test-key1'),
     })
     expect(info).toEqual({
       status: 'paid',
@@ -196,13 +207,13 @@ describe('cổng ZaloPay', () => {
   ])('truy vấn return_code %s thành %s, không có giao dịch', async (returnCode, status) => {
     const { gateway } = fakeZaloPay({}, Response.json({ return_code: returnCode, is_processing: false }))
 
-    expect(await gateway.getPayment('261102_100123')).toEqual({ status, transactions: [] })
+    expect(await gateway.getPayment('261102_100123_a1b2c3d4')).toEqual({ status, transactions: [] })
   })
 
   it('truy vấn return_code lạ thì báo lỗi cổng thay vì đoán', async () => {
     const { gateway } = fakeZaloPay({}, Response.json({ return_code: -401, return_message: 'Sai MAC' }))
 
-    await expect(gateway.getPayment('261102_100123')).rejects.toThrow('ZaloPay -401')
+    await expect(gateway.getPayment('261102_100123_a1b2c3d4')).rejects.toThrow('ZaloPay -401')
   })
 
   it('hủy link không gọi ZaloPay (không có API hủy đơn)', async () => {
@@ -229,7 +240,7 @@ describe('đặt mua qua cổng ZaloPay', () => {
       description: 'Thanh toán đơn hàng #100000',
       expire_duration_seconds: '900',
     })
-    expect(calls[0]!.form.app_trans_id).toMatch(/^\d{6}_100000$/)
+    expect(calls[0]!.form.app_trans_id).toMatch(/^\d{6}_100000_[0-9a-f]{8}$/)
     // Không gửi email hay số điện thoại khách cho cổng.
     expect(JSON.stringify(calls[0]!.form)).not.toMatch(/example\.com|0912345678/i)
   })
