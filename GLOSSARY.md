@@ -130,7 +130,7 @@ _Avoid_: phí ship, phí vận chuyển
 Ba khía cạnh theo dõi độc lập của một đơn. Đã trả đủ không có nghĩa là đã giao; đã bàn giao không có nghĩa là đã giao tới khách.
 
 **Cổng thanh toán** (Payment gateway):
-Dịch vụ bên ngoài nhận tiền của khách cho đơn và báo lại cho hệ thống; hiện là ZaloPay (ADR 0009). Local dùng cổng giả lập.
+Dịch vụ bên ngoài nhận tiền của khách cho đơn và báo lại cho hệ thống; hiện là VNPAY (ADR 0010). Local dùng cổng giả lập.
 _Avoid_: ví, ngân hàng (khi nói về cổng)
 
 **Cần đối soát** (Needs reconciliation):

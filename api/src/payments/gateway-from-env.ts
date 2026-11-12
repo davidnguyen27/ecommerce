@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { SimulatorPaymentGateway, type PaymentGateway } from './gateway.ts'
-import { ZaloPayPaymentGateway, type ZaloPayKeys } from './zalopay.ts'
+import { VnpayPaymentGateway, type VnpayKeys } from './vnpay.ts'
 
 /** Khóa để trống hay chỉ có khoảng trắng coi như chưa đặt (`.env.example` để trống). */
 const optional = z
@@ -10,66 +10,57 @@ const optional = z
 
 const PaymentEnv = z.object({
   NODE_ENV: optional,
-  ZALOPAY_APP_ID: optional,
-  ZALOPAY_KEY1: optional,
-  ZALOPAY_KEY2: optional,
-  /** Mặc định `sandbox`: thanh toán thật cần đặt rõ `production` (quyết định 2026-11-09, chỉ chạy sandbox trước). */
-  ZALOPAY_ENV: optional.pipe(
-    z.enum(['sandbox', 'production'], { error: 'ZALOPAY_ENV chỉ nhận sandbox hoặc production' }).default('sandbox'),
+  VNPAY_TMN_CODE: optional,
+  VNPAY_HASH_SECRET: optional,
+  /** Mặc định `sandbox`: thanh toán thật cần đặt rõ `production` (quyết định 2026-11-11, chỉ chạy sandbox trước). */
+  VNPAY_ENV: optional.pipe(
+    z.enum(['sandbox', 'production'], { error: 'VNPAY_ENV chỉ nhận sandbox hoặc production' }).default('sandbox'),
   ),
-  /** URL ZaloPay gọi khi tiền về, ví dụ qua tunnel khi thử sandbox trên máy; mặc định theo SITE_URL. */
-  ZALOPAY_CALLBACK_URL: optional,
+  /** `vnp_IpAddr` khi API truy vấn VNPAY: IP máy chủ; mặc định 127.0.0.1. */
+  VNPAY_SERVER_IP: optional,
   /**
-   * `allow`: cho cổng giả lập, hay ZaloPay sandbox, dù `NODE_ENV=production`. Chỉ dùng cho smoke/CI và chạy image
-   * trên máy.
+   * `allow`: cho cổng giả lập, hay VNPAY sandbox, dù `NODE_ENV=production`. Chỉ dùng cho smoke/CI và chạy image trên
+   * máy.
    */
   PAYMENT_SIMULATOR: optional,
 })
 
-const KEY_NAMES = ['ZALOPAY_APP_ID', 'ZALOPAY_KEY1', 'ZALOPAY_KEY2'] as const
+const KEY_NAMES = ['VNPAY_TMN_CODE', 'VNPAY_HASH_SECRET'] as const
 
-/** Đường callback ZaloPay trên API (`routes/payments.ts`). */
-export const ZALOPAY_CALLBACK_PATH = '/api/payments/zalopay/callback'
+/** Đường IPN trên API (`routes/payments.ts`); khai với VNPAY, không gửi theo từng đơn. */
+export const VNPAY_IPN_PATH = '/api/payments/vnpay/ipn'
 
-/** Khóa ZaloPay khi đặt đủ cả ba; chưa đặt khóa nào thì `undefined`; đặt thiếu thì ném vì đó là cấu hình sai. */
-export function zalopayKeysFromEnv(env: NodeJS.ProcessEnv): ZaloPayKeys | undefined {
+/** Khóa VNPAY khi đặt đủ cả hai; chưa đặt khóa nào thì `undefined`; đặt thiếu thì ném vì đó là cấu hình sai. */
+export function vnpayKeysFromEnv(env: NodeJS.ProcessEnv): VnpayKeys | undefined {
   const parsed = PaymentEnv.parse(env)
   const missing = KEY_NAMES.filter((name) => !parsed[name])
   if (missing.length === KEY_NAMES.length) return undefined
-  if (missing.length > 0) throw new Error(`Cấu hình ZaloPay thiếu ${missing.join(', ')}`)
-  return {
-    appId: parsed.ZALOPAY_APP_ID!,
-    key1: parsed.ZALOPAY_KEY1!,
-    key2: parsed.ZALOPAY_KEY2!,
-    env: parsed.ZALOPAY_ENV,
-  }
+  if (missing.length > 0) throw new Error(`Cấu hình VNPAY thiếu ${missing.join(', ')}`)
+  return { tmnCode: parsed.VNPAY_TMN_CODE!, hashSecret: parsed.VNPAY_HASH_SECRET!, env: parsed.VNPAY_ENV }
 }
 
 /**
- * Chọn cổng thanh toán (spec "Thanh toán", ADR 0009): đủ khóa ZaloPay thì dùng ZaloPay; chưa có khóa thì dùng cổng giả
+ * Chọn cổng thanh toán (spec "Thanh toán", ADR 0010): đủ khóa VNPAY thì dùng VNPAY; chưa có khóa thì dùng cổng giả
  * lập. Với `NODE_ENV=production`, thiếu khóa hay khóa sandbox đều làm API không khởi động (cổng giả lập cho ai cũng báo
  * được "đã thanh toán", sandbox không nhận tiền thật), trừ khi bật rõ `PAYMENT_SIMULATOR=allow`. Image Docker luôn chạy
  * `NODE_ENV=production`, nên smoke/CI và docker compose local phải đặt dòng đó.
  */
 export function paymentGatewayFromEnv(env: NodeJS.ProcessEnv, siteUrl: string): PaymentGateway {
-  const keys = zalopayKeysFromEnv(env)
-  const { NODE_ENV, PAYMENT_SIMULATOR, ZALOPAY_CALLBACK_URL } = PaymentEnv.parse(env)
+  const keys = vnpayKeysFromEnv(env)
+  const { NODE_ENV, PAYMENT_SIMULATOR, VNPAY_SERVER_IP } = PaymentEnv.parse(env)
   const guarded = NODE_ENV === 'production' && PAYMENT_SIMULATOR !== 'allow'
   if (keys) {
     if (guarded && keys.env === 'sandbox') {
       throw new Error(
-        'NODE_ENV=production đang dùng ZaloPay sandbox, không nhận tiền thật. Đặt ZALOPAY_ENV=production với khóa ' +
-          'thật; chỉ khi chạy thử image trên máy mới đặt PAYMENT_SIMULATOR=allow.',
+        'NODE_ENV=production đang dùng VNPAY sandbox, không nhận tiền thật. Đặt VNPAY_ENV=production với khóa thật; ' +
+          'chỉ khi chạy thử image trên máy mới đặt PAYMENT_SIMULATOR=allow.',
       )
     }
-    return new ZaloPayPaymentGateway({
-      ...keys,
-      callbackUrl: ZALOPAY_CALLBACK_URL ?? new URL(ZALOPAY_CALLBACK_PATH, siteUrl).toString(),
-    })
+    return new VnpayPaymentGateway({ ...keys, serverIp: VNPAY_SERVER_IP })
   }
   if (guarded) {
     throw new Error(
-      `NODE_ENV=production cần ${KEY_NAMES.join(', ')} (lấy ở sbmc.zalopay.vn cho sandbox, mc.zalopay.vn cho thật). ` +
+      `NODE_ENV=production cần ${KEY_NAMES.join(', ')} (đăng ký sandbox ở pay.vnpaytest.vn/dev-registration). ` +
         'Chỉ khi chạy thử image trên máy mới đặt PAYMENT_SIMULATOR=allow để dùng cổng giả lập.',
     )
   }

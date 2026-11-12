@@ -13,15 +13,15 @@ import { InMemoryPaymentGateway, SimulatorPaymentGateway, type PaymentGateway } 
 /** Gốc URL website trong link của email gửi ra từ test. */
 export const SITE_URL = 'https://shop.test'
 
-/** Key2 ZaloPay của test (không phải khóa thật hay khóa sandbox); test tự ký callback bằng key này. */
-export const ZALOPAY_KEY2 = 'test-zalopay-key2'
+/** `vnp_HashSecret` của test (không phải khóa thật hay khóa sandbox); test tự ký IPN bằng khóa này. */
+export const VNPAY_HASH_SECRET = 'test-vnpay-hash-secret'
 
 type Options = {
   /** Ghi đè URL DB, ví dụ để giả lập mất kết nối. */
   databaseUrl?: string
   /** Dùng cổng giả lập như khi chạy local thay cho bản trong bộ nhớ (`payments` khi đó không được app dùng). */
   simulator?: boolean
-  /** Cổng thanh toán khác cho app dùng, ví dụ ZaloPay trên HTTP giả (`payments` khi đó không được app dùng). */
+  /** Cổng thanh toán khác cho app dùng, ví dụ VNPAY trên HTTP giả (`payments` khi đó không được app dùng). */
   gateway?: PaymentGateway
 }
 
@@ -71,7 +71,7 @@ export async function createTestApp(options: Options = {}) {
     jwtSecret,
     siteUrl: SITE_URL,
     payments: gateway,
-    zalopayCallbackKey: ZALOPAY_KEY2,
+    vnpayHashSecret: VNPAY_HASH_SECRET,
   })
 
   onTestFinished(async () => {

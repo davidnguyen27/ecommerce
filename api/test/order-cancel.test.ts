@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { expireOverdueOrders } from '../src/orders/cancel-order.ts'
 import { CUSTOMER, register } from './support/customer.ts'
-import { callbackData, signedCallback } from './support/zalopay.ts'
+import { ipnParams, signedIpn } from './support/vnpay.ts'
 import { shop } from './support/shop.ts'
 import { bearer, createStaff } from './support/staff.ts'
 
@@ -142,7 +142,7 @@ describe('tiền về sau khi đơn đã hết hạn', () => {
     const { code, order, reserved, expire, request, token } = await pendingOrder()
     await expire(inMinutes(16))
 
-    const res = await request.post('/api/payments/zalopay/callback').send(signedCallback(callbackData(code, 2_030_000)))
+    const res = await request.get('/api/payments/vnpay/ipn').query(signedIpn(ipnParams(code, 2_030_000)))
 
     expect(res.status).toBe(200)
     expect((await order()).body).toMatchObject({

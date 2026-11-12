@@ -697,7 +697,7 @@ model Order {
   lookupTokenHash   String            @unique @map("lookup_token_hash")
   /// Hạn giữ hàng khi chưa thanh toán; `null` khi không còn hạn (đã trả hoặc đã hủy).
   reservedUntil     DateTime?         @map("reserved_until")
-  /// Mã đơn bên cổng thanh toán (ZaloPay `app_trans_id`), cổng trả khi tạo link; dùng để truy vấn cổng (ADR 0009).
+  /// Mã đơn bên cổng thanh toán (VNPAY `vnp_TxnRef`), cổng trả khi tạo link; dùng để truy vấn cổng (ADR 0010).
   gatewayReference  String?           @unique @map("gateway_reference")
   /// Có khi và chỉ khi đơn `cancelled` (check constraint `order_cancellation_check`).
   cancelReason      OrderCancelReason? @map("cancel_reason")

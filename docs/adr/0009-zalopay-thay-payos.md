@@ -1,5 +1,7 @@
 # Thanh toán qua ZaloPay, thay cho PayOS
 
+**Đã được thay bằng ADR 0010 (VNPAY), ngày 2026-11-11.**
+
 Chủ doanh nghiệp đổi cổng thanh toán từ PayOS sang ZaloPay (thay ADR 0008), vì PayOS không liên kết được tài khoản nhận tiền ở ngân hàng doanh nghiệp đang dùng. Code PayOS chưa từng chạy thật nên được bỏ hẳn, không cần chuyển dữ liệu. ZaloPay vẫn nằm sau interface cổng thanh toán (`api/src/payments/gateway.ts`): test dùng bản trong bộ nhớ và callback tự ký, local dùng cổng giả lập, ghi nhận thanh toán vẫn qua một hàm chạy nhiều lần vẫn cho một kết quả.
 
 ## Considered Options
