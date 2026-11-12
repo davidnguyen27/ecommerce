@@ -10,6 +10,8 @@ export const ErrorCode = {
   /** Vượt giới hạn tần suất; response kèm header `Retry-After` (giây). */
   RATE_LIMITED: 'RATE_LIMITED',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+  /** Dịch vụ bên ngoài (cổng thanh toán) lỗi; thử lại sau. */
+  BAD_GATEWAY: 'BAD_GATEWAY',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]

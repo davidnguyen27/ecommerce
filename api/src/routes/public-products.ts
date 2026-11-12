@@ -158,6 +158,7 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
         groundShippingOnly: snapshot.groundShippingOnly,
         attributeSchema: schema.attributes,
         variants: snapshot.variants.map(({ id, sku, attributes, price, compareAtPrice }) => ({
+          id,
           sku,
           attributes,
           price,

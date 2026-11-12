@@ -4,7 +4,7 @@ Reviewer đọc file này khi chạy `/code-review`. Chỉ ghi các judgement ca
 
 ## Dữ liệu công khai
 
-- **Snapshot đã xuất bản:** endpoint cho khách chỉ đọc từ bản đã xuất bản (ví dụ `content_page_version`), không đọc trường nào của bản đang soạn, kể cả trường phụ như loại hay slug. Trường nào khách thấy mà sửa được trong bản nháp thì hoặc chép vào snapshot, hoặc cố định từ lúc tạo. Áp dụng cho trang nội dung và cho sản phẩm (ticket 11). Ngoại lệ duy nhất là còn hàng hay hết: đọc trực tiếp từ tồn của các biến thể có trong snapshot, chỉ trả boolean, không bao giờ trả số lượng (ADR 0006).
+- **Snapshot đã xuất bản:** endpoint cho khách chỉ đọc từ bản đã xuất bản (ví dụ `content_page_version`), không đọc trường nào của bản đang soạn, kể cả trường phụ như loại hay slug. Trường nào khách thấy mà sửa được trong bản nháp thì hoặc chép vào snapshot, hoặc cố định từ lúc tạo. Áp dụng cho trang nội dung và cho sản phẩm (ticket 11). Ngoại lệ duy nhất là còn hàng hay hết: đọc trực tiếp từ tồn trừ số đang giữ (`on_hand - reserved > 0`) của các biến thể có trong snapshot, chỉ trả boolean, không bao giờ trả số lượng (ADR 0006, ADR 0007).
 - Thứ cần giữ làm bằng chứng (audit log, phiên bản đã xuất bản) là append-only, chặn bằng trigger trong migration chứ không chỉ bằng việc API thiếu endpoint sửa.
 
 ## Ghi dữ liệu ở API quản trị
@@ -24,6 +24,7 @@ Reviewer đọc file này khi chạy `/code-review`. Chỉ ghi các judgement ca
 - Test đi qua HTTP (supertest trên Postgres thật). `prisma` trong test chỉ dùng để dựng trạng thái ban đầu, không dùng để kiểm kết quả.
 - Ngoại lệ khi không có đường HTTP để chạm tới hành vi: trigger chặn sửa (thử bằng SQL trực tiếp), job nền (gọi thẳng hàm job), bất biến mà API hiện tại chưa chạm tới (ví dụ chốt tồn âm khi giảm song song). Kết quả vẫn kiểm qua HTTP khi có thể, và comment trong test nói vì sao phải đi đường tắt.
 - Tên test mô tả hành vi bằng tiếng Việt, đọc như một dòng đặc tả.
+- E2E (`e2e/`, Playwright trên stack của `pnpm smoke --keep`): thao tác qua giao diện như người dùng, chọn phần tử theo vai trò hoặc nhãn, chỉ dùng `data-testid` khi không có cách khác. Dữ liệu dựng và kết quả kiểm (tồn, sổ, trạng thái đơn) đi qua API quản trị, không đọc DB.
 
 ## Web
 

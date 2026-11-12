@@ -9,7 +9,7 @@
     "migrate": "prisma migrate deploy",
     "seed:owner": "tsx src/cli/seed-owner.ts",
     "typecheck": "prisma generate && tsc --noEmit",
-    "test": "vitest run"
+    "test": "prisma generate && vitest run"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",

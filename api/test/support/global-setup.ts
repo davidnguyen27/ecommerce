@@ -6,6 +6,7 @@ import type { TestProject } from 'vitest/node'
 import { InMemoryMailer } from '../../src/adapters/mailer.ts'
 import { createPrisma } from '../../src/db.ts'
 import { Jobs } from '../../src/jobs/jobs.ts'
+import { InMemoryPaymentGateway } from '../../src/payments/gateway.ts'
 
 const TEMPLATE_DB = 'app_template'
 
@@ -40,7 +41,14 @@ export default async function setup(project: TestProject) {
 
   // Cài sẵn schema pg-boss vào template, để mỗi test khởi động hàng đợi job không phải tạo lại.
   const prisma = createPrisma(url, { maxConnections: 1 })
-  const jobs = new Jobs({ databaseUrl: url, prisma, mailer: new InMemoryMailer(), logger: pino({ enabled: false }) })
+  const jobs = new Jobs({
+    databaseUrl: url,
+    prisma,
+    mailer: new InMemoryMailer(),
+    logger: pino({ enabled: false }),
+    payments: new InMemoryPaymentGateway(),
+    siteUrl: 'https://shop.test',
+  })
   await jobs.start()
   await jobs.stop()
   await prisma.$disconnect()

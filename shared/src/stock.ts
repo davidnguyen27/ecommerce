@@ -7,7 +7,7 @@ import { PageQuery, pageOf } from './pagination.ts'
 import type { Permission } from './staff.ts'
 
 /** Loại biến động trong sổ xuất nhập. */
-export const StockMovementKind = z.enum(['receipt', 'adjustment', 'opening'])
+export const StockMovementKind = z.enum(['receipt', 'adjustment', 'opening', 'sale'])
 export type StockMovementKind = z.infer<typeof StockMovementKind>
 
 /** Lý do điều chỉnh: kiểm kê, hàng hỏng, mất hàng, khác. */
@@ -77,6 +77,8 @@ export const StockItem = z.object({
   attributes: AttributeValues,
   status: VariantStatus,
   onHand: z.number(),
+  /** Số đang giữ cho đơn (ADR 0007), nằm trong `onHand`. */
+  reserved: z.number(),
   product: z.object({ id: z.string(), name: z.string(), productType: ProductType, status: ProductStatus }),
   brand: z.object({ id: z.string(), name: z.string() }),
 })
@@ -110,6 +112,8 @@ export const StockMovement = z.object({
   note: z.string(),
   /** Phiếu nhập của dòng loại nhập kho; loại khác thì `null`. */
   receiptId: z.string().nullable(),
+  /** Mã đơn của dòng xuất bán; loại khác thì `null`. */
+  orderCode: z.number().nullable(),
   variant: z.object({ id: z.string(), sku: z.string() }),
   product: z.object({ id: z.string(), name: z.string() }),
   actor: AuditActor,
