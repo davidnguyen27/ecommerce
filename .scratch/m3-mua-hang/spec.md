@@ -1,10 +1,10 @@
 # Spec: M3 — Mua hàng có sẵn
 
-> Đổi cổng sang ZaloPay ngày 2026-11-09, ADR 0009 (thay ADR 0008). Cùng ngày người dùng chốt: M3 chỉ thanh toán qua ZaloPay sandbox, chưa có tiền thật.
+> Đổi cổng sang ZaloPay ngày 2026-11-09 (ADR 0009, thay ADR 0008), rồi sang VNPAY ngày 2026-11-11 (ADR 0010, thay ADR 0009) vì ZaloPay sandbox cần tài khoản test do ZaloPay cấp tay. M3 chỉ thanh toán qua VNPAY sandbox, chưa có tiền thật.
 
 **Status:** ready-for-agent
 
-Nguồn: `project-overview.md` (mục 4, 5.1, 5.4, 5.5, 6.1, 10.1), Out of Scope của spec M2 (`.scratch/m2-ton-kho/spec.md`) và phiên làm rõ requirement ngày 2026-10-30 (35 câu, người dùng chấp nhận mọi đề xuất). Đây là mốc thứ ba trong lộ trình M0 → M8 của giai đoạn 1 (mở bán). Quyết định kiến trúc: `docs/adr/0007-giu-hang-khong-tru-ton-hang-roi-ton-khi-ban-giao.md`, `docs/adr/0009-zalopay-thay-payos.md` (thay `docs/adr/0008-payos-chuyen-khoan-vietqr.md`).
+Nguồn: `project-overview.md` (mục 4, 5.1, 5.4, 5.5, 6.1, 10.1), Out of Scope của spec M2 (`.scratch/m2-ton-kho/spec.md`) và phiên làm rõ requirement ngày 2026-10-30 (35 câu, người dùng chấp nhận mọi đề xuất). Đây là mốc thứ ba trong lộ trình M0 → M8 của giai đoạn 1 (mở bán). Quyết định kiến trúc: `docs/adr/0007-giu-hang-khong-tru-ton-hang-roi-ton-khi-ban-giao.md`, `docs/adr/0010-vnpay-thay-zalopay.md` (thay `docs/adr/0009-zalopay-thay-payos.md`, vốn thay `docs/adr/0008-payos-chuyen-khoan-vietqr.md`).
 
 ## Problem Statement
 
@@ -12,11 +12,11 @@ Sau M2, khách xem được sản phẩm, giá và biết biến thể nào còn
 
 ## Solution
 
-Khách thêm biến thể vào giỏ hàng, đặt mua với thông tin nhận hàng, thấy phí giao và tổng tiền, rồi thanh toán ở trang của ZaloPay (ví, thẻ hay tài khoản ngân hàng). Lúc đặt mua, hệ thống kiểm lại giá và tồn, tạo đơn hàng và giữ hàng trong 15 phút; tiền về đúng thì đơn thành đã trả đủ, quá hạn thì đơn tự hủy và nhả hàng. Khách vãng lai mua được không cần đăng nhập và tra cứu đơn qua link trong email; khách có tài khoản thấy lịch sử mua.
+Khách thêm biến thể vào giỏ hàng, đặt mua với thông tin nhận hàng, thấy phí giao và tổng tiền, rồi thanh toán ở trang của VNPAY (thẻ ATM, thẻ quốc tế hay QR). Lúc đặt mua, hệ thống kiểm lại giá và tồn, tạo đơn hàng và giữ hàng trong 15 phút; tiền về đúng thì đơn thành đã trả đủ, quá hạn thì đơn tự hủy và nhả hàng. Khách vãng lai mua được không cần đăng nhập và tra cứu đơn qua link trong email; khách có tài khoản thấy lịch sử mua.
 
 Ở trang quản trị, nhân viên kho thấy đơn cần soạn, in phiếu soạn hàng, ghi bàn giao vận chuyển kèm mã vận đơn (lúc này hàng mới rời tồn, ghi sổ xuất bán), rồi đánh dấu đã giao hoặc giao thất bại. Tiền về không khớp với đơn được đưa vào danh sách cần đối soát để kế toán hoặc chủ doanh nghiệp quyết định, không bao giờ tự xử lý.
 
-Mốc này **chỉ có hàng có sẵn và chỉ thanh toán qua ZaloPay** (sandbox ở M3): chưa có đặt trước (M4), voucher (M5), hủy đơn đã thanh toán hay hoàn tiền (M6).
+Mốc này **chỉ có hàng có sẵn và chỉ thanh toán qua VNPAY** (sandbox ở M3): chưa có đặt trước (M4), voucher (M5), hủy đơn đã thanh toán hay hoàn tiền (M6).
 
 ## User Stories
 
@@ -46,7 +46,7 @@ Mốc này **chỉ có hàng có sẵn và chỉ thanh toán qua ZaloPay** (sand
 
 ### Khách hàng: thanh toán
 
-19. Là khách hàng, sau khi đặt mua tôi muốn được đưa tới trang thanh toán của ZaloPay đúng số tiền, để trả bằng ví ZaloPay, thẻ hay app ngân hàng.
+19. Là khách hàng, sau khi đặt mua tôi muốn được đưa tới trang thanh toán của VNPAY đúng số tiền, để trả bằng thẻ ATM, thẻ quốc tế hay quét QR bằng app ngân hàng.
 20. Là khách hàng, tôi muốn biết hàng của tôi được giữ trong 15 phút và còn bao lâu, để thanh toán kịp.
 21. Là khách hàng, khi quay về website sau khi chuyển khoản, tôi muốn thấy ngay đơn đã được ghi nhận thanh toán hay chưa, kể cả khi thông báo của cổng thanh toán tới chậm.
 22. Là khách hàng, tôi muốn nhận email xác nhận đã nhận thanh toán, kèm tóm tắt đơn và link tra cứu.
@@ -91,14 +91,14 @@ Mốc này **chỉ có hàng có sẵn và chỉ thanh toán qua ZaloPay** (sand
 
 ### Vận hành và phát triển
 
-52. Là lập trình viên chạy local chưa có khóa ZaloPay, tôi muốn đi trọn luồng mua hàng bằng cổng giả lập có nút "giả lập đã thanh toán" và "giả lập hết hạn".
-53. Là người vận hành, tôi muốn API từ chối khởi động ở production nếu thiếu khóa ZaloPay hay đang dùng khóa sandbox, để không bao giờ lỡ nhận đơn thật bằng cổng giả lập hay sandbox.
+52. Là lập trình viên chạy local chưa có khóa VNPAY, tôi muốn đi trọn luồng mua hàng bằng cổng giả lập có nút "giả lập đã thanh toán" và "giả lập hết hạn".
+53. Là người vận hành, tôi muốn API từ chối khởi động ở production nếu thiếu khóa VNPAY hay đang dùng khóa sandbox, để không bao giờ lỡ nhận đơn thật bằng cổng giả lập hay sandbox.
 
 ## Implementation Decisions
 
 ### Mô hình đơn hàng
 
-- Bảng đơn hàng có **mã đơn** là số nguyên tăng dần (sequence riêng, bắt đầu từ 100000), là mã khách thấy (`#100123`); id nội bộ vẫn là uuid. Mã đơn bên cổng (`app_trans_id` của ZaloPay, tiền tố ngày) lưu ở `order.gateway_reference` (ADR 0009).
+- Bảng đơn hàng có **mã đơn** là số nguyên tăng dần (sequence riêng, bắt đầu từ 100000), là mã khách thấy (`#100123`); id nội bộ vẫn là uuid. Mã đơn bên cổng (`vnp_TxnRef` của VNPAY: mã đơn ghép giờ tạo link) lưu ở `order.gateway_reference` (ADR 0010).
 - Ba trạng thái độc lập (GLOSSARY "Trạng thái đơn hàng / thanh toán / giao hàng"):
   - đơn hàng: `pending_payment` → `processing` → `completed`, hoặc `cancelled`;
   - thanh toán: `unpaid` → `paid`;
@@ -119,7 +119,7 @@ Mốc này **chỉ có hàng có sẵn và chỉ thanh toán qua ZaloPay** (sand
 - Điều chỉnh tồn (kiểm kê, hỏng, mất, khác) làm `on_hand` mới nhỏ hơn `reserved` thì 409, kèm danh sách mã đơn đang giữ biến thể đó; phiếu nhập không bị ảnh hưởng.
 - "Còn hàng" ở mọi chỗ (API sản phẩm, thẻ sản phẩm, tìm kiếm, sắp xếp còn hàng trước, JSON-LD `availability`, trang Tồn kho) đổi sang `on_hand - reserved > 0`. Trang Tồn kho thêm cột đang giữ.
 - **Thời hạn giữ hàng**: 15 phút từ lúc tạo đơn, cấu hình trong code. Đơn đã `paid` không còn hạn.
-- Hết hạn: khi tạo đơn, xếp một job pg-boss `expire-order` chạy đúng lúc hết hạn; thêm job định kỳ mỗi phút quét đơn `pending_payment` quá hạn để không sót khi job bị mất. Hàm hết hạn chạy nhiều lần vẫn cho một kết quả: chỉ hủy đơn còn `pending_payment` và đã quá hạn; trước khi hủy hỏi cổng một lần (đã trả thì ghi nhận, không hủy; cổng lỗi thì log rồi vẫn hủy), nhả giữ hàng, gọi cổng hủy link (lỗi chỉ log; ZaloPay không có API hủy nên bước này không làm gì).
+- Hết hạn: khi tạo đơn, xếp một job pg-boss `expire-order` chạy đúng lúc hết hạn; thêm job định kỳ mỗi phút quét đơn `pending_payment` quá hạn để không sót khi job bị mất. Hàm hết hạn chạy nhiều lần vẫn cho một kết quả: chỉ hủy đơn còn `pending_payment` và đã quá hạn; trước khi hủy hỏi cổng một lần (đã trả thì ghi nhận, không hủy; cổng lỗi thì log rồi vẫn hủy), nhả giữ hàng, gọi cổng hủy link (lỗi chỉ log; VNPAY không có API hủy nên bước này không làm gì).
 
 ### Đặt mua
 
@@ -147,9 +147,9 @@ Mốc này **chỉ có hàng có sẵn và chỉ thanh toán qua ZaloPay** (sand
 - Interface cổng thanh toán, inject vào `createApp` như `Storage` và `EmailQueue`:
   - tạo link (mã đơn, số tiền, mô tả, `returnUrl`, thời hạn) → `checkoutUrl` và mã đơn bên cổng (`gatewayReference`, lưu vào đơn);
   - truy vấn theo mã đơn bên cổng → trạng thái (`pending`/`paid`/`failed`), các giao dịch;
-  - hủy link theo mã đơn bên cổng (ZaloPay không có API hủy: không làm gì).
-  Kiểm MAC callback không nằm trong interface: là hàm thuần dùng key2 (HMAC-SHA256 trên chuỗi `data` gốc), để test ký được payload thật.
-- Ba bản: ZaloPay (API v2 qua `fetch`), bản giả trong bộ nhớ cho test, và **cổng giả lập** cho local có trang thanh toán riêng với nút "Giả lập đã thanh toán" và "Giả lập hết hạn". Chọn bản theo biến môi trường: đủ khóa ZaloPay (`ZALOPAY_APP_ID`, `ZALOPAY_KEY1`, `ZALOPAY_KEY2`) thì dùng ZaloPay, `ZALOPAY_ENV` mặc định `sandbox`; thiếu khóa thì dùng cổng giả lập. `NODE_ENV=production` mà thiếu khóa hay dùng sandbox thì API dừng khởi động với thông báo rõ, trừ khi đặt `PAYMENT_SIMULATOR=allow` (smoke, docker compose trên máy).
+  - hủy link theo mã đơn bên cổng (VNPAY không có API hủy: không làm gì).
+  Kiểm chữ ký IPN không nằm trong interface: là hàm thuần dùng `vnp_HashSecret` (HMAC-SHA512 trên các tham số `vnp_*` đã sắp và encode), để test ký được IPN thật.
+- Ba bản: VNPAY (URL thanh toán ký sẵn, truy vấn `querydr` qua `fetch`), bản giả trong bộ nhớ cho test, và **cổng giả lập** cho local có trang thanh toán riêng với nút "Giả lập đã thanh toán" và "Giả lập hết hạn". Chọn bản theo biến môi trường: đủ khóa VNPAY (`VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`) thì dùng VNPAY, `VNPAY_ENV` mặc định `sandbox`; thiếu khóa thì dùng cổng giả lập. `NODE_ENV=production` mà thiếu khóa hay dùng sandbox thì API dừng khởi động với thông báo rõ, trừ khi đặt `PAYMENT_SIMULATOR=allow` (smoke, docker compose trên máy).
 - Hàm **ghi nhận thanh toán** duy nhất, chạy nhiều lần vẫn một kết quả, nhận (mã đơn, số tiền, mã tham chiếu giao dịch, nguồn):
   - khóa đơn `FOR UPDATE`;
   - giao dịch (mã tham chiếu) đã ghi thì bỏ qua;
@@ -157,10 +157,11 @@ Mốc này **chỉ có hàng có sẵn và chỉ thanh toán qua ZaloPay** (sand
   - đơn `pending_payment` và tổng đã nhận bằng đúng tổng phải trả → `paid` + `processing`, bỏ hạn giữ hàng, xếp email "đã nhận thanh toán";
   - mọi trường hợp khác (lệch tiền, đơn đã hủy hoặc hết hạn, tiền về thêm cho đơn đã `paid`) → gắn cờ **cần đối soát** kèm lý do; không tự đổi trạng thái đơn.
 - Hai đường gọi vào hàm đó:
-  - `POST /api/payments/zalopay/callback`: không cần đăng nhập, kiểm MAC; luôn HTTP 200, kết quả trong `return_code`: sai MAC `-1` (không ghi gì), đã ghi nhận hay đã ghi trước đó `1`, lỗi phía hệ thống `0` để ZaloPay gửi lại;
+  - `GET /api/payments/vnpay/ipn`: IPN của VNPAY, không cần đăng nhập, kiểm chữ ký; trả JSON `{RspCode, Message}`: sai chữ ký `97` (không ghi gì), không thấy đơn `01`, đã ghi trước đó `02`, lỗi phía hệ thống `99` để VNPAY gửi lại, còn lại `00` (kể cả giao dịch không thành công và tiền lệch đã vào đối soát);
+  - `POST /api/payments/vnpay/return`: trang kết quả chuyển các tham số `vnp_*` có chữ ký VNPAY gửi kèm khi đưa khách về; xử lý y như IPN, nguồn `return` (người dùng chốt 2026-11-12 vì `querydr` của sandbox lỗi, ADR 0010);
   - trang kết quả (`returnUrl`) gọi `GET /api/orders/:code?token=…` có tham số `refresh=1`: server truy vấn cổng theo mã đơn bên cổng rồi ghi nhận các giao dịch mới, sau đó trả đơn.
-  Job hết hạn cũng truy vấn cổng trước khi hủy (ZaloPay yêu cầu merchant tự truy vấn khi không thấy callback).
-- URL callback gửi kèm mỗi đơn (`ZALOPAY_CALLBACK_URL`, mặc định theo `SITE_URL`); thử trên máy cần tunnel (ticket 16, `ready-for-human`).
+  Job hết hạn cũng truy vấn cổng trước khi hủy, để không hủy đơn đã trả mà IPN chưa tới.
+- URL IPN khai với VNPAY một lần, không gửi theo từng đơn; thử IPN trên máy cần tunnel HTTPS. Không có IPN thì vẫn ghi nhận qua `refresh=1` và job hết hạn (ticket 16).
 
 ### Đối soát
 
@@ -180,7 +181,7 @@ Mốc này **chỉ có hàng có sẵn và chỉ thanh toán qua ZaloPay** (sand
 
 ### API
 
-- Công khai: `POST /api/checkout/quote`, `POST /api/checkout`, `GET /api/orders/:code?token=…` (kèm `refresh=1`), `POST /api/orders/:code/cancel?token=…`, `POST /api/payments/zalopay/callback`, `GET /api/shipping/regions` (danh mục hành chính) — hoặc trả danh mục cùng `quote`, tùy ticket.
+- Công khai: `POST /api/checkout/quote`, `POST /api/checkout`, `GET /api/orders/:code?token=…` (kèm `refresh=1`), `POST /api/orders/:code/cancel?token=…`, `GET /api/payments/vnpay/ipn`, `POST /api/payments/vnpay/return`, `GET /api/shipping/regions` (danh mục hành chính) — hoặc trả danh mục cùng `quote`, tùy ticket.
 - Khách đã đăng nhập: `GET /api/account/orders`, `GET /api/account/orders/:code`, `POST /api/account/orders/:code/cancel`.
 - Quản trị: danh sách đơn (lọc theo ba trạng thái, tìm theo mã đơn/số điện thoại/email, phân trang `PageQuery`), chi tiết đơn kèm lịch sử thao tác, chuyển trạng thái giao hàng (bàn giao kèm `carrier` và `trackingNumber` bắt buộc), hủy đơn chưa thanh toán, danh sách cần đối soát và hai thao tác đối soát, đọc và sửa cấu hình phí giao.
 - Mọi thao tác ghi ở admin đi qua `audited()`; hủy, hết hạn và ghi nhận thanh toán của khách hoặc hệ thống cũng ghi vào lịch sử thao tác của đơn (actor là khách/hệ thống), bằng một bảng sự kiện đơn chỉ ghi thêm.
@@ -207,7 +208,7 @@ Không gửi email khi đơn mới tạo, khi hết hạn hay khi khách tự h�
 
 - Test kiểm hành vi bên ngoài, không kiểm cách cài: gọi HTTP, đọc kết quả qua HTTP. `prisma` chỉ để dựng trạng thái (CODING_STANDARDS "Test").
 - **Seam 1 — HTTP** (supertest trên Postgres thật, Testcontainers), như M0–M2. Prior art: `stock.test.ts`, `stock-receipts.test.ts`, `customer-auth.test.ts`, `rate-limit.test.ts`, `availability.test.ts`.
-- **Seam 2 — cổng thanh toán giả trong bộ nhớ**, inject qua `createTestApp` như `InMemoryStorage`/`InMemoryMailer`: ghi lại link đã tạo, link đã hủy, trả trạng thái truy vấn do test đặt, và có thể giả lập lỗi khi tạo link. Callback được test **tự ký bằng key2 của test** rồi POST qua HTTP, nên phần kiểm MAC là code thật. Adapter ZaloPay test trên HTTP giả (inject `fetch`), MAC tính độc lập theo công thức của tài liệu.
+- **Seam 2 — cổng thanh toán giả trong bộ nhớ**, inject qua `createTestApp` như `InMemoryStorage`/`InMemoryMailer`: ghi lại link đã tạo, link đã hủy, trả trạng thái truy vấn do test đặt, và có thể giả lập lỗi khi tạo link. IPN được test **tự ký bằng `vnp_HashSecret` của test** rồi gọi qua HTTP, nên phần kiểm chữ ký là code thật. Adapter VNPAY test trên HTTP giả (inject `fetch`), chữ ký tính độc lập theo công thức của tài liệu.
 - **Seam 3 — job hết hạn**: test gọi thẳng hàm hết hạn với `now` ở tương lai, rồi kiểm qua HTTP (giống `cleanup.test.ts`; ngoại lệ đã ghi trong CODING_STANDARDS).
 - **Seam 4 — E2E Playwright** trên stack của `pnpm smoke --keep` với cổng giả lập: khách thêm vào giỏ → đặt mua → giả lập đã thanh toán → nhân viên kho chuẩn bị, bàn giao, đã giao; kiểm tồn, đang giữ, sổ xuất nhập và trạng thái ở từng bước. Thay cho mục "smoke admin" ghi ở ticket 15.
 - Hành vi bắt buộc có test:
@@ -215,14 +216,14 @@ Không gửi email khi đơn mới tạo, khi hết hạn hay khi khách tự h�
   - **Phí giao:** mức riêng của tỉnh thắng mức mặc định; đạt ngưỡng thì miễn phí; đơn lưu phí lúc đặt, sửa cấu hình sau không đổi đơn.
   - **Snapshot:** đổi giá, tên hay chính sách sau khi đặt không đổi đơn; đơn lưu đúng phiên bản chính sách.
   - **Giữ hàng đồng thời:** nhiều khách đặt biến thể cuối cùng song song thì đúng một đơn được tạo, các đơn khác 409; `reserved` không vượt `on_hand`.
-  - **Thanh toán:** callback đúng MAC và đúng tiền → đã trả đủ, email gửi đúng một lần; callback sai MAC trả `-1` và không ghi gì; cùng callback gửi hai lần chỉ ghi một giao dịch; `refresh=1` ghi nhận được khi chưa có callback; callback và truy vấn cùng về chỉ ghi một lần; lệch tiền → cần đối soát, đơn vẫn chưa thanh toán; tiền về sau khi hết hạn → cần đối soát, đơn vẫn hủy.
+  - **Thanh toán:** IPN đúng chữ ký và đúng tiền → đã trả đủ, email gửi đúng một lần; IPN sai chữ ký trả `97` và không ghi gì; cùng IPN gửi hai lần chỉ ghi một giao dịch (lần hai `02`); giao dịch không thành công không ghi gì; `refresh=1` ghi nhận được khi chưa có IPN; IPN và truy vấn cùng về chỉ ghi một lần; lệch tiền → cần đối soát, đơn vẫn chưa thanh toán; tiền về sau khi hết hạn → cần đối soát, đơn vẫn hủy.
   - **Hết hạn và hủy:** hết hạn hỏi cổng trước (đã trả thì không hủy, cổng lỗi vẫn hủy), nhả giữ hàng, hủy link, chạy lại không đổi gì, không động tới đơn đã trả; khách hủy bằng token và bằng tài khoản; token sai không xem được đơn; không hủy được đơn đã trả.
   - **Xử lý đơn:** chuẩn bị → bàn giao trừ `on_hand` và `reserved`, ghi dòng sổ `sale` có tham chiếu đơn; bàn giao thiếu mã vận đơn bị từ chối; sai cạnh trạng thái 409; đã giao → đơn hoàn tất; giao thất bại giữ đơn đang xử lý; email bàn giao và giao thất bại.
   - **Kho:** "còn hàng" ở API sản phẩm và tìm kiếm tính theo `on_hand - reserved`; điều chỉnh xuống dưới số đang giữ 409 kèm mã đơn.
   - **Đối soát:** khôi phục đơn khi đủ điều kiện; khôi phục khi thiếu hàng 409; đóng mục cần ghi chú.
   - **Tài khoản:** đơn của khách đăng nhập hiện trong lịch sử; đơn vãng lai gắn vào tài khoản chỉ sau khi xác minh email; địa chỉ lần trước được trả về.
   - **Quyền và audit:** thiếu `order.view`, `order.fulfill`, `payment.reconcile`, `price.edit` thì 403 ở đúng chỗ; mỗi thao tác ghi audit; bảng giao dịch thanh toán và bảng sự kiện đơn không sửa xóa được (trigger, thử bằng SQL).
-  - **Khởi động:** production thiếu khóa ZaloPay, hay dùng khóa sandbox, thì API không khởi động.
+  - **Khởi động:** production thiếu khóa VNPAY, hay dùng khóa sandbox, thì API không khởi động.
 
 ## Out of Scope
 
@@ -231,7 +232,7 @@ Không gửi email khi đơn mới tạo, khi hết hạn hay khi khách tự h�
 - Hủy đơn đã thanh toán, hoàn tiền có theo dõi, đổi trả, bảo hành, nhập lại kho từ giao thất bại hoặc đổi trả, ticket hỗ trợ (M6).
 - Báo cáo bán hàng, doanh thu, tiền đã nhận (M7).
 - COD, chuyển khoản đối soát tay ngoài cổng thanh toán.
-- Thanh toán bằng tiền thật qua ZaloPay (M3 chỉ chạy sandbox); hoàn tiền qua `/v2/refund` (M6).
+- Thanh toán bằng tiền thật qua VNPAY (M3 chỉ chạy sandbox); hoàn tiền qua lệnh `refund` của VNPAY (M6).
 - Kết nối API đơn vị vận chuyển, tính phí theo cân nặng, phụ phí hàng chỉ giao đường bộ.
 - Nhân viên tạo đơn hộ khách; sửa đơn sau khi đặt (đổi size, đổi địa chỉ); tách một đơn thành nhiều kiện hoặc giao từng phần (một đơn = một kiện = một mã vận đơn).
 - Giỏ hàng lưu trên server hoặc đồng bộ giữa các máy; sổ địa chỉ nhiều mục.
@@ -240,12 +241,13 @@ Không gửi email khi đơn mới tạo, khi hết hạn hay khi khách tự h�
 
 ## Further Notes
 
-- ADR 0007 (giữ hàng không trừ tồn, hàng rời tồn khi bàn giao) thay điều kiện "còn hàng" của ADR 0006; ADR 0008 ghi lựa chọn PayOS ban đầu; ADR 0009 thay bằng ZaloPay (PayOS không liên kết được ngân hàng doanh nghiệp đang dùng) và ghi hệ quả: `app_trans_id` có tiền tố ngày nên lưu `order.gateway_reference`, không có API hủy đơn, callback luôn HTTP 200, job hết hạn hỏi cổng trước khi hủy, có sandbox.
+- ADR 0007 (giữ hàng không trừ tồn, hàng rời tồn khi bàn giao) thay điều kiện "còn hàng" của ADR 0006; ADR 0008 ghi lựa chọn PayOS ban đầu; ADR 0009 thay bằng ZaloPay (PayOS không liên kết được ngân hàng doanh nghiệp đang dùng) và ghi hệ quả: `app_trans_id` có tiền tố ngày nên lưu `order.gateway_reference`, không có API hủy đơn, callback luôn HTTP 200, job hết hạn hỏi cổng trước khi hủy, có sandbox. ADR 0010 thay ZaloPay bằng VNPAY (sandbox ZaloPay cần tài khoản test cấp tay) và ghi hệ quả: link là URL ký sẵn, `vnp_TxnRef` ghép giờ tạo, IPN là GET với mã `RspCode`, URL IPN khai một lần.
 - GLOSSARY có mục **Mua hàng** mới (giỏ hàng, đặt mua, đơn hàng, dòng đơn, khách vãng lai, phí giao, ba trạng thái, cần đối soát, hủy đơn, phiếu soạn hàng, bàn giao vận chuyển, mã vận đơn) và **giữ hàng**, **xuất bán** ở mục Kho.
-- Sự kiện thực tế về ZaloPay (2026-11-09, `https://developers.zalopay.vn/v2/general/overview.html` và repo mẫu `zalopay-samples/quickstart-payment-gateway`): xem ticket 17. Những điểm chưa xác minh (định dạng request, trường của response truy vấn, `amount` của callback có tính giảm giá/phí không, callback cho đơn đã hết hạn) kiểm trên sandbox ở ticket 16.
-- Tiền thật qua ZaloPay (người dùng chốt 2026-11-09, việc sau M3, trước khi mở bán): doanh nghiệp đăng ký merchant ở `mc.zalopay.vn`, đặt khóa thật với `ZALOPAY_ENV=production`, xóa `PAYMENT_SIMULATOR`, thử một giao dịch số tiền nhỏ qua cả callback và `refresh=1`.
+- Sự kiện thực tế về VNPAY (2026-11-11, `sandbox.vnpayment.vn/apis/docs/`): xem ticket 18 và `docs/vnpay.md`. Những điểm chưa xác minh (thuật toán ký `querydr`, cách VNPAY nối tham số vào return URL có sẵn query, múi giờ `vnp_PayDate`, `vnp_ExpireDate` có chặn thanh toán không) kiểm trên sandbox ở ticket 16.
+- (Lịch sử) Sự kiện thực tế về ZaloPay (2026-11-09, `https://developers.zalopay.vn/v2/general/overview.html` và repo mẫu `zalopay-samples/quickstart-payment-gateway`): xem ticket 17. Những điểm chưa xác minh (định dạng request, trường của response truy vấn, `amount` của callback có tính giảm giá/phí không, callback cho đơn đã hết hạn) kiểm trên sandbox ở ticket 16.
+- Tiền thật qua VNPAY (việc sau M3, trước khi mở bán): doanh nghiệp ký hợp đồng merchant với VNPAY, xác nhận URL production, biểu phí và việc nhận tiền về TPBank; đặt khóa thật với `VNPAY_ENV=production`, xóa `PAYMENT_SIMULATOR`, khai URL IPN thật, thử một giao dịch số tiền nhỏ qua cả IPN và `refresh=1`.
 - (Lịch sử) Sự kiện thực tế về PayOS (2026-10-30, từ tài liệu chính thức): chỉ chuyển khoản Napas qua VietQR; `orderCode` là số nguyên, trùng thì lỗi; `expiredAt` là Unix timestamp; webhook ký HMAC-SHA256 trên `data`, phải trả 2xx, bước xác nhận URL webhook gọi thử vào URL nên cần URL công khai (tunnel khi chạy local); không công bố việc gửi lại hay gửi trùng webhook; trạng thái gồm `PENDING`, `PAID`, `UNDERPAID`, `CANCELLED`, `EXPIRED`, `PROCESSING`, `FAILED`; không có sandbox, không có API hoàn tiền. Tài liệu không xác nhận chuyện chuyển tiền sau khi link hết hạn, nên thiết kế coi là có thể xảy ra.
-- Việc cần người làm (`ready-for-human`, ticket 16): lấy khóa app sandbox ở `sbmc.zalopay.vn`, điền vào `.env`, chạy tunnel tới callback, thử thanh toán sandbox qua callback và `refresh=1`, kiểm các điểm chưa xác minh.
+- Việc cần người làm (`ready-for-human`, ticket 16): đăng ký sandbox VNPAY ở `pay.vnpaytest.vn/dev-registration`, điền `VNPAY_TMN_CODE` và `VNPAY_HASH_SECRET` vào `.env`; sau đó agent tự trả bằng thẻ test NCB qua Playwright và kiểm các điểm chưa xác minh.
 - Migration theo quy ước hiện có: SQL viết tay, giữ `schema.prisma` đồng bộ, trigger chặn sửa xóa cho bảng chỉ ghi thêm.
 - Cần chủ doanh nghiệp xác nhận:
   - thời hạn giữ hàng 15 phút;
@@ -256,5 +258,5 @@ Không gửi email khi đơn mới tạo, khi hết hạn hay khi khách tự h�
   - tiền về sau hạn giữ hàng nhưng trước khi job hết hạn chạy (tối đa khoảng 1 phút) thì đơn vẫn thành đã trả (ticket 05 đã chọn, hàng vẫn đang giữ);
   - khách trả thiếu rồi chuyển lại đủ tiền: tổng nhận lớn hơn tổng đơn nên đơn bị gắn cờ và hết hạn, không khôi phục được vì spec đòi "tổng đã nhận bằng đúng tổng phải trả"; kế toán xử lý ngoài hệ thống.
 - Chia ticket (2026-11-02): 16 ticket trong `issues/`, chạy bằng `/implement-spec`. Thứ tự bắt đầu: 01 → 02 → 03; ticket 13 (CI) không phụ thuộc gì nên chạy song song được. Người dùng dừng lại tự thử luồng giỏ → đặt mua → giả lập thanh toán sau ticket 05.
-- Đổi cổng (2026-11-09): ticket 17 thay phần cổng thật của ticket 12 bằng ZaloPay; ticket 16 thành thử ZaloPay sandbox.
-- **M3 xong khi:** ticket 01–15 và 17 đã resolved, test và E2E xanh, và ticket 16 (thanh toán ZaloPay sandbox) đã làm xong.
+- Đổi cổng (2026-11-09): ticket 17 thay phần cổng thật của ticket 12 bằng ZaloPay. Đổi lần hai (2026-11-11): ticket 18 thay ZaloPay bằng VNPAY; ticket 16 thành thử VNPAY sandbox.
+- **M3 xong khi:** ticket 01–15, 17 và 18 đã resolved, test và E2E xanh, và ticket 16 (thanh toán VNPAY sandbox) đã làm xong.

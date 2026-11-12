@@ -61,6 +61,7 @@ export const PAYMENT_SOURCE_LABELS: Record<PaymentSource, string> = {
   webhook: 'Webhook cổng',
   query: 'Truy vấn cổng',
   simulator: 'Cổng giả lập',
+  return: 'Trang quay về',
 }
 
 export const RECONCILIATION_RESOLUTION_LABELS: Record<ReconciliationResolution, string> = {

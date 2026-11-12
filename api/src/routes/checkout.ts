@@ -233,6 +233,8 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
               description: `Thanh toán đơn hàng #${order.code}`,
               returnUrl,
               expiresAt: reservedUntil,
+              // `trust proxy` (app.ts) cho IP thật sau Caddy; bỏ tiền tố IPv4-mapped của Node.
+              clientIp: (req.ip ?? '127.0.0.1').replace(/^::ffff:/, ''),
             })
             .catch((err: unknown) => {
               req.log.error({ err, orderCode: order.code }, 'Không tạo được link thanh toán')
