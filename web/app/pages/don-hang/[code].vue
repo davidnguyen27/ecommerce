@@ -34,7 +34,26 @@ async function load() {
     checking.value = false
   }
 }
-onMounted(load)
+// VNPAY đưa khách về kèm kết quả có chữ ký (`vnp_*`) trên URL: chuyển cho API kiểm chữ ký và ghi nhận (ADR 0010),
+// không cần token đơn; rồi bỏ khỏi URL để tải lại hay chia sẻ link không mang theo. Lỗi thì `refresh=1` vẫn thử.
+async function forwardGatewayResult() {
+  const entries = Object.entries(route.query)
+  const signed = Object.fromEntries(
+    entries.filter(([key, value]) => key.startsWith('vnp_') && typeof value === 'string'),
+  )
+  if (!isResult.value || !('vnp_SecureHash' in signed)) return
+  try {
+    await $fetch('/api/payments/vnpay/return', { method: 'POST', body: signed })
+  } catch {
+    // Đã có IPN, truy vấn cổng và job hết hạn làm đường dự phòng.
+  }
+  await navigateTo({ query: Object.fromEntries(entries.filter(([key]) => !key.startsWith('vnp_'))) }, { replace: true })
+}
+
+onMounted(async () => {
+  await forwardGatewayResult()
+  await load()
+})
 
 // Token cho xem và hủy đơn chưa thanh toán; không gửi email khi khách tự hủy.
 const cancelling = ref(false)

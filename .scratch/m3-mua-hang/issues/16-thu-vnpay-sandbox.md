@@ -11,22 +11,51 @@ M3 chỉ xong khi ticket này xong. Thử bằng tiền thật không thuộc M3
 
 **Blocked by:** 18 (Đổi cổng thanh toán sang VNPAY)
 
-**Status:** ready-for-human
+**Status:** resolved
 
 Hướng dẫn: `docs/vnpay.md`.
 
-- [ ] Người dùng đăng ký sandbox ở `https://pay.vnpaytest.vn/dev-registration`, rồi điền `VNPAY_TMN_CODE` và `VNPAY_HASH_SECRET` vào `.env` local (không commit), giữ `VNPAY_ENV=sandbox` và `PAYMENT_SIMULATOR=allow`
-- [ ] `docker compose up`; log API ghi `payments: VnpayPaymentGateway`
-- [ ] Đặt một đơn số tiền nhỏ, trả trên trang VNPAY bằng thẻ NCB test (OTP `123456`), quay về `/don-hang/<mã>?ket-qua=1`. Kết quả mong đợi: đơn thành đã trả đủ, có email, giao dịch nguồn `query`. Agent làm được bằng Playwright khi đã có khóa
-- [ ] Đặt một đơn, bấm hủy ở trang VNPAY. Kết quả mong đợi: đơn vẫn chờ thanh toán, rồi tự hủy khi hết hạn giữ hàng
-- [ ] Kiểm các điểm chưa xác minh (ticket 18), sửa `api/src/payments/vnpay.ts` nếu khác:
-  - URL thanh toán ký đúng (VNPAY không báo "sai chữ ký");
-  - chữ ký `querydr` là HMAC-SHA512 (VNPAY không trả `97`);
-  - VNPAY nối `vnp_*` vào `vnp_ReturnUrl` có sẵn `?ket-qua=1` thế nào, trang kết quả còn đọc được `ket-qua` không;
-  - `vnp_PayDate` theo giờ Việt Nam;
-  - `vnp_ExpireDate` có chặn thanh toán sau hạn không.
-- [ ] (Không bắt buộc) Tunnel HTTPS, khai URL IPN với VNPAY, trả một đơn. Kết quả mong đợi: giao dịch nguồn `webhook`
-- [ ] Ghi kết quả và các bất ngờ (nếu có) vào ticket này
+- [x] Người dùng đăng ký sandbox ở `https://pay.vnpaytest.vn/dev-registration`, rồi điền `VNPAY_TMN_CODE` và `VNPAY_HASH_SECRET` vào `.env` local (không commit), giữ `VNPAY_ENV=sandbox` và `PAYMENT_SIMULATOR=allow`
+- [x] `docker compose up`; log API ghi `payments: VnpayPaymentGateway`
+- [x] Đặt một đơn, trả trên trang VNPAY bằng thẻ NCB test (OTP `123456`), quay về `/don-hang/<mã>?ket-qua=1`. Kết quả: đơn thành đã trả đủ. Giao dịch có nguồn `return` thay vì `query`, vì `querydr` của sandbox lỗi (xem dưới)
+- [x] Đặt một đơn, bấm hủy ở trang VNPAY. Kết quả: VNPAY trả `24`/`02`, hệ thống không ghi gì, đơn vẫn chờ thanh toán (tự hủy khi hết hạn giữ hàng)
+- [x] Kiểm các điểm chưa xác minh (ticket 18), sửa code nếu khác. Chi tiết ở mục kết quả:
+  - chữ ký URL thanh toán đúng;
+  - `vnp_*` được nối bằng `&`;
+  - `vnp_PayDate` là giờ Việt Nam;
+  - trang VNPAY đếm ngược theo `vnp_ExpireDate`;
+  - **`querydr` chưa xác minh được**.
+- [ ] (Không bắt buộc) Tunnel HTTPS, khai URL IPN với VNPAY, trả một đơn. Kết quả mong đợi: giao dịch nguồn `webhook`. Chưa làm
+- [x] Ghi kết quả và các bất ngờ vào ticket này
+
+## Kết quả thử VNPAY sandbox (2026-11-12, agent, Playwright trên Edge)
+
+**Chữ ký**
+- VNPAY nhận URL thanh toán do dự án ký, không báo sai chữ ký.
+- Trang thẻ NCB hiện đúng số tiền (3.680.000 VND), mã `vnp_TxnRef` và đếm ngược 15 phút.
+- Chữ ký VNPAY gửi về trang quay về được `isValidVnpaySignature` kiểm **đúng**; sửa `vnp_Amount` thì không qua.
+
+**Trang quay về**
+- URL có dạng `/don-hang/<mã>?ket-qua=1&vnp_Amount=…&vnp_ResponseCode=00&…&vnp_SecureHash=…`.
+- VNPAY nối tham số bằng `&`, nên `ket-qua=1` còn nguyên.
+
+**`vnp_PayDate`** là giờ Việt Nam: đơn tạo link lúc `20261112105012`, trả lúc `20261112105057`.
+
+**Bất ngờ 1, lỗi phía VNPAY:** `querydr` sandbox trả `{"vnp_ResponseCode":"99","vnp_Message":"Unexpected error"}` cho mọi request.
+- Đã thử: chữ ký SHA512 lẫn SHA256, `vnp_RequestId` dài và ngắn, có và không có `vnp_TransactionNo`, nhiều IP, mã giao dịch có thật và không có thật, cả `vnp_TmnCode` sai.
+- Chỉ khác khi thiếu `vnp_TransactionDate`: trả `99 "Parameter required"`.
+- Kết luận: lỗi nằm phía VNPAY sandbox. Thuật toán ký `querydr` vẫn chưa xác minh.
+
+**Cách xử lý (người dùng chốt 2026-11-12):** ghi nhận từ trang quay về (ADR 0010).
+- Trang kết quả chuyển các tham số `vnp_*` có chữ ký cho `POST /api/payments/vnpay/return`.
+- Route dùng chung xử lý với IPN, nguồn `return` (migration `20261112000100_payment_source_return`).
+
+**Kết quả các đơn:**
+- **#100003:** trả trong một trình duyệt khác với lúc đặt (không có token). Ghi nhận bằng cách gửi lại tham số có chữ ký đã lưu: thành đã trả.
+- **#100004:** trọn luồng trong một trình duyệt, đặt mua → thẻ NCB → quay về "Đang xử lý / Đã thanh toán". Giao dịch nguồn `return`, 3.680.000, mã `15734235`.
+- **#100006:** khách hủy ở trang VNPAY, VNPAY trả `24`/`02`, không ghi gì.
+
+**Việc còn mở, chuyển sang trước khi mở bán:** hỏi VNPAY về lỗi `querydr` và thuật toán ký của lệnh này; thử IPN qua tunnel.
 
 ## Lịch sử: thử ZaloPay sandbox (trước khi đổi sang VNPAY)
 

@@ -46,6 +46,7 @@ Sự kiện về VNPAY (đọc 2026-11-11):
 
 - [x] `VnpayPaymentGateway`: URL thanh toán ký sẵn; `getPayment` qua `querydr` (kiểm chữ ký response); `cancelLink` không làm gì
 - [x] `GET /api/payments/vnpay/ipn` ánh xạ kết quả `recordPayment` sang `RspCode` (ADR 0010)
+- [x] (Bổ sung 2026-11-12, sau khi thử sandbox) `POST /api/payments/vnpay/return`: trang kết quả chuyển tham số `vnp_*` có chữ ký cho API, xử lý chung với IPN, nguồn `return`; vì `querydr` của sandbox trả `99` cho mọi request (ticket 16)
 - [x] `PaymentLinkRequest` thêm `clientIp`; đặt mua truyền IP khách
 - [x] Biến môi trường `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_ENV` (mặc định `sandbox`), `VNPAY_SERVER_IP`; production với sandbox hay thiếu khóa bị chặn trừ khi `PAYMENT_SIMULATOR=allow`
 - [x] Bỏ code, test và tài liệu ZaloPay; ADR 0010, `docs/vnpay.md`, spec M3, GLOSSARY, ticket 16 cập nhật theo VNPAY
