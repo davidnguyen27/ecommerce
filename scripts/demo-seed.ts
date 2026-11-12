@@ -354,10 +354,26 @@ const PAGES = [
   },
 ]
 
+/** Phí giao mặc định của demo: chưa có thì khách không đặt mua được ("Cửa hàng chưa sẵn sàng nhận đơn"). */
+async function ensureShippingFee(token: string) {
+  const current = await api('/api/admin/shipping-fees', { token })
+  if (current.defaultFee !== null) return
+  await api('/api/admin/shipping-fees', {
+    method: 'PUT',
+    token,
+    body: { defaultFee: 30_000, freeShippingThreshold: null, provinceFees: [] },
+  })
+  console.log('Đã đặt phí giao mặc định 30.000đ')
+}
+
 async function main() {
   const existing = await fetch(`${BASE}/api/brands/nike`)
   if (existing.ok) {
-    console.log('Đã có dữ liệu demo (thương hiệu nike), bỏ qua.')
+    console.log('Đã có dữ liệu demo (thương hiệu nike), bỏ qua phần danh mục.')
+    // Dữ liệu demo cũ (trước M3) chưa có phí giao: bổ sung để đặt mua được.
+    const token = String((await api('/api/admin/auth/login', { method: 'POST', body: OWNER })).accessToken)
+    await ensureShippingFee(token)
+    console.log(`Đăng nhập quản trị: ${OWNER.email} / ${OWNER.password}`)
     return
   }
 
@@ -404,6 +420,7 @@ async function main() {
       moitNoticeUrl: '',
     },
   })
+  await ensureShippingFee(token)
 
   const brandIds: Record<string, string> = {}
   for (const brand of BRANDS) {

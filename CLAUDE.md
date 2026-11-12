@@ -11,3 +11,8 @@ Default five-role vocabulary (needs-triage, needs-info, ready-for-agent, ready-f
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Working with the app
+
+- Choosing an external service (payment gateway, carrier, email/SMS provider): read `docs/agents/third-party.md` before writing the ADR.
+- Driving the real app locally (orders, admin login, payments, Docker): see `docs/agents/local-walkthrough.md`.
