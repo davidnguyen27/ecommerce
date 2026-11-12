@@ -1,0 +1,19 @@
+# Web bản demo trên Netlify (ADR 0011, docs/deploy.md). Trong dashboard Netlify: Package directory = `web`, Base
+# directory để trống (gốc repo), để pnpm thấy cả workspace. Đường dẫn ở đây tính từ gốc repo.
+# Biến môi trường đặt trong dashboard: NUXT_API_BASE (URL API trên Render, cho SSR), NUXT_PUBLIC_SITE_URL (URL site).
+
+[build]
+  command = "pnpm --filter @ecommerce/web... build"
+  publish = "web/dist"
+
+[build.environment]
+  # Phiên bản Node lấy từ .nvmrc, pnpm từ `packageManager` của package.json gốc. Tài liệu Nuxt trên Netlify: pnpm cần hoist.
+  PNPM_FLAGS = "--shamefully-hoist"
+
+# Trình duyệt gọi /api/... cùng origin như sau Caddy: cookie refresh (host-only, SameSite=Strict) vẫn chạy, không cần
+# CORS. Netlify chờ API tối đa 26 giây. Đổi host nếu Render cấp URL khác tên service trong render.yaml.
+[[redirects]]
+  from = "/api/*"
+  to = "https://atelier-demo-api.onrender.com/api/:splat"
+  status = 200
+  force = true
