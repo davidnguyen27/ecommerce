@@ -20,4 +20,5 @@ Read this before driving the real app on this machine: placing an order, logging
 ## Docker on this Windows machine
 
 - Docker Compose v5.6 build fails with `additional privileges requested`; run `BUILDX_BAKE_ENTITLEMENTS_FS=0 docker compose up -d --build`.
+- vitest stopping at `Startup Error ... code.charCodeAt is not a function` means Docker Desktop is not running (Testcontainers cannot start); start it and rerun.
 - A test failing with `Connection terminated due to connection timeout`, or a lone timeout right after Docker starts, is Docker Desktop: rerun that file alone. CI on Linux is the reference.

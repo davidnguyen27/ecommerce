@@ -1,0 +1,51 @@
+# Blueprint của Render cho API bản demo (ADR 0011, docs/deploy.md). Web chạy trên Netlify (web/netlify.toml), DB trên
+# Neon, ảnh trên Cloudflare R2. Biến `sync: false` điền trong dashboard Render khi tạo Blueprint; không ghi khóa ở đây.
+services:
+  - type: web
+    name: atelier-demo-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: api/Dockerfile
+    dockerContext: .
+    # Gói Free không có pre-deploy command: chạy migration rồi mới khởi động API (WORKDIR của image là /repo/api).
+    dockerCommand: sh -c "pnpm migrate && node dist/server.js"
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      # Neon: connection string direct (không có -pooler), vì pg-boss dùng LISTEN/NOTIFY.
+      - key: DATABASE_URL
+        sync: false
+      # URL web trên Netlify, ví dụ https://<site>.netlify.app: link trong email, trang VNPAY đưa khách về.
+      - key: SITE_URL
+        sync: false
+      # Khách → Netlify → load balancer của Render → API: hai tầng proxy (chốt khi thử thật, ADR 0011).
+      - key: TRUST_PROXY
+        value: '2'
+      - key: MAIL_PROVIDER
+        value: log
+      - key: STORAGE_PROVIDER
+        value: r2
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_PUBLIC_BUCKET
+        sync: false
+      - key: R2_PRIVATE_BUCKET
+        sync: false
+      - key: MEDIA_PUBLIC_URL
+        sync: false
+      - key: VNPAY_TMN_CODE
+        sync: false
+      - key: VNPAY_HASH_SECRET
+        sync: false
+      - key: VNPAY_ENV
+        value: sandbox
+      # Image chạy NODE_ENV=production; khóa VNPAY sandbox ở production cần dòng này (bản demo, không nhận tiền thật).
+      - key: PAYMENT_SIMULATOR
+        value: allow

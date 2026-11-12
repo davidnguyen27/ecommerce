@@ -25,7 +25,7 @@ Sau mốc này, sản phẩm có:
   - Phân quyền theo permission.
   - Mọi thao tác nhạy cảm đều ghi audit log.
 - **Hạ tầng**:
-  - Ba môi trường local, staging, production chạy Docker Compose trên VPS, phía sau Caddy.
+  - Ba môi trường local, staging, production chạy Docker Compose trên VPS, phía sau Caddy. (2026-11-12: bản demo tạm chạy trên Netlify + Render + Neon + R2, xem `docs/adr/0011-trien-khai-demo-netlify-render-neon.md`; VPS vẫn là đích khi bán thật.)
   - Ảnh và chứng từ lưu trên object storage tương thích S3 (R2).
   - Mỗi đêm sao lưu Postgres, mã hóa và đẩy lên R2.
   - Giám sát lỗi bằng Sentry, kiểm tra sức khỏe hệ thống qua `/healthz`.

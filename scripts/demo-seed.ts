@@ -6,8 +6,21 @@ import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { PRIVACY_POLICY_SLUG } from '../shared/src/content.ts'
 
-const BASE = `http://localhost:${process.env.HTTP_PORT ?? '80'}`
-const OWNER = { email: 'chu-shop@example.com', password: 'mat-khau-demo-local', name: 'Chủ shop' }
+// Bản deploy (ADR 0011): DEMO_SEED_BASE_URL=https://<site>.netlify.app, kèm OWNER_EMAIL/OWNER_PASSWORD của chủ shop đã
+// tạo trước bằng `seed:owner` trên DB đó.
+const BASE = process.env.DEMO_SEED_BASE_URL ?? `http://localhost:${process.env.HTTP_PORT ?? '80'}`
+const LOCAL = new URL(BASE).hostname === 'localhost'
+/** Bản deploy công khai không dùng mật khẩu demo nằm trong repo: tài khoản lấy từ biến môi trường. */
+function remoteOwner() {
+  const { OWNER_EMAIL: email, OWNER_PASSWORD: password } = process.env
+  if (!email || !password) throw new Error('Seed vào bản deploy cần OWNER_EMAIL và OWNER_PASSWORD của chủ shop')
+  return { email, password, name: 'Chủ shop' }
+}
+const OWNER = LOCAL
+  ? { email: 'chu-shop@example.com', password: 'mat-khau-demo-local', name: 'Chủ shop' }
+  : remoteOwner()
+/** Chỉ in mật khẩu demo của máy local, không in mật khẩu bản deploy. */
+const loginHint = () => `Đăng nhập quản trị: ${OWNER.email}${LOCAL ? ` / ${OWNER.password}` : ''}`
 
 // sharp là dependency của api, không có ở gốc repo.
 const sharp = createRequire(new URL('../api/package.json', import.meta.url))('sharp') as typeof import('sharp')
@@ -373,28 +386,31 @@ async function main() {
     // Dữ liệu demo cũ (trước M3) chưa có phí giao: bổ sung để đặt mua được.
     const token = String((await api('/api/admin/auth/login', { method: 'POST', body: OWNER })).accessToken)
     await ensureShippingFee(token)
-    console.log(`Đăng nhập quản trị: ${OWNER.email} / ${OWNER.password}`)
+    console.log(loginHint())
     return
   }
 
-  execFileSync(
-    'docker',
-    [
-      'compose',
-      'exec',
-      '-T',
-      '-e',
-      `OWNER_EMAIL=${OWNER.email}`,
-      '-e',
-      `OWNER_PASSWORD=${OWNER.password}`,
-      '-e',
-      `OWNER_NAME=${OWNER.name}`,
-      'api',
-      'pnpm',
-      'seed:owner',
-    ],
-    { stdio: 'inherit' },
-  )
+  // Local: tạo chủ shop demo trong container. Bản deploy: chủ shop đã tạo trước bằng seed:owner trên DB đó.
+  if (LOCAL) {
+    execFileSync(
+      'docker',
+      [
+        'compose',
+        'exec',
+        '-T',
+        '-e',
+        `OWNER_EMAIL=${OWNER.email}`,
+        '-e',
+        `OWNER_PASSWORD=${OWNER.password}`,
+        '-e',
+        `OWNER_NAME=${OWNER.name}`,
+        'api',
+        'pnpm',
+        'seed:owner',
+      ],
+      { stdio: 'inherit' },
+    )
+  }
   const token = String((await api('/api/admin/auth/login', { method: 'POST', body: OWNER })).accessToken)
 
   const pageIds: Record<string, string> = {}
@@ -509,7 +525,7 @@ async function main() {
   }
 
   console.log(`\nXong. Website: ${BASE}  Quản trị: ${BASE}/admin/login`)
-  console.log(`Đăng nhập quản trị: ${OWNER.email} / ${OWNER.password}`)
+  console.log(loginHint())
 }
 
 await main()
