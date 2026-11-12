@@ -7,9 +7,10 @@ datasource db {
   provider = "postgresql"
 }
 
-/// Miền xác thực, cũng là audience của JWT. Ticket 05 thêm `customer`.
+/// Miền xác thực, cũng là audience của JWT (ADR 0001).
 enum AuthAudience {
   staff
+  customer
 
   @@map("auth_audience")
 }
@@ -41,8 +42,11 @@ model Staff {
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
 
-  auditLogs         AuditLog[]
-  publishedVersions ContentPageVersion[]
+  auditLogs                AuditLog[]
+  publishedVersions        ContentPageVersion[]
+  publishedProductVersions ProductVersion[]
+  stockMovements           StockMovement[]
+  stockReceipts            StockReceipt[]
 
   @@map("staff")
 }
@@ -70,6 +74,15 @@ model AuditLog {
   @@map("audit_log")
 }
 
+/// Bộ đếm giới hạn tần suất theo cửa sổ cố định. `key` là SHA-256 của tên giới hạn kèm IP hoặc email.
+model RateLimitBucket {
+  key         String   @id
+  windowStart DateTime @map("window_start")
+  hits        Int
+
+  @@map("rate_limit_bucket")
+}
+
 /// Refresh token của mọi miền. Chỉ lưu hash; các token sinh ra từ một lần đăng nhập chung một family.
 model RefreshToken {
   id        String       @id @default(uuid()) @db.Uuid
@@ -87,6 +100,61 @@ model RefreshToken {
   @@index([audience, subjectId])
   @@index([familyId])
   @@map("refresh_token")
+}
+
+/// Khách tự đăng ký; tách hẳn khỏi `staff` (ADR 0001), nên có thể trùng email với một nhân viên.
+model Customer {
+  id              String    @id @default(uuid()) @db.Uuid
+  /// Luôn lưu dạng chữ thường.
+  email           String    @unique
+  /// argon2id, dạng chuỗi PHC.
+  passwordHash    String    @map("password_hash")
+  /// Chưa xác minh không chặn việc dùng tài khoản.
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  consents CustomerConsent[]
+  tokens   CustomerToken[]
+
+  @@map("customer")
+}
+
+/// Append-only: khách đồng ý với đúng phiên bản chính sách bảo mật nào, vào lúc nào.
+model CustomerConsent {
+  id              String             @id @default(uuid()) @db.Uuid
+  customerId      String             @map("customer_id") @db.Uuid
+  customer        Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  policyVersionId String             @map("policy_version_id") @db.Uuid
+  policyVersion   ContentPageVersion @relation(fields: [policyVersionId], references: [id], onDelete: Restrict)
+  consentedAt     DateTime           @default(now()) @map("consented_at")
+
+  @@index([customerId])
+  @@map("customer_consent")
+}
+
+/// Mục đích của token một lần gửi qua email. Ticket 06 thêm đặt lại mật khẩu.
+enum CustomerTokenPurpose {
+  email_verification
+  password_reset
+
+  @@map("customer_token_purpose")
+}
+
+/// Token một lần, có hạn, gửi qua email. Chỉ lưu hash.
+model CustomerToken {
+  id         String               @id @default(uuid()) @db.Uuid
+  customerId String               @map("customer_id") @db.Uuid
+  customer   Customer             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  purpose    CustomerTokenPurpose
+  /// SHA-256 của token, hex.
+  tokenHash  String               @unique @map("token_hash")
+  expiresAt  DateTime             @map("expires_at")
+  usedAt     DateTime?            @map("used_at")
+  createdAt  DateTime             @default(now()) @map("created_at")
+
+  @@index([customerId, purpose])
+  @@map("customer_token")
 }
 
 enum ContentPageKind {
@@ -110,6 +178,7 @@ model ContentPage {
   updatedAt DateTime        @updatedAt @map("updated_at")
 
   versions ContentPageVersion[]
+  products ProductPolicyPage[]
 
   @@map("content_page")
 }
@@ -126,6 +195,8 @@ model ContentPageVersion {
   publishedAt   DateTime    @default(now()) @map("published_at")
   publishedById String      @map("published_by_id") @db.Uuid
   publishedBy   Staff       @relation(fields: [publishedById], references: [id], onDelete: Restrict)
+
+  customerConsents CustomerConsent[]
 
   @@unique([pageId, version])
   @@map("content_page_version")
@@ -149,10 +220,25 @@ model Brand {
   name        String
   description String   @default("")
   hidden      Boolean  @default(false)
+  /// Logo trên bucket public: `StoredImage` (api/src/media/images.ts), `null` khi chưa có.
+  logo        Json?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  products        Product[]
+  productVersions ProductVersion[]
+
   @@map("brand")
+}
+
+/// Schema thuộc tính của một nhóm hàng; mọi danh mục trong nhóm hàng dùng chung.
+model AttributeSchema {
+  productType ProductType @id @map("product_type")
+  /// Mảng `AttributeDefinition` (@ecommerce/shared), xếp theo thứ tự hiển thị.
+  attributes  Json
+  updatedAt   DateTime    @default(now()) @updatedAt @map("updated_at")
+
+  @@map("attribute_schema")
 }
 
 /// Nút trong cây danh mục, nằm trọn trong một nhóm hàng (ADR 0004). `parentId` null là con trực tiếp của nhóm hàng.
@@ -170,8 +256,322 @@ model Category {
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
+  products        Product[]
+  productVersions ProductVersion[]
+
   @@index([parentId])
   @@map("category")
+}
+
+/// Vòng đời sản phẩm; chỉ `published` hiện với khách, và khách chỉ đọc phiên bản đang xuất bản.
+enum ProductStatus {
+  draft
+  published
+  archived
+
+  @@map("product_status")
+}
+
+enum VariantStatus {
+  active
+  discontinued
+
+  @@map("variant_status")
+}
+
+/// Sản phẩm: một mẫu hàng của một thương hiệu. Không có trường bảo hành (ADR 0005).
+model Product {
+  id                 String          @id @default(uuid()) @db.Uuid
+  /// Lấy từ danh mục lúc tạo và cố định; đổi danh mục chỉ trong cùng nhóm hàng.
+  productType        ProductType     @map("product_type")
+  brandId            String          @map("brand_id") @db.Uuid
+  brand              Brand           @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  categoryId         String          @map("category_id") @db.Uuid
+  category           Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  slug               String          @unique
+  name               String
+  /// Mã mẫu do hãng đặt; chuỗi rỗng khi chưa có.
+  modelCode          String          @default("") @map("model_code")
+  description        String          @default("")
+  /// Hướng dẫn sử dụng và bảo quản.
+  usageCare          String          @default("") @map("usage_care")
+  /// `SizeChart` (@ecommerce/shared), `null` khi không có.
+  sizeChart          Json?           @map("size_chart")
+  /// Thông tin nguồn gốc công bố, không kèm bằng chứng.
+  originStatement    String          @default("") @map("origin_statement")
+  /// Thuộc tính cấp sản phẩm, đã kiểm theo schema của nhóm hàng.
+  attributes         Json            @default("{}")
+  groundShippingOnly Boolean         @default(false) @map("ground_shipping_only")
+  status             ProductStatus   @default(draft)
+  /// Phiên bản khách đang thấy; check constraint: có đúng khi `status = published`.
+  liveVersionId      String?         @unique @map("live_version_id") @db.Uuid
+  liveVersion        ProductVersion? @relation("LiveVersion", fields: [liveVersionId], references: [id], onDelete: Restrict)
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  variants    ProductVariant[]
+  images      ProductImage[]
+  versions    ProductVersion[]    @relation("ProductVersions")
+  policyPages ProductPolicyPage[]
+  documents   ProductDocument[]
+  commitments ProductCommitment[]
+  search      ProductSearch?
+
+  @@index([productType])
+  @@index([brandId])
+  @@index([categoryId])
+  @@map("product")
+}
+
+/// Biến thể khách mua. Migration có unique index `(product_id, attributes)` mà Prisma không khai báo được trên Json.
+model ProductVariant {
+  id             String        @id @default(uuid()) @db.Uuid
+  productId      String        @map("product_id") @db.Uuid
+  product        Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// Duy nhất toàn hệ thống, lưu chữ hoa.
+  sku            String        @unique
+  /// Thuộc tính cấp biến thể, đã kiểm theo schema của nhóm hàng.
+  attributes     Json          @default("{}")
+  /// VND đã gồm VAT; `null` khi chưa đặt giá. Check constraint: `> 0`, giá hãng `>=` giá bán.
+  price          BigInt?
+  compareAtPrice BigInt?       @map("compare_at_price")
+  status         VariantStatus @default(active)
+  sortOrder      Int           @default(0) @map("sort_order")
+  /// Tồn trong kho; check constraint `>= 0`. Chỉ module kho ghi (api/src/stock/stock.ts), kèm một dòng sổ.
+  onHand         Int           @default(0) @map("on_hand")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  images         ProductImageVariant[]
+  stockMovements StockMovement[]
+
+  @@map("product_variant")
+}
+
+enum StockMovementKind {
+  receipt
+  adjustment
+  opening
+
+  @@map("stock_movement_kind")
+}
+
+enum StockAdjustmentReason {
+  stocktake
+  damaged
+  lost
+  other
+
+  @@map("stock_adjustment_reason")
+}
+
+/// Sổ xuất nhập. Append-only: trigger trong migration chặn UPDATE, DELETE và TRUNCATE.
+model StockMovement {
+  id          String                 @id @default(uuid()) @db.Uuid
+  /// Thứ tự ghi, để sắp xếp ổn định khi nhiều dòng trùng thời điểm.
+  seq         BigInt                 @unique @default(autoincrement())
+  variantId   String                 @map("variant_id") @db.Uuid
+  variant     ProductVariant         @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  kind        StockMovementKind
+  /// Có dấu: dương là tăng, âm là giảm; khác 0.
+  quantity    Int
+  onHandAfter Int                    @map("on_hand_after")
+  /// Chỉ có ở điều chỉnh (check constraint).
+  reason      StockAdjustmentReason?
+  note        String                 @default("")
+  /// Chỉ có, và luôn có, ở dòng nhập kho (check constraint).
+  receiptId   String?                @map("receipt_id") @db.Uuid
+  receipt     StockReceipt?          @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+  actorId     String                 @map("actor_id") @db.Uuid
+  actor       Staff                  @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt   DateTime               @default(now()) @map("created_at")
+
+  @@index([variantId, seq])
+  @@index([createdAt])
+  @@index([receiptId])
+  @@map("stock_movement")
+}
+
+/// Phiếu nhập kho; các dòng là `StockMovement` loại `receipt`. Append-only: trigger chặn UPDATE, DELETE, TRUNCATE.
+model StockReceipt {
+  id           String          @id @default(uuid()) @db.Uuid
+  seq          BigInt          @unique @default(autoincrement())
+  /// Chữ tự do; M2 chưa có danh bạ nhà cung cấp.
+  supplierName String          @map("supplier_name")
+  receivedOn   DateTime        @map("received_on") @db.Date
+  note         String          @default("")
+  createdById  String          @map("created_by_id") @db.Uuid
+  createdBy    Staff           @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  movements    StockMovement[]
+
+  @@map("stock_receipt")
+}
+
+/// Nội dung sản phẩm tại một lần xuất bản; khách chỉ đọc từ đây. Không sửa, không xóa (trigger trong migration).
+/// Các cột ngoài `snapshot` là bản chép từ snapshot để lọc và sắp xếp.
+model ProductVersion {
+  id                 String      @id @default(uuid()) @db.Uuid
+  productId          String      @map("product_id") @db.Uuid
+  product            Product     @relation("ProductVersions", fields: [productId], references: [id], onDelete: Restrict)
+  /// Đánh số từ 1 trong từng sản phẩm.
+  version            Int
+  slug               String
+  productType        ProductType @map("product_type")
+  brandId            String      @map("brand_id") @db.Uuid
+  brand              Brand       @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  categoryId         String      @map("category_id") @db.Uuid
+  category           Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  /// Giá thấp nhất trong các biến thể đang bán, và giá hãng của chính biến thể đó.
+  fromPrice          BigInt      @map("from_price")
+  fromCompareAtPrice BigInt?     @map("from_compare_at_price")
+  /// `ProductSnapshot` (api/src/catalog/publication.ts).
+  snapshot           Json
+  publishedAt        DateTime    @default(now()) @map("published_at")
+  publishedById      String      @map("published_by_id") @db.Uuid
+  publishedBy        Staff       @relation(fields: [publishedById], references: [id], onDelete: Restrict)
+
+  liveOf   Product?       @relation("LiveVersion")
+  searchOf ProductSearch?
+
+  @@unique([productId, version])
+  @@index([slug])
+  @@index([brandId])
+  @@index([categoryId])
+  @@map("product_version")
+}
+
+/// Dữ liệu tìm kiếm của sản phẩm đang hiện với khách, dựng từ phiên bản đang xuất bản và tên thương hiệu.
+/// Chỉ trigger trong migration ghi bảng này; truy vấn tìm kiếm viết raw SQL (api/src/catalog/search.ts).
+model ProductSearch {
+  productId String                  @id @map("product_id") @db.Uuid
+  product   Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  versionId String                  @unique @map("version_id") @db.Uuid
+  version   ProductVersion          @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  /// Tên sản phẩm, tên thương hiệu, mã mẫu đã bỏ dấu, chữ thường.
+  document  String
+  tsv       Unsupported("tsvector")
+  /// SKU đang bán, cách nhau và bao quanh bởi dấu cách.
+  skus      String
+
+  @@index([tsv], type: Gin)
+  @@index([document(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([skus(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@map("product_search")
+}
+
+/// Trang chính sách áp dụng cho sản phẩm; liên kết tới trang, không tới một phiên bản (GLOSSARY "Trang chính sách").
+model ProductPolicyPage {
+  productId String      @map("product_id") @db.Uuid
+  product   Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  pageId    String      @map("page_id") @db.Uuid
+  page      ContentPage @relation(fields: [pageId], references: [id], onDelete: Restrict)
+
+  @@id([productId, pageId])
+  @@index([pageId])
+  @@map("product_policy_page")
+}
+
+/// Ảnh sản phẩm trên bucket public: bản gốc `<storageKey>/original.<đuôi>` và các cỡ webp `<storageKey>/w<cỡ>.webp`.
+model ProductImage {
+  id          String                @id @default(uuid()) @db.Uuid
+  productId   String                @map("product_id") @db.Uuid
+  product     Product               @relation(fields: [productId], references: [id], onDelete: Restrict)
+  storageKey  String                @unique @map("storage_key")
+  /// MIME type thật của bản gốc, đọc từ nội dung file.
+  contentType String                @map("content_type")
+  /// Kích thước bản gốc sau khi xoay theo EXIF.
+  width       Int
+  height      Int
+  /// Các cỡ webp đã sinh, theo chiều rộng danh nghĩa.
+  widths      Int[]
+  alt         String                @default("")
+  sortOrder   Int                   @default(0) @map("sort_order")
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+  variants    ProductImageVariant[]
+
+  @@index([productId])
+  @@map("product_image")
+}
+
+/// Ảnh gắn vào biến thể; API chỉ cho gắn biến thể của chính sản phẩm có ảnh.
+model ProductImageVariant {
+  imageId   String         @map("image_id") @db.Uuid
+  image     ProductImage   @relation(fields: [imageId], references: [id], onDelete: Cascade)
+  variantId String         @map("variant_id") @db.Uuid
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@id([imageId, variantId])
+  @@index([variantId])
+  @@map("product_image_variant")
+}
+
+/// Chứng từ nguồn hàng nội bộ trên bucket private, key `products/<productId>/documents/<id>`. Không bao giờ công khai.
+model ProductDocument {
+  id          String                      @id @default(uuid()) @db.Uuid
+  productId   String                      @map("product_id") @db.Uuid
+  product     Product                     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  storageKey  String                      @unique @map("storage_key")
+  /// Tên file lúc tải lên, chỉ để nhân viên nhận ra chứng từ.
+  fileName    String                      @map("file_name")
+  /// MIME type thật, đọc từ nội dung file.
+  contentType String                      @map("content_type")
+  sizeBytes   Int                         @map("size_bytes")
+  createdAt   DateTime                    @default(now()) @map("created_at")
+  commitments ProductCommitmentDocument[]
+
+  @@index([productId])
+  @@map("product_document")
+}
+
+enum CommitmentKind {
+  warranty
+  other
+
+  @@map("commitment_kind")
+}
+
+/// Loại cam kết: danh sách đóng, seed trong migration, chỉ `commitment.edit` thêm và sửa.
+model CommitmentType {
+  id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String              @unique
+  /// `warranty` là bảo hành; bảo hành chỉ hiện với khách qua loại này (ADR 0005).
+  kind        CommitmentKind
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @default(now()) @updatedAt @map("updated_at")
+  commitments ProductCommitment[]
+
+  @@map("commitment_type")
+}
+
+/// Cam kết có bằng chứng ở cấp sản phẩm; mỗi loại tối đa một cam kết trên một sản phẩm.
+model ProductCommitment {
+  id        String                      @id @default(uuid()) @db.Uuid
+  productId String                      @map("product_id") @db.Uuid
+  product   Product                     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  typeId    String                      @map("type_id") @db.Uuid
+  type      CommitmentType              @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  /// Nội dung hiển thị cho khách.
+  statement String
+  createdAt DateTime                    @default(now()) @map("created_at")
+  updatedAt DateTime                    @updatedAt @map("updated_at")
+  documents ProductCommitmentDocument[]
+
+  @@unique([productId, typeId])
+  @@map("product_commitment")
+}
+
+/// Chứng từ làm bằng chứng cho cam kết; chứng từ đang được tham chiếu thì không xóa được.
+model ProductCommitmentDocument {
+  commitmentId String            @map("commitment_id") @db.Uuid
+  commitment   ProductCommitment @relation(fields: [commitmentId], references: [id], onDelete: Cascade)
+  documentId   String            @map("document_id") @db.Uuid
+  document     ProductDocument   @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@id([commitmentId, documentId])
+  @@index([documentId])
+  @@map("product_commitment_document")
 }
 
 /// Cấu hình hệ thống dạng khóa → giá trị JSON; schema của từng khóa định nghĩa trong `@ecommerce/shared`.

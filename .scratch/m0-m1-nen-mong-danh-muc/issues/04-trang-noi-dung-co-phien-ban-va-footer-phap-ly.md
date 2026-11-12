@@ -10,7 +10,7 @@ Ticket 05 cần ticket này để lưu khách đã đồng ý với **phiên b�
 
 **Blocked by:** 03 (Phân quyền, quản lý nhân viên và audit log)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] Trang nội dung có: slug duy nhất, tiêu đề, nội dung markdown hoặc rich text, loại (giới thiệu / quy trình / chính sách), trạng thái nháp/xuất bản
 - [x] Xuất bản tạo phiên bản mới có số phiên bản và thời điểm xuất bản. Các phiên bản cũ đọc được qua API

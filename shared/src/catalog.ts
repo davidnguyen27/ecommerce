@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ImageRenditions } from './media.ts'
 import { Slug } from './slug.ts'
 
 /** Năm nhóm hàng cố định, là gốc của cây danh mục (ADR 0004). */
@@ -22,6 +23,8 @@ export const AdminBrand = z.object({
   name: z.string(),
   description: z.string(),
   hidden: z.boolean(),
+  /** `null` khi chưa có logo. */
+  logo: ImageRenditions.nullable(),
   updatedAt: z.string(),
 })
 export type AdminBrand = z.infer<typeof AdminBrand>
@@ -30,7 +33,12 @@ export const AdminBrandList = z.object({ items: z.array(AdminBrand) })
 export type AdminBrandList = z.infer<typeof AdminBrandList>
 
 /** Thương hiệu đang hiển thị, như khách thấy. */
-export const PublicBrand = z.object({ slug: z.string(), name: z.string(), description: z.string() })
+export const PublicBrand = z.object({
+  slug: z.string(),
+  name: z.string(),
+  description: z.string(),
+  logo: ImageRenditions.nullable(),
+})
 export type PublicBrand = z.infer<typeof PublicBrand>
 
 export const PublicBrandList = z.object({ items: z.array(PublicBrand.pick({ slug: true, name: true })) })

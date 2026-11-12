@@ -70,6 +70,30 @@ _Avoid_: xóa, ẩn (khi nói về sản phẩm)
 Biến thể không còn được bán, dù sản phẩm của nó vẫn đã xuất bản.
 _Avoid_: ngừng hoạt động, inactive, hết hàng
 
+## Kho
+
+**Tồn** (On hand):
+Số lượng thực có trong kho của một biến thể. Chỉ có một kho.
+_Avoid_: tồn kho của sản phẩm (tồn luôn ở cấp biến thể)
+
+**Còn hàng** / **Hết hàng** (In stock / Out of stock):
+Điều khách thấy về tồn của một biến thể: còn hàng khi tồn lớn hơn 0. Sản phẩm còn hàng khi có ít nhất một biến thể đang hiện với khách còn hàng. Khách không thấy số lượng.
+_Avoid_: ngừng bán (khi nói về hết hàng)
+
+**Sổ xuất nhập** (Stock ledger):
+Danh sách chỉ ghi thêm mọi lần tồn thay đổi: biến thể, số lượng tăng hoặc giảm, tồn sau thay đổi, loại biến động, người làm và thời điểm.
+_Avoid_: lịch sử kho, thẻ kho
+
+**Phiếu nhập** (Stock receipt):
+Một lần ghi hàng về kho, gồm nhiều dòng SKU và số lượng, kèm nhà cung cấp và ngày hàng về. Không sửa được sau khi ghi.
+_Avoid_: đơn nhập, phiếu nhập hàng (khi nói về đơn đặt hàng với nhà cung cấp)
+
+**Điều chỉnh** (Stock adjustment):
+Thay đổi tồn ngoài nhập kho và bán hàng, luôn kèm một lý do: kiểm kê, hàng hỏng, mất hàng hoặc khác.
+
+**Tồn đầu kỳ** (Opening stock):
+Số tồn ghi lần đầu cho một biến thể khi bắt đầu dùng hệ thống; chỉ ghi được khi biến thể chưa có dòng nào trong sổ xuất nhập.
+
 ## Nguồn gốc và cam kết
 
 **Thông tin nguồn gốc công bố** (Origin statement):

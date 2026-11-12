@@ -10,23 +10,43 @@ const { data, error } = await useAsyncData(`brand-${slug.value}`, async () => {
   return PublicBrand.parse(body)
 })
 
-if (error.value) {
-  const notFound = (error.value as { statusCode?: number }).statusCode === 404
-  throw createError({
-    statusCode: notFound ? 404 : 502,
-    message: notFound ? 'Không tìm thấy thương hiệu' : 'Không tải được thương hiệu',
-    fatal: true,
-  })
-}
+if (error.value) throwPageError(error.value, 'thương hiệu')
 
-useHead({ title: () => data.value?.name ?? '' })
+useSeo({
+  title: () => data.value?.name ?? '',
+  description: () =>
+    data.value ? excerpt(data.value.description || `Sản phẩm của thương hiệu ${data.value.name}.`) : '',
+  canonicalPath: () => listingCanonicalPath(`/thuong-hieu/${slug.value}`, route.query),
+  image: () => data.value?.logo?.originalUrl,
+  noindex: () => isFilteredListing(route.query),
+})
 </script>
 
 <template>
-  <main v-if="data">
-    <h1>{{ data.name }}</h1>
-    <p v-if="data.description">{{ data.description }}</p>
-    <!-- Sản phẩm có từ ticket 09; tới lúc đó thương hiệu nào cũng trống. -->
-    <p>Chưa có sản phẩm của thương hiệu này.</p>
+  <main v-if="data" class="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
+    <nav aria-label="Đường dẫn" class="mb-6 text-sm text-muted-foreground">
+      <NuxtLink to="/thuong-hieu" class="transition-colors hover:text-foreground">Thương hiệu</NuxtLink>
+    </nav>
+    <div class="mb-10 flex flex-col gap-6 sm:flex-row sm:items-center">
+      <div
+        v-if="data.logo"
+        class="flex h-28 w-28 shrink-0 items-center justify-center rounded-lg border border-border bg-card p-4"
+      >
+        <img
+          :src="imageSrc(data.logo, 160)"
+          :srcset="srcset(data.logo)"
+          sizes="160px"
+          :alt="`Logo ${data.name}`"
+          class="max-h-full w-auto object-contain"
+        />
+      </div>
+      <div>
+        <h1>{{ data.name }}</h1>
+        <p v-if="data.description" class="mt-3 max-w-2xl whitespace-pre-line leading-relaxed text-muted-foreground">
+          {{ data.description }}
+        </p>
+      </div>
+    </div>
+    <ProductSearch :brand="data.slug" empty="Chưa có sản phẩm của thương hiệu này." />
   </main>
 </template>

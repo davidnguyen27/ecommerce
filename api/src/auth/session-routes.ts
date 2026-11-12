@@ -5,6 +5,7 @@ import { AuthClient, ErrorCode, LoginRequest, RefreshRequest, type AuthTokens } 
 import type { Db } from '../db.ts'
 import type { AuthAudience } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
+import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { parse } from '../http/validation.ts'
 import { signAccessToken } from './access-token.ts'
 import { hashPassword, verifyPassword } from './password.ts'
@@ -15,6 +16,7 @@ import {
   rotateRefreshToken,
   type IssuedRefreshToken,
 } from './refresh-tokens.ts'
+import { normalizeEmail } from './staff.ts'
 
 export type SessionOptions = {
   prisma: Db
@@ -36,17 +38,19 @@ const ClientHeader = z.object({ 'x-client': AuthClient })
 // Băm sẵn lúc nạp module, để cả request đầu tiên cũng chỉ tốn đúng một lần verify.
 const dummyHash = hashPassword('khong-co-tai-khoan')
 
+/** Kênh của request theo header `X-Client`; thiếu hoặc sai thì 400. */
+export function clientOf(req: Request): AuthClient {
+  return parse(ClientHeader, req.headers)['x-client']
+}
+
 /**
- * `POST /login`, `POST /refresh` và `DELETE /refresh` (đăng xuất) cho một miền xác thực.
+ * Phiên đăng nhập của một miền xác thực. `routes` gồm `POST /login`, `POST /refresh` và
+ * `DELETE /refresh` (đăng xuất); `start` mở phiên cho route khác, ví dụ ngay sau khi đăng ký.
  * Header `X-Client` chọn kênh: `web` giữ refresh token trong cookie, `mobile` gửi qua body.
  */
-export function sessionRoutes(options: SessionOptions) {
+export function createSessions(options: SessionOptions) {
   const { prisma, secret, audience } = options
   const cookieName = `${audience}_refresh`
-
-  function clientOf(req: Request): AuthClient {
-    return parse(ClientHeader, req.headers)['x-client']
-  }
 
   function readRefreshToken(req: Request, client: AuthClient): string | undefined {
     if (client === 'mobile') return parse(RefreshRequest, req.body).refreshToken
@@ -54,7 +58,7 @@ export function sessionRoutes(options: SessionOptions) {
     return typeof cookie === 'string' ? cookie : undefined
   }
 
-  async function sendTokens(res: Response, client: AuthClient, issued: IssuedRefreshToken) {
+  async function sendTokens(res: Response, client: AuthClient, issued: IssuedRefreshToken, status = 200) {
     const body: AuthTokens = { accessToken: await signAccessToken(secret, audience, issued.subjectId) }
     if (client === 'mobile') {
       body.refreshToken = issued.refreshToken
@@ -67,21 +71,33 @@ export function sessionRoutes(options: SessionOptions) {
         expires: issued.expiresAt,
       })
     }
-    res.json(body)
+    res.status(status).json(body)
   }
 
-  return Router()
+  /** Mở một phiên mới cho `subjectId` và trả token theo kênh của request. */
+  async function start(req: Request, res: Response, subjectId: string, status = 200) {
+    const client = clientOf(req)
+    await sendTokens(res, client, await issueRefreshToken(prisma, audience, subjectId, options.sessionTtlMs), status)
+  }
+
+  const routes = Router()
     .use(cookieParser())
     .post('/login', async (req, res) => {
-      const client = clientOf(req)
+      // Kiểm header kênh trước khi tốn một lần verify mật khẩu.
+      clientOf(req)
       const { email, password } = parse(LoginRequest, req.body)
+      // Đếm cả lần đăng nhập đúng, và đếm trước khi verify để kẻ dò mật khẩu không tốn thêm CPU của mình.
+      await enforceRateLimits(prisma, res, [
+        { limit: RATE_LIMITS.loginPerEmail, subject: `${audience}:${normalizeEmail(email)}` },
+        { limit: RATE_LIMITS.loginPerIp, subject: `${audience}:${String(req.ip)}` },
+      ])
       const account = await options.findCredentials(email)
       if (!account) await verifyPassword(await dummyHash, password)
       if (!account || !(await verifyPassword(account.passwordHash, password))) {
         throw new AppError(401, ErrorCode.UNAUTHORIZED, 'Email hoặc mật khẩu không đúng')
       }
 
-      await sendTokens(res, client, await issueRefreshToken(prisma, audience, account.id, options.sessionTtlMs))
+      await start(req, res, account.id)
     })
     .post('/refresh', async (req, res) => {
       const client = clientOf(req)
@@ -103,4 +119,6 @@ export function sessionRoutes(options: SessionOptions) {
       if (client === 'web') res.clearCookie(cookieName, { path: options.refreshPath })
       res.status(204).end()
     })
+
+  return { routes, start }
 }

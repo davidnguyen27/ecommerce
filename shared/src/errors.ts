@@ -7,6 +7,8 @@ export const ErrorCode = {
   FORBIDDEN: 'FORBIDDEN',
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT: 'CONFLICT',
+  /** Vượt giới hạn tần suất; response kèm header `Retry-After` (giây). */
+  RATE_LIMITED: 'RATE_LIMITED',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const
@@ -24,6 +26,8 @@ export const ApiErrorBody = z.object({
     code: z.enum(ErrorCode),
     message: z.string(),
     fields: z.array(FieldError).optional(),
+    /** Dữ liệu kèm lỗi để client xử lý tiếp, ví dụ tồn hiện tại khi điều chỉnh tồn bị 409. */
+    details: z.record(z.string(), z.unknown()).optional(),
     requestId: z.string(),
   }),
 })
