@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Trang của cổng thanh toán giả lập (API chạy không có khóa ZaloPay): link thanh toán mang mã đơn, số tiền, hạn và
+// Trang của cổng thanh toán giả lập (API chạy không có khóa VNPAY): link thanh toán mang mã đơn, số tiền, hạn và
 // trang quay về trong query. Không có tiền thật nào đi qua đây.
 const route = useRoute()
 const param = (name: string) => (typeof route.query[name] === 'string' ? route.query[name] : '')
@@ -70,7 +70,7 @@ useSeo({ title: 'Cổng thanh toán giả lập', description: 'Cổng thanh to�
   <main class="mx-auto max-w-md px-4 py-12 sm:py-20">
     <h1>Cổng thanh toán giả lập</h1>
     <p class="mt-2 text-sm text-muted-foreground">
-      Website đang chạy không có khóa ZaloPay. Trang này thay cho trang thanh toán thật, không có tiền nào được chuyển.
+      Website đang chạy không có khóa VNPAY. Trang này thay cho trang thanh toán thật, không có tiền nào được chuyển.
     </p>
 
     <dl class="mt-8 space-y-3 rounded-lg border border-border bg-card p-6 text-sm">

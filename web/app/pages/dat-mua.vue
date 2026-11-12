@@ -413,8 +413,8 @@ useSeo({ title: 'Đặt mua', description: 'Thông tin nhận hàng và xác nh�
           <p v-if="error" class="notice-error mt-4" role="alert">{{ error }}</p>
           <button type="submit" class="btn-primary mt-6 w-full" :disabled="!canSubmit">Đặt mua và thanh toán</button>
           <p class="mt-3 text-xs text-muted-foreground">
-            Hàng được giữ cho bạn {{ RESERVATION_MINUTES }} phút sau khi đặt. Thanh toán qua ZaloPay: ví, thẻ hoặc tài
-            khoản ngân hàng.
+            Hàng được giữ cho bạn {{ RESERVATION_MINUTES }} phút sau khi đặt. Thanh toán qua VNPAY: thẻ ATM, thẻ quốc tế
+            hoặc quét QR.
           </p>
         </div>
       </aside>

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { InMemoryMailer } from '../src/adapters/mailer.ts'
 import type { PaymentInfo } from '../src/payments/gateway.ts'
-import { callbackData, signedCallback } from './support/zalopay.ts'
+import { ipnParams, signedIpn, transactionNoOf } from './support/vnpay.ts'
 import { shop } from './support/shop.ts'
 import { bearer } from './support/staff.ts'
 
@@ -50,7 +50,7 @@ async function pendingOrder() {
   expect(res.status).toBe(201)
   const { code, token } = res.body as { code: number; token: string }
   const order = () => app.request.get(`/api/orders/${code}`).query({ token })
-  const callback = (body: unknown) => app.request.post('/api/payments/zalopay/callback').send(body as object)
+  const ipn = (query: Record<string, string>) => app.request.get('/api/payments/vnpay/ipn').query(query)
   const transactionCount = async () => (await transactions(app, code)).length
   return {
     ...app,
@@ -58,20 +58,20 @@ async function pendingOrder() {
     code,
     token,
     order,
-    callback,
+    ipn,
     transactionCount,
     reconciliation: () => reconciliation(app),
   }
 }
 
-describe('ghi nhận thanh toán qua callback', () => {
-  it('callback đúng MAC, đúng tiền: trả 1, đơn thành đã trả đủ, hết hạn giữ hàng và khách nhận email một lần', async () => {
-    const { code, order, callback, mailer, request } = await pendingOrder()
+describe('ghi nhận thanh toán qua IPN', () => {
+  it('IPN đúng chữ ký, đúng tiền: trả 00, đơn thành đã trả đủ, hết hạn giữ hàng và khách nhận email một lần', async () => {
+    const { code, order, ipn, mailer, request } = await pendingOrder()
 
-    const res = await callback(signedCallback(callbackData(code, TOTAL)))
+    const res = await ipn(signedIpn(ipnParams(code, TOTAL)))
 
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ return_code: 1, return_message: 'success' })
+    expect(res.body).toEqual({ RspCode: '00', Message: 'Confirm Success' })
     const after = await order()
     expect(after.body).toMatchObject({
       status: 'processing',
@@ -90,32 +90,33 @@ describe('ghi nhận thanh toán qua callback', () => {
     expect(viaMail.status).toBe(200)
   })
 
-  it('sai MAC thì HTTP 200 với return_code -1 và không ghi gì', async () => {
-    const { code, order, callback, transactionCount } = await pendingOrder()
-    const body = signedCallback(callbackData(code, TOTAL))
+  it('sai chữ ký thì trả 97 và không ghi gì', async () => {
+    const { code, order, ipn, transactionCount } = await pendingOrder()
+    const signed = signedIpn(ipnParams(code, TOTAL))
 
-    const tampered = await callback({ ...body, data: body.data.replace(String(TOTAL), '1') })
-    const otherKey = await callback(signedCallback(callbackData(code, TOTAL), 'khoa-khac'))
-    const unsigned = await callback({ data: body.data })
-    const notHex = await callback({ ...body, mac: 'z'.repeat(64) })
+    const tampered = await ipn({ ...signed, vnp_Amount: '100' })
+    const otherKey = await ipn(signedIpn(ipnParams(code, TOTAL), 'khoa-khac'))
+    const { vnp_SecureHash: _, ...unsigned } = signed
+    const unsignedRes = await ipn(unsigned)
+    const notHex = await ipn({ ...signed, vnp_SecureHash: 'z'.repeat(128) })
 
-    for (const res of [tampered, otherKey, unsigned, notHex]) {
+    for (const res of [tampered, otherKey, unsignedRes, notHex]) {
       expect(res.status).toBe(200)
-      expect(res.body.return_code).toBe(-1)
+      expect(res.body.RspCode).toBe('97')
     }
     expect((await order()).body).toMatchObject({ status: 'pending_payment', paymentStatus: 'unpaid' })
     expect(await transactionCount()).toBe(0)
   })
 
-  it('cùng một callback gửi hai lần: chỉ ghi một giao dịch và gửi một email', async () => {
-    const { code, order, callback, transactionCount, mailer } = await pendingOrder()
-    const body = signedCallback(callbackData(code, TOTAL))
+  it('cùng một IPN gửi hai lần: lần hai trả 02, chỉ ghi một giao dịch và gửi một email', async () => {
+    const { code, order, ipn, transactionCount, mailer } = await pendingOrder()
+    const signed = signedIpn(ipnParams(code, TOTAL))
 
-    const first = await callback(body)
-    const second = await callback(body)
+    const first = await ipn(signed)
+    const second = await ipn(signed)
 
-    expect(first.body.return_code).toBe(1)
-    expect(second.body.return_code).toBe(1)
+    expect(first.body.RspCode).toBe('00')
+    expect(second.body).toEqual({ RspCode: '02', Message: 'Order already confirmed' })
     expect((await order()).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
     expect(await transactionCount()).toBe(1)
     await paymentMails(mailer, code)
@@ -123,29 +124,43 @@ describe('ghi nhận thanh toán qua callback', () => {
     expect(await paymentMails(mailer, code)).toHaveLength(1)
   })
 
-  it('callback cho mã đơn không có hay app_trans_id lạ vẫn trả 1 để ZaloPay thôi gửi, không ghi gì', async () => {
-    const { callback, transactionCount } = await pendingOrder()
+  it('giao dịch không thành công (khách hủy, thẻ lỗi) thì trả 00 để VNPAY thôi gửi, đơn vẫn chờ thanh toán', async () => {
+    const { code, order, ipn, transactionCount } = await pendingOrder()
 
-    const unknown = await callback(signedCallback(callbackData(123, 3_000)))
-    const foreign = await callback(signedCallback(callbackData(123, 3_000, { app_trans_id: 'khac' })))
+    const cancelled = await ipn(
+      signedIpn(ipnParams(code, TOTAL, { vnp_ResponseCode: '24', vnp_TransactionStatus: '02' })),
+    )
+    // Mẫu PHP của VNPAY chỉ xét một mã; hệ thống đòi cả hai mã là 00.
+    const halfOk = await ipn(signedIpn(ipnParams(code, TOTAL, { vnp_TransactionStatus: '01' })))
 
-    for (const res of [unknown, foreign]) expect(res.body.return_code).toBe(1)
+    for (const res of [cancelled, halfOk]) expect(res.body.RspCode).toBe('00')
+    expect((await order()).body).toMatchObject({ status: 'pending_payment', paymentStatus: 'unpaid' })
     expect(await transactionCount()).toBe(0)
   })
 
-  it('đúng MAC mà data không đọc được thì trả 0 để ZaloPay gửi lại, không ghi gì', async () => {
-    const { code, callback, transactionCount } = await pendingOrder()
+  it('IPN cho mã đơn không có hay vnp_TxnRef lạ thì trả 01, không ghi gì', async () => {
+    const { ipn, transactionCount } = await pendingOrder()
 
-    const res = await callback(signedCallback(callbackData(code, TOTAL, { amount: 'nhiều' })))
+    const unknown = await ipn(signedIpn(ipnParams(123, 3_000)))
+    const foreign = await ipn(signedIpn(ipnParams(123, 3_000, { vnp_TxnRef: 'khac' })))
 
-    expect(res.status).toBe(200)
-    expect(res.body.return_code).toBe(0)
+    for (const res of [unknown, foreign]) expect(res.body).toEqual({ RspCode: '01', Message: 'Order not found' })
+    expect(await transactionCount()).toBe(0)
+  })
+
+  it('đúng chữ ký mà thiếu trường cần dùng thì trả 01, không ghi gì', async () => {
+    const { code, ipn, transactionCount } = await pendingOrder()
+    const { vnp_TransactionNo: _, ...params } = ipnParams(code, TOTAL)
+
+    const res = await ipn(signedIpn(params))
+
+    expect(res.body.RspCode).toBe('01')
     expect(await transactionCount()).toBe(0)
   })
 })
 
 describe('ghi nhận thanh toán khi khách quay về', () => {
-  it('refresh=1 hỏi cổng và ghi nhận được khi chưa có callback', async () => {
+  it('refresh=1 hỏi cổng và ghi nhận được khi chưa có IPN', async () => {
     const { code, order, payments, token, request } = await pendingOrder()
     payments.payments.set(String(code), paidInfo(TOTAL, 'FT-Q1'))
 
@@ -177,12 +192,12 @@ describe('ghi nhận thanh toán khi khách quay về', () => {
     expect(await transactionCount()).toBe(0)
   })
 
-  it('callback và truy vấn cùng về một khoản: chỉ ghi một lần, email một lần', async () => {
-    const { code, order, callback, payments, token, request, transactionCount, mailer } = await pendingOrder()
-    payments.payments.set(String(code), paidInfo(TOTAL, String(251102000000000 + code)))
+  it('IPN và truy vấn cùng về một khoản: chỉ ghi một lần, email một lần', async () => {
+    const { code, order, ipn, payments, token, request, transactionCount, mailer } = await pendingOrder()
+    payments.payments.set(String(code), paidInfo(TOTAL, transactionNoOf(code)))
 
     const [hook, query] = await Promise.all([
-      callback(signedCallback(callbackData(code, TOTAL))),
+      ipn(signedIpn(ipnParams(code, TOTAL))),
       request.get(`/api/orders/${code}`).query({ token, refresh: '1' }),
     ])
 
@@ -198,9 +213,9 @@ describe('ghi nhận thanh toán khi khách quay về', () => {
 
 describe('cần đối soát', () => {
   it('lệch tiền: gắn cờ amount_mismatch, đơn vẫn chưa thanh toán', async () => {
-    const { code, order, callback, reconciliation } = await pendingOrder()
+    const { code, order, ipn, reconciliation } = await pendingOrder()
 
-    const res = await callback(signedCallback(callbackData(code, 2_000_000)))
+    const res = await ipn(signedIpn(ipnParams(code, 2_000_000)))
 
     expect(res.status).toBe(200)
     expect((await order()).body).toMatchObject({ status: 'pending_payment', paymentStatus: 'unpaid' })
@@ -210,10 +225,10 @@ describe('cần đối soát', () => {
   })
 
   it('trả thiếu rồi chuyển nốt phần còn lại: đơn đã trả đủ, mục lệch tiền tự đóng vì đã đủ tiền', async () => {
-    const { code, order, callback, reconciliation, request, adminToken } = await pendingOrder()
-    await callback(signedCallback(callbackData(code, 2_000_000)))
+    const { code, order, ipn, reconciliation, request, adminToken } = await pendingOrder()
+    await ipn(signedIpn(ipnParams(code, 2_000_000)))
 
-    const res = await callback(signedCallback(callbackData(code, 30_000, { zp_trans_id: 1 })))
+    const res = await ipn(signedIpn(ipnParams(code, 30_000, { vnp_TransactionNo: '1' })))
 
     expect(res.status).toBe(200)
     expect((await order()).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
@@ -235,10 +250,10 @@ describe('cần đối soát', () => {
   })
 
   it('tiền về thêm cho đơn đã trả: gắn cờ extra_payment, đơn giữ nguyên đã trả', async () => {
-    const { code, order, callback, reconciliation } = await pendingOrder()
-    await callback(signedCallback(callbackData(code, TOTAL)))
+    const { code, order, ipn, reconciliation } = await pendingOrder()
+    await ipn(signedIpn(ipnParams(code, TOTAL)))
 
-    const res = await callback(signedCallback(callbackData(code, 50_000, { zp_trans_id: 2 })))
+    const res = await ipn(signedIpn(ipnParams(code, 50_000, { vnp_TransactionNo: '2' })))
 
     expect(res.status).toBe(200)
     expect((await order()).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
@@ -246,10 +261,10 @@ describe('cần đối soát', () => {
   })
 
   it('tiền về cho đơn đã hủy: gắn cờ paid_after_cancel, đơn vẫn hủy', async () => {
-    const { code, token, order, callback, reconciliation, request } = await pendingOrder()
+    const { code, token, order, ipn, reconciliation, request } = await pendingOrder()
     expect((await request.post(`/api/orders/${code}/cancel`).query({ token })).status).toBe(200)
 
-    const res = await callback(signedCallback(callbackData(code, TOTAL)))
+    const res = await ipn(signedIpn(ipnParams(code, TOTAL)))
 
     expect(res.status).toBe(200)
     expect((await order()).body).toMatchObject({
@@ -298,8 +313,8 @@ describe('cổng giả lập', () => {
 
 describe('bảng giao dịch thanh toán', () => {
   it('không sửa, không xóa được', async () => {
-    const { code, callback, prisma } = await pendingOrder()
-    await callback(signedCallback(callbackData(code, TOTAL)))
+    const { code, ipn, prisma } = await pendingOrder()
+    await ipn(signedIpn(ipnParams(code, TOTAL)))
 
     // Không có API nào sửa giao dịch; thử thẳng bằng SQL để chắc trigger chặn.
     await expect(prisma.$executeRaw`UPDATE "payment_transaction" SET "amount" = 1`).rejects.toThrow(
