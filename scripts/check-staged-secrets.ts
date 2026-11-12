@@ -1,6 +1,7 @@
 // Chặn commit làm lộ khóa trong `.env`: repo công khai trên GitHub. Chạy trong hook pre-commit (.husky/pre-commit).
-// Khóa là biến có tên chứa SECRET, KEY, PASSWORD, TOKEN hay HASH, dài từ 8 ký tự. Giá trị đã có trong `.env.example`
-// (khóa local mặc định, ví dụ SeaweedFS) là công khai sẵn nên bỏ qua. Chỉ in tên biến và file, không in giá trị.
+// Khóa là biến có tên chứa SECRET, KEY, PASSWORD, TOKEN hay HASH, dài từ 8 ký tự. Giá trị đã có trong `.env.example`,
+// kể cả trong dòng chú thích (khóa local mặc định, ví dụ SeaweedFS), là công khai sẵn nên bỏ qua.
+// Chỉ in tên biến và file, không in giá trị.
 // Chạy tay: node scripts/check-staged-secrets.ts
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -17,9 +18,10 @@ function envValues(file: string) {
     .map(([, name, raw]) => ({ name: name!, value: raw!.trim().replace(/^(["'])(.*)\1$/, '$2') }))
 }
 
-const published = new Set(envValues('.env.example').map(({ value }) => value))
+// Giá trị mặc định công khai có thể nằm trong dòng chú thích của `.env.example`, nên tìm trên cả file.
+const published = existsSync('.env.example') ? readFileSync('.env.example', 'utf8') : ''
 const secrets = envValues('.env').filter(
-  ({ name, value }) => SECRET_NAME.test(name) && value.length >= MIN_LENGTH && !published.has(value),
+  ({ name, value }) => SECRET_NAME.test(name) && value.length >= MIN_LENGTH && !published.includes(value),
 )
 if (secrets.length === 0) process.exit(0)
 
