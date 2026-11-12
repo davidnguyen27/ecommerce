@@ -2,17 +2,21 @@ import { randomUUID } from 'node:crypto'
 import express from 'express'
 import type { Logger } from 'pino'
 import { pinoHttp } from 'pino-http'
-import type { Mailer } from './adapters/mailer.ts'
 import type { Storage } from './adapters/storage.ts'
 import { requireAuth } from './auth/require-auth.ts'
 import { loadStaff } from './auth/staff-context.ts'
 import type { Db } from './db.ts'
+import type { EmailQueue } from './jobs/jobs.ts'
 import { errorHandler, notFound } from './http/errors.ts'
+import { accountRoutes } from './routes/account.ts'
 import { adminRoutes } from './routes/admin.ts'
 import { adminAuthRoutes } from './routes/admin-auth.ts'
+import { customerAuthRoutes, customerSessions } from './routes/customer-auth.ts'
 import { publicLegalInfoRoutes } from './routes/legal-info.ts'
-import { publicBrandRoutes, publicCategoryRoutes } from './routes/public-catalog.ts'
+import { publicAttributeSchemaRoutes, publicBrandRoutes, publicCategoryRoutes } from './routes/public-catalog.ts'
 import { publicPageRoutes } from './routes/public-pages.ts'
+import { publicProductRoutes } from './routes/public-products.ts'
+import { publicSitemapRoutes } from './routes/public-sitemap.ts'
 import { healthRoutes } from './routes/health.ts'
 
 /** Mọi phụ thuộc bên ngoài đi vào app qua đây, để test thay bằng bản giả. */
@@ -20,7 +24,10 @@ export type AppDeps = {
   prisma: Db
   logger: Logger
   storage: Storage
-  mailer: Mailer
+  /** Email đi qua hàng đợi job; worker gửi bằng mailer. */
+  emails: EmailQueue
+  /** Gốc URL của website, ví dụ `https://shop.vn`, để dựng link trong email. */
+  siteUrl: string
   /** Khóa ký JWT (HS256). */
   jwtSecret: string
 }
@@ -53,10 +60,21 @@ export function createApp(deps: AppDeps) {
   const api = express.Router()
   api.use('/pages', publicPageRoutes(deps.prisma))
   api.use('/legal-info', publicLegalInfoRoutes(deps.prisma))
-  api.use('/brands', publicBrandRoutes(deps.prisma))
+  api.use('/brands', publicBrandRoutes(deps.prisma, deps.storage))
+  api.use('/products', publicProductRoutes(deps.prisma, deps.storage))
   api.use('/categories', publicCategoryRoutes(deps.prisma))
+  api.use('/attribute-schemas', publicAttributeSchemaRoutes(deps.prisma))
+  api.use('/sitemap', publicSitemapRoutes(deps.prisma))
+  const customerDeps = {
+    prisma: deps.prisma,
+    emails: deps.emails,
+    siteUrl: deps.siteUrl,
+    sessions: customerSessions(deps.prisma, secret, '/api/auth'),
+  }
+  api.use('/auth', customerAuthRoutes(customerDeps))
+  api.use('/account', requireAuth(secret, 'customer'), accountRoutes(customerDeps))
   api.use('/admin/auth', adminAuthRoutes(deps.prisma, secret, '/api/admin/auth'))
-  api.use('/admin', requireAuth(secret, 'staff'), loadStaff(deps.prisma), adminRoutes(deps.prisma))
+  api.use('/admin', requireAuth(secret, 'staff'), loadStaff(deps.prisma), adminRoutes(deps.prisma, deps.storage))
   app.use('/api', api)
 
   app.use(notFound)

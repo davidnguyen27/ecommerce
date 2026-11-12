@@ -7,6 +7,10 @@ import { createApp } from '../../src/app.ts'
 import { createPrisma } from '../../src/db.ts'
 import { InMemoryMailer } from '../../src/adapters/mailer.ts'
 import { InMemoryStorage } from '../../src/adapters/storage.ts'
+import { Jobs } from '../../src/jobs/jobs.ts'
+
+/** Gốc URL website trong link của email gửi ra từ test. */
+export const SITE_URL = 'https://shop.test'
 
 type Options = {
   /** Ghi đè URL DB, ví dụ để giả lập mất kết nối. */
@@ -19,7 +23,8 @@ type Options = {
  */
 export async function createTestApp(options: Options = {}) {
   const databaseUrl = options.databaseUrl ?? (await createCleanDatabase())
-  const prisma = createPrisma(databaseUrl)
+  // Pool nhỏ: các file test chạy song song trên một container, mỗi test một app.
+  const prisma = createPrisma(databaseUrl, { maxConnections: 3 })
 
   const lines: string[] = []
   const logger = pino(
@@ -34,9 +39,17 @@ export async function createTestApp(options: Options = {}) {
   const mailer = new InMemoryMailer()
   const storage = new InMemoryStorage()
   const jwtSecret = randomBytes(32).toString('base64url')
-  const app = createApp({ prisma, logger, mailer, storage, jwtSecret })
+  // Hàng đợi job thật trên DB của test; worker gửi thư vào mailer giả.
+  // DB bị ghi đè là DB giả lập hỏng, nên không khởi động worker trên đó.
+  const jobs = new Jobs({ databaseUrl, prisma, mailer, logger, maxConnections: 2 })
+  const startJobs = !options.databaseUrl
+  if (startJobs) await jobs.start()
+  const app = createApp({ prisma, logger, emails: jobs, storage, jwtSecret, siteUrl: SITE_URL })
 
-  onTestFinished(() => prisma.$disconnect())
+  onTestFinished(async () => {
+    if (startJobs) await jobs.stop()
+    await prisma.$disconnect()
+  })
 
   return {
     request: supertest(app),
@@ -57,7 +70,7 @@ async function createCleanDatabase(): Promise<string> {
 
   const admin = new URL(template)
   admin.pathname = '/postgres'
-  const prisma = createPrisma(admin.toString())
+  const prisma = createPrisma(admin.toString(), { maxConnections: 1 })
   try {
     await prisma.$executeRawUnsafe(`CREATE DATABASE "${name}" TEMPLATE "${templateName}"`)
   } finally {

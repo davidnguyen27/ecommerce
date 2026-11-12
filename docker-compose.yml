@@ -1,4 +1,5 @@
 # Môi trường local: docker compose up --build, rồi mở http://localhost
+# Muốn xem được ảnh và chứng từ: đặt trong .env các biến S3 local ghi trong .env.example (COMPOSE_PROFILES=local).
 x-database-url: &database-url postgresql://${POSTGRES_USER:-ecommerce}:${POSTGRES_PASSWORD:-ecommerce}@postgres:5432/${POSTGRES_DB:-ecommerce}
 
 services:
@@ -35,13 +36,30 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Giá trị mặc định chỉ dùng cho local; staging/production phải đặt khóa riêng.
       JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-khong-dung-cho-production}
+      # Gốc URL trong link gửi qua email.
+      SITE_URL: ${SITE_URL:-http://localhost:${HTTP_PORT:-80}}
+      # Local chỉ ghi email ra log; staging/production đặt MAIL_PROVIDER=resend kèm RESEND_API_KEY, MAIL_FROM.
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-log}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      # Local giữ file trong bộ nhớ; staging/production đặt STORAGE_PROVIDER=r2 kèm các biến R2_*, MEDIA_PUBLIC_URL.
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-memory}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_PUBLIC_BUCKET: ${R2_PUBLIC_BUCKET:-}
+      R2_PRIVATE_BUCKET: ${R2_PRIVATE_BUCKET:-}
+      MEDIA_PUBLIC_URL: ${MEDIA_PUBLIC_URL:-}
     depends_on:
       migrate: { condition: service_completed_successfully }
+      # Chỉ có khi bật profile local; staging/production bỏ qua.
+      s3-buckets: { condition: service_completed_successfully, required: false }
 
   web:
     build: { context: ., dockerfile: web/Dockerfile }
     environment:
       NUXT_API_BASE: http://api:3001
+      NUXT_PUBLIC_SITE_URL: ${SITE_URL:-http://localhost:${HTTP_PORT:-80}}
     depends_on:
       - api
 
@@ -59,6 +77,55 @@ services:
       - api
       - web
 
+  # Chỉ local (COMPOSE_PROFILES=local): SeaweedFS làm lưu trữ tương thích S3 thay cho R2, để xem được ảnh và mở được chứng từ.
+  # Trình duyệt và API cùng gọi http://s3.localhost:9000: trình duyệt tự trỏ *.localhost về máy mình,
+  # trong mạng Docker thì alias dưới đây trỏ về container này. URL ký có hạn nhờ vậy dùng được ở cả hai phía.
+  # Quyền: khóa R2_ACCESS_KEY_ID ghi được mọi bucket; khách ẩn danh chỉ đọc được bucket public, như CDN.
+  s3:
+    image: chrislusf/seaweedfs:4.48
+    profiles: [local]
+    entrypoint: ['sh', '-c']
+    command:
+      - >
+        printf '{"identities":[{"name":"app","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","List","Write","Tagging"]},{"name":"anonymous","actions":["Read:%s"]}]}'
+        "$$ACCESS_KEY" "$$SECRET_KEY" "$$PUBLIC_BUCKET" > /tmp/s3.json &&
+        exec weed server -dir=/data -master.volumeSizeLimitMB=1024 -s3 -s3.port=9000 -s3.config=/tmp/s3.json
+    environment:
+      ACCESS_KEY: ${R2_ACCESS_KEY_ID:-local-access-key}
+      SECRET_KEY: ${R2_SECRET_ACCESS_KEY:-local-secret-key}
+      PUBLIC_BUCKET: ${R2_PUBLIC_BUCKET:-media-public}
+    ports:
+      - '9000:9000'
+    volumes:
+      - s3_data:/data
+    networks:
+      default:
+        aliases: [s3.localhost]
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:9333/cluster/status && nc -z 127.0.0.1 9000']
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  # Tạo bucket public và private. weed shell báo lỗi khi bucket đã có, nên bỏ qua lỗi tạo
+  # rồi kiểm tra cả hai bucket đều có trong danh sách.
+  s3-buckets:
+    image: chrislusf/seaweedfs:4.48
+    profiles: [local]
+    entrypoint: ['sh', '-c']
+    command:
+      - >
+        { echo "s3.bucket.create -name $$PUBLIC_BUCKET"; echo "s3.bucket.create -name $$PRIVATE_BUCKET"; }
+        | weed shell -master=s3:9333;
+        echo s3.bucket.list | weed shell -master=s3:9333 > /tmp/buckets &&
+        grep -qw "$$PUBLIC_BUCKET" /tmp/buckets && grep -qw "$$PRIVATE_BUCKET" /tmp/buckets
+    environment:
+      PUBLIC_BUCKET: ${R2_PUBLIC_BUCKET:-media-public}
+      PRIVATE_BUCKET: ${R2_PRIVATE_BUCKET:-media-private}
+    depends_on:
+      s3: { condition: service_healthy }
+
 volumes:
   pgdata:
   caddy_data:
+  s3_data:
