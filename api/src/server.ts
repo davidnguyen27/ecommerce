@@ -1,5 +1,5 @@
 import pino from 'pino'
-import { createApp } from './app.ts'
+import { createApp, trustProxyFromEnv } from './app.ts'
 import { mailerFromEnv } from './adapters/mailer.ts'
 import { storageFromEnv } from './adapters/storage.ts'
 import { createPrisma } from './db.ts'
@@ -35,6 +35,7 @@ const app = createApp({
   payments,
   // IPN VNPAY chỉ mở khi đang dùng VNPAY.
   vnpayHashSecret: vnpayKeysFromEnv(process.env)?.hashSecret,
+  trustProxy: trustProxyFromEnv(process.env.TRUST_PROXY),
 })
 
 const server = app.listen(port, () => logger.info({ port, payments: payments.constructor.name }, 'API đang chạy'))

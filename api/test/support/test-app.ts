@@ -23,6 +23,8 @@ type Options = {
   simulator?: boolean
   /** Cổng thanh toán khác cho app dùng, ví dụ VNPAY trên HTTP giả (`payments` khi đó không được app dùng). */
   gateway?: PaymentGateway
+  /** `trust proxy` như `TRUST_PROXY` của bản deploy (ADR 0011); không đặt thì giữ mặc định của app. */
+  trustProxy?: string | number
 }
 
 /**
@@ -72,6 +74,7 @@ export async function createTestApp(options: Options = {}) {
     siteUrl: SITE_URL,
     payments: gateway,
     vnpayHashSecret: VNPAY_HASH_SECRET,
+    trustProxy: options.trustProxy,
   })
 
   onTestFinished(async () => {
