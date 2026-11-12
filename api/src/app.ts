@@ -41,6 +41,18 @@ export type AppDeps = {
   payments: PaymentGateway
   /** `vnp_HashSecret` để kiểm chữ ký IPN; không có thì không mở route IPN. */
   vnpayHashSecret?: string
+  /**
+   * Giá trị `trust proxy` của Express, để `req.ip` là IP khách (rate limit, audit, `vnp_IpAddr`). Mặc định tin proxy
+   * trong mạng riêng (Caddy trên VPS); bản deploy Netlify → Render đặt số tầng proxy (ADR 0011).
+   */
+  trustProxy?: string | number
+}
+
+/** Đọc `TRUST_PROXY`: số là số tầng proxy, chuỗi khác là danh sách địa chỉ/từ khóa của Express, trống là mặc định. */
+export function trustProxyFromEnv(value: string | undefined): string | number | undefined {
+  const trimmed = value?.trim()
+  if (!trimmed) return undefined
+  return /^\d+$/.test(trimmed) ? Number(trimmed) : trimmed
 }
 
 const REQUEST_ID = /^[\w.-]{1,128}$/
@@ -48,7 +60,7 @@ const REQUEST_ID = /^[\w.-]{1,128}$/
 export function createApp(deps: AppDeps) {
   const app = express()
   app.disable('x-powered-by')
-  app.set('trust proxy', 'loopback, uniquelocal')
+  app.set('trust proxy', deps.trustProxy ?? 'loopback, uniquelocal')
 
   app.use(
     pinoHttp({
@@ -69,6 +81,12 @@ export function createApp(deps: AppDeps) {
 
   const secret = new TextEncoder().encode(deps.jwtSecret)
   const api = express.Router()
+  // Mặc định không cho cache: CDN đứng trước API (proxy Netlify, ADR 0011) có thể cache response có ETag, kể cả dữ
+  // liệu cá nhân. Route nào muốn cache thì tự đặt lại header.
+  api.use((_req, res, next) => {
+    res.set('Cache-Control', 'no-store')
+    next()
+  })
   api.use('/pages', publicPageRoutes(deps.prisma))
   api.use('/legal-info', publicLegalInfoRoutes(deps.prisma))
   api.use('/brands', publicBrandRoutes(deps.prisma, deps.storage))
