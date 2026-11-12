@@ -340,3 +340,43 @@ describe('trang quay về từ cổng thanh toán', () => {
     expect(JSON.stringify(payments.created)).not.toContain(res.body.token)
   })
 })
+
+describe('ghi nhận từ trang quay về VNPAY', () => {
+  const returned = (app: Awaited<ReturnType<typeof pendingOrder>>, body: Record<string, string>) =>
+    app.request.post('/api/payments/vnpay/return').send(body)
+
+  it('tham số có chữ ký trên URL quay về: đơn thành đã trả đủ, giao dịch nguồn return, không cần token', async () => {
+    const app = await pendingOrder()
+
+    const res = await returned(app, signedIpn(ipnParams(app.code, TOTAL)))
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ RspCode: '00', Message: 'Confirm Success' })
+    expect((await app.order()).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
+    // `pendingOrder` đè `token` bằng token đơn; trang quản trị cần token admin.
+    expect(await transactions({ ...app, token: app.adminToken }, app.code)).toEqual([
+      expect.objectContaining({ source: 'return', amount: TOTAL }),
+    ])
+  })
+
+  it('trang quay về và IPN cùng báo một khoản: chỉ ghi một lần, IPN tới sau nhận 02', async () => {
+    const app = await pendingOrder()
+    const signed = signedIpn(ipnParams(app.code, TOTAL))
+
+    await returned(app, signed)
+    const ipn = await app.ipn(signed)
+
+    expect(ipn.body.RspCode).toBe('02')
+    expect(await app.transactionCount()).toBe(1)
+  })
+
+  it('tham số bị sửa hay không phải object thì trả 97 và không ghi gì', async () => {
+    const app = await pendingOrder()
+
+    const tampered = await returned(app, { ...signedIpn(ipnParams(app.code, TOTAL)), vnp_Amount: '100' })
+    const notObject = await app.request.post('/api/payments/vnpay/return').send(['x'])
+
+    for (const res of [tampered, notObject]) expect(res.body.RspCode).toBe('97')
+    expect(await app.transactionCount()).toBe(0)
+  })
+})

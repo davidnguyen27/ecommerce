@@ -120,7 +120,7 @@ export const AdminOrderPage = pageOf(AdminOrderSummary)
 export type AdminOrderPage = z.infer<typeof AdminOrderPage>
 
 /** Đường báo tiền về (`payment_source`). */
-export const PaymentSource = z.enum(['webhook', 'query', 'simulator'])
+export const PaymentSource = z.enum(['webhook', 'query', 'simulator', 'return'])
 export type PaymentSource = z.infer<typeof PaymentSource>
 
 /** Lý do khoản tiền cần đối soát. */

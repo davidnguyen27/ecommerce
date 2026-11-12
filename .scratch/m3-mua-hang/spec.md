@@ -158,6 +158,7 @@ Mốc này **chỉ có hàng có sẵn và chỉ thanh toán qua VNPAY** (sandbo
   - mọi trường hợp khác (lệch tiền, đơn đã hủy hoặc hết hạn, tiền về thêm cho đơn đã `paid`) → gắn cờ **cần đối soát** kèm lý do; không tự đổi trạng thái đơn.
 - Hai đường gọi vào hàm đó:
   - `GET /api/payments/vnpay/ipn`: IPN của VNPAY, không cần đăng nhập, kiểm chữ ký; trả JSON `{RspCode, Message}`: sai chữ ký `97` (không ghi gì), không thấy đơn `01`, đã ghi trước đó `02`, lỗi phía hệ thống `99` để VNPAY gửi lại, còn lại `00` (kể cả giao dịch không thành công và tiền lệch đã vào đối soát);
+  - `POST /api/payments/vnpay/return`: trang kết quả chuyển các tham số `vnp_*` có chữ ký VNPAY gửi kèm khi đưa khách về; xử lý y như IPN, nguồn `return` (người dùng chốt 2026-11-12 vì `querydr` của sandbox lỗi, ADR 0010);
   - trang kết quả (`returnUrl`) gọi `GET /api/orders/:code?token=…` có tham số `refresh=1`: server truy vấn cổng theo mã đơn bên cổng rồi ghi nhận các giao dịch mới, sau đó trả đơn.
   Job hết hạn cũng truy vấn cổng trước khi hủy, để không hủy đơn đã trả mà IPN chưa tới.
 - URL IPN khai với VNPAY một lần, không gửi theo từng đơn; thử IPN trên máy cần tunnel HTTPS. Không có IPN thì vẫn ghi nhận qua `refresh=1` và job hết hạn (ticket 16).
@@ -180,7 +181,7 @@ Mốc này **chỉ có hàng có sẵn và chỉ thanh toán qua VNPAY** (sandbo
 
 ### API
 
-- Công khai: `POST /api/checkout/quote`, `POST /api/checkout`, `GET /api/orders/:code?token=…` (kèm `refresh=1`), `POST /api/orders/:code/cancel?token=…`, `GET /api/payments/vnpay/ipn`, `GET /api/shipping/regions` (danh mục hành chính) — hoặc trả danh mục cùng `quote`, tùy ticket.
+- Công khai: `POST /api/checkout/quote`, `POST /api/checkout`, `GET /api/orders/:code?token=…` (kèm `refresh=1`), `POST /api/orders/:code/cancel?token=…`, `GET /api/payments/vnpay/ipn`, `POST /api/payments/vnpay/return`, `GET /api/shipping/regions` (danh mục hành chính) — hoặc trả danh mục cùng `quote`, tùy ticket.
 - Khách đã đăng nhập: `GET /api/account/orders`, `GET /api/account/orders/:code`, `POST /api/account/orders/:code/cancel`.
 - Quản trị: danh sách đơn (lọc theo ba trạng thái, tìm theo mã đơn/số điện thoại/email, phân trang `PageQuery`), chi tiết đơn kèm lịch sử thao tác, chuyển trạng thái giao hàng (bàn giao kèm `carrier` và `trackingNumber` bắt buộc), hủy đơn chưa thanh toán, danh sách cần đối soát và hai thao tác đối soát, đọc và sửa cấu hình phí giao.
 - Mọi thao tác ghi ở admin đi qua `audited()`; hủy, hết hạn và ghi nhận thanh toán của khách hoặc hệ thống cũng ghi vào lịch sử thao tác của đơn (actor là khách/hệ thống), bằng một bảng sự kiện đơn chỉ ghi thêm.
