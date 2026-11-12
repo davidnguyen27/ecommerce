@@ -4,6 +4,7 @@ import {
   FileSpreadsheet,
   FileText,
   FolderTree,
+  HandCoins,
   History,
   Images,
   LayoutDashboard,
@@ -12,7 +13,9 @@ import {
   PackagePlus,
   Scale,
   ScrollText,
+  ShoppingBag,
   Tag,
+  Truck,
   Users,
   Warehouse,
   type LucideIcon,
@@ -50,6 +53,14 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
       { to: '/admin/stock', label: 'Tồn kho', icon: Warehouse, permission: STOCK_VIEW_PERMISSIONS },
       { to: '/admin/stock/receipts', label: 'Phiếu nhập', icon: PackagePlus, permission: STOCK_VIEW_PERMISSIONS },
       { to: '/admin/stock/movements', label: 'Sổ xuất nhập', icon: ScrollText, permission: STOCK_VIEW_PERMISSIONS },
+    ],
+  },
+  {
+    title: 'Bán hàng',
+    items: [
+      { to: '/admin/orders', label: 'Đơn hàng', icon: ShoppingBag, permission: 'order.view' },
+      { to: '/admin/reconciliation', label: 'Cần đối soát', icon: HandCoins, permission: 'order.view' },
+      { to: '/admin/shipping-fees', label: 'Phí giao', icon: Truck, permission: 'price.edit' },
     ],
   },
   {

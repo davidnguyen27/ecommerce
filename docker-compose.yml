@@ -50,6 +50,14 @@ services:
       R2_PUBLIC_BUCKET: ${R2_PUBLIC_BUCKET:-}
       R2_PRIVATE_BUCKET: ${R2_PRIVATE_BUCKET:-}
       MEDIA_PUBLIC_URL: ${MEDIA_PUBLIC_URL:-}
+      # Đủ hai khóa VNPAY thì dùng VNPAY (VNPAY_ENV mặc định sandbox). Image chạy NODE_ENV=production nên thiếu khóa
+      # hay dùng sandbox thì API không khởi động, trừ khi đặt PAYMENT_SIMULATOR=allow (chỉ local và smoke; không bao
+      # giờ đặt ở production).
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
+      VNPAY_ENV: ${VNPAY_ENV:-}
+      VNPAY_SERVER_IP: ${VNPAY_SERVER_IP:-}
+      PAYMENT_SIMULATOR: ${PAYMENT_SIMULATOR:-}
     depends_on:
       migrate: { condition: service_completed_successfully }
       # Chỉ có khi bật profile local; staging/production bỏ qua.

@@ -9,3 +9,7 @@ coverage/
 .env
 .env.*
 !.env.example
+test-results/
+playwright-report/
+# Build của Netlify (preset nitro netlify)
+.netlify/

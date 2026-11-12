@@ -37,6 +37,14 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'stock.receipt.create': 'Ghi phiếu nhập kho',
   'stock.opening': 'Ghi tồn đầu kỳ',
   'catalog.import': 'Import hàng hóa từ Excel',
+  'shipping.fee.update': 'Sửa phí giao',
+  'order.cancel': 'Hủy đơn chưa thanh toán',
+  'reconciliation.restore': 'Khôi phục đơn (đối soát)',
+  'reconciliation.resolve': 'Đóng mục đối soát: đã xử lý ngoài hệ thống',
+  'order.prepare': 'Bắt đầu chuẩn bị đơn',
+  'order.hand_over': 'Bàn giao vận chuyển',
+  'order.deliver': 'Đánh dấu đã giao',
+  'order.delivery_failed': 'Đánh dấu giao thất bại',
 }
 
 const AUDIT_ENTITY_LABELS: Record<string, string> = {
@@ -54,6 +62,8 @@ const AUDIT_ENTITY_LABELS: Record<string, string> = {
   commitment_type: 'Loại cam kết',
   import: 'Lần import',
   stock_receipt: 'Phiếu nhập kho',
+  shipping_fee: 'Phí giao',
+  order: 'Đơn hàng',
 }
 
 export const AUDIT_ENTITY_TYPES = Object.keys(AUDIT_ENTITY_LABELS)

@@ -47,6 +47,8 @@ model Staff {
   publishedProductVersions ProductVersion[]
   stockMovements           StockMovement[]
   stockReceipts            StockReceipt[]
+  orderEvents              OrderEvent[]
+  resolvedReconciliations  ReconciliationItem[]
 
   @@map("staff")
 }
@@ -104,18 +106,22 @@ model RefreshToken {
 
 /// Khách tự đăng ký; tách hẳn khỏi `staff` (ADR 0001), nên có thể trùng email với một nhân viên.
 model Customer {
-  id              String    @id @default(uuid()) @db.Uuid
+  id                  String    @id @default(uuid()) @db.Uuid
   /// Luôn lưu dạng chữ thường.
-  email           String    @unique
+  email               String    @unique
   /// argon2id, dạng chuỗi PHC.
-  passwordHash    String    @map("password_hash")
+  passwordHash        String    @map("password_hash")
   /// Chưa xác minh không chặn việc dùng tài khoản.
-  emailVerifiedAt DateTime? @map("email_verified_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  emailVerifiedAt     DateTime? @map("email_verified_at")
+  /// Địa chỉ nhận hàng (`ShippingAddress`) của lần đặt mua thành công gần nhất; trang đặt mua tự điền.
+  lastShippingAddress Json?     @map("last_shipping_address")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  consents CustomerConsent[]
-  tokens   CustomerToken[]
+  consents    CustomerConsent[]
+  tokens      CustomerToken[]
+  orders      Order[]
+  orderEvents OrderEvent[]
 
   @@map("customer")
 }
@@ -197,6 +203,8 @@ model ContentPageVersion {
   publishedBy   Staff       @relation(fields: [publishedById], references: [id], onDelete: Restrict)
 
   customerConsents CustomerConsent[]
+  orders           OrderPolicyVersion[]
+  orderConsents    Order[]
 
   @@unique([pageId, version])
   @@map("content_page_version")
@@ -339,11 +347,14 @@ model ProductVariant {
   sortOrder      Int           @default(0) @map("sort_order")
   /// Tồn trong kho; check constraint `>= 0`. Chỉ module kho ghi (api/src/stock/stock.ts), kèm một dòng sổ.
   onHand         Int           @default(0) @map("on_hand")
+  /// Số đã giữ cho đơn (ADR 0007); check constraint `>= 0` và `<= on_hand`. Còn hàng khi `on_hand - reserved > 0`.
+  reserved       Int           @default(0)
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
   images         ProductImageVariant[]
   stockMovements StockMovement[]
+  orderLines     OrderLine[]
 
   @@map("product_variant")
 }
@@ -352,6 +363,8 @@ enum StockMovementKind {
   receipt
   adjustment
   opening
+  /// Xuất bán: hàng của một đơn rời kho lúc bàn giao vận chuyển (ADR 0007).
+  sale
 
   @@map("stock_movement_kind")
 }
@@ -382,13 +395,17 @@ model StockMovement {
   /// Chỉ có, và luôn có, ở dòng nhập kho (check constraint).
   receiptId   String?                @map("receipt_id") @db.Uuid
   receipt     StockReceipt?          @relation(fields: [receiptId], references: [id], onDelete: Restrict)
-  actorId     String                 @map("actor_id") @db.Uuid
+  /// Chỉ có, và luôn có, ở dòng xuất bán (check constraint).
+  orderId     String?                @map("order_id") @db.Uuid
+  order       Order?                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  actorId    String                 @map("actor_id") @db.Uuid
   actor       Staff                  @relation(fields: [actorId], references: [id], onDelete: Restrict)
   createdAt   DateTime               @default(now()) @map("created_at")
 
   @@index([variantId, seq])
   @@index([createdAt])
   @@index([receiptId])
+  @@index([orderId])
   @@map("stock_movement")
 }
 
@@ -581,4 +598,295 @@ model SystemConfig {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_config")
+}
+
+/// Cấu hình phí giao chung, tối đa một dòng (check `id`). Không có dòng là chưa có mức mặc định: chưa nhận đơn.
+model ShippingFeeSetting {
+  id                    Boolean  @id @default(true)
+  /// VND, `>= 0`.
+  defaultFee            Int      @map("default_fee")
+  /// Tổng tiền hàng từ mức này trở lên thì miễn phí giao; `null` là không có miễn phí. VND, `>= 0`.
+  freeShippingThreshold Int?     @map("free_shipping_threshold")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@map("shipping_fee_setting")
+}
+
+/// Mức phí giao riêng của một tỉnh/thành, thắng mức mặc định.
+model ShippingFeeProvince {
+  /// Mã tỉnh/thành theo danh mục hành chính trong `@ecommerce/shared`.
+  provinceCode String @id @map("province_code")
+  /// VND, `>= 0`.
+  fee          Int
+
+  @@map("shipping_fee_province")
+}
+
+/// Trạng thái đơn hàng (GLOSSARY "Trạng thái đơn hàng"); chỉ chuyển theo các cạnh của spec.
+enum OrderStatus {
+  pending_payment
+  processing
+  completed
+  cancelled
+
+  @@map("order_status")
+}
+
+enum PaymentStatus {
+  unpaid
+  paid
+
+  @@map("payment_status")
+}
+
+enum FulfillmentStatus {
+  not_prepared
+  preparing
+  handed_over
+  delivered
+  failed
+
+  @@map("fulfillment_status")
+}
+
+/// Vì sao đơn chưa thanh toán bị hủy: quá hạn giữ hàng, khách tự hủy hay nhân viên hủy.
+enum OrderCancelReason {
+  expired
+  customer
+  staff
+
+  @@map("order_cancel_reason")
+}
+
+/// Ai làm một sự kiện đơn: nhân viên (có `staffId`), khách hay hệ thống (job hết hạn, cổng thanh toán).
+enum OrderEventActor {
+  staff
+  customer
+  system
+
+  @@map("order_event_actor")
+}
+
+/// Đơn hàng. Thông tin nhận hàng, tiền và dòng đơn là snapshot lúc đặt mua, không đổi về sau.
+model Order {
+  id                String            @id @default(uuid()) @db.Uuid
+  /// Mã khách thấy và `orderCode` gửi cổng thanh toán; sequence riêng bắt đầu từ 100000.
+  code              Int               @unique @default(dbgenerated("nextval('order_code_seq'::regclass)"))
+  status            OrderStatus       @default(pending_payment)
+  paymentStatus     PaymentStatus     @default(unpaid) @map("payment_status")
+  fulfillmentStatus FulfillmentStatus @default(not_prepared) @map("fulfillment_status")
+  /// Có khi khách đã đăng nhập lúc đặt, hoặc đơn vãng lai được gắn sau khi xác minh email.
+  customerId        String?           @map("customer_id") @db.Uuid
+  customer          Customer?         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  recipientName     String            @map("recipient_name")
+  phone             String
+  /// Luôn lưu dạng chữ thường.
+  email             String
+  provinceCode      String            @map("province_code")
+  provinceName      String            @map("province_name")
+  wardCode          String            @map("ward_code")
+  wardName          String            @map("ward_name")
+  /// Số nhà, đường.
+  streetAddress     String            @map("street_address")
+  note              String            @default("")
+  /// VND. Check constraint: `total = subtotal + shipping_fee`.
+  subtotal          BigInt
+  shippingFee       BigInt            @map("shipping_fee")
+  total             BigInt
+  /// SHA-256 của token tra cứu, hex; token chỉ có trong response đặt mua và link gửi khách.
+  lookupTokenHash   String            @unique @map("lookup_token_hash")
+  /// Hạn giữ hàng khi chưa thanh toán; `null` khi không còn hạn (đã trả hoặc đã hủy).
+  reservedUntil     DateTime?         @map("reserved_until")
+  /// Mã đơn bên cổng thanh toán (VNPAY `vnp_TxnRef`), cổng trả khi tạo link; dùng để truy vấn cổng (ADR 0010).
+  gatewayReference  String?           @unique @map("gateway_reference")
+  /// Có khi và chỉ khi đơn `cancelled` (check constraint `order_cancellation_check`).
+  cancelReason      OrderCancelReason? @map("cancel_reason")
+  cancelledAt       DateTime?         @map("cancelled_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  /// Khách vãng lai: phiên bản chính sách bảo mật đã đồng ý lúc đặt. Check constraint: có khi không có `customerId`.
+  privacyPolicyVersionId String?             @map("privacy_policy_version_id") @db.Uuid
+  privacyPolicyVersion   ContentPageVersion? @relation(fields: [privacyPolicyVersionId], references: [id], onDelete: Restrict)
+
+  /// Xuất hóa đơn công ty, snapshot lúc đặt. Check constraint: có đủ cả ba hoặc không có gì.
+  invoiceCompanyName String? @map("invoice_company_name")
+  invoiceTaxCode     String? @map("invoice_tax_code")
+  invoiceAddress     String? @map("invoice_address")
+
+  /// Bàn giao vận chuyển. Check constraint `order_handover_check`: có đủ cả ba khi và chỉ khi giao hàng đã tới
+  /// `handed_over` (kể cả `delivered`, `failed`).
+  carrier        String?
+  trackingNumber String?   @map("tracking_number")
+  handedOverAt   DateTime? @map("handed_over_at")
+
+  lines               OrderLine[]
+  stockMovements      StockMovement[]
+  policyVersions      OrderPolicyVersion[]
+  events              OrderEvent[]
+  lookupTokens        OrderLookupToken[]
+  paymentTransactions PaymentTransaction[]
+  reconciliationItems ReconciliationItem[]
+
+  @@index([customerId])
+  @@index([status, reservedUntil])
+  @@index([createdAt])
+  @@index([privacyPolicyVersionId])
+  @@index([email, status])
+  @@index([phone, status])
+  @@map("order")
+}
+
+/// Dòng đơn: snapshot biến thể lúc đặt mua.
+model OrderLine {
+  id          String         @id @default(uuid()) @db.Uuid
+  orderId     String         @map("order_id") @db.Uuid
+  order       Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Thứ tự trong giỏ, từ 0.
+  position    Int
+  variantId   String         @map("variant_id") @db.Uuid
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  sku         String
+  productName String         @map("product_name")
+  attributes  Json
+  /// Ảnh đại diện: `StoredImage` (api/src/media/images.ts) kèm `alt`; `null` khi không có.
+  image       Json?
+  /// VND, giá bán lúc đặt.
+  price       BigInt
+  /// 1–5 (check constraint).
+  quantity    Int
+
+  @@unique([orderId, position])
+  @@index([variantId])
+  @@map("order_line")
+}
+
+/// Phiên bản trang chính sách (đổi trả, bảo hành) gắn với sản phẩm trong đơn tại lúc đặt mua.
+model OrderPolicyVersion {
+  orderId       String             @map("order_id") @db.Uuid
+  order         Order              @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  pageVersionId String             @map("page_version_id") @db.Uuid
+  pageVersion   ContentPageVersion @relation(fields: [pageVersionId], references: [id], onDelete: Restrict)
+
+  @@id([orderId, pageVersionId])
+  @@index([pageVersionId])
+  @@map("order_policy_version")
+}
+
+/// Lịch sử thao tác của đơn. Append-only: trigger trong migration chặn UPDATE, DELETE và TRUNCATE.
+model OrderEvent {
+  id         String          @id @default(uuid()) @db.Uuid
+  seq        BigInt          @unique @default(autoincrement())
+  orderId    String          @map("order_id") @db.Uuid
+  order      Order           @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Loại sự kiện, xem `OrderEventKind` (api/src/orders/orders.ts).
+  kind       String
+  actor      OrderEventActor
+  /// Có đúng khi `actor = staff` (check constraint).
+  staffId    String?         @map("staff_id") @db.Uuid
+  staff      Staff?          @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  /// Chỉ khi `actor = customer` và khách đã đăng nhập; khách dùng token tra cứu thì `null`.
+  customerId String?         @map("customer_id") @db.Uuid
+  customer   Customer?       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  data       Json            @default("{}")
+  createdAt  DateTime        @default(now()) @map("created_at")
+
+  @@index([orderId, seq])
+  @@map("order_event")
+}
+
+/// Token tra cứu cấp thêm cho đơn, ví dụ cho link trong email; token lúc đặt mua nằm ở `Order.lookupTokenHash`.
+model OrderLookupToken {
+  /// SHA-256 của token, hex.
+  tokenHash String   @id @map("token_hash")
+  orderId   String   @map("order_id") @db.Uuid
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@map("order_lookup_token")
+}
+
+/// Đường báo tiền về: webhook của cổng, truy vấn khi khách quay về, hoặc nút của cổng giả lập.
+enum PaymentSource {
+  webhook
+  query
+  simulator
+  /// Tham số có chữ ký VNPAY gửi kèm khi đưa khách về trang kết quả (ADR 0010).
+  return
+
+  @@map("payment_source")
+}
+
+/// Khoản tiền cổng báo về cho đơn. Append-only: trigger trong migration chặn UPDATE, DELETE và TRUNCATE.
+model PaymentTransaction {
+  id        String        @id @default(uuid()) @db.Uuid
+  orderId   String        @map("order_id") @db.Uuid
+  order     Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// VND, > 0.
+  amount    BigInt
+  /// Mã tham chiếu giao dịch của cổng; unique để không ghi một khoản hai lần.
+  reference String        @unique
+  paidAt    DateTime      @map("paid_at")
+  source    PaymentSource
+  /// Dữ liệu gốc cổng gửi, để đối chiếu về sau.
+  payload   Json
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  reconciliationItem ReconciliationItem?
+
+  @@index([orderId])
+  @@map("payment_transaction")
+}
+
+/// Lý do khoản tiền cần đối soát.
+enum ReconciliationReason {
+  amount_mismatch
+  paid_after_cancel
+  extra_payment
+
+  @@map("reconciliation_reason")
+}
+
+enum ReconciliationStatus {
+  open
+  resolved
+
+  @@map("reconciliation_status")
+}
+
+enum ReconciliationResolution {
+  restored
+  handled_externally
+  /// Hệ thống đóng mục lệch tiền khi khoản sau làm đơn đủ tiền; không có `resolvedBy`.
+  settled_by_payment
+
+  @@map("reconciliation_resolution")
+}
+
+/// Cần đối soát (GLOSSARY): một khoản tiền không khớp với đơn, chờ kế toán quyết định.
+model ReconciliationItem {
+  id            String               @id @default(uuid()) @db.Uuid
+  orderId       String               @map("order_id") @db.Uuid
+  order         Order                @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  transactionId String               @unique @map("transaction_id") @db.Uuid
+  transaction   PaymentTransaction   @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  reason        ReconciliationReason
+  /// VND, số tiền của khoản này.
+  amount        BigInt
+  receivedAt    DateTime             @map("received_at")
+  status        ReconciliationStatus @default(open)
+  /// Cách đóng mục; có khi và chỉ khi `status = resolved`.
+  resolution    ReconciliationResolution?
+  /// Bắt buộc khi `handled_externally`: số tiền, mã giao dịch ngân hàng.
+  note          String?
+  resolvedById  String?              @map("resolved_by_id") @db.Uuid
+  resolvedBy    Staff?               @relation(fields: [resolvedById], references: [id], onDelete: Restrict)
+  resolvedAt    DateTime?            @map("resolved_at")
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@index([status, createdAt])
+  @@map("reconciliation_item")
 }

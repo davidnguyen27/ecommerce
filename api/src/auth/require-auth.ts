@@ -27,6 +27,16 @@ export function requireAuth(secret: Uint8Array, audience: AuthAudience): Request
   }
 }
 
+/**
+ * Đăng nhập không bắt buộc: không có header `Authorization` thì cho qua như khách vãng lai, có thì token phải còn
+ * hạn và đúng audience (sai thì 401, để trình duyệt refresh rồi gửi lại thay vì bị coi là khách vãng lai).
+ * Route đọc `req.auth?.subjectId`.
+ */
+export function optionalAuth(secret: Uint8Array, audience: AuthAudience): RequestHandler {
+  const required = requireAuth(secret, audience)
+  return (req, res, next) => (req.headers.authorization === undefined ? next() : required(req, res, next))
+}
+
 /** Lấy subject đã xác thực; chỉ gọi sau `requireAuth`. */
 export function authSubject(req: Request): string {
   if (!req.auth) throw new Error('Route chưa đi qua requireAuth')

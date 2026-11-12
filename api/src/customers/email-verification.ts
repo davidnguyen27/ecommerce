@@ -26,7 +26,10 @@ export async function sendVerificationEmail(
   })
 }
 
-/** Dùng token xác minh; trả `false` khi token sai, đã dùng hoặc hết hạn. */
+/**
+ * Dùng token xác minh; trả `false` khi token sai, đã dùng hoặc hết hạn. Cùng transaction, các đơn vãng lai
+ * (chưa có `customer_id`) đặt bằng đúng email này được gắn vào khách: giờ đã chắc email là của khách.
+ */
 export async function verifyEmail(prisma: Db, token: string): Promise<boolean> {
   return prisma.$transaction(async (tx) => {
     const customerId = await claimCustomerToken(tx, token, 'email_verification')
@@ -35,6 +38,9 @@ export async function verifyEmail(prisma: Db, token: string): Promise<boolean> {
       where: { id: customerId, emailVerifiedAt: null },
       data: { emailVerifiedAt: new Date() },
     })
+    const customer = await tx.customer.findUniqueOrThrow({ where: { id: customerId } })
+    // Email trên đơn và trên khách đều lưu chữ thường.
+    await tx.order.updateMany({ where: { customerId: null, email: customer.email }, data: { customerId } })
     return true
   })
 }

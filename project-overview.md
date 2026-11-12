@@ -158,7 +158,7 @@ Các nhãn trên mô tả nhu cầu nghiệp vụ, chưa phải bộ trạng th�
 
 ### 6.1. Thanh toán, đối soát và hoàn tiền
 
-Đề xuất bắt đầu với một cổng thanh toán phục vụ thị trường Việt Nam, hỗ trợ khoản thanh toán cho hàng có sẵn, tiền cọc và phần còn lại của đơn đặt trước. Nhà cung cấp cụ thể chưa được chọn; cần xác nhận khả năng tích hợp và điều kiện sử dụng thực tế.
+Đề xuất bắt đầu với một cổng thanh toán phục vụ thị trường Việt Nam, hỗ trợ khoản thanh toán cho hàng có sẵn, tiền cọc và phần còn lại của đơn đặt trước. Nhà cung cấp cụ thể chưa được chọn; cần xác nhận khả năng tích hợp và điều kiện sử dụng thực tế. (M3 chọn ZaloPay, rồi đổi sang VNPAY: xem `docs/adr/0010-vnpay-thay-zalopay.md`.)
 
 Mỗi giao dịch gắn với đúng đơn và mục đích thu tiền. Trang quản trị thể hiện tổng phải trả, tiền đã nhận, tiền đã hoàn và số còn phải thu. Báo cáo tách khoản cọc của đơn chưa giao khỏi giá trị các đơn đã hoàn tất để chủ doanh nghiệp không nhầm số tiền nhận với kết quả giao hàng.
 

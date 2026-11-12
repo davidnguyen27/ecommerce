@@ -25,7 +25,7 @@ Sau mốc này, sản phẩm có:
   - Phân quyền theo permission.
   - Mọi thao tác nhạy cảm đều ghi audit log.
 - **Hạ tầng**:
-  - Ba môi trường local, staging, production chạy Docker Compose trên VPS, phía sau Caddy.
+  - Ba môi trường local, staging, production chạy Docker Compose trên VPS, phía sau Caddy. (2026-11-12: bản demo tạm chạy trên Netlify + Render + Neon + R2, xem `docs/adr/0011-trien-khai-demo-netlify-render-neon.md`; VPS vẫn là đích khi bán thật.)
   - Ảnh và chứng từ lưu trên object storage tương thích S3 (R2).
   - Mỗi đêm sao lưu Postgres, mã hóa và đẩy lên R2.
   - Giám sát lỗi bằng Sentry, kiểm tra sức khỏe hệ thống qua `/healthz`.
@@ -262,7 +262,7 @@ Mốc này **chưa có tồn kho, chưa có mua hàng**. Trang sản phẩm hi�
 
 - Tồn kho, sổ xuất nhập kho, tình trạng còn hàng/hết hàng/đặt trước trên trang sản phẩm (M2, M4).
 - Import sản phẩm, biến thể và tồn đầu kỳ bằng CSV/Excel, tải ảnh hàng loạt ghép theo SKU (cuối M2).
-- Giỏ hàng, checkout, giữ hàng, thanh toán PayOS, báo giá vận chuyển, địa chỉ hai cấp tỉnh/xã (M3).
+- Giỏ hàng, checkout, giữ hàng, thanh toán PayOS (sau đổi sang ZaloPay, ADR 0009, rồi VNPAY, ADR 0010), báo giá vận chuyển, địa chỉ hai cấp tỉnh/xã (M3).
 - Đặt trước, đặt cọc, đợt đặt trước (M4). Voucher (M5). Hủy đơn, hoàn tiền, đổi trả, bảo hành, ticket hỗ trợ (M6). Báo cáo (M7). Chatbot (M8).
 - Tra cứu đơn cho khách không có tài khoản qua OTP email (M3).
 - Yêu cầu xóa dữ liệu cá nhân của khách (ghi nhận ở mốc hậu mãi).

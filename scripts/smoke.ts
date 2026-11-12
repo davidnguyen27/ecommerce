@@ -21,6 +21,10 @@ const env = {
   // Không theo .env local: bỏ SeaweedFS (sẽ tranh cổng 9000 với stack dev), giữ file trong bộ nhớ.
   COMPOSE_PROFILES: '',
   STORAGE_PROVIDER: 'memory',
+  // Luôn cổng giả lập, kể cả khi .env local có khóa VNPAY: smoke không được tạo đơn ở VNPAY.
+  VNPAY_TMN_CODE: '',
+  VNPAY_HASH_SECRET: '',
+  PAYMENT_SIMULATOR: 'allow',
 }
 
 function compose(...args: string[]) {
@@ -211,6 +215,8 @@ const CHECKS: Check[] = [
       'alt="Đã thông báo Bộ Công Thương"',
       '<summary>Danh mục</summary>',
       'href="/tai-khoan"',
+      // Biểu tượng giỏ; số món chỉ có sau khi mount nên HTML từ server không có.
+      'href="/gio-hang"',
       'Giày dép',
       'href="/danh-muc/sneaker-co-thap"',
       'role="search"',
@@ -282,6 +288,8 @@ const CHECKS: Check[] = [
       'data-testid="availability"',
       'Còn hàng',
       'Hết hàng',
+      'data-testid="add-to-cart"',
+      'Thêm vào giỏ',
       // Dữ liệu cấu trúc: khoảng giá VND của hai biến thể đang bán, còn hàng vì Đen còn, thương hiệu, ảnh.
       '<script type="application/ld+json">',
       '"@type":"Product"',
@@ -349,6 +357,27 @@ const CHECKS: Check[] = [
   },
   // Phiên khách chỉ có ở trình duyệt, nên HTML từ server chỉ có khung trang.
   { path: '/tai-khoan', status: 200, contains: ['<h1>Tài khoản</h1>', 'Đang tải'] },
+  { path: '/tai-khoan/don-hang/100000', status: 200, contains: ['Đơn hàng #100000', 'Đang tải', NOINDEX] },
+  // Giỏ hàng ở localStorage của trình duyệt, nên HTML từ server chỉ có khung trang.
+  { path: '/gio-hang', status: 200, contains: ['<h1>Giỏ hàng</h1>', 'Đang tải', NOINDEX] },
+  // Đặt mua và đơn qua token là dữ liệu cá nhân: HTML từ server chỉ có khung trang.
+  { path: '/dat-mua', status: 200, contains: ['<h1>Đặt mua</h1>', 'Đang tải', NOINDEX] },
+  { path: '/don-hang/100000?token=sai', status: 200, contains: ['Đơn hàng #100000', 'Đang tải', NOINDEX] },
+  // Trang kết quả cổng đưa khách quay về: URL không có token, token nằm ở sessionStorage của trình duyệt.
+  { path: '/don-hang/100000?ket-qua=1', status: 200, contains: ['Đơn hàng #100000', 'Đang tải', NOINDEX] },
+  // Stack của smoke không có khóa VNPAY nên dùng cổng giả lập.
+  {
+    path: '/thanh-toan-gia-lap?orderCode=100000&amount=2030000',
+    status: 200,
+    contains: [
+      '<h1>Cổng thanh toán giả lập</h1>',
+      '#100000',
+      'Giả lập đã thanh toán',
+      'Giả lập hết hạn',
+      'Số tiền chuyển',
+      NOINDEX,
+    ],
+  },
   { path: '/xac-minh-email?token=sai', status: 200, contains: ['Link xác minh không hợp lệ hoặc đã hết hạn'] },
   {
     path: '/admin/login',

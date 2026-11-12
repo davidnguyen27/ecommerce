@@ -1,5 +1,11 @@
 import { Router } from 'express'
-import { ChangePasswordRequest, ErrorCode, type CustomerProfile } from '@ecommerce/shared'
+import {
+  ChangePasswordRequest,
+  ErrorCode,
+  ShippingAddress,
+  type CustomerProfile,
+  type LastShippingAddress,
+} from '@ecommerce/shared'
 import { hashPassword, verifyPassword } from '../auth/password.ts'
 import { authSubject } from '../auth/require-auth.ts'
 import { clientOf } from '../auth/session-routes.ts'
@@ -45,6 +51,13 @@ export function accountRoutes(deps: CustomerAuthDeps) {
         },
       }
       res.json(body)
+    })
+    .get('/shipping-address', async (req, res) => {
+      const customer = await prisma.customer.findUnique({ where: { id: authSubject(req) } })
+      if (!customer) throw signedOut()
+      const stored = ShippingAddress.safeParse(customer.lastShippingAddress)
+      const body: LastShippingAddress = { address: stored.success ? stored.data : null }
+      res.set('Cache-Control', 'no-store').json(body)
     })
     .post('/email-verification', async (req, res) => {
       const customer = await prisma.customer.findUnique({ where: { id: authSubject(req) } })

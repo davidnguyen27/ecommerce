@@ -8,13 +8,23 @@ import { createPrisma } from '../../src/db.ts'
 import { InMemoryMailer } from '../../src/adapters/mailer.ts'
 import { InMemoryStorage } from '../../src/adapters/storage.ts'
 import { Jobs } from '../../src/jobs/jobs.ts'
+import { InMemoryPaymentGateway, SimulatorPaymentGateway, type PaymentGateway } from '../../src/payments/gateway.ts'
 
 /** Gốc URL website trong link của email gửi ra từ test. */
 export const SITE_URL = 'https://shop.test'
 
+/** `vnp_HashSecret` của test (không phải khóa thật hay khóa sandbox); test tự ký IPN bằng khóa này. */
+export const VNPAY_HASH_SECRET = 'test-vnpay-hash-secret'
+
 type Options = {
   /** Ghi đè URL DB, ví dụ để giả lập mất kết nối. */
   databaseUrl?: string
+  /** Dùng cổng giả lập như khi chạy local thay cho bản trong bộ nhớ (`payments` khi đó không được app dùng). */
+  simulator?: boolean
+  /** Cổng thanh toán khác cho app dùng, ví dụ VNPAY trên HTTP giả (`payments` khi đó không được app dùng). */
+  gateway?: PaymentGateway
+  /** `trust proxy` như `TRUST_PROXY` của bản deploy (ADR 0011); không đặt thì giữ mặc định của app. */
+  trustProxy?: string | number
 }
 
 /**
@@ -41,10 +51,31 @@ export async function createTestApp(options: Options = {}) {
   const jwtSecret = randomBytes(32).toString('base64url')
   // Hàng đợi job thật trên DB của test; worker gửi thư vào mailer giả.
   // DB bị ghi đè là DB giả lập hỏng, nên không khởi động worker trên đó.
-  const jobs = new Jobs({ databaseUrl, prisma, mailer, logger, maxConnections: 2 })
+  const payments = new InMemoryPaymentGateway()
+  const gateway = options.gateway ?? (options.simulator ? new SimulatorPaymentGateway(SITE_URL) : payments)
+  const jobs = new Jobs({
+    databaseUrl,
+    prisma,
+    mailer,
+    logger,
+    payments: gateway,
+    siteUrl: SITE_URL,
+    maxConnections: 2,
+  })
   const startJobs = !options.databaseUrl
   if (startJobs) await jobs.start()
-  const app = createApp({ prisma, logger, emails: jobs, storage, jwtSecret, siteUrl: SITE_URL })
+  const app = createApp({
+    prisma,
+    logger,
+    emails: jobs,
+    orderExpiry: jobs,
+    storage,
+    jwtSecret,
+    siteUrl: SITE_URL,
+    payments: gateway,
+    vnpayHashSecret: VNPAY_HASH_SECRET,
+    trustProxy: options.trustProxy,
+  })
 
   onTestFinished(async () => {
     if (startJobs) await jobs.stop()
@@ -59,6 +90,12 @@ export async function createTestApp(options: Options = {}) {
     jwtSecret,
     mailer,
     storage,
+    /** Cổng thanh toán giả: link đã tạo, đã hủy, trạng thái truy vấn, lỗi khi tạo link. */
+    payments,
+    /** Logger của app, để test gọi thẳng hàm job. */
+    logger,
+    /** Phụ thuộc của hàm hết hạn, để test gọi thẳng job với `now` tương lai. */
+    expireDeps: { prisma, payments: gateway, logger, emails: jobs, siteUrl: SITE_URL },
     logs: () => lines.map((line) => JSON.parse(line) as Record<string, unknown>),
   }
 }
