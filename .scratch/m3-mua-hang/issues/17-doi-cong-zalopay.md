@@ -1,5 +1,7 @@
 # 17: Đổi cổng thanh toán từ PayOS sang ZaloPay
 
+> Đã được thay bằng ticket 18 (VNPAY, ADR 0010), ngày 2026-11-11. Giữ lại làm lịch sử.
+
 **What to build:**
 - Bản cài đặt ZaloPay của interface cổng thanh toán thay cho PayOS (ADR 0009), chạy được ngay khi có khóa sandbox hoặc khóa thật. Bỏ hẳn code PayOS.
 - Callback của ZaloPay ghi nhận thanh toán qua `recordPayment`, như webhook PayOS trước đây.

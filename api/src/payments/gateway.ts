@@ -10,6 +10,8 @@ export type PaymentLinkRequest = {
   returnUrl: string
   /** Link hết hạn cùng lúc với hạn giữ hàng. */
   expiresAt: Date
+  /** IP của khách đặt mua (VNPAY đòi `vnp_IpAddr`). */
+  clientIp: string
 }
 
 /** Link vừa tạo: trang khách tới để trả tiền, và mã đơn bên cổng để truy vấn sau (`order.gateway_reference`). */
@@ -37,8 +39,8 @@ export class PaymentGatewayError extends Error {
 }
 
 /**
- * Cổng thanh toán (ADR 0009). Bản thật là ZaloPay (`zalopay.ts`), chọn ở `gateway-from-env.ts`; local dùng cổng giả
- * lập; test dùng bản trong bộ nhớ. Kiểm MAC của callback không nằm ở đây: đó là hàm thuần trên khóa callback.
+ * Cổng thanh toán (ADR 0010). Bản thật là VNPAY (`vnpay.ts`), chọn ở `gateway-from-env.ts`; local dùng cổng giả
+ * lập; test dùng bản trong bộ nhớ. Kiểm chữ ký IPN không nằm ở đây: đó là hàm thuần trên khóa bí mật.
  */
 export interface PaymentGateway {
   /** Tạo link thanh toán; lỗi thì ném để đơn không được tạo. */
@@ -88,7 +90,7 @@ export class InMemoryPaymentGateway implements PaymentGateway {
 export const SIMULATOR_PATH = '/thanh-toan-gia-lap'
 
 /**
- * Cổng giả lập cho local và smoke, khi chưa có khóa ZaloPay (spec "Thanh toán"): link trỏ tới trang
+ * Cổng giả lập cho local và smoke, khi chưa có khóa VNPAY (spec "Thanh toán"): link trỏ tới trang
  * `/thanh-toan-gia-lap` của chính website, mang mã đơn, số tiền, hạn và trang quay về trong query. Truy vấn luôn là
  * chưa trả: tiền giả lập về qua nút "Giả lập đã thanh toán", ghi nhận thẳng.
  */

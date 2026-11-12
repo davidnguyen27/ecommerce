@@ -1,60 +1,93 @@
 import { randomUUID } from 'node:crypto'
-import { Router, type Response } from 'express'
+import { Router, type Request } from 'express'
 import {
   ErrorCode,
   SimulatedExpiryRequest,
   SimulatedPaymentRequest,
-  ZaloPayCallback,
-  ZaloPayCallbackData,
-  type ZaloPayCallbackResult,
+  VnpayIpnQuery,
+  type VnpayIpnResult,
 } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
+import type { PaymentSource } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 import { assertCancellable, expireOrder } from '../orders/cancel-order.ts'
 import { SimulatorPaymentGateway } from '../payments/gateway.ts'
 import { recordPayment } from '../payments/record-payment.ts'
-import { isValidZaloPayCallback, orderCodeFromAppTransId } from '../payments/zalopay.ts'
+import { isValidVnpaySignature, isVnpaySuccess, parseTxnRef, parseVnDateTime } from '../payments/vnpay.ts'
 
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đơn hàng')
 
-/** ZaloPay đọc kết quả trong body, luôn với HTTP 200. */
-const reply = (res: Response, body: ZaloPayCallbackResult) => res.json(body)
-
 /** Cổng thanh toán báo tiền về, không cần đăng nhập. */
-export function paymentRoutes({ prisma, emails, siteUrl, payments, zalopayCallbackKey, logger }: AppDeps) {
+export function paymentRoutes({ prisma, emails, siteUrl, payments, vnpayHashSecret, logger }: AppDeps) {
   const router = Router()
   const recordDeps = { prisma, emails, siteUrl }
 
-  if (zalopayCallbackKey) {
-    router.post('/zalopay/callback', async (req, res) => {
-      const callback = ZaloPayCallback.safeParse(req.body)
-      // Kiểm MAC trên chuỗi `data` gốc trước khi đọc gì khác.
-      if (!callback.success || !isValidZaloPayCallback(callback.data.data, callback.data.mac, zalopayCallbackKey)) {
-        req.log.warn('Callback ZaloPay sai MAC')
-        return reply(res, { return_code: -1, return_message: 'mac not equal' })
+  if (vnpayHashSecret) {
+    /**
+     * Kết quả thanh toán VNPAY có chữ ký, từ IPN hay từ trang quay về: cùng bộ tham số, cùng chữ ký, ghi qua cùng
+     * `recordPayment` nên về trùng chỉ ghi một lần. Mã trả lời theo ADR 0010.
+     */
+    const recordVnpayResult = async (
+      req: Request,
+      raw: Record<string, unknown>,
+      source: PaymentSource,
+    ): Promise<VnpayIpnResult> => {
+      // Kiểm chữ ký trên toàn bộ tham số gốc trước khi đọc gì khác.
+      if (!isValidVnpaySignature(raw, vnpayHashSecret)) {
+        req.log.warn({ source }, 'Kết quả VNPAY sai chữ ký')
+        return { RspCode: '97', Message: 'Invalid signature' }
+      }
+      const parsed = VnpayIpnQuery.safeParse(raw)
+      const ref = parsed.success ? parseTxnRef(parsed.data.vnp_TxnRef) : null
+      if (!parsed.success || !ref) {
+        req.log.warn({ source, txnRef: raw.vnp_TxnRef }, 'Kết quả VNPAY cho mã giao dịch lạ')
+        return { RspCode: '01', Message: 'Order not found' }
+      }
+      const data = parsed.data
+      if (!isVnpaySuccess(data)) {
+        // Khách hủy, thẻ lỗi, hết hạn...: không có tiền về, đơn giữ nguyên chờ thanh toán.
+        req.log.info(
+          { source, txnRef: data.vnp_TxnRef, responseCode: data.vnp_ResponseCode, status: data.vnp_TransactionStatus },
+          'VNPAY: giao dịch không thành công',
+        )
+        return { RspCode: '00', Message: 'Confirm Success' }
       }
       try {
-        const raw: unknown = JSON.parse(callback.data.data)
-        const data = ZaloPayCallbackData.parse(raw)
-        const orderCode = orderCodeFromAppTransId(data.app_trans_id)
-        const outcome = orderCode
-          ? await recordPayment(recordDeps, {
-              orderCode,
-              amount: data.amount,
-              reference: String(data.zp_trans_id),
-              paidAt: new Date(data.server_time),
-              source: 'webhook',
-              payload: raw as object,
-            })
-          : 'unknown_order'
-        req.log.info({ appTransId: data.app_trans_id, zpTransId: data.zp_trans_id, outcome }, 'Callback thanh toán')
-        // Đã ghi từ trước hay mã đơn lạ cũng là đã nhận: ZaloPay không cần gửi lại.
-        return reply(res, { return_code: 1, return_message: 'success' })
+        const outcome = await recordPayment(recordDeps, {
+          orderCode: ref.orderCode,
+          amount: Number(data.vnp_Amount) / 100,
+          reference: data.vnp_TransactionNo,
+          paidAt: (data.vnp_PayDate && parseVnDateTime(data.vnp_PayDate)) || new Date(),
+          source,
+          payload: raw as object,
+        })
+        req.log.info(
+          { source, txnRef: data.vnp_TxnRef, transactionNo: data.vnp_TransactionNo, outcome },
+          'Kết quả thanh toán VNPAY',
+        )
+        if (outcome === 'unknown_order') return { RspCode: '01', Message: 'Order not found' }
+        if (outcome === 'duplicate') return { RspCode: '02', Message: 'Order already confirmed' }
+        // `paid`, hay `flagged` (lệch tiền, trả sau khi hủy) đã vào đối soát: gửi lại cũng không đổi gì.
+        return { RspCode: '00', Message: 'Confirm Success' }
       } catch (err) {
-        req.log.error({ err }, 'Không ghi nhận được callback ZaloPay')
-        return reply(res, { return_code: 0, return_message: 'retry' })
+        req.log.error({ err, source }, 'Không ghi nhận được kết quả VNPAY')
+        return { RspCode: '99', Message: 'Unknown error' }
       }
+    }
+
+    // IPN: VNPAY gọi server bằng GET, tham số trong query; kết quả đọc trong body JSON.
+    router.get('/vnpay/ipn', async (req, res) => {
+      res.json(await recordVnpayResult(req, req.query as Record<string, unknown>, 'webhook'))
+    })
+
+    // Trang quay về: VNPAY gửi kèm cùng bộ tham số có chữ ký trên URL; trang kết quả chuyển lại cho API. Người dùng
+    // chốt 2026-11-12 vì `querydr` của sandbox lỗi và IPN cần tunnel (ADR 0010). Chữ ký chỉ VNPAY và hệ thống tạo
+    // được, nên an toàn như IPN; không cần token đơn.
+    router.post('/vnpay/return', async (req, res) => {
+      const body: unknown = req.body
+      const raw = body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : {}
+      res.json(await recordVnpayResult(req, raw, 'return'))
     })
   }
 
