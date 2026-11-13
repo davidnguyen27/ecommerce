@@ -8,8 +8,9 @@ services:
     region: singapore
     dockerfilePath: api/Dockerfile
     dockerContext: .
-    # Gói Free không có pre-deploy command: chạy migration rồi mới khởi động API (WORKDIR của image là /repo/api).
-    dockerCommand: sh -c "pnpm migrate && node dist/server.js"
+    # Gói Free không có pre-deploy command: chạy migration rồi mới khởi động API (script `start:migrate` của api,
+    # WORKDIR của image là /repo/api). Render không tách được `sh -c "..."` (cả chuỗi thành tên lệnh), nên để lệnh đơn.
+    dockerCommand: pnpm start:migrate
     healthCheckPath: /healthz
     autoDeploy: true
     envVars:

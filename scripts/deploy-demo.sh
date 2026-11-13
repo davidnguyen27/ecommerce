@@ -134,6 +134,26 @@ ask_secret() {
   printf -v "$key" '%s' "$input"
 }
 
+# ask_secret_match KEY "Prompt" REGEX "Hint" asks (hidden) until the value matches
+# REGEX. Hidden input shows nothing while pasting, so people paste again and
+# again; the value then holds several copies. Prints only the length.
+ask_secret_match() {
+  local key="$1" prompt="$2" regex="$3" hint="$4"
+  note "Ô nhập ẩn: dán MỘT lần (chuột phải hoặc Shift+Insert) rồi Enter, màn hình không hiện gì là bình thường."
+  local value
+  while :; do
+    ask_secret "$key" "$prompt" || return 1
+    value="${!key}"
+    if [[ "$value" =~ $regex ]]; then
+      step "Đã nhận ${#value} ký tự, đúng dạng."
+      return 0
+    fi
+    warn "Đã nhận ${#value} ký tự nhưng sai dạng ($hint). Dán lại một lần."
+    # Bỏ giá trị cũ khỏi file để Enter không giữ lại giá trị sai.
+    if [[ -f "$ENV_FILE" ]]; then grep -v "^${key}=" "$ENV_FILE" > "$ENV_FILE.tmp" || true; cat "$ENV_FILE.tmp" > "$ENV_FILE"; rm -f "$ENV_FILE.tmp"; fi
+  done
+}
+
 # write_env KEY VALUE upserts KEY='VALUE' into ENV_FILE (replaces any existing
 # line) and sets $KEY. Idempotent. Creates ENV_FILE at mode 0600; writes through
 # a symlink and keeps an existing file's mode.
@@ -233,11 +253,14 @@ open_url "https://console.neon.tech/app/projects"
 step "New Project → đặt tên (ví dụ atelier-demo) → Region: AWS Asia Pacific (Singapore) → Create."
 step "Bấm Connect. TẮT 'Connection pooling' (pg-boss cần LISTEN/NOTIFY, pooler không hỗ trợ)."
 step "Chép connection string: host KHÔNG có '-pooler', cuối có '?sslmode=require'."
-ask_secret DATABASE_URL "Dán connection string direct:"
-if [[ "$DATABASE_URL" == *-pooler* ]]; then
-  warn "Chuỗi này có '-pooler': hãy tắt Connection pooling rồi chép lại."
-  ask_secret DATABASE_URL "Dán connection string direct:"
-fi
+ask_secret_match DATABASE_URL "Dán connection string direct:" '^postgres(ql)?://[^[:space:]]+$' \
+  "một chuỗi postgresql://… duy nhất"
+while [[ "$DATABASE_URL" == *-pooler* || "$DATABASE_URL" == *postgres*postgres* ]]; do
+  warn "Chuỗi có '-pooler' (tắt Connection pooling rồi chép lại) hoặc bị dán nhiều lần."
+  write_env DATABASE_URL ""
+  ask_secret_match DATABASE_URL "Dán connection string direct:" '^postgres(ql)?://[^[:space:]]+$' \
+    "một chuỗi postgresql://… duy nhất"
+done
 write_env DATABASE_URL "$DATABASE_URL"
 
 # ── 3 ─────────────────────────────────────────────────────────────────────
@@ -271,8 +294,8 @@ step "Phạm vi: chỉ hai bucket '$R2_PUBLIC_BUCKET' và '$R2_PRIVATE_BUCKET' �
 step "Trang kết quả hiện Access Key ID, Secret Access Key và endpoint S3 (https://<account_id>.r2.cloudflarestorage.com)."
 warn "Secret Access Key chỉ hiện một lần: chép ngay."
 ask R2_ENDPOINT "Dán endpoint S3:"
-ask_secret R2_ACCESS_KEY_ID "Dán Access Key ID:"
-ask_secret R2_SECRET_ACCESS_KEY "Dán Secret Access Key:"
+ask_secret_match R2_ACCESS_KEY_ID "Dán Access Key ID:" '^[0-9a-f]{32}$' "32 ký tự 0-9, a-f"
+ask_secret_match R2_SECRET_ACCESS_KEY "Dán Secret Access Key:" '^[0-9a-f]{64}$' "64 ký tự 0-9, a-f"
 write_env R2_ENDPOINT "${R2_ENDPOINT%/}"
 write_env R2_ACCESS_KEY_ID "$R2_ACCESS_KEY_ID"
 write_env R2_SECRET_ACCESS_KEY "$R2_SECRET_ACCESS_KEY"
