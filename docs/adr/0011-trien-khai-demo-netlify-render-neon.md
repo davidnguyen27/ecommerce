@@ -26,7 +26,7 @@ Netlify proxy `/api/*` sang Render với status 200, nên trình duyệt vẫn t
 
 **IP khách**
 
-- `req.ip` là IP khách và được dùng cho rate limit, audit và `vnp_IpAddr`. Trước API có bốn tầng proxy tính cả kết nối trực tiếp (Netlify, Cloudflare mà Render đặt phía trước, rồi mạng nội bộ của Render), nên `TRUST_PROXY=4`; số này chốt từ IP thật trong audit ở mục Kết quả thử thật. Đặt sai số tầng thì mọi khách chung một IP và rate limit chặn cả shop.
+- `req.ip` là IP khách và được dùng cho rate limit, audit và `vnp_IpAddr`. Trước API có năm tầng proxy tính cả kết nối trực tiếp (hai tầng của Netlify, Cloudflare mà Render đặt phía trước, rồi mạng nội bộ của Render), nên `TRUST_PROXY=5`. Số này đo bằng IP trong audit ở mục Kết quả thử thật, và đổi nếu Netlify hay Render đổi hạ tầng. Đặt sai số tầng thì mọi khách chung một IP và rate limit chặn cả shop.
 
 **Database**
 
@@ -66,8 +66,9 @@ vấn chỉ đọc vào Neon và thử tay trên trình duyệt:
   Cloudflare trước load balancer của mình, nên giữa khách và API có hơn hai tầng proxy, và `TRUST_PROXY=2` không đủ.
   Hệ quả: rate limit có thể gộp nhiều khách chung một IP, audit và `vnp_IpAddr` không đúng IP khách. Log request của
   Render cho `x-forwarded-for: <khách>, <Cloudflare 162.158.x>, <10.24.x nội bộ>` với request gọi thẳng Render. Đặt thử
-  `TRUST_PROXY=3` thì audit ghi `47.130.x.x` (AWS Singapore, tức Netlify): request qua Netlify có thêm một tầng, nên
-  chốt `TRUST_PROXY=4`. Express đếm cả kết nối trực tiếp; địa chỉ giả do khách tự chèn nằm bên trái nên không ảnh
+  `TRUST_PROXY=3` thì audit ghi `47.130.x.x` (AWS Singapore, tức Netlify); đặt `4` thì ghi `100.64.x.x` (mạng nội bộ
+  của Netlify). Chuỗi qua Netlify là `<khách>, <100.64.x>, <47.130.x>, <Cloudflare>, <10.x>`, nên đặt
+  `TRUST_PROXY=5`. Đếm tầng phụ thuộc hạ tầng của hai bên; nếu audit lại ra IP lạ thì đo lại. Express đếm cả kết nối trực tiếp; địa chỉ giả do khách tự chèn nằm bên trái nên không ảnh
   hưởng. Request gọi thẳng Render (cron ping, IPN VNPAY) có ít tầng hơn nên `req.ip` của chúng không đáng tin:
   ai gọi thẳng `onrender.com` kèm `x-forwarded-for` tự chế thì chọn được IP mà API thấy, nên lách được rate limit. Chấp
   nhận cho bản demo; bán thật thì quay về VPS sau Caddy, nơi API chỉ nhận kết nối từ proxy.
