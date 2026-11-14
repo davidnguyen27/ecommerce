@@ -23,6 +23,10 @@ fi
 TOTAL_STAGES=0
 
 _STAGE_INDEX=0
+# Chạy tiếp từ stage N (`bash scripts/deploy-demo.sh N`): các stage trước chỉ nạp giá trị đã lưu trong ENV_FILE,
+# không in, không hỏi, không mở trình duyệt.
+_FROM=1
+_skipping() { (( _STAGE_INDEX > 0 && _STAGE_INDEX < _FROM )); }
 ENV_FILE="${ENV_FILE:-.env}"
 WRITTEN_ENV=()    # KEYs written to ENV_FILE this run
 WRITTEN_SECRET=() # secret NAMEs set this run
@@ -50,22 +54,24 @@ banner() {
 # stage "Name" clears the screen, then announces a stage and shows progress.
 # Clearing keeps only the current step on screen.
 stage() {
-  _clear
   _STAGE_INDEX=$((_STAGE_INDEX + 1))
+  if _skipping; then printf '  %s↷ Bỏ qua stage %s · %s%s\n' "$DIM" "$_STAGE_INDEX" "$1" "$RESET"; return 0; fi
+  _clear
   printf '\n%s%s▸ Stage %s/%s · %s%s\n' \
     "$BOLD" "$BLUE" "$_STAGE_INDEX" "$TOTAL_STAGES" "$1" "$RESET"
 }
 
 # say "..." prints a plain instruction line.
-say()  { printf '  %s\n' "$1"; }
+say()  { _skipping && return 0; printf '  %s\n' "$1"; }
 # step "..." is a numbered-feeling action the human takes in the browser.
-step() { printf '  %s•%s %s\n' "$BLUE" "$RESET" "$1"; }
-note() { printf '  %s%s%s\n' "$DIM" "$1" "$RESET"; }
-warn() { printf '  %s⚠ %s%s\n' "$YELLOW" "$1" "$RESET"; }
+step() { _skipping && return 0; printf '  %s•%s %s\n' "$BLUE" "$RESET" "$1"; }
+note() { _skipping && return 0; printf '  %s%s%s\n' "$DIM" "$1" "$RESET"; }
+warn() { _skipping && return 0; printf '  %s⚠ %s%s\n' "$YELLOW" "$1" "$RESET"; }
 
 # open_url URL opens it in the human's browser, cross-platform incl. WSL.
 open_url() {
   local url="$1"
+  _skipping && return 0
   printf '  %s↗ opening%s %s\n' "$GREEN" "$RESET" "$url"
   { if   command -v wslview     >/dev/null 2>&1; then wslview "$url"
     elif command -v explorer.exe >/dev/null 2>&1; then explorer.exe "$url"
@@ -77,6 +83,7 @@ open_url() {
 
 # pause "msg" waits for the human to confirm they've done the manual part.
 pause() {
+  _skipping && return 0
   printf '  %s%s%s ' "$DIM" "${1:-Press Enter to continue}" "$RESET"
   read -r _ || true
 }
@@ -84,6 +91,7 @@ pause() {
 # confirm "question" is a y/N gate; returns success on yes.
 confirm() {
   local reply=""
+  _skipping && return 1
   printf '  %s? %s [y/N] ' "$YELLOW" "$1"
   read -r reply || true
   [[ "$reply" =~ ^[Yy] ]]
@@ -109,6 +117,7 @@ _existing() {
 ask() {
   local key="$1" prompt="$2" current input s=$'\001' e=$'\002' p rc=0
   current=$(_existing "$key" || true)
+  if _skipping; then printf -v "$key" '%s' "$current"; return 0; fi
   # Readline needs the colour codes wrapped in \001..\002 to place the cursor.
   p="  $s$BOLD$e$prompt$s$RESET$e "
   [[ -n "$current" ]] && p+="$s$DIM$e[Enter keeps current]$s$RESET$e "
@@ -122,6 +131,7 @@ ask() {
 ask_secret() {
   local key="$1" prompt="$2" current input rc=0
   current=$(_existing "$key" || true)
+  if _skipping; then printf -v "$key" '%s' "$current"; return 0; fi
   if [[ -n "$current" ]]; then
     printf '  %s%s%s %s[Enter keeps current]%s ' "$BOLD" "$prompt" "$RESET" "$DIM" "$RESET"
   else
@@ -143,6 +153,7 @@ ask_secret_match() {
   local value
   while :; do
     ask_secret "$key" "$prompt" || return 1
+    _skipping && return 0
     value="${!key}"
     if [[ "$value" =~ $regex ]]; then
       step "Đã nhận ${#value} ký tự, đúng dạng."
@@ -227,6 +238,10 @@ ENV_FILE=".env.deploy"
 DEFAULT_API_URL="https://atelier-demo-api.onrender.com"
 
 TOTAL_STAGES=12
+if [[ $# -gt 0 ]]; then
+  [[ "$1" =~ ^[0-9]+$ ]] && (( $1 >= 1 && $1 <= TOTAL_STAGES )) || { echo "Dùng: bash scripts/deploy-demo.sh [stage 1-$TOTAL_STAGES]"; exit 1; }
+  _FROM="$1"
+fi
 
 banner "Triển khai bản demo: Netlify + Render + Neon + R2"
 
