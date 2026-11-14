@@ -4,7 +4,7 @@ import type { Db } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
-import { recordGatewayPayments, type RecordPaymentDeps } from '../payments/record-payment.ts'
+import { PAYMENT_LINK_REFERENCES, recordGatewayPayments, type RecordPaymentDeps } from '../payments/record-payment.ts'
 import { releaseStock } from '../stock/stock.ts'
 import { recordOrderEvent, type OrderEventActor } from './orders.ts'
 
@@ -72,18 +72,19 @@ export async function cancelInTransaction(
 }
 
 /**
- * Hủy link thanh toán của đơn vừa hủy; đơn không có mã bên cổng thì bỏ qua. Lỗi chỉ log: đơn đã hủy, tiền về sau đó
- * thành cần đối soát.
+ * Hủy mọi link thanh toán của đơn vừa hủy (chọn bằng `PAYMENT_LINK_REFERENCES`); đơn chưa có link thì không làm gì.
+ * Lỗi chỉ log rồi hủy link kế tiếp: đơn đã hủy, tiền về sau đó thành cần đối soát.
  */
-export async function cancelPaymentLink(
+export async function cancelPaymentLinks(
   { payments, logger }: Omit<CancelDeps, 'prisma'>,
-  order: { code: number; gatewayReference: string | null },
+  order: { code: number; paymentLinks: { gatewayReference: string }[] },
 ) {
-  if (!order.gatewayReference) return
-  try {
-    await payments.cancelLink(order.gatewayReference)
-  } catch (err) {
-    logger.error({ err, orderCode: order.code }, 'Không hủy được link thanh toán')
+  for (const { gatewayReference } of order.paymentLinks) {
+    try {
+      await payments.cancelLink(gatewayReference)
+    } catch (err) {
+      logger.error({ err, orderCode: order.code, gatewayReference }, 'Không hủy được link thanh toán')
+    }
   }
 }
 
@@ -93,9 +94,9 @@ export async function cancelOrder(deps: CancelDeps, orderId: string, cancellatio
   if (outcome === 'cancelled') {
     const order = await deps.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
-      select: { code: true, gatewayReference: true },
+      select: { code: true, paymentLinks: PAYMENT_LINK_REFERENCES },
     })
-    await cancelPaymentLink(deps, order)
+    await cancelPaymentLinks(deps, order)
   }
   return outcome
 }
@@ -111,7 +112,7 @@ export type ExpireDeps = CancelDeps & Pick<RecordPaymentDeps, 'emails' | 'siteUr
 export async function expireOrder(deps: ExpireDeps, orderId: string, overdueAt?: Date) {
   const order = await deps.prisma.order.findUnique({
     where: { id: orderId },
-    select: { code: true, status: true, reservedUntil: true, gatewayReference: true },
+    select: { code: true, status: true, reservedUntil: true },
   })
   const due =
     order?.status === 'pending_payment' && !(overdueAt && order.reservedUntil && order.reservedUntil > overdueAt)

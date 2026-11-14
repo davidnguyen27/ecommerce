@@ -28,6 +28,8 @@ export type VnpayIpnResult = { RspCode: '00' | '01' | '02' | '97' | '99'; Messag
 export const SimulatedPaymentRequest = z.object({
   orderCode: z.number().int().positive(),
   amount: z.number().int().positive('Số tiền phải lớn hơn 0'),
+  /** Mã link (`ref` trên URL cổng giả lập), để giao dịch mang đúng mục đích; thiếu thì coi là trả đủ. */
+  gatewayReference: z.string().min(1).max(100).optional(),
 })
 export type SimulatedPaymentRequest = z.infer<typeof SimulatedPaymentRequest>
 

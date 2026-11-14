@@ -13,7 +13,7 @@ Code ZaloPay mới chạy sandbox, chưa có giao dịch thật nào, nên đư�
 
 - **Link thanh toán là URL ký sẵn** (HMAC-SHA512), không gọi API của VNPAY. Đặt mua không còn lỗi mạng ở bước tạo link.
 - **Thông tin khách gửi VNPAY:** VNPAY đòi IP của khách (`vnp_IpAddr`), nên yêu cầu tạo link mang thêm `clientIp`. `vnp_OrderInfo` phải là tiếng Việt không dấu, không có ký tự đặc biệt.
-- **Mã giao dịch `vnp_TxnRef`** có dạng `<mã đơn>T<yyyyMMddHHmmss>`, theo giờ Việt Nam lúc tạo link, và lưu ở `order.gateway_reference`.
+- **Mã giao dịch `vnp_TxnRef`** có dạng `<mã đơn>T<yyyyMMddHHmmss>`, theo giờ Việt Nam lúc tạo link, và lưu ở `order.gateway_reference`. (Bổ sung 2026-11-14, M4 ticket 01: một đơn có thể có nhiều link (trả đủ, cọc, phần còn lại), nên mã chuyển sang bảng `payment_link`, mỗi link một mã; giao dịch mang mục đích của link nó về qua.)
   - VNPAY không cho trùng mã trong ngày, mà mã đơn đánh lại từ đầu khi reset DB; giờ tạo trong mã giữ cho mã không trùng.
   - Truy vấn cần đúng giờ tạo link (`vnp_TransactionDate`), nên đọc lại từ chính mã này.
 - **URL IPN khai với VNPAY một lần**, không gửi theo từng đơn như callback của ZaloPay. VNPAY gọi IPN bằng GET qua HTTPS. Mã trả lời:

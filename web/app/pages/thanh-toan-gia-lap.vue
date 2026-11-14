@@ -5,6 +5,8 @@ const route = useRoute()
 const param = (name: string) => (typeof route.query[name] === 'string' ? route.query[name] : '')
 
 const orderCode = computed(() => param('orderCode'))
+// Mã link: cho giao dịch giả lập mang đúng mục đích (trả đủ, cọc, phần còn lại).
+const gatewayReference = computed(() => param('ref') || undefined)
 const amount = computed(() => Number(param('amount')))
 const expiresAt = computed(() => (Number.isNaN(Date.parse(param('expiresAt'))) ? null : param('expiresAt')))
 
@@ -37,7 +39,7 @@ async function simulatePaid() {
     // API chỉ có khi server dùng cổng giả lập; ghi nhận qua cùng hàm với webhook, nguồn `simulator`.
     await $fetch('/api/payments/simulator/paid', {
       method: 'POST',
-      body: { orderCode: Number(orderCode.value), amount: paidAmount.value },
+      body: { orderCode: Number(orderCode.value), amount: paidAmount.value, gatewayReference: gatewayReference.value },
     })
     done.value = true
     if (returnPath.value) await navigateTo(returnPath.value)
