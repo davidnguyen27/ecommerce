@@ -22,9 +22,9 @@ services:
       # URL web trên Netlify, ví dụ https://<site>.netlify.app: link trong email, trang VNPAY đưa khách về.
       - key: SITE_URL
         sync: false
-      # Khách → Netlify → load balancer của Render → API: hai tầng proxy (chốt khi thử thật, ADR 0011).
+      # x-forwarded-for thật: "<khách>, <Cloudflare trước Render>, <10.x nội bộ Render>", cộng kết nối trực tiếp: 3 tầng (ADR 0011).
       - key: TRUST_PROXY
-        value: '2'
+        value: '3'
       - key: MAIL_PROVIDER
         value: log
       - key: STORAGE_PROVIDER

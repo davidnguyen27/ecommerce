@@ -23,7 +23,7 @@ cron-job.org ──► https://<api>.onrender.com/healthz mỗi 10 phút, để 
 Các biến cố định nằm trong `render.yaml`:
 
 - `JWT_SECRET`: Render tự sinh.
-- `TRUST_PROXY=2`, `MAIL_PROVIDER=log`, `STORAGE_PROVIDER=r2`, `VNPAY_ENV=sandbox`, `PAYMENT_SIMULATOR=allow`.
+- `TRUST_PROXY=3`, `MAIL_PROVIDER=log`, `STORAGE_PROVIDER=r2`, `VNPAY_ENV=sandbox`, `PAYMENT_SIMULATOR=allow`.
 
 Proxy `/api/*` khai trong `web/netlify.toml`. Nếu Render cấp URL khác `atelier-demo-api.onrender.com`, sửa dòng `to` trong file đó.
 

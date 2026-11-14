@@ -26,7 +26,7 @@ Netlify proxy `/api/*` sang Render với status 200, nên trình duyệt vẫn t
 
 **IP khách**
 
-- `req.ip` là IP khách và được dùng cho rate limit, audit và `vnp_IpAddr`. Trước API có hai tầng proxy (Netlify, rồi load balancer của Render), nên `TRUST_PROXY=2`. Đặt sai số tầng thì mọi khách chung một IP và rate limit chặn cả shop.
+- `req.ip` là IP khách và được dùng cho rate limit, audit và `vnp_IpAddr`. Trước API có ba tầng proxy tính cả kết nối trực tiếp (Cloudflare mà Render đặt phía trước, rồi mạng nội bộ của Render), nên `TRUST_PROXY=3`; số này chốt từ header thật ở mục Kết quả thử thật. Đặt sai số tầng thì mọi khách chung một IP và rate limit chặn cả shop.
 
 **Database**
 
@@ -50,11 +50,29 @@ Netlify proxy `/api/*` sang Render với status 200, nên trình duyệt vẫn t
 
 ## Kết quả thử thật
 
-(Ghi khi deploy lần đầu, theo `docs/agents/third-party.md`.) Cần kiểm:
+Deploy lần đầu 2026-11-13/14 (web `atelierde.netlify.app`, API `atelier-demo-api.onrender.com`), kiểm bằng curl, truy
+vấn chỉ đọc vào Neon và thử tay trên trình duyệt:
 
-- `Set-Cookie` có qua proxy không;
-- header IP khách và giá trị `TRUST_PROXY`;
-- `no-store` có chặn được CDN cache không;
-- `pg-boss` có chạy trên Neon direct không;
-- ảnh trên R2;
-- trọn luồng VNPAY sandbox.
+- **Proxy `/api/*` và cache:** qua Netlify trả 200, khoảng 0,5 giây khi API thức. Có `Cache-Control: no-store`, và
+  `Cache-Status: "Netlify Edge"; fwd=miss`: CDN không giữ response.
+- **Đăng nhập qua proxy:** `demo-seed` đăng nhập và ghi hơn 170 thao tác admin qua URL Netlify; người dùng đăng nhập
+  admin trên trình duyệt được.
+- **pg-boss trên Neon direct:** job `expire-overdue-orders` chạy định kỳ (193 lần hoàn tất), `send-email` hoàn tất, job
+  `expire-order` của đơn được xếp lịch.
+- **Ảnh R2:** URL `pub-….r2.dev` trả 200 `image/png`; trang sản phẩm hiện ảnh.
+- **VNPAY sandbox:** người dùng trả bằng thẻ test NCB. Đơn sang `processing` với giao dịch nguồn `return`; chưa khai IPN
+  nên không có giao dịch nguồn `webhook`.
+- **IP khách: SAI.** Audit ghi IP `172.68.x.x` / `172.70.x.x`, là IP của Cloudflare, không phải IP người dùng. Render đặt
+  Cloudflare trước load balancer của mình, nên giữa khách và API có hơn hai tầng proxy, và `TRUST_PROXY=2` không đủ.
+  Hệ quả: rate limit có thể gộp nhiều khách chung một IP, audit và `vnp_IpAddr` không đúng IP khách. Log request của
+  Render cho `x-forwarded-for: <khách>, <Cloudflare 162.158.x>, <10.24.x nội bộ>`. Express đếm cả kết nối trực tiếp,
+  nên IP khách ở tầng thứ 3: đổi sang `TRUST_PROXY=3`. Địa chỉ giả do khách tự chèn nằm bên trái nên không ảnh hưởng.
+
+Lỗi gặp khi deploy, đã sửa:
+
+- Render chạy `dockerCommand: sh -c "…"` thành một tên lệnh (`not found`, exit 127): đổi sang lệnh đơn
+  `pnpm start:migrate`. Service tạo từ Blueprint giữ lệnh cũ trong Settings, phải sửa tay.
+- Ô nhập ẩn của wizard khiến khóa bị dán nhiều lần: wizard kiểm dạng khóa và cho chạy tiếp từ một stage.
+- Site Netlify mới bật sẵn bảo vệ đăng nhập (401 cho mọi đường dẫn): tắt ở Visitor access.
+- `NUXT_API_BASE` chưa có hiệu lực ở Functions nên SSR gọi `localhost:3001` (502 ở trang sản phẩm, trang chủ trống):
+  biến phải có scope Functions, rồi deploy lại.
