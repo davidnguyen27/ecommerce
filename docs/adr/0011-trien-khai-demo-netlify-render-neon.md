@@ -26,7 +26,7 @@ Netlify proxy `/api/*` sang Render với status 200, nên trình duyệt vẫn t
 
 **IP khách**
 
-- `req.ip` là IP khách và được dùng cho rate limit, audit và `vnp_IpAddr`. Trước API có ba tầng proxy tính cả kết nối trực tiếp (Cloudflare mà Render đặt phía trước, rồi mạng nội bộ của Render), nên `TRUST_PROXY=3`; số này chốt từ header thật ở mục Kết quả thử thật. Đặt sai số tầng thì mọi khách chung một IP và rate limit chặn cả shop.
+- `req.ip` là IP khách và được dùng cho rate limit, audit và `vnp_IpAddr`. Trước API có bốn tầng proxy tính cả kết nối trực tiếp (Netlify, Cloudflare mà Render đặt phía trước, rồi mạng nội bộ của Render), nên `TRUST_PROXY=4`; số này chốt từ IP thật trong audit ở mục Kết quả thử thật. Đặt sai số tầng thì mọi khách chung một IP và rate limit chặn cả shop.
 
 **Database**
 
@@ -65,8 +65,12 @@ vấn chỉ đọc vào Neon và thử tay trên trình duyệt:
 - **IP khách: SAI.** Audit ghi IP `172.68.x.x` / `172.70.x.x`, là IP của Cloudflare, không phải IP người dùng. Render đặt
   Cloudflare trước load balancer của mình, nên giữa khách và API có hơn hai tầng proxy, và `TRUST_PROXY=2` không đủ.
   Hệ quả: rate limit có thể gộp nhiều khách chung một IP, audit và `vnp_IpAddr` không đúng IP khách. Log request của
-  Render cho `x-forwarded-for: <khách>, <Cloudflare 162.158.x>, <10.24.x nội bộ>`. Express đếm cả kết nối trực tiếp,
-  nên IP khách ở tầng thứ 3: đổi sang `TRUST_PROXY=3`. Địa chỉ giả do khách tự chèn nằm bên trái nên không ảnh hưởng.
+  Render cho `x-forwarded-for: <khách>, <Cloudflare 162.158.x>, <10.24.x nội bộ>` với request gọi thẳng Render. Đặt thử
+  `TRUST_PROXY=3` thì audit ghi `47.130.x.x` (AWS Singapore, tức Netlify): request qua Netlify có thêm một tầng, nên
+  chốt `TRUST_PROXY=4`. Express đếm cả kết nối trực tiếp; địa chỉ giả do khách tự chèn nằm bên trái nên không ảnh
+  hưởng. Request gọi thẳng Render (cron ping, IPN VNPAY) có ít tầng hơn nên `req.ip` của chúng không đáng tin:
+  ai gọi thẳng `onrender.com` kèm `x-forwarded-for` tự chế thì chọn được IP mà API thấy, nên lách được rate limit. Chấp
+  nhận cho bản demo; bán thật thì quay về VPS sau Caddy, nơi API chỉ nhận kết nối từ proxy.
 
 Lỗi gặp khi deploy, đã sửa:
 
