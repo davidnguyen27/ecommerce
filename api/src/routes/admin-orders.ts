@@ -8,7 +8,7 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
 import { loadAdminOrder } from '../orders/admin-order.ts'
-import { assertCancellable, cancelInTransaction, cancelPaymentLink } from '../orders/cancel-order.ts'
+import { assertCancellable, cancelInTransaction, cancelPaymentLinks } from '../orders/cancel-order.ts'
 import {
   deliverOrder,
   failDelivery,
@@ -19,6 +19,7 @@ import {
 } from '../orders/fulfill-order.ts'
 import { orderNotFound, parseOrderCode } from '../orders/orders.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
+import { PAYMENT_LINK_REFERENCES } from '../payments/record-payment.ts'
 
 /** Ô tìm kiếm: mã đơn đúng bằng, số điện thoại (nhận cả `+84`, dấu cách, chấm, gạch) hoặc email chứa chuỗi đã gõ. */
 function searchWhere(q: string): Prisma.OrderWhereInput {
@@ -34,7 +35,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
   const findOrder = async (code: string) => {
     const order = await prisma.order.findUnique({
       where: { code: parseOrderCode(code) },
-      select: { id: true, code: true, gatewayReference: true },
+      select: { id: true, code: true, paymentLinks: PAYMENT_LINK_REFERENCES },
     })
     if (!order) throw orderNotFound()
     return order
@@ -119,7 +120,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
         return result
       })
       assertCancellable(outcome)
-      if (outcome === 'cancelled') await cancelPaymentLink({ payments, logger: req.log }, order)
+      if (outcome === 'cancelled') await cancelPaymentLinks({ payments, logger: req.log }, order)
       // Đơn đã hủy từ trước cũng trả đơn hiện tại, không ghi gì.
       const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
       res.json(body)

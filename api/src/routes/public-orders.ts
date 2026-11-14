@@ -16,7 +16,7 @@ export function publicOrderRoutes({ prisma, storage, emails, siteUrl, payments, 
       let order = await findOrderByToken(prisma, code, token)
 
       // Trang kết quả thanh toán: hỏi cổng các khoản đã về, phòng khi callback tới chậm hoặc không tới.
-      if (req.query.refresh === '1' && order.gatewayReference) {
+      if (req.query.refresh === '1') {
         try {
           await recordGatewayPayments({ prisma, emails, siteUrl, payments }, order)
           order = await findOrderByToken(prisma, code, token)

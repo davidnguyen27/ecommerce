@@ -123,6 +123,10 @@ export type AdminOrderPage = z.infer<typeof AdminOrderPage>
 export const PaymentSource = z.enum(['webhook', 'query', 'simulator', 'return'])
 export type PaymentSource = z.infer<typeof PaymentSource>
 
+/** Khoản một giao dịch thu: trả đủ đơn hàng sẵn, tiền cọc hay phần còn lại của đơn đặt trước. */
+export const PaymentPurpose = z.enum(['full', 'deposit', 'remainder'])
+export type PaymentPurpose = z.infer<typeof PaymentPurpose>
+
 /** Lý do khoản tiền cần đối soát. */
 export const ReconciliationReason = z.enum(['amount_mismatch', 'paid_after_cancel', 'extra_payment'])
 export type ReconciliationReason = z.infer<typeof ReconciliationReason>
@@ -152,6 +156,7 @@ export type ReconciliationDetail = z.infer<typeof ReconciliationDetail>
 /** Khoản tiền cổng báo về cho đơn; `reconciliation` có khi khoản đó bị gắn cờ cần đối soát. */
 export const AdminPaymentTransaction = z.object({
   id: z.string(),
+  purpose: PaymentPurpose,
   amount: z.number(),
   reference: z.string(),
   paidAt: z.string(),

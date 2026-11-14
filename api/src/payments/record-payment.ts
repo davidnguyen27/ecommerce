@@ -11,6 +11,11 @@ export type PaymentReceipt = {
   amount: number
   /** Mã tham chiếu giao dịch của cổng; cùng một khoản thì cùng mã dù đến từ đường nào. */
   reference: string
+  /**
+   * Mã đơn bên cổng của link mà khoản này về qua (VNPAY `vnp_TxnRef`); quyết định mục đích của giao dịch. Không có, hay
+   * không thấy link của đơn mang mã này (đơn cũ), thì coi là trả đủ.
+   */
+  gatewayReference?: string
   paidAt: Date
   source: PaymentSource
   /** Dữ liệu gốc, lưu để đối chiếu. */
@@ -59,9 +64,16 @@ async function recordInTransaction(
     where: { id: locked[0]!.id },
     include: { lines: { orderBy: { position: 'asc' } } },
   })
+  const link = receipt.gatewayReference
+    ? await tx.paymentLink.findFirst({
+        where: { orderId: order.id, gatewayReference: receipt.gatewayReference },
+        select: { purpose: true },
+      })
+    : null
   const transaction = await tx.paymentTransaction.create({
     data: {
       orderId: order.id,
+      purpose: link?.purpose ?? 'full',
       amount: receipt.amount,
       reference: receipt.reference,
       paidAt: receipt.paidAt,
@@ -69,7 +81,11 @@ async function recordInTransaction(
       payload: receipt.payload,
     },
   })
-  const { _sum } = await tx.paymentTransaction.aggregate({ where: { orderId: order.id }, _sum: { amount: true } })
+  // Chỉ khoản trả đủ mới làm đơn hàng sẵn thành đã trả; cọc và phần còn lại có luồng riêng (M4).
+  const { _sum } = await tx.paymentTransaction.aggregate({
+    where: { orderId: order.id, purpose: 'full' },
+    _sum: { amount: true },
+  })
   const received = _sum.amount ?? 0n
   const eventData = { amount: receipt.amount, reference: receipt.reference, source: receipt.source }
 
@@ -120,26 +136,39 @@ async function recordInTransaction(
 }
 
 /**
- * Hỏi cổng các khoản đã về cho đơn và ghi nhận từng khoản (nguồn `query`), phòng khi callback tới chậm hoặc không tới.
- * Đơn không có mã bên cổng thì không hỏi. Cổng lỗi thì ném; nơi gọi quyết định log rồi đi tiếp.
+ * Hỏi cổng các khoản đã về qua mọi link của đơn, cũ trước, và ghi nhận từng khoản (nguồn `query`), phòng khi callback
+ * tới chậm hoặc không tới. Đơn chưa có link thì không hỏi. Cổng lỗi thì ném; nơi gọi quyết định log rồi đi tiếp.
  */
 export async function recordGatewayPayments(
   deps: RecordPaymentDeps & { payments: PaymentGateway },
-  order: { code: number; gatewayReference: string | null },
+  order: { code: number },
 ) {
-  if (!order.gatewayReference) return
-  const info = await deps.payments.getPayment(order.gatewayReference)
-  for (const t of info.transactions) {
-    await recordPayment(deps, {
-      orderCode: order.code,
-      amount: t.amount,
-      reference: t.reference,
-      paidAt: t.paidAt,
-      source: 'query',
-      payload: t.payload ?? { reference: t.reference, amount: t.amount, paidAt: t.paidAt.toISOString() },
-    })
+  const links = await deps.prisma.paymentLink.findMany({
+    where: { order: { code: order.code } },
+    select: { gatewayReference: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  for (const { gatewayReference } of links) {
+    const info = await deps.payments.getPayment(gatewayReference)
+    for (const t of info.transactions) {
+      await recordPayment(deps, {
+        orderCode: order.code,
+        amount: t.amount,
+        reference: t.reference,
+        gatewayReference,
+        paidAt: t.paidAt,
+        source: 'query',
+        payload: t.payload ?? { reference: t.reference, amount: t.amount, paidAt: t.paidAt.toISOString() },
+      })
+    }
   }
 }
+
+/** Mã đơn bên cổng của mọi link của đơn, cũ trước: để hủy link khi hủy đơn. */
+export const PAYMENT_LINK_REFERENCES = {
+  select: { gatewayReference: true },
+  orderBy: { createdAt: 'asc' },
+} as const satisfies Prisma.Order$paymentLinksArgs
 
 type OrderWithLines = Prisma.OrderGetPayload<{ include: { lines: true } }>
 
