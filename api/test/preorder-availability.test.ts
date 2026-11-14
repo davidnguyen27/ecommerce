@@ -1,41 +1,18 @@
 import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
-import { shop } from './support/shop.ts'
+import { preorderShop as baseShop } from './support/preorder.ts'
 import { bearer } from './support/staff.ts'
 import { adjust } from './support/stock.ts'
-
-const DAY = 24 * 60 * 60_000
-const inDays = (days: number) => new Date(Date.now() + days * DAY).toISOString()
 
 type Availability = { sku: string; inStock: boolean; availability: string; preorder: unknown }
 
 /**
- * Cửa hàng có Air Max đã xuất bản: AM-40 còn 3 đôi, AM-41 hết hàng. `open` mở đợt đặt trước cho cả hai biến thể,
- * cọc 30%, giao 10–20/12/2026.
+ * Cửa hàng có Air Max đã xuất bản: AM-40 còn 3 đôi, AM-41 hết hàng. `open` mở đợt đặt trước (mặc định cả hai biến
+ * thể), cọc 30%, giao 10–20/12/2026.
  */
 async function preorderShop() {
-  const app = await shop()
-  const { request, token, product, v40, v41 } = app
-  const open = async (
-    variants = [
-      { variantId: v40.id, allocation: 10 },
-      { variantId: v41.id, allocation: 5 },
-    ],
-  ) => {
-    const res = await request
-      .post('/api/admin/preorder-campaigns')
-      .set(bearer(token))
-      .send({
-        productId: product.id,
-        depositPercent: 30,
-        deliveryFrom: '2026-12-10',
-        deliveryTo: '2026-12-20',
-        closesAt: inDays(14),
-        variants,
-      })
-    expect(res.status).toBe(201)
-    return res.body.id as string
-  }
+  const app = await baseShop()
+  const { request, token, v40 } = app
   /** Biến thể như khách thấy ở trang sản phẩm, theo SKU. */
   const variants = async () => {
     const res = await request.get('/api/products/air-max')
@@ -58,7 +35,7 @@ async function preorderShop() {
     })
     expect(res.status).toBe(201)
   }
-  return { ...app, open, variants, card, countV40 }
+  return { ...app, variants, card, countV40 }
 }
 
 describe('khách thấy đang nhận đặt trước', () => {
@@ -93,24 +70,15 @@ describe('khách thấy đang nhận đặt trước', () => {
     expect((await app.variants())['AM-41']).toMatchObject({ availability: 'out_of_stock' })
   })
 
-  it('hết suất thì hết hàng: đơn chưa hủy chiếm suất, đơn hủy thì trả suất', async () => {
+  it('hết suất thì hết hàng: đơn chờ cọc chiếm suất, đơn hủy thì trả suất', async () => {
     const app = await preorderShop()
-    const campaignId = await app.open([{ variantId: app.v40.id, allocation: 1 }])
-    // Một đơn 1 đôi AM-40 thuộc đợt: ticket 04 mới có đường đặt trước qua HTTP, nên gắn đợt cho đơn đặt mua bằng prisma.
-    const order = await app.checkout()
-    expect(order.status).toBe(201)
-    await app.prisma.order.update({ where: { code: order.body.code }, data: { preorderCampaignId: campaignId } })
-    // Còn 1 đôi trên kệ, đang giữ đúng 1 cho đơn đó: hết hàng sẵn.
-    await app.countV40(1)
+    const campaignId = await app.open([{ variantId: app.v41.id, allocation: 1 }])
+    const { code, token } = await app.placed(campaignId)
 
-    expect((await app.variants())['AM-40']).toMatchObject({ inStock: false, availability: 'out_of_stock' })
+    expect((await app.variants())['AM-41']).toMatchObject({ inStock: false, availability: 'out_of_stock' })
 
-    const cancel = await app.request.post(`/api/admin/orders/${order.body.code}/cancel`).set(bearer(app.token))
-    expect(cancel.status).toBe(200)
-    // Hủy đơn nhả cả hàng đang giữ: AM-40 lại còn hàng sẵn; về 0 thì đặt trước được vì suất đã trống.
-    expect((await app.variants())['AM-40']).toMatchObject({ availability: 'in_stock' })
-    await app.countV40(0, 1)
-    expect((await app.variants())['AM-40']).toMatchObject({ availability: 'preorder' })
+    expect((await app.request.post(`/api/orders/${code}/cancel`).query({ token })).status).toBe(200)
+    expect((await app.variants())['AM-41']).toMatchObject({ availability: 'preorder' })
   })
 
   it('đợt đóng tay hay quá hạn đóng thì hết hàng', async () => {

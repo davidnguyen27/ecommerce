@@ -15,6 +15,24 @@ export type PaymentStatus = z.infer<typeof PaymentStatus>
 export const FulfillmentStatus = z.enum(['not_prepared', 'preparing', 'handed_over', 'delivered', 'failed'])
 export type FulfillmentStatus = z.infer<typeof FulfillmentStatus>
 
+/** Đơn hàng sẵn (qua giỏ hàng) hay đơn đặt trước (GLOSSARY "Đơn đặt trước"). */
+export const OrderKind = z.enum(['standard', 'preorder'])
+export type OrderKind = z.infer<typeof OrderKind>
+
+/**
+ * Phần đặt trước của đơn, chụp lúc đặt: mức cọc, tiền cọc, phần còn lại (gồm phí giao), thời gian giao dự kiến và số
+ * ngày được trả phần còn lại sau khi hàng về.
+ */
+export const OrderPreorder = z.object({
+  depositPercent: z.number(),
+  depositAmount: z.number(),
+  remainingAmount: z.number(),
+  deliveryFrom: z.string(),
+  deliveryTo: z.string(),
+  remainderDays: z.number(),
+})
+export type OrderPreorder = z.infer<typeof OrderPreorder>
+
 /** Vì sao đơn chưa thanh toán bị hủy: quá hạn giữ hàng, khách tự hủy, hay nhân viên hủy. */
 export const OrderCancelReason = z.enum(['expired', 'customer', 'staff'])
 export type OrderCancelReason = z.infer<typeof OrderCancelReason>
@@ -38,6 +56,9 @@ export type OrderLineView = z.infer<typeof OrderLineView>
  */
 export const PublicOrder = z.object({
   code: z.number(),
+  kind: OrderKind,
+  /** Có khi và chỉ khi đơn đặt trước. */
+  preorder: OrderPreorder.nullable(),
   status: OrderStatus,
   paymentStatus: PaymentStatus,
   fulfillmentStatus: FulfillmentStatus,
@@ -76,6 +97,7 @@ export type PublicOrder = z.infer<typeof PublicOrder>
 /** Một đơn trong lịch sử mua của khách (`GET /api/account/orders`). */
 export const AccountOrderSummary = z.object({
   code: z.number(),
+  kind: OrderKind,
   status: OrderStatus,
   paymentStatus: PaymentStatus,
   fulfillmentStatus: FulfillmentStatus,

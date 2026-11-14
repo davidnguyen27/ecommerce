@@ -3,15 +3,12 @@ import {
   CheckoutConflictDetails,
   CheckoutQuote,
   CheckoutResult,
-  LastShippingAddress,
   PRIVACY_POLICY_SLUG,
-  PROVINCES,
   RESERVATION_MINUTES,
   type CheckoutLineChange,
   type CheckoutQuoteRequest,
   type CheckoutRequest,
 } from '@ecommerce/shared'
-import type { Ward } from '@ecommerce/shared/wards'
 import { Truck } from 'lucide-vue-next'
 
 // Giỏ ở localStorage và thông tin nhận hàng là dữ liệu cá nhân: trang chỉ có khung khi SSR, mọi thứ nạp sau khi mount.
@@ -19,52 +16,8 @@ const cart = useCart()
 const quote = ref<CheckoutQuote | null>(null)
 const quoteError = ref<string | null>(null)
 
-const form = reactive({
-  recipientName: '',
-  phone: '',
-  email: '',
-  provinceCode: '',
-  wardCode: '',
-  streetAddress: '',
-  note: '',
-})
-const acceptPrivacyPolicy = ref(false)
-const invoice = reactive({ companyName: '', taxCode: '', address: '' })
-// Phần hóa đơn thu gọn mặc định; mở ra khi server báo lỗi ở trường của nó.
-const invoiceOpen = ref(false)
-
-// Khách đã đăng nhập đồng ý chính sách bảo mật lúc đăng ký, nên ô đồng ý chỉ hiện cho khách vãng lai.
-const session = useCustomerSession()
-const signedIn = ref<boolean | null>(null)
-onMounted(async () => {
-  signedIn.value = await session.signedIn()
-  if (signedIn.value) await fillLastAddress()
-})
-
-/** Khách đã đăng nhập: điền sẵn địa chỉ lần đặt mua trước, chỉ khi khách chưa gõ gì vào form. */
-async function fillLastAddress() {
-  try {
-    const { address } = LastShippingAddress.parse(await session.accountFetch('/api/account/shipping-address'))
-    const untouched = [form.recipientName, form.phone, form.email, form.provinceCode, form.streetAddress].every(
-      (value) => value === '',
-    )
-    if (!address || !untouched) return
-    const { wardCode, ...rest } = address
-    Object.assign(form, rest)
-    // Đổi tỉnh/thành thì watcher xóa phường/xã; đợi watcher chạy xong rồi mới điền.
-    await nextTick()
-    form.wardCode = wardCode
-  } catch {
-    // Không điền được thì khách tự nhập như bình thường.
-  }
-}
-
-// Danh mục phường/xã nặng, nên chỉ nạp ở trang này và chỉ ở trình duyệt.
-const wardsOf = shallowRef<((provinceCode: string) => Ward[]) | null>(null)
-onMounted(async () => {
-  wardsOf.value = (await import('@ecommerce/shared/wards')).wardsOf
-})
-const wards = computed(() => (wardsOf.value && form.provinceCode ? wardsOf.value(form.provinceCode) : []))
+const { form, invoice, invoiceOpen, acceptPrivacyPolicy, session, signedIn, wards, contactPayload, revealErrors } =
+  useShippingForm()
 
 let latest = 0
 async function refreshQuote() {
@@ -76,7 +29,8 @@ async function refreshQuote() {
   // Đổi tỉnh/thành liên tiếp: chỉ nhận báo giá của lần gọi cuối.
   const call = ++latest
   try {
-    const body: CheckoutQuoteRequest = { lines, ...(form.provinceCode && { provinceCode: form.provinceCode }) }
+    const provinceCode = form.value.provinceCode
+    const body: CheckoutQuoteRequest = { lines, ...(provinceCode && { provinceCode }) }
     const result = CheckoutQuote.parse(await $fetch('/api/checkout/quote', { method: 'POST', body }))
     if (call !== latest) return
     quote.value = result
@@ -86,12 +40,10 @@ async function refreshQuote() {
   }
 }
 watch(cart.ready, refreshQuote, { immediate: true })
+// `useShippingForm` xóa phường/xã khi đổi tỉnh/thành; ở đây chỉ tính lại phí giao.
 watch(
-  () => form.provinceCode,
-  () => {
-    form.wardCode = ''
-    void refreshQuote()
-  },
+  () => form.value.provinceCode,
+  () => void refreshQuote(),
 )
 
 /** Thay đổi server báo khi đặt mua (409), theo variant id; giỏ đổi thì khách đã xử lý, bỏ đi. */
@@ -135,15 +87,10 @@ async function submit() {
   error.value = null
   fieldErrors.value = new Map()
   try {
-    const { note, ...address } = form
-    // Phần hóa đơn bỏ trống thì không gửi; điền dở thì gửi để server báo trường còn thiếu.
-    const wantsInvoice = Object.values(invoice).some((value) => value.trim() !== '')
     const body: CheckoutRequest = {
       lines: cart.lines.value.map(({ variantId, quantity, price }) => ({ variantId, quantity, price })),
-      address,
-      note,
+      ...contactPayload(),
       ...(!signedIn.value && { acceptPrivacyPolicy: acceptPrivacyPolicy.value }),
-      ...(wantsInvoice && { invoice: { ...invoice } }),
     }
     const result = CheckoutResult.parse(await session.optionalAuthFetch('/api/checkout', { method: 'POST', body }))
     cart.clear()
@@ -160,7 +107,7 @@ async function submit() {
     }
     error.value = apiErrorMessage(err)
     fieldErrors.value = new Map(apiFieldErrors(err).map((f) => [f.path, f.message]))
-    if ([...fieldErrors.value.keys()].some((path) => path.startsWith('invoice.'))) invoiceOpen.value = true
+    revealErrors(fieldErrors.value)
     submitting.value = false
   }
 }
@@ -180,121 +127,14 @@ useSeo({ title: 'Đặt mua', description: 'Thông tin nhận hàng và xác nh�
     </div>
 
     <form v-else class="mt-8 grid gap-10 lg:grid-cols-12" @submit.prevent="submit">
-      <section class="space-y-5 lg:col-span-7" aria-label="Thông tin nhận hàng">
-        <h2>Thông tin nhận hàng</h2>
-        <label class="field">
-          Họ tên người nhận
-          <input v-model="form.recipientName" class="field-input" name="name" autocomplete="name" required />
-          <span v-if="fieldErrors.get('address.recipientName')" class="text-sm text-red-700">{{
-            fieldErrors.get('address.recipientName')
-          }}</span>
-        </label>
-        <div class="grid gap-5 sm:grid-cols-2">
-          <label class="field">
-            Số điện thoại
-            <input
-              v-model="form.phone"
-              class="field-input"
-              type="tel"
-              name="tel"
-              autocomplete="tel"
-              inputmode="tel"
-              required
-            />
-            <span v-if="fieldErrors.get('address.phone')" class="text-sm text-red-700">{{
-              fieldErrors.get('address.phone')
-            }}</span>
-          </label>
-          <label class="field">
-            Email
-            <input
-              v-model="form.email"
-              class="field-input"
-              type="email"
-              name="email"
-              autocomplete="email"
-              inputmode="email"
-              required
-            />
-            <span v-if="fieldErrors.get('address.email')" class="text-sm text-red-700">{{
-              fieldErrors.get('address.email')
-            }}</span>
-          </label>
-        </div>
-        <div class="grid gap-5 sm:grid-cols-2">
-          <!-- Label tách khỏi select: bọc thì tên truy cập của ô lẫn chữ của các option. -->
-          <div class="field">
-            <label for="checkout-province">Tỉnh/thành</label>
-            <select id="checkout-province" v-model="form.provinceCode" class="field-input" name="province" required>
-              <option value="" disabled>Chọn tỉnh/thành</option>
-              <option v-for="p in PROVINCES" :key="p.code" :value="p.code">{{ p.name }}</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="checkout-ward">Phường/xã</label>
-            <select
-              id="checkout-ward"
-              v-model="form.wardCode"
-              class="field-input"
-              name="ward"
-              required
-              :disabled="!wards.length"
-            >
-              <option value="" disabled>{{ form.provinceCode ? 'Chọn phường/xã' : 'Chọn tỉnh/thành trước' }}</option>
-              <option v-for="w in wards" :key="w.code" :value="w.code">{{ w.name }}</option>
-            </select>
-            <span v-if="fieldErrors.get('address.wardCode')" class="text-sm text-red-700">{{
-              fieldErrors.get('address.wardCode')
-            }}</span>
-          </div>
-        </div>
-        <label class="field">
-          Số nhà, tên đường
-          <input v-model="form.streetAddress" class="field-input" name="street" autocomplete="address-line1" required />
-        </label>
-        <label class="field">
-          Ghi chú cho đơn (không bắt buộc)
-          <textarea v-model="form.note" class="field-input min-h-24 py-2" name="note" maxlength="1000" />
-        </label>
-
-        <details
-          class="rounded-lg border border-border bg-card"
-          data-testid="invoice"
-          :open="invoiceOpen"
-          @toggle="invoiceOpen = ($event.target as HTMLDetailsElement).open"
-        >
-          <summary class="cursor-pointer px-5 py-4 font-medium">Xuất hóa đơn công ty (không bắt buộc)</summary>
-          <div class="space-y-5 px-5 pb-5">
-            <label class="field">
-              Tên công ty
-              <input v-model="invoice.companyName" class="field-input" name="companyName" autocomplete="organization" />
-              <span v-if="fieldErrors.get('invoice.companyName')" class="text-sm text-red-700">{{
-                fieldErrors.get('invoice.companyName')
-              }}</span>
-            </label>
-            <label class="field">
-              Mã số thuế
-              <input
-                v-model="invoice.taxCode"
-                class="field-input"
-                name="taxCode"
-                inputmode="numeric"
-                placeholder="0101234567 hoặc 0101234567-001"
-              />
-              <span v-if="fieldErrors.get('invoice.taxCode')" class="text-sm text-red-700">{{
-                fieldErrors.get('invoice.taxCode')
-              }}</span>
-            </label>
-            <label class="field">
-              Địa chỉ xuất hóa đơn
-              <input v-model="invoice.address" class="field-input" name="invoiceAddress" />
-              <span v-if="fieldErrors.get('invoice.address')" class="text-sm text-red-700">{{
-                fieldErrors.get('invoice.address')
-              }}</span>
-            </label>
-          </div>
-        </details>
-      </section>
+      <CheckoutContactFields
+        v-model:form="form"
+        v-model:invoice="invoice"
+        v-model:invoice-open="invoiceOpen"
+        class="lg:col-span-7"
+        :wards="wards"
+        :field-errors="fieldErrors"
+      />
 
       <aside class="lg:col-span-5">
         <div class="rounded-lg border border-border bg-card p-6 lg:sticky lg:top-28">

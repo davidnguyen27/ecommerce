@@ -44,6 +44,8 @@ export async function restoreOrder(
     include: { lines: { orderBy: { position: 'asc' } } },
   })
   if (order.status !== 'cancelled') throw conflict('Chỉ khôi phục được đơn đã hủy')
+  // Khôi phục đơn đặt trước là khôi phục khoản cọc và suất, không giữ hàng: ticket 05 làm; tới lúc đó xử lý ngoài hệ thống.
+  if (order.kind === 'preorder') throw conflict('Chưa khôi phục được đơn đặt trước, hãy xử lý ngoài hệ thống')
   const handledExternally = await tx.reconciliationItem.count({
     where: { orderId: order.id, resolution: 'handled_externally' },
   })

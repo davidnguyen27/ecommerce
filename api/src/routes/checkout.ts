@@ -16,36 +16,16 @@ import type { AppDeps } from '../app.ts'
 import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
 import { optionalAuth } from '../auth/require-auth.ts'
 import { findCurrentPrivacyPolicy } from '../content/pages.ts'
-import { cartVariants, type CartVariant } from '../checkout/live-variants.ts'
+import { cartVariants } from '../checkout/live-variants.ts'
+import { createOrderPaymentLink, livePolicyVersions, storedImageOf } from '../checkout/order-snapshot.ts'
 import { enforcePendingOrderLimit } from '../checkout/pending-orders.ts'
-import type { DbClient } from '../db.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { parse } from '../http/validation.ts'
 import { imageRenditions } from '../media/images.ts'
-import { paymentResultUrl, recordOrderEvent, type OrderLineImage } from '../orders/orders.ts'
+import { recordOrderEvent } from '../orders/orders.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
 import { enoughStockIds, reserveStock } from '../stock/stock.ts'
-
-/** Ảnh gắn với biến thể, không có thì ảnh đầu tiên của sản phẩm. */
-function storedImageOf({ snapshot, variant }: CartVariant): OrderLineImage | null {
-  const images = snapshot?.images ?? []
-  const image = images.find((i) => variant && i.variantIds.includes(variant.id)) ?? images[0]
-  if (!image) return null
-  const { key, contentType, width, height, widths, alt } = image
-  return { key, contentType, width, height, widths, alt }
-}
-
-/** Phiên bản đang xuất bản của các trang chính sách gắn với sản phẩm trong đơn. */
-async function livePolicyVersions(db: DbClient, variants: Iterable<CartVariant>) {
-  const pageIds = new Set([...variants].flatMap((v) => (v.variant ? (v.snapshot?.policyPageIds ?? []) : [])))
-  const pages = await db.contentPage.findMany({
-    where: { id: { in: [...pageIds] }, kind: 'policy' },
-    select: { slug: true, versions: { orderBy: { version: 'desc' }, take: 1, select: { id: true, title: true } } },
-    orderBy: { slug: 'asc' },
-  })
-  return pages.flatMap(({ slug, versions }) => versions.map(({ id, title }) => ({ id, slug, title })))
-}
 
 /** Đặt mua của khách, không cần đăng nhập; kèm access token khách thì đơn gắn với tài khoản. */
 export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, orderExpiry }: AppDeps) {
@@ -224,35 +204,14 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
           }
 
           // Gọi cổng sau cùng, khi mọi thứ khác đã ghi được; cổng lỗi thì cả đơn rollback.
-          // Trang quay về không mang token: cổng không được thấy link xem và hủy đơn.
-          const returnUrl = paymentResultUrl(siteUrl, order.code).toString()
-          const link = await payments
-            .createLink({
-              orderCode: order.code,
-              purpose: 'full',
-              amount: total,
-              description: `Thanh toán đơn hàng #${order.code}`,
-              returnUrl,
-              expiresAt: reservedUntil,
-              // `trust proxy` (app.ts) cho IP thật sau Caddy; bỏ tiền tố IPv4-mapped của Node.
-              clientIp: (req.ip ?? '127.0.0.1').replace(/^::ffff:/, ''),
-            })
-            .catch((err: unknown) => {
-              req.log.error({ err, orderCode: order.code }, 'Không tạo được link thanh toán')
-              throw new AppError(502, ErrorCode.BAD_GATEWAY, 'Chưa tạo được thanh toán, thử lại')
-            })
-          // Mã đơn bên cổng, để ghi nhận tiền về và truy vấn sau (refresh=1, job hết hạn).
-          await tx.paymentLink.create({
-            data: {
-              orderId: order.id,
-              purpose: 'full',
-              amount: total,
-              gatewayReference: link.gatewayReference,
-              expiresAt: reservedUntil,
-            },
+          const checkoutUrl = await createOrderPaymentLink(tx, { payments, siteUrl, req }, order, {
+            purpose: 'full',
+            amount: total,
+            description: `Thanh toán đơn hàng #${order.code}`,
+            expiresAt: reservedUntil,
           })
 
-          return { code: order.code, token, checkoutUrl: link.checkoutUrl, reservedUntil: reservedUntil.toISOString() }
+          return { code: order.code, token, checkoutUrl, reservedUntil: reservedUntil.toISOString() }
         },
         // Gọi cổng thanh toán nằm trong transaction nên cần lâu hơn mặc định 5 giây.
         { timeout: 30_000, maxWait: 10_000 },

@@ -661,6 +661,14 @@ enum OrderCancelReason {
   @@map("order_cancel_reason")
 }
 
+/// Đơn hàng sẵn (qua giỏ hàng) hay đơn đặt trước (GLOSSARY "Đơn đặt trước", ADR 0012).
+enum OrderKind {
+  standard
+  preorder
+
+  @@map("order_kind")
+}
+
 /// Ai làm một sự kiện đơn: nhân viên (có `staffId`), khách hay hệ thống (job hết hạn, cổng thanh toán).
 enum OrderEventActor {
   staff
@@ -720,9 +728,19 @@ model Order {
   carrier            String?
   trackingNumber     String?           @map("tracking_number")
   handedOverAt       DateTime?         @map("handed_over_at")
-  /// Đợt đặt trước của đơn đặt trước (M4); đơn hàng sẵn để trống. Ticket 04 thêm loại đơn và các trường cọc.
+  kind               OrderKind         @default(standard)
+  /// Đợt của đơn đặt trước; đơn hàng sẵn để trống. Check `order_preorder_check`: đơn đặt trước có đủ đợt và các trường
+  /// cọc bên dưới, đơn hàng sẵn không có trường nào.
   preorderCampaignId String?           @map("preorder_campaign_id") @db.Uuid
   preorderCampaign   PreorderCampaign? @relation(fields: [preorderCampaignId], references: [id], onDelete: Restrict)
+  /// Chụp từ đợt lúc đặt: phần trăm cọc, và tiền cọc VND (làm tròn lên 1.000, check `0 < deposit_amount <= subtotal`).
+  depositPercent     Int?              @map("deposit_percent")
+  depositAmount      BigInt?           @map("deposit_amount")
+  /// Thời gian giao dự kiến lúc đặt; đợt có thể đổi về sau (ticket 09) nhưng đơn giữ lời hẹn ban đầu.
+  deliveryFrom       DateTime?         @map("delivery_from") @db.Date
+  deliveryTo         DateTime?         @map("delivery_to") @db.Date
+  /// Số ngày được trả phần còn lại từ lúc hàng về, chụp từ đợt.
+  remainderDays      Int?              @map("remainder_days")
 
   lines               OrderLine[]
   stockMovements      StockMovement[]
