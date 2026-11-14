@@ -1,6 +1,7 @@
 import { STOCK_VIEW_PERMISSIONS, type Permission } from '@ecommerce/shared'
 import {
   BadgeCheck,
+  CalendarClock,
   FileSpreadsheet,
   FileText,
   FolderTree,
@@ -60,6 +61,12 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
     items: [
       { to: '/admin/orders', label: 'Đơn hàng', icon: ShoppingBag, permission: 'order.view' },
       { to: '/admin/reconciliation', label: 'Cần đối soát', icon: HandCoins, permission: 'order.view' },
+      {
+        to: '/admin/preorders',
+        label: 'Đặt trước',
+        icon: CalendarClock,
+        permission: ['order.view', 'preorder.manage'],
+      },
       { to: '/admin/shipping-fees', label: 'Phí giao', icon: Truck, permission: 'price.edit' },
     ],
   },

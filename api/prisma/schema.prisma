@@ -49,6 +49,7 @@ model Staff {
   stockReceipts            StockReceipt[]
   orderEvents              OrderEvent[]
   resolvedReconciliations  ReconciliationItem[]
+  preorderCampaigns        PreorderCampaign[]
 
   @@map("staff")
 }
@@ -317,13 +318,14 @@ model Product {
   createdAt          DateTime        @default(now()) @map("created_at")
   updatedAt          DateTime        @updatedAt @map("updated_at")
 
-  variants    ProductVariant[]
-  images      ProductImage[]
-  versions    ProductVersion[]    @relation("ProductVersions")
-  policyPages ProductPolicyPage[]
-  documents   ProductDocument[]
-  commitments ProductCommitment[]
-  search      ProductSearch?
+  variants          ProductVariant[]
+  images            ProductImage[]
+  versions          ProductVersion[]    @relation("ProductVersions")
+  policyPages       ProductPolicyPage[]
+  documents         ProductDocument[]
+  commitments       ProductCommitment[]
+  search            ProductSearch?
+  preorderCampaigns PreorderCampaign[]
 
   @@index([productType])
   @@index([brandId])
@@ -352,9 +354,10 @@ model ProductVariant {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
-  images         ProductImageVariant[]
-  stockMovements StockMovement[]
-  orderLines     OrderLine[]
+  images            ProductImageVariant[]
+  stockMovements    StockMovement[]
+  orderLines        OrderLine[]
+  preorderCampaigns PreorderCampaignVariant[]
 
   @@map("product_variant")
 }
@@ -714,9 +717,12 @@ model Order {
 
   /// Bàn giao vận chuyển. Check constraint `order_handover_check`: có đủ cả ba khi và chỉ khi giao hàng đã tới
   /// `handed_over` (kể cả `delivered`, `failed`).
-  carrier        String?
-  trackingNumber String?   @map("tracking_number")
-  handedOverAt   DateTime? @map("handed_over_at")
+  carrier            String?
+  trackingNumber     String?           @map("tracking_number")
+  handedOverAt       DateTime?         @map("handed_over_at")
+  /// Đợt đặt trước của đơn đặt trước (M4); đơn hàng sẵn để trống. Ticket 04 thêm loại đơn và các trường cọc.
+  preorderCampaignId String?           @map("preorder_campaign_id") @db.Uuid
+  preorderCampaign   PreorderCampaign? @relation(fields: [preorderCampaignId], references: [id], onDelete: Restrict)
 
   lines               OrderLine[]
   stockMovements      StockMovement[]
@@ -733,6 +739,7 @@ model Order {
   @@index([privacyPolicyVersionId])
   @@index([email, status])
   @@index([phone, status])
+  @@index([preorderCampaignId])
   @@map("order")
 }
 
@@ -919,4 +926,60 @@ model ReconciliationItem {
   @@index([orderId])
   @@index([status, createdAt])
   @@map("reconciliation_item")
+}
+
+/// Trạng thái nhập hàng của một đợt đặt trước, do nhân viên cập nhật. "Đã về kho" không nằm ở đây: tính theo từng đơn.
+enum PreorderSupplyStatus {
+  not_ordered
+  ordered
+  in_transit
+  issue
+
+  @@map("preorder_supply_status")
+}
+
+/// Đợt đặt trước (GLOSSARY): một lần mở nhận cọc cho một sản phẩm. Đang mở khi `closed_at` trống và chưa tới
+/// `closes_at`; mỗi sản phẩm tối đa một đợt đang mở (kiểm khi tạo, khóa dòng sản phẩm).
+model PreorderCampaign {
+  id             String               @id @default(uuid()) @db.Uuid
+  productId      String               @map("product_id") @db.Uuid
+  product        Product              @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// Phần trăm tiền hàng khách cọc; check 10–100.
+  depositPercent Int                  @map("deposit_percent")
+  /// Thời gian giao dự kiến, ngày; check `delivery_from <= delivery_to`.
+  deliveryFrom   DateTime             @map("delivery_from") @db.Date
+  deliveryTo     DateTime             @map("delivery_to") @db.Date
+  /// Hạn đóng nhận đặt.
+  closesAt       DateTime             @map("closes_at")
+  /// Số ngày khách được trả phần còn lại từ lúc hàng về; check >= 1.
+  remainderDays  Int                  @default(7) @map("remainder_days")
+  supplyStatus   PreorderSupplyStatus @default(not_ordered) @map("supply_status")
+  /// Ghi chú nội bộ về tiến độ nhập, khách không thấy.
+  supplyNote     String               @default("") @map("supply_note")
+  /// Có khi nhân viên đóng tay; không mở lại được.
+  closedAt       DateTime?            @map("closed_at")
+  createdById    String               @map("created_by_id") @db.Uuid
+  createdBy      Staff                @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  variants PreorderCampaignVariant[]
+  orders   Order[]
+
+  @@index([productId, closesAt])
+  @@index([createdAt])
+  @@map("preorder_campaign")
+}
+
+/// Một biến thể nhận đặt trong đợt, kèm số suất (GLOSSARY "Suất"); check `allocation >= 1`.
+model PreorderCampaignVariant {
+  campaignId String           @map("campaign_id") @db.Uuid
+  campaign   PreorderCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  variantId  String           @map("variant_id") @db.Uuid
+  variant    ProductVariant   @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  allocation Int
+
+  @@id([campaignId, variantId])
+  @@index([variantId])
+  @@map("preorder_campaign_variant")
 }
