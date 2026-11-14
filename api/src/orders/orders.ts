@@ -1,4 +1,4 @@
-import { ErrorCode, PublicImage, type AttributeValues, type PublicOrder } from '@ecommerce/shared'
+import { ErrorCode, PublicImage, type AttributeValues, type OrderPreorder, type PublicOrder } from '@ecommerce/shared'
 import { z } from 'zod'
 import type { Storage } from '../adapters/storage.ts'
 import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
@@ -125,6 +125,26 @@ export async function findCustomerOrder(db: DbClient, code: string, customerId: 
   return order
 }
 
+/** Phần đặt trước của đơn; `null` với đơn hàng sẵn (check `order_preorder_check` bảo đảm đủ trường). */
+export function preorderOf(
+  order: Pick<
+    OrderForView,
+    'kind' | 'total' | 'depositPercent' | 'depositAmount' | 'deliveryFrom' | 'deliveryTo' | 'remainderDays'
+  >,
+): OrderPreorder | null {
+  const { depositPercent, depositAmount, deliveryFrom, deliveryTo, remainderDays } = order
+  if (order.kind !== 'preorder' || depositPercent === null || depositAmount === null) return null
+  if (deliveryFrom === null || deliveryTo === null || remainderDays === null) return null
+  return {
+    depositPercent,
+    depositAmount: Number(depositAmount),
+    remainingAmount: Number(order.total - depositAmount),
+    deliveryFrom: deliveryFrom.toISOString().slice(0, 10),
+    deliveryTo: deliveryTo.toISOString().slice(0, 10),
+    remainderDays,
+  }
+}
+
 export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrder {
   const image = (value: Prisma.JsonValue): PublicImage | null => {
     if (value === null) return null
@@ -133,6 +153,8 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
   }
   return {
     code: order.code,
+    kind: order.kind,
+    preorder: preorderOf(order),
     status: order.status,
     paymentStatus: order.paymentStatus,
     fulfillmentStatus: order.fulfillmentStatus,

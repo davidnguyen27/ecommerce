@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { shop } from './support/shop.ts'
+import { inDays, preorderShop } from './support/preorder.ts'
 import { bearer, createStaff } from './support/staff.ts'
 
-const DAY = 24 * 60 * 60_000
-const inDays = (days: number) => new Date(Date.now() + days * DAY).toISOString()
-
-type Shop = Awaited<ReturnType<typeof shop>>
+type Shop = Awaited<ReturnType<typeof preorderShop>>
 
 /** Cửa hàng có sản phẩm Air Max đã xuất bản (AM-40, AM-41), và hàm mở/sửa/đóng đợt bằng tài khoản owner. */
 async function campaigns() {
-  const app = await shop()
+  const app = await preorderShop()
   const { request, token, product, v40, v41 } = app
   const base = (overrides: Record<string, unknown> = {}) => ({
     productId: product.id,
@@ -34,16 +31,8 @@ async function campaigns() {
     expect(res.status).toBe(200)
     return res.body.items as { action: string; before: unknown; after: unknown }[]
   }
-  /**
-   * Một đơn chưa hủy thuộc đợt, 1 đôi AM-40. Ticket 04 mới có đường đặt trước qua HTTP, nên test lấy một đơn đặt mua
-   * thường rồi gắn đợt bằng `prisma`.
-   */
-  const orderIn = async (campaignId: string) => {
-    const res = await app.checkout()
-    expect(res.status).toBe(201)
-    await app.prisma.order.update({ where: { code: res.body.code }, data: { preorderCampaignId: campaignId } })
-    return res.body.code as number
-  }
+  /** Một đơn đặt trước chờ cọc thuộc đợt, 1 đôi AM-41 (hết hàng sẵn). */
+  const orderIn = (campaignId: string) => app.placed(campaignId)
   return { ...app, base, create, update, close, get, audits, orderIn }
 }
 
@@ -235,38 +224,35 @@ describe('sửa và đóng đợt', () => {
     const campaign = await opened(app)
     await app.orderIn(campaign.id)
     await app.orderIn(campaign.id)
-    expect((await app.get(campaign.id)).body.variants[0]).toMatchObject({ sku: 'AM-40', used: 2 })
+    expect((await app.get(campaign.id)).body.variants[1]).toMatchObject({ sku: 'AM-41', used: 2 })
 
     expect((await app.update(campaign.id, { depositPercent: 50 })).status).toBe(409)
     expect((await app.update(campaign.id, { remainderDays: 3 })).status).toBe(409)
-    const lower = await app.update(campaign.id, { variants: [{ variantId: app.v40.id, allocation: 1 }] })
+    const lower = await app.update(campaign.id, { variants: [{ variantId: app.v41.id, allocation: 1 }] })
     expect(lower.status).toBe(409)
     expect(lower.body.error.fields).toEqual([
       { path: 'variants.0.allocation', message: 'Đã đặt 2, suất không thấp hơn được' },
     ])
-    const dropped = await app.update(campaign.id, { variants: [{ variantId: app.v41.id, allocation: 5 }] })
+    const dropped = await app.update(campaign.id, { variants: [{ variantId: app.v40.id, allocation: 10 }] })
     expect(dropped.status).toBe(409)
     expect(dropped.body.error.fields).toEqual([
-      { path: 'variants', message: 'AM-40 đã có đơn, không bỏ khỏi đợt được' },
+      { path: 'variants', message: 'AM-41 đã có đơn, không bỏ khỏi đợt được' },
     ])
 
     // Suất bằng đúng số đã đặt, và bỏ biến thể chưa có đơn, vẫn được.
-    const ok = await app.update(campaign.id, { variants: [{ variantId: app.v40.id, allocation: 2 }] })
+    const ok = await app.update(campaign.id, { variants: [{ variantId: app.v41.id, allocation: 2 }] })
     expect(ok.status).toBe(200)
-    expect(ok.body.variants).toEqual([expect.objectContaining({ sku: 'AM-40', allocation: 2, used: 2 })])
+    expect(ok.body.variants).toEqual([expect.objectContaining({ sku: 'AM-41', allocation: 2, used: 2 })])
     expect((await app.audits()).map((a) => a.action)).toEqual(['preorder.campaign.update', 'preorder.campaign.create'])
   })
 
   it('đơn đã hủy không tính vào số đã dùng và không khóa mức cọc', async () => {
     const app = await campaigns()
     const campaign = await opened(app)
-    const code = await app.orderIn(campaign.id)
-    await app.prisma.order.update({
-      where: { code },
-      data: { status: 'cancelled', cancelReason: 'staff', cancelledAt: new Date(), reservedUntil: null },
-    })
+    const { code, token } = await app.orderIn(campaign.id)
+    expect((await app.request.post(`/api/orders/${code}/cancel`).query({ token })).status).toBe(200)
 
-    expect((await app.get(campaign.id)).body.variants[0]).toMatchObject({ sku: 'AM-40', used: 0 })
+    expect((await app.get(campaign.id)).body.variants[1]).toMatchObject({ sku: 'AM-41', used: 0 })
     expect((await app.update(campaign.id, { depositPercent: 50 })).status).toBe(200)
   })
 

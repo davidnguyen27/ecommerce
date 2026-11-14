@@ -31,6 +31,7 @@ export function accountOrderRoutes({
         const body: AccountOrderPage = {
           items: orders.map((order) => ({
             code: order.code,
+            kind: order.kind,
             status: order.status,
             paymentStatus: order.paymentStatus,
             fulfillmentStatus: order.fulfillmentStatus,

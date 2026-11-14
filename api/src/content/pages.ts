@@ -1,4 +1,4 @@
-import { PRIVACY_POLICY_SLUG } from '@ecommerce/shared'
+import { PREORDER_POLICY_SLUG, PRIVACY_POLICY_SLUG } from '@ecommerce/shared'
 import type { DbClient } from '../db.ts'
 
 /** `include` lấy phiên bản mới nhất của trang. */
@@ -28,6 +28,12 @@ export function findPublishedVersion(db: DbClient, slug: string) {
 /** Phiên bản hiện hành của chính sách bảo mật; lời đồng ý của khách lưu id phiên bản này. */
 export async function findCurrentPrivacyPolicy(db: DbClient) {
   const version = await findPublishedVersion(db, PRIVACY_POLICY_SLUG)
+  return version?.page.kind === 'policy' ? version : null
+}
+
+/** Phiên bản hiện hành của chính sách đặt trước; đơn đặt trước lưu id phiên bản này cùng các chính sách khác. */
+export async function findCurrentPreorderPolicy(db: DbClient) {
+  const version = await findPublishedVersion(db, PREORDER_POLICY_SLUG)
   return version?.page.kind === 'policy' ? version : null
 }
 

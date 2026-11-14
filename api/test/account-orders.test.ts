@@ -17,6 +17,7 @@ describe('đơn hàng trong tài khoản khách', () => {
       items: [
         {
           code: placed.body.code,
+          kind: 'standard',
           status: 'pending_payment',
           paymentStatus: 'unpaid',
           fulfillmentStatus: 'not_prepared',

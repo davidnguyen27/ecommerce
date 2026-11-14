@@ -46,8 +46,9 @@ export async function cancelInTransaction(
   orderId: string,
   cancellation: Cancellation,
 ): Promise<CancelOutcome> {
-  const [locked] = await tx.$queryRaw<{ status: string; reservedUntil: Date | null }[]>`
-    SELECT "status"::text AS status, "reserved_until" AS "reservedUntil" FROM "order" WHERE "id" = ${orderId}::uuid
+  const [locked] = await tx.$queryRaw<{ status: string; kind: string; reservedUntil: Date | null }[]>`
+    SELECT "status"::text AS status, "kind"::text AS kind, "reserved_until" AS "reservedUntil"
+    FROM "order" WHERE "id" = ${orderId}::uuid
     FOR UPDATE`
   if (!locked) throw new Error(`Không có đơn ${orderId}`)
   if (locked.status === 'cancelled') return 'already_cancelled'
@@ -61,8 +62,11 @@ export async function cancelInTransaction(
     return 'not_due'
   }
 
-  const lines = await tx.orderLine.findMany({ where: { orderId }, select: { variantId: true, quantity: true } })
-  await releaseStock(tx, lines)
+  // Đơn đặt trước chờ cọc chỉ chiếm suất, không giữ hàng: hủy là suất tự trống ra, không có gì để nhả (ADR 0013).
+  if (locked.kind !== 'preorder') {
+    const lines = await tx.orderLine.findMany({ where: { orderId }, select: { variantId: true, quantity: true } })
+    await releaseStock(tx, lines)
+  }
   await tx.order.update({
     where: { id: orderId },
     data: { status: 'cancelled', cancelReason: cancellation.reason, cancelledAt: new Date(), reservedUntil: null },

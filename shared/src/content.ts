@@ -7,6 +7,12 @@ export type ContentPageKind = z.infer<typeof ContentPageKind>
 /** Slug của trang chính sách bảo mật; lời đồng ý của khách tham chiếu phiên bản hiện hành của trang này. */
 export const PRIVACY_POLICY_SLUG = 'chinh-sach-bao-mat'
 
+/**
+ * Slug của trang chính sách đặt trước (điều kiện hủy/hoàn, quá hạn trả phần còn lại). Khách đồng ý với phiên bản
+ * hiện hành khi đặt trước, và đơn lưu lại phiên bản đó cùng các chính sách khác.
+ */
+export const PREORDER_POLICY_SLUG = 'chinh-sach-dat-truoc'
+
 /** Phần sửa được của trang. Slug và loại cố định từ lúc tạo, nên khách luôn thấy chúng khớp phiên bản đang xuất bản. */
 export const UpdateContentPageRequest = z.object({
   title: z.string().trim().min(1).max(200),
