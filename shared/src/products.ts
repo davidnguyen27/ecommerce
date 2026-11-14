@@ -165,6 +165,22 @@ export type AdminProductDetail = z.infer<typeof AdminProductDetail>
 export const PublicImage = ImageRenditions.extend({ alt: z.string() })
 export type PublicImage = z.infer<typeof PublicImage>
 
+/**
+ * Điều khách thấy về một biến thể: còn hàng sẵn, đang nhận đặt trước (hết hàng nhưng thuộc đợt đang mở và còn suất),
+ * hay hết hàng. Hàng đặt trước không tính là còn hàng (GLOSSARY "Đang nhận đặt trước").
+ */
+export const VariantAvailability = z.enum(['in_stock', 'preorder', 'out_of_stock'])
+export type VariantAvailability = z.infer<typeof VariantAvailability>
+
+/** Đợt đặt trước của một biến thể như khách thấy: mức cọc và thời gian giao dự kiến (`YYYY-MM-DD`). */
+export const PreorderOffer = z.object({
+  campaignId: z.string(),
+  depositPercent: z.number(),
+  deliveryFrom: z.string(),
+  deliveryTo: z.string(),
+})
+export type PreorderOffer = z.infer<typeof PreorderOffer>
+
 /** Thẻ sản phẩm ở trang danh mục, thương hiệu. */
 export const ProductCard = z.object({
   slug: z.string(),
@@ -177,6 +193,8 @@ export const ProductCard = z.object({
   image: PublicImage.nullable(),
   /** Có ít nhất một biến thể đang hiện với khách còn hàng; không bao giờ kèm số lượng (ADR 0006). */
   inStock: z.boolean(),
+  /** Không còn hàng sẵn nhưng có ít nhất một biến thể đang nhận đặt trước: thẻ có nhãn "Đặt trước". */
+  preorder: z.boolean(),
 })
 export type ProductCard = z.infer<typeof ProductCard>
 
@@ -294,6 +312,10 @@ export const PublicProduct = z.object({
       compareAtPrice: z.number().nullable(),
       /** Còn hàng hay hết, đọc trực tiếp từ tồn chứ không từ phiên bản xuất bản (ADR 0006). */
       inStock: z.boolean(),
+      /** `in_stock` khi và chỉ khi `inStock`; còn lại là đặt trước được hay hết hàng. */
+      availability: VariantAvailability,
+      /** Có khi và chỉ khi `availability` là `preorder`. */
+      preorder: PreorderOffer.nullable(),
     }),
   ),
   /** Theo thứ tự hiển thị; `skus` rỗng là ảnh chung. */

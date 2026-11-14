@@ -362,6 +362,8 @@ const CHECKS: Check[] = [
   { path: '/gio-hang', status: 200, contains: ['<h1>Giỏ hàng</h1>', 'Đang tải', NOINDEX] },
   // Đặt mua và đơn qua token là dữ liệu cá nhân: HTML từ server chỉ có khung trang.
   { path: '/dat-mua', status: 200, contains: ['<h1>Đặt mua</h1>', 'Đang tải', NOINDEX] },
+  // Đặt trước không qua giỏ hàng (ADR 0012); ticket 04 thay khung trang chờ bằng form đặt trước.
+  { path: '/dat-truoc/00000000-0000-4000-8000-000000000000', status: 200, contains: ['<h1>Đặt trước</h1>', NOINDEX] },
   { path: '/don-hang/100000?token=sai', status: 200, contains: ['Đơn hàng #100000', 'Đang tải', NOINDEX] },
   // Trang kết quả cổng đưa khách quay về: URL không có token, token nằm ở sessionStorage của trình duyệt.
   { path: '/don-hang/100000?ket-qua=1', status: 200, contains: ['Đơn hàng #100000', 'Đang tải', NOINDEX] },

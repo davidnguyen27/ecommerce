@@ -33,6 +33,45 @@ export async function usedAllocations(db: DbClient, campaignIds: string[]) {
   return used
 }
 
+/** Điều khách thấy về một biến thể đang nhận đặt trước: đợt, mức cọc, thời gian giao dự kiến. */
+export type PreorderOffer = { campaignId: string; depositPercent: number; deliveryFrom: string; deliveryTo: string }
+
+/**
+ * Những biến thể đang nhận đặt trước (GLOSSARY "Đang nhận đặt trước"), theo id biến thể: sản phẩm đã xuất bản, biến
+ * thể không ngừng bán, hết hàng sẵn (`on_hand - reserved <= 0`), thuộc đợt đang mở và số đã dùng còn dưới suất.
+ * Còn một cái hàng sẵn là không đặt trước được. Như `inStockIds`, không bao giờ trả số lượng hay số suất (ADR 0006).
+ */
+export async function preorderOffers(db: DbClient, variantIds: readonly string[], now = new Date()) {
+  const offers = new Map<string, PreorderOffer>()
+  if (variantIds.length === 0) return offers
+  const rows = await db.$queryRaw<
+    { variantId: string; campaignId: string; depositPercent: number; deliveryFrom: Date; deliveryTo: Date }[]
+  >`
+    SELECT cv."variant_id"::text AS "variantId", c."id"::text AS "campaignId", c."deposit_percent" AS "depositPercent",
+      c."delivery_from" AS "deliveryFrom", c."delivery_to" AS "deliveryTo"
+    FROM "preorder_campaign_variant" cv
+    JOIN "preorder_campaign" c ON c."id" = cv."campaign_id"
+    JOIN "product_variant" v ON v."id" = cv."variant_id"
+    JOIN "product" p ON p."id" = c."product_id"
+    WHERE cv."variant_id" = ANY(${[...variantIds]}::uuid[])
+      AND c."closed_at" IS NULL AND c."closes_at" > ${now}
+      AND p."status" = 'published' AND v."status" = 'active'
+      AND v."on_hand" - v."reserved" <= 0
+      AND cv."allocation" > COALESCE((
+        SELECT SUM(l."quantity") FROM "order_line" l JOIN "order" o ON o."id" = l."order_id"
+        WHERE o."preorder_campaign_id" = c."id" AND l."variant_id" = cv."variant_id" AND o."status" <> 'cancelled'
+      ), 0)`
+  for (const row of rows) {
+    offers.set(row.variantId, {
+      campaignId: row.campaignId,
+      depositPercent: row.depositPercent,
+      deliveryFrom: day(row.deliveryFrom),
+      deliveryTo: day(row.deliveryTo),
+    })
+  }
+  return offers
+}
+
 export const CAMPAIGN_INCLUDE = {
   product: { select: { id: true, name: true, slug: true, status: true } },
   createdBy: { select: ACTOR_SELECT },
