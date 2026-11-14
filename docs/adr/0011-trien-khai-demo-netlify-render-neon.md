@@ -62,7 +62,8 @@ vấn chỉ đọc vào Neon và thử tay trên trình duyệt:
 - **Ảnh R2:** URL `pub-….r2.dev` trả 200 `image/png`; trang sản phẩm hiện ảnh.
 - **VNPAY sandbox:** người dùng trả bằng thẻ test NCB. Đơn sang `processing` với giao dịch nguồn `return`; chưa khai IPN
   nên không có giao dịch nguồn `webhook`.
-- **IP khách: SAI.** Audit ghi IP `172.68.x.x` / `172.70.x.x`, là IP của Cloudflare, không phải IP người dùng. Render đặt
+- **IP khách: đúng với `TRUST_PROXY=5`** (audit ghi IPv6 nhà mạng Viettel của người dùng, 2026-11-14). Ban đầu, với
+  `TRUST_PROXY=2`, audit ghi IP `172.68.x.x` / `172.70.x.x`, là IP của Cloudflare, không phải IP người dùng. Render đặt
   Cloudflare trước load balancer của mình, nên giữa khách và API có hơn hai tầng proxy, và `TRUST_PROXY=2` không đủ.
   Hệ quả: rate limit có thể gộp nhiều khách chung một IP, audit và `vnp_IpAddr` không đúng IP khách. Log request của
   Render cho `x-forwarded-for: <khách>, <Cloudflare 162.158.x>, <10.24.x nội bộ>` với request gọi thẳng Render. Đặt thử
