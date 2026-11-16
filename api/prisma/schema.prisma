@@ -738,7 +738,7 @@ model Order {
   /// cọc bên dưới, đơn hàng sẵn không có trường nào.
   preorderCampaignId  String?           @map("preorder_campaign_id") @db.Uuid
   preorderCampaign    PreorderCampaign? @relation(fields: [preorderCampaignId], references: [id], onDelete: Restrict)
-  /// Chụp từ đợt lúc đặt: phần trăm cọc, và tiền cọc VND (làm tròn lên 1.000, check `0 < deposit_amount <= subtotal`).
+  /// Chụp từ đợt lúc đặt: phần trăm cọc, và tiền cọc VND (làm tròn lên 1.000, tính trên tiền hàng sau giảm, check `0 < deposit_amount <= subtotal - discount`).
   depositPercent      Int?              @map("deposit_percent")
   depositAmount       BigInt?           @map("deposit_amount")
   /// Mã giảm giá đã dùng, cùng các giá trị chụp lúc đặt (check `order_voucher_check`: có mã thì có đủ, không có thì

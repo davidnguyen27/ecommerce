@@ -27,7 +27,13 @@ import { imageRenditions } from '../media/images.ts'
 import { recordOrderEvent } from '../orders/orders.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
 import { enoughStockIds, reserveStock } from '../stock/stock.ts'
-import { checkVoucher, voucherSnapshot, type VoucherLine } from '../vouchers/apply.ts'
+import {
+  checkVoucher,
+  requireVoucherAsSeen,
+  toVoucherQuote,
+  voucherSnapshot,
+  type VoucherLine,
+} from '../vouchers/apply.ts'
 
 const VOUCHER_RATE_MESSAGE = 'Bạn đã thử mã giảm giá quá nhiều lần, vui lòng thử lại sau'
 
@@ -83,19 +89,7 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
           lines: buyable,
           customer: { email: input.email, phone: input.phone },
         })
-        voucher = check.ok
-          ? {
-              applied: true,
-              code: check.voucher.code,
-              discount: Number(check.discount),
-              lines: check.lines.map((l) => ({ variantId: l.variantId, discount: Number(l.discount) })),
-            }
-          : {
-              applied: false,
-              code: check.code,
-              reason: check.reason,
-              ...(check.shortfall !== undefined && { shortfall: Number(check.shortfall) }),
-            }
+        voucher = toVoucherQuote(check)
       }
       const discount = voucher?.applied ? voucher.discount : 0
       // Ngưỡng miễn phí giao so với tiền hàng sau giảm (spec M5).
@@ -221,25 +215,11 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
                     customer: { email: address.email, phone: address.phone },
                     lock: true,
                   })
-                  if (check.ok && Number(check.discount) === input.discount) return check
-                  const details: CheckoutConflictDetails = {
-                    lines: [],
-                    voucher: {
-                      code: check.ok ? check.voucher.code : check.code,
-                      reason: check.ok ? 'changed' : check.reason,
-                      discount: check.ok ? Number(check.discount) : null,
-                      ...(!check.ok && check.shortfall !== undefined && { shortfall: Number(check.shortfall) }),
-                      totalWithoutVoucher: subtotal + shippingFeeFor(config, address.provinceCode, subtotal),
-                    },
-                  }
-                  throw new AppError(
-                    409,
-                    ErrorCode.CONFLICT,
-                    check.ok
-                      ? 'Tiền giảm của mã đã thay đổi, hãy xem lại trước khi đặt mua'
-                      : 'Mã giảm giá không còn dùng được cho đơn này',
-                    undefined,
-                    details,
+                  return requireVoucherAsSeen(
+                    check,
+                    input.discount,
+                    subtotal + shippingFeeFor(config, address.provinceCode, subtotal),
+                    (voucher): CheckoutConflictDetails => ({ lines: [], voucher }),
                   )
                 })()
           const discount = applied ? Number(applied.discount) : 0
