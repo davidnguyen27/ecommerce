@@ -144,6 +144,7 @@ export function preorderOf(
   order: Pick<
     OrderForView,
     | 'kind'
+    | 'preorderCampaignId'
     | 'total'
     | 'depositPercent'
     | 'depositAmount'
@@ -163,6 +164,7 @@ export function preorderOf(
   if (deliveryFrom === null || deliveryTo === null || remainderDays === null) return null
   const quantity = order.lines.reduce((sum, line) => sum + line.quantity, 0)
   return {
+    campaignId: order.preorderCampaignId!,
     // Đã về đủ thì là đủ, kể cả khi số đang giữ đã về 0 sau bàn giao vận chuyển.
     arrivedQuantity: order.arrivedAt ? quantity : order.lines.reduce((sum, line) => sum + line.reservedQuantity, 0),
     quantity,

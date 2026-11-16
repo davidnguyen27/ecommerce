@@ -170,11 +170,14 @@ async function close() {
                 <th>Biến thể</th>
                 <th class="admin-table-num">Suất</th>
                 <th class="admin-table-num">Đã đặt</th>
+                <th class="admin-table-num">Đã cọc</th>
+                <th class="admin-table-num">Chờ cọc</th>
+                <th class="admin-table-num">Đã về</th>
                 <th class="admin-table-num">Còn suất</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="v in campaign.variants" :key="v.variantId">
+              <tr v-for="v in campaign.variants" :key="v.variantId" data-testid="campaign-variant">
                 <td style="font-family: var(--adm-mono); font-size: 12px; font-weight: 600">{{ v.sku }}</td>
                 <td style="font-size: 12px">
                   {{ variantLabel(v.attributes) || '—' }}
@@ -182,7 +185,66 @@ async function close() {
                 </td>
                 <td class="admin-table-num">{{ v.allocation }}</td>
                 <td class="admin-table-num">{{ v.used }}</td>
+                <td class="admin-table-num">{{ v.deposited }}</td>
+                <td class="admin-table-num">{{ v.pendingDeposit }}</td>
+                <td class="admin-table-num">{{ v.arrived }}</td>
                 <td class="admin-table-num">{{ Math.max(0, v.allocation - v.used) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <h2 class="admin-section-title" style="margin-top: 24px">
+        Đơn theo thứ tự cọc
+        <NuxtLink :to="`/admin/orders?campaignId=${campaign.id}`" style="font-size: 12px; font-weight: 400">
+          · mở ở trang Đơn hàng
+        </NuxtLink>
+      </h2>
+      <p style="font-size: 12px; color: var(--adm-muted); margin: 0 0 8px">
+        Hàng nhập về được chia cho các đơn đã cọc theo đúng thứ tự này; đơn chờ cọc chưa được chia.
+      </p>
+      <div class="admin-table-card">
+        <div v-if="campaign.orders.length === 0" style="padding: 24px; text-align: center; color: var(--adm-muted)">
+          Đợt chưa có đơn nào.
+        </div>
+        <div v-else style="overflow-x: auto">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Mã đơn</th>
+                <th>Người nhận</th>
+                <th>SKU</th>
+                <th class="admin-table-num">Đã về / số lượng</th>
+                <th>Cọc lúc</th>
+                <th>Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="o in campaign.orders" :key="o.code" data-testid="campaign-order">
+                <td>
+                  <NuxtLink :to="`/admin/orders/${o.code}`" style="font-family: var(--adm-mono); font-weight: 600">
+                    #{{ o.code }}
+                  </NuxtLink>
+                </td>
+                <td>{{ o.recipientName }}</td>
+                <td style="font-family: var(--adm-mono); font-size: 12px">{{ o.sku }}</td>
+                <td class="admin-table-num">{{ o.arrivedQuantity }}/{{ o.quantity }}</td>
+                <td style="font-size: 12px; white-space: nowrap">
+                  {{ o.depositPaidAt ? formatDateTime(o.depositPaidAt) : 'Chưa cọc' }}
+                </td>
+                <td style="font-size: 12px">
+                  {{ PAYMENT_STATUS_LABELS[o.paymentStatus] }} · {{ FULFILLMENT_STATUS_LABELS[o.fulfillmentStatus] }}
+                  <div v-if="o.remainderOverdueAt" style="color: #b45309; font-weight: 600">
+                    Quá hạn trả phần còn lại
+                  </div>
+                  <div
+                    v-else-if="o.remainderDueAt && o.paymentStatus === 'deposit_paid'"
+                    style="color: var(--adm-muted)"
+                  >
+                    Hạn trả {{ formatDateTime(o.remainderDueAt) }}
+                  </div>
+                </td>
               </tr>
             </tbody>
           </table>

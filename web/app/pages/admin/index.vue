@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { AdminBrandList, AdminOrderPage, AdminProductList, AuditPage, ReconciliationPage } from '@ecommerce/shared'
+import {
+  AdminBrandList,
+  AdminOrderPage,
+  AdminProductList,
+  AuditPage,
+  PreorderAttention,
+  ReconciliationPage,
+} from '@ecommerce/shared'
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth' })
 
@@ -40,6 +47,14 @@ const ORDER_COUNTS = [
     testid: 'dashboard-reconciliation',
     load: async () =>
       ReconciliationPage.parse(await session.adminFetch('/api/admin/reconciliation', { query: { pageSize: 1 } })).total,
+  },
+  {
+    to: '/admin/preorders/attention',
+    label: 'Đặt trước cần xử lý',
+    sub: 'Quá hạn trả phần còn lại, đợt gặp sự cố',
+    testid: 'dashboard-preorder-attention',
+    load: async () =>
+      PreorderAttention.parse(await session.adminFetch('/api/admin/preorder-campaigns/attention')).total,
   },
 ].filter((item) => canOpen(item.to))
 const orderCounts = ref<Record<string, number>>({})

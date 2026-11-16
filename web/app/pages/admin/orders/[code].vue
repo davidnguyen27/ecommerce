@@ -181,7 +181,12 @@ await load()
                     </tr>
                     <tr>
                       <td colspan="5">
-                        Giao dự kiến {{ formatDateOnly(order.preorder.currentDeliveryFrom) }} –
+                        <NuxtLink
+                          :to="`/admin/preorders/${order.preorder.campaignId}`"
+                          data-testid="order-campaign-link"
+                          >Đợt đặt trước</NuxtLink
+                        >
+                        · giao dự kiến {{ formatDateOnly(order.preorder.currentDeliveryFrom) }} –
                         {{ formatDateOnly(order.preorder.currentDeliveryTo) }}
                         <template
                           v-if="
@@ -227,6 +232,7 @@ await load()
                     <th>Thời điểm</th>
                     <th>Mã tham chiếu</th>
                     <th>Nguồn</th>
+                    <th>Khoản</th>
                     <th class="admin-table-num">Số tiền</th>
                     <th>Đối soát</th>
                   </tr>
@@ -236,6 +242,7 @@ await load()
                     <td style="white-space: nowrap">{{ formatDateTime(p.paidAt) }}</td>
                     <td style="font-family: var(--adm-mono); font-size: 12px">{{ p.reference }}</td>
                     <td>{{ PAYMENT_SOURCE_LABELS[p.source] }}</td>
+                    <td>{{ PAYMENT_PURPOSE_LABELS[p.purpose] }}</td>
                     <td class="admin-table-num">{{ formatVnd(p.amount) }}</td>
                     <td style="font-size: 12px">
                       <span v-if="p.reconciliation">
