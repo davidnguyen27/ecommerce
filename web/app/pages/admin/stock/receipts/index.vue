@@ -175,6 +175,7 @@ await load()
               <td>
                 <input
                   v-model="line.sku"
+                  aria-label="SKU"
                   class="form-input"
                   style="font-family: var(--adm-mono); font-size: 12px"
                   required
