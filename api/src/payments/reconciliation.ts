@@ -82,6 +82,9 @@ export async function restoreOrder(
         lines: order.lines.filter((l) => short.has(l.variantId)).map((l) => ({ variantId: l.variantId, sku: l.sku })),
       })
     }
+    for (const line of order.lines) {
+      await tx.orderLine.update({ where: { id: line.id }, data: { reservedQuantity: line.quantity } })
+    }
   }
 
   const paymentStatus = preorder ? 'deposit_paid' : 'paid'

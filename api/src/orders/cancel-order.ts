@@ -46,9 +46,8 @@ export async function cancelInTransaction(
   orderId: string,
   cancellation: Cancellation,
 ): Promise<CancelOutcome> {
-  const [locked] = await tx.$queryRaw<{ status: string; kind: string; reservedUntil: Date | null }[]>`
-    SELECT "status"::text AS status, "kind"::text AS kind, "reserved_until" AS "reservedUntil"
-    FROM "order" WHERE "id" = ${orderId}::uuid
+  const [locked] = await tx.$queryRaw<{ status: string; reservedUntil: Date | null }[]>`
+    SELECT "status"::text AS status, "reserved_until" AS "reservedUntil" FROM "order" WHERE "id" = ${orderId}::uuid
     FOR UPDATE`
   if (!locked) throw new Error(`Không có đơn ${orderId}`)
   if (locked.status === 'cancelled') return 'already_cancelled'
@@ -62,10 +61,18 @@ export async function cancelInTransaction(
     return 'not_due'
   }
 
-  // Đơn đặt trước chờ cọc chỉ chiếm suất, không giữ hàng: hủy là suất tự trống ra, không có gì để nhả (ADR 0013).
-  if (locked.kind !== 'preorder') {
-    const lines = await tx.orderLine.findMany({ where: { orderId }, select: { variantId: true, quantity: true } })
-    await releaseStock(tx, lines)
+  // Nhả đúng số đang giữ của từng dòng. Đơn đặt trước chờ cọc chỉ chiếm suất, không giữ hàng nên không có gì để nhả;
+  // suất tự trống ra (ADR 0013).
+  const lines = await tx.orderLine.findMany({
+    where: { orderId, reservedQuantity: { gt: 0 } },
+    select: { variantId: true, reservedQuantity: true },
+  })
+  if (lines.length > 0) {
+    await releaseStock(
+      tx,
+      lines.map((l) => ({ variantId: l.variantId, quantity: l.reservedQuantity })),
+    )
+    await tx.orderLine.updateMany({ where: { orderId }, data: { reservedQuantity: 0 } })
   }
   await tx.order.update({
     where: { id: orderId },

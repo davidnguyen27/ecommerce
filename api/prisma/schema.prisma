@@ -745,6 +745,10 @@ model Order {
   remainderDays      Int?              @map("remainder_days")
   /// Lúc cọc thành công (hay lúc khôi phục từ đối soát); thứ tự chia hàng về (ADR 0013). Check `order_deposit_paid_check`.
   depositPaidAt      DateTime?         @map("deposit_paid_at")
+  /// Lúc mọi cái của đơn đặt trước đã được giữ từ hàng về (GLOSSARY "Hàng đã về"); hạn trả phần còn lại tính từ đây
+  /// (`remainder_days` ngày). Check `order_arrival_check`.
+  arrivedAt          DateTime?         @map("arrived_at")
+  remainderDueAt     DateTime?         @map("remainder_due_at")
 
   lines               OrderLine[]
   stockMovements      StockMovement[]
@@ -768,22 +772,25 @@ model Order {
 
 /// Dòng đơn: snapshot biến thể lúc đặt mua.
 model OrderLine {
-  id          String         @id @default(uuid()) @db.Uuid
-  orderId     String         @map("order_id") @db.Uuid
-  order       Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  id               String         @id @default(uuid()) @db.Uuid
+  orderId          String         @map("order_id") @db.Uuid
+  order            Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
   /// Thứ tự trong giỏ, từ 0.
-  position    Int
-  variantId   String         @map("variant_id") @db.Uuid
-  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
-  sku         String
-  productName String         @map("product_name")
-  attributes  Json
+  position         Int
+  variantId        String         @map("variant_id") @db.Uuid
+  variant          ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  sku              String
+  productName      String         @map("product_name")
+  attributes       Json
   /// Ảnh đại diện: `StoredImage` (api/src/media/images.ts) kèm `alt`; `null` khi không có.
-  image       Json?
+  image            Json?
   /// VND, giá bán lúc đặt.
-  price       BigInt
+  price            BigInt
   /// 1–5 (check constraint).
-  quantity    Int
+  quantity         Int
+  /// Số đang giữ trong kho cho dòng này, 0–`quantity` (check constraint). Đơn hàng sẵn: bằng `quantity` từ lúc giữ tới
+  /// lúc hủy hay bàn giao; đơn đặt trước: tăng dần theo phiếu nhập (ADR 0013). Hủy và bàn giao đưa về 0.
+  reservedQuantity Int            @default(0) @map("reserved_quantity")
 
   @@unique([orderId, position])
   @@index([variantId])

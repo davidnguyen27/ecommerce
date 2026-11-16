@@ -215,6 +215,22 @@ const remainingText = computed(() => {
         {{ formatDateOnly(order.preorder.deliveryTo) }}; khi hàng về, bạn có {{ order.preorder.remainderDays }} ngày để
         trả phần còn lại.
       </p>
+      <p
+        v-if="order.preorder?.remainderDueAt"
+        class="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+        role="status"
+        data-testid="order-arrived"
+      >
+        Hàng đã về đủ. Hạn trả phần còn lại: <strong>{{ formatDate(order.preorder.remainderDueAt) }}</strong
+        >.
+      </p>
+      <p
+        v-else-if="order.preorder && order.preorder.arrivedQuantity > 0"
+        class="mt-3 text-sm"
+        data-testid="order-arriving"
+      >
+        Đã về {{ order.preorder.arrivedQuantity }}/{{ order.preorder.quantity }} cái, đang chờ phần còn lại.
+      </p>
     </section>
 
     <section class="grid gap-6 text-sm sm:grid-cols-2">

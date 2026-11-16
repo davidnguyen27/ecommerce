@@ -60,7 +60,7 @@ export async function handOverOrder(
   await lockForTransition(tx, orderId, 'preparing')
   const lines = await tx.orderLine.findMany({
     where: { orderId },
-    select: { variantId: true, quantity: true },
+    select: { variantId: true, quantity: true, reservedQuantity: true },
     orderBy: { position: 'asc' },
   })
   await changeStock(
@@ -71,12 +71,14 @@ export async function handOverOrder(
       lines.map((line, i) => ({
         variantId: line.variantId,
         quantity: -line.quantity,
-        releaseReserved: line.quantity,
+        // Đơn đã trả đủ thì đang giữ đủ: đơn hàng sẵn từ lúc đặt, đơn đặt trước từ lúc hàng về (ADR 0013).
+        releaseReserved: line.reservedQuantity,
         kind: 'sale' as const,
         orderId,
         path: `lines.${i}`,
       })),
   )
+  await tx.orderLine.updateMany({ where: { orderId }, data: { reservedQuantity: 0 } })
   const order = await tx.order.update({
     where: { id: orderId },
     data: { fulfillmentStatus: 'handed_over', ...shipment, handedOverAt: new Date() },

@@ -54,7 +54,7 @@ export function adminRoutes(
       .use('/products/:id/documents', adminProductDocumentRoutes(prisma, storage))
       .use('/products/:id/commitments', adminProductCommitmentRoutes(prisma))
       .use('/products', adminProductRoutes(prisma))
-      .use('/stock/receipts', adminStockReceiptRoutes(prisma))
+      .use('/stock/receipts', adminStockReceiptRoutes(prisma, mail))
       .use('/stock', adminStockRoutes(prisma))
       .use('/import', adminImportRoutes(prisma))
       .use('/images', adminBulkImageRoutes(prisma, storage))
