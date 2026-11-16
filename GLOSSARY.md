@@ -153,6 +153,36 @@ _Avoid_: xuất kho, gửi hàng
 Mã của đơn vị vận chuyển cho một kiện hàng, nhân viên nhập tay.
 _Avoid_: mã đơn
 
+## Đặt trước
+
+**Đợt đặt trước** (Pre-order campaign):
+Một lần doanh nghiệp mở nhận đặt cọc cho một sản phẩm sau khi đã kiểm tra khả năng cung ứng: gồm các biến thể nhận đặt, mức cọc, thời gian giao dự kiến và điều kiện hủy/hoàn. Mỗi đơn đặt trước thuộc đúng một đợt.
+_Avoid_: lô, batch, hàng order
+
+**Đơn đặt trước** (Pre-order):
+Đơn hàng cho một biến thể chưa có trong kho, thuộc một đợt đặt trước; khách trả cọc trước, phần còn lại sau. Chỉ đặt được khi biến thể hết hàng và đang có đợt mở; không nằm trong giỏ hàng.
+_Avoid_: đơn order, đơn chờ hàng
+
+**Đang nhận đặt trước** (Available for pre-order):
+Điều khách thấy về một biến thể hết hàng nhưng thuộc một đợt đặt trước đang mở và còn suất. Hàng đang nhận đặt trước không tính là còn hàng.
+_Avoid_: còn hàng (khi nói về hàng đặt trước), sắp về
+
+**Suất** (Pre-order allocation):
+Số lượng tối đa của một biến thể mà một đợt đặt trước nhận đặt, theo khả năng cung ứng đã kiểm tra.
+_Avoid_: quota, hạn mức
+
+**Tiền cọc** (Deposit):
+Khoản khách trả trước cho đơn đặt trước, tính bằng tỷ lệ của đợt trên tiền hàng của đơn. Đã cọc không có nghĩa là đã trả đủ.
+_Avoid_: tiền đặt trước, tạm ứng
+
+**Phần còn lại** (Remaining balance):
+Tổng phải trả của đơn đặt trước trừ tiền cọc, gồm cả phí giao. Khách được mời trả khi hàng của đơn đã về đủ và có một thời hạn để trả.
+_Avoid_: tiền thiếu, công nợ
+
+**Hàng đã về** (Arrived):
+Đơn đặt trước đã cọc mà mọi cái đã được giữ hàng từ hàng nhập về; hàng về được chia cho các đơn theo thứ tự cọc. Đơn mới được mời trả phần còn lại từ lúc này.
+_Avoid_: đã nhập, sẵn hàng
+
 ## Nguồn gốc và cam kết
 
 **Thông tin nguồn gốc công bố** (Origin statement):

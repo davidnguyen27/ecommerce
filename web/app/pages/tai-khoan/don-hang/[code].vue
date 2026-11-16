@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PublicOrder } from '@ecommerce/shared'
+import { PayRemainderResult, PublicOrder } from '@ecommerce/shared'
 
 // Đơn trong tài khoản: phiên khách chỉ có ở trình duyệt nên đơn nạp sau khi mount, HTML từ server không có gì của đơn.
 const route = useRoute()
@@ -35,6 +35,26 @@ async function cancel() {
   }
 }
 
+// Trả phần còn lại của đơn đặt trước: API cấp kèm token tra cứu để trang kết quả mở được đơn khi cổng đưa khách về.
+const payingRemainder = ref(false)
+async function payRemainder() {
+  payingRemainder.value = true
+  cancelError.value = null
+  try {
+    const result = PayRemainderResult.parse(
+      await session.accountFetch(`/api/account/orders/${encodeURIComponent(code.value)}/pay-remainder`, {
+        method: 'POST',
+      }),
+    )
+    if (result.token) rememberOrderToken(Number(code.value), result.token)
+    window.location.assign(result.checkoutUrl)
+  } catch (err) {
+    cancelError.value = apiErrorMessage(err)
+    payingRemainder.value = false
+    await load()
+  }
+}
+
 useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đơn hàng của bạn.', noindex: true })
 </script>
 
@@ -46,7 +66,15 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
     <p v-else-if="!order" class="mt-8 text-muted-foreground">Đang tải…</p>
     <template v-else>
       <p v-if="cancelError" class="notice-error mt-8" role="alert">{{ cancelError }}</p>
-      <OrderView :order="order" class="mt-8" cancellable :cancelling="cancelling" @cancel="cancel" />
+      <OrderView
+        :order="order"
+        class="mt-8"
+        cancellable
+        :cancelling="cancelling"
+        :paying-remainder="payingRemainder"
+        @cancel="cancel"
+        @pay-remainder="payRemainder"
+      />
     </template>
   </main>
 </template>

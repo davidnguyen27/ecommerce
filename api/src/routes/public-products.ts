@@ -10,6 +10,7 @@ import {
   type ProductCard,
   type ProductSearchResult,
   type PublicProduct,
+  type VariantAvailability,
 } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
 import { loadAttributeSchema } from '../catalog/attribute-schemas.ts'
@@ -22,6 +23,7 @@ import type { Brand, ProductVersion } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 import { imageRenditions } from '../media/images.ts'
+import { preorderOffers } from '../preorders/campaigns.ts'
 import { inStockIds } from '../stock/stock.ts'
 
 const SlugParams = z.object({ slug: z.string() })
@@ -30,7 +32,8 @@ const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấ
 
 /**
  * Sản phẩm như khách thấy: chỉ sản phẩm đã xuất bản, và chỉ đọc phiên bản đang xuất bản, không đọc bản đang soạn.
- * Ngoại lệ duy nhất là còn hàng hay hết, đọc trực tiếp từ tồn (ADR 0006).
+ * Ngoại lệ duy nhất là còn hàng hay hết, đọc trực tiếp từ tồn (ADR 0006), cùng việc đang nhận đặt trước hay không,
+ * đọc trực tiếp từ đợt đặt trước (M4).
  * Ẩn thương hiệu, danh mục không làm sản phẩm biến mất (GLOSSARY "Ẩn").
  */
 export function publicProductRoutes(prisma: Db, storage: Storage) {
@@ -38,6 +41,7 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
     version: ProductVersion & { brand: Brand },
     snapshot: ProductSnapshot,
     inStock: boolean,
+    preorder: boolean,
   ): ProductCard {
     const cheapest = cheapestVariant(snapshot)
     const cover = snapshot.images[0]
@@ -49,6 +53,7 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
       compareAtPrice: cheapest.compareAtPrice,
       image: cover ? { ...imageRenditions(storage, cover), alt: cover.alt } : null,
       inStock,
+      preorder: !inStock && preorder,
     }
   }
 
@@ -89,10 +94,8 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
       const parsedById = new Map(
         versions.map((v) => [v.id, { version: v, snapshot: ProductSnapshot.parse(v.snapshot) }]),
       )
-      const stocked = await inStockIds(
-        prisma,
-        [...parsedById.values()].flatMap(({ snapshot }) => snapshot.variants.map((v) => v.id)),
-      )
+      const variantIds = [...parsedById.values()].flatMap(({ snapshot }) => snapshot.variants.map((v) => v.id))
+      const [stocked, offers] = await Promise.all([inStockIds(prisma, variantIds), preorderOffers(prisma, variantIds)])
 
       const body: ProductSearchResult = {
         items: versionIds.map((id) => {
@@ -101,6 +104,7 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
             version,
             snapshot,
             snapshot.variants.some((v) => stocked.has(v.id)),
+            snapshot.variants.some((v) => offers.has(v.id)),
           )
         }),
         page: query.page,
@@ -127,7 +131,7 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
       const version = product.liveVersion
       const snapshot = ProductSnapshot.parse(version.snapshot)
 
-      const [schema, tree, pages, stocked] = await Promise.all([
+      const [schema, tree, pages, stocked, offers] = await Promise.all([
         loadAttributeSchema(prisma, snapshot.productType),
         loadVisibleTree(prisma),
         prisma.contentPage.findMany({
@@ -136,6 +140,10 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
           orderBy: { createdAt: 'asc' },
         }),
         inStockIds(
+          prisma,
+          snapshot.variants.map((v) => v.id),
+        ),
+        preorderOffers(
           prisma,
           snapshot.variants.map((v) => v.id),
         ),
@@ -157,14 +165,13 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
         attributes: snapshot.attributes,
         groundShippingOnly: snapshot.groundShippingOnly,
         attributeSchema: schema.attributes,
-        variants: snapshot.variants.map(({ id, sku, attributes, price, compareAtPrice }) => ({
-          id,
-          sku,
-          attributes,
-          price,
-          compareAtPrice,
-          inStock: stocked.has(id),
-        })),
+        variants: snapshot.variants.map(({ id, sku, attributes, price, compareAtPrice }) => {
+          // Còn hàng sẵn thì không bao giờ là đặt trước; `preorderOffers` cũng đã loại các biến thể đó.
+          const inStock = stocked.has(id)
+          const preorder = inStock ? null : (offers.get(id) ?? null)
+          const availability: VariantAvailability = inStock ? 'in_stock' : preorder ? 'preorder' : 'out_of_stock'
+          return { id, sku, attributes, price, compareAtPrice, inStock, availability, preorder }
+        }),
         images: snapshot.images.map((image) => ({
           ...imageRenditions(storage, image),
           alt: image.alt,

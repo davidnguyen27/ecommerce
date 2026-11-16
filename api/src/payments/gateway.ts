@@ -1,8 +1,13 @@
+import { randomUUID } from 'node:crypto'
+import type { PaymentPurpose } from '../generated/prisma/client.ts'
+
 /** Yêu cầu tạo link thanh toán cho một đơn. */
 export type PaymentLinkRequest = {
   /** Mã đơn khách thấy. */
   orderCode: number
-  /** VND, tổng phải trả. */
+  /** Khoản link thu: trả đủ, cọc hay phần còn lại. Một đơn có thể có nhiều link. */
+  purpose: PaymentPurpose
+  /** VND, số tiền link đòi. */
   amount: number
   /** Mô tả khách thấy ở trang thanh toán. */
   description: string
@@ -14,7 +19,7 @@ export type PaymentLinkRequest = {
   clientIp: string
 }
 
-/** Link vừa tạo: trang khách tới để trả tiền, và mã đơn bên cổng để truy vấn sau (`order.gateway_reference`). */
+/** Link vừa tạo: trang khách tới để trả tiền, và mã đơn bên cổng để truy vấn sau (`payment_link.gateway_reference`). */
 export type PaymentLink = { checkoutUrl: string; gatewayReference: string }
 
 /** Một khoản tiền đã về cho đơn, theo cổng thanh toán. */
@@ -54,8 +59,16 @@ export interface PaymentGateway {
 const PENDING: PaymentInfo = { status: 'pending', transactions: [] }
 
 /**
+ * Mã đơn bên cổng của cổng giả: link trả đủ là `String(orderCode)` như M3; link khác thêm mục đích và một số phân biệt,
+ * để mọi link của một đơn khác mã nhau.
+ */
+function fakeReference(request: PaymentLinkRequest, distinct: number | string) {
+  return request.purpose === 'full' ? String(request.orderCode) : `${request.orderCode}-${request.purpose}-${distinct}`
+}
+
+/**
  * Bản giả cho test: ghi lại link đã tạo, đã hủy; trạng thái truy vấn do test đặt; giả lập được lỗi. Mã đơn bên cổng
- * là `String(orderCode)`.
+ * theo `fakeReference`, số phân biệt đếm từ 1 theo đơn và mục đích.
  */
 export class InMemoryPaymentGateway implements PaymentGateway {
   readonly created: PaymentLinkRequest[] = []
@@ -72,7 +85,11 @@ export class InMemoryPaymentGateway implements PaymentGateway {
   async createLink(request: PaymentLinkRequest) {
     if (this.failCreate) throw new Error('Cổng thanh toán giả lập lỗi')
     this.created.push(request)
-    return { checkoutUrl: `https://pay.test/${request.orderCode}`, gatewayReference: String(request.orderCode) }
+    const sequence = this.created.filter(
+      (r) => r.orderCode === request.orderCode && r.purpose === request.purpose,
+    ).length
+    const gatewayReference = fakeReference(request, sequence)
+    return { checkoutUrl: `https://pay.test/${gatewayReference}`, gatewayReference }
   }
 
   async getPayment(gatewayReference: string) {
@@ -91,7 +108,7 @@ export const SIMULATOR_PATH = '/thanh-toan-gia-lap'
 
 /**
  * Cổng giả lập cho local và smoke, khi chưa có khóa VNPAY (spec "Thanh toán"): link trỏ tới trang
- * `/thanh-toan-gia-lap` của chính website, mang mã đơn, số tiền, hạn và trang quay về trong query. Truy vấn luôn là
+ * `/thanh-toan-gia-lap` của chính website, mang mã đơn, mã link (`ref`), số tiền, hạn và trang quay về trong query. Truy vấn luôn là
  * chưa trả: tiền giả lập về qua nút "Giả lập đã thanh toán", ghi nhận thẳng.
  */
 export class SimulatorPaymentGateway implements PaymentGateway {
@@ -103,7 +120,9 @@ export class SimulatorPaymentGateway implements PaymentGateway {
     url.searchParams.set('amount', String(request.amount))
     url.searchParams.set('expiresAt', request.expiresAt.toISOString())
     url.searchParams.set('returnUrl', request.returnUrl)
-    return { checkoutUrl: url.toString(), gatewayReference: String(request.orderCode) }
+    const gatewayReference = fakeReference(request, randomUUID().slice(0, 8))
+    url.searchParams.set('ref', gatewayReference)
+    return { checkoutUrl: url.toString(), gatewayReference }
   }
 
   async getPayment() {

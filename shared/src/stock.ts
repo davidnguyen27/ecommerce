@@ -149,6 +149,28 @@ export const StockReceiptRequest = z.object({
 })
 export type StockReceiptRequest = z.input<typeof StockReceiptRequest>
 
+/** Body của `POST /api/admin/stock/receipts/preview`: các dòng định nhập, kiểm như lúc ghi phiếu. */
+export const StockReceiptPreviewRequest = StockReceiptRequest.pick({ lines: true })
+export type StockReceiptPreviewRequest = z.input<typeof StockReceiptPreviewRequest>
+
+/**
+ * Hàng định nhập sẽ được chia thế nào, không ghi gì (ADR 0013): số giữ ngay cho đơn đặt trước đã cọc đang chờ, số đơn
+ * được chia, số đơn sẽ về đủ, và số thành hàng sẵn. Có thể lệch với lúc ghi nếu có đơn cọc xen vào giữa.
+ */
+export const StockReceiptPreview = z.object({
+  lines: z.array(
+    z.object({
+      sku: z.string(),
+      quantity: z.number(),
+      forPreorders: z.number(),
+      preorderOrders: z.number(),
+      ordersCompleted: z.number(),
+      toStock: z.number(),
+    }),
+  ),
+})
+export type StockReceiptPreview = z.infer<typeof StockReceiptPreview>
+
 const ReceiptHeader = z.object({
   id: z.string(),
   supplierName: z.string(),

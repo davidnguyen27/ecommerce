@@ -23,9 +23,12 @@ const pageLink = (page: number) => ({ query: { ...route.query, trang: page > 1 ?
           <div class="relative mb-2 aspect-[4/5] overflow-hidden rounded-md bg-secondary">
             <span
               v-if="!product.inStock"
-              class="absolute left-2 top-2 z-10 rounded bg-background/90 px-2 py-0.5 text-[11px] font-semibold text-muted-foreground"
+              :class="[
+                'absolute left-2 top-2 z-10 rounded bg-background/90 px-2 py-0.5 text-[11px] font-semibold',
+                product.preorder ? 'text-highlight' : 'text-muted-foreground',
+              ]"
             >
-              Hết hàng
+              {{ product.preorder ? 'Đặt trước' : 'Hết hàng' }}
             </span>
             <img
               v-if="product.image"

@@ -163,6 +163,58 @@ await load()
                     <td colspan="4" style="font-weight: 600">Tổng</td>
                     <td class="admin-table-num" style="font-weight: 600">{{ formatVnd(order.total) }}</td>
                   </tr>
+                  <template v-if="order.preorder">
+                    <tr>
+                      <td colspan="4">
+                        Tiền cọc {{ order.preorder.depositPercent }}%
+                        {{
+                          order.preorder.depositPaidAt
+                            ? `(đã cọc ${formatDateTime(order.preorder.depositPaidAt)})`
+                            : '(chưa cọc)'
+                        }}
+                      </td>
+                      <td class="admin-table-num">{{ formatVnd(order.preorder.depositAmount) }}</td>
+                    </tr>
+                    <tr>
+                      <td colspan="4">Phần còn lại (gồm phí giao)</td>
+                      <td class="admin-table-num">{{ formatVnd(order.preorder.remainingAmount) }}</td>
+                    </tr>
+                    <tr>
+                      <td colspan="5">
+                        <NuxtLink
+                          :to="`/admin/preorders/${order.preorder.campaignId}`"
+                          data-testid="order-campaign-link"
+                          >Đợt đặt trước</NuxtLink
+                        >
+                        · giao dự kiến {{ formatDateOnly(order.preorder.currentDeliveryFrom) }} –
+                        {{ formatDateOnly(order.preorder.currentDeliveryTo) }}
+                        <template
+                          v-if="
+                            order.preorder.currentDeliveryFrom !== order.preorder.deliveryFrom ||
+                            order.preorder.currentDeliveryTo !== order.preorder.deliveryTo
+                          "
+                        >
+                          (lúc đặt {{ formatDateOnly(order.preorder.deliveryFrom) }} –
+                          {{ formatDateOnly(order.preorder.deliveryTo) }})
+                        </template>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td colspan="4">
+                        Hàng về
+                        <template v-if="order.preorder.remainderDueAt">
+                          đủ lúc {{ formatDateTime(order.preorder.arrivedAt!) }}, hạn trả phần còn lại
+                          {{ formatDateTime(order.preorder.remainderDueAt) }}
+                          <strong v-if="order.preorder.remainderOverdueAt" style="color: #b45309">
+                            · Quá hạn trả phần còn lại</strong
+                          >
+                        </template>
+                      </td>
+                      <td class="admin-table-num">
+                        {{ order.preorder.arrivedQuantity }}/{{ order.preorder.quantity }}
+                      </td>
+                    </tr>
+                  </template>
                 </tfoot>
               </table>
             </div>
@@ -180,6 +232,7 @@ await load()
                     <th>Thời điểm</th>
                     <th>Mã tham chiếu</th>
                     <th>Nguồn</th>
+                    <th>Khoản</th>
                     <th class="admin-table-num">Số tiền</th>
                     <th>Đối soát</th>
                   </tr>
@@ -189,6 +242,7 @@ await load()
                     <td style="white-space: nowrap">{{ formatDateTime(p.paidAt) }}</td>
                     <td style="font-family: var(--adm-mono); font-size: 12px">{{ p.reference }}</td>
                     <td>{{ PAYMENT_SOURCE_LABELS[p.source] }}</td>
+                    <td>{{ PAYMENT_PURPOSE_LABELS[p.purpose] }}</td>
                     <td class="admin-table-num">{{ formatVnd(p.amount) }}</td>
                     <td style="font-size: 12px">
                       <span v-if="p.reconciliation">

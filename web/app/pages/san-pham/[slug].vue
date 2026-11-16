@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { MAX_CART_LINES, MAX_QUANTITY_PER_VARIANT, PublicProduct, type AttributeValue } from '@ecommerce/shared'
-import { ChevronRight, FileCheck2, ShoppingBag, Truck } from 'lucide-vue-next'
+import { CalendarClock, ChevronRight, FileCheck2, ShoppingBag, Truck } from 'lucide-vue-next'
 
 const route = useRoute()
 const { apiBase } = useRuntimeConfig()
@@ -19,11 +19,21 @@ type Variant = PublicProduct['variants'][number]
 const definitionOf = (key: string) => data.value?.attributeSchema.find((d) => d.key === key)
 const same = (a: AttributeValue | undefined, b: AttributeValue | undefined) => JSON.stringify(a) === JSON.stringify(b)
 
-/** Biến thể theo `?sku=`; không có hoặc sai thì biến thể đầu tiên còn hàng, hết cả thì biến thể đầu tiên. */
+/**
+ * Biến thể theo `?sku=`; không có hoặc sai thì biến thể đầu tiên còn hàng, rồi biến thể đầu tiên đang nhận đặt trước,
+ * hết cả thì biến thể đầu tiên.
+ */
 const selected = computed<Variant>(() => {
   const variants = data.value!.variants
-  return variants.find((v) => v.sku === route.query.sku) ?? variants.find((v) => v.inStock) ?? variants[0]!
+  return (
+    variants.find((v) => v.sku === route.query.sku) ??
+    variants.find((v) => v.inStock) ??
+    variants.find((v) => v.availability === 'preorder') ??
+    variants[0]!
+  )
 })
+
+const AVAILABILITY_LABELS = { in_stock: 'Còn hàng', preorder: 'Đặt trước', out_of_stock: 'Hết hàng' } as const
 
 /** Thuộc tính cấp biến thể theo thứ tự schema, mỗi thuộc tính kèm các giá trị có ở ít nhất một biến thể. */
 const choices = computed(() =>
@@ -176,9 +186,16 @@ useHead({
             </p>
             <p
               data-testid="availability"
-              :class="['text-sm font-medium', selected.inStock ? 'text-emerald-700' : 'text-muted-foreground']"
+              :class="[
+                'text-sm font-medium',
+                selected.availability === 'in_stock'
+                  ? 'text-emerald-700'
+                  : selected.availability === 'preorder'
+                    ? 'text-highlight'
+                    : 'text-muted-foreground',
+              ]"
             >
-              {{ selected.inStock ? 'Còn hàng' : 'Hết hàng' }}
+              {{ AVAILABILITY_LABELS[selected.availability] }}
             </p>
           </div>
           <p class="mt-2 text-xs text-muted-foreground">
@@ -201,19 +218,40 @@ useHead({
                 :to="{ query: { sku: option.variant.sku } }"
                 replace
                 :aria-current="same(selected.attributes[choice.definition.key], option.value) ? 'true' : undefined"
-                :title="option.variant.inStock ? undefined : 'Hết hàng'"
+                :title="option.variant.inStock ? undefined : AVAILABILITY_LABELS[option.variant.availability]"
                 :class="[
                   'inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-4 text-sm transition-colors hover:border-foreground aria-[current]:border-foreground aria-[current]:bg-primary aria-[current]:font-semibold aria-[current]:text-primary-foreground',
-                  !option.variant.inStock && 'text-muted-foreground opacity-60',
+                  option.variant.availability === 'out_of_stock' && 'text-muted-foreground opacity-60',
                 ]"
               >
                 <span>{{ formatAttribute(choice.definition, option.value) }}</span>
-                <span v-if="!option.variant.inStock" class="text-[11px]">Hết hàng</span>
+                <span v-if="!option.variant.inStock" class="text-[11px]">{{
+                  AVAILABILITY_LABELS[option.variant.availability]
+                }}</span>
               </NuxtLink>
             </div>
           </fieldset>
 
-          <div class="mt-6 border-t border-border pt-5">
+          <!-- Biến thể hết hàng sẵn nhưng đang nhận đặt trước: đặt ngay ở trang riêng, không qua giỏ hàng (ADR 0012). -->
+          <div v-if="selected.preorder" class="mt-6 border-t border-border pt-5" data-testid="preorder-offer">
+            <p class="text-sm">
+              Cọc <strong class="tabular-nums">{{ selected.preorder.depositPercent }}%</strong> khi đặt, trả phần còn
+              lại khi hàng về. Giao dự kiến
+              <strong class="tabular-nums"
+                >{{ formatDateOnly(selected.preorder.deliveryFrom) }} –
+                {{ formatDateOnly(selected.preorder.deliveryTo) }}</strong
+              >.
+            </p>
+            <NuxtLink
+              :to="`/dat-truoc/${selected.id}`"
+              class="btn-primary mt-4 h-12 w-full"
+              data-testid="preorder-button"
+            >
+              <CalendarClock class="h-5 w-5" aria-hidden="true" />
+              Đặt trước
+            </NuxtLink>
+          </div>
+          <div v-else class="mt-6 border-t border-border pt-5">
             <button
               type="button"
               class="btn-primary h-12 w-full"

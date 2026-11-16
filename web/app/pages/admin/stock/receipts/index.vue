@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { STOCK_VIEW_PERMISSIONS, StockPage, StockReceipt, StockReceiptPage, type FieldError } from '@ecommerce/shared'
+import {
+  STOCK_VIEW_PERMISSIONS,
+  StockPage,
+  StockReceipt,
+  StockReceiptPage,
+  StockReceiptPreview,
+  type FieldError,
+} from '@ecommerce/shared'
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: STOCK_VIEW_PERMISSIONS })
 
@@ -42,7 +49,15 @@ function openForm() {
   form.value = { supplierName: '', receivedOn: today(), note: '', lines: [emptyLine()] }
   formErrors.value = []
   notice.value = null
+  preview.value = null
 }
+
+// Xem trước rồi mới ghi (ADR 0013): hàng về được giữ ngay cho đơn đặt trước đã cọc, nên kho cần biết trước bao nhiêu
+// thành hàng sẵn. Sửa dòng nào thì phải xem trước lại.
+const preview = ref<{ key: string; result: StockReceiptPreview } | null>(null)
+const linesKey = computed(() => JSON.stringify(form.value?.lines.map((l) => [l.sku.trim().toUpperCase(), l.quantity])))
+const previewed = computed(() => (preview.value?.key === linesKey.value ? preview.value.result : null))
+const previewOf = (index: number) => previewed.value?.lines[index]
 
 /** `undefined` là chưa tra, `null` là không có SKU này. */
 async function lookUp(line: Line) {
@@ -63,6 +78,20 @@ async function save() {
   const f = form.value
   if (!f) return
   error.value = null
+  if (!previewed.value) {
+    try {
+      const body = { lines: f.lines.map((l) => ({ sku: l.sku, quantity: l.quantity })) }
+      const result = StockReceiptPreview.parse(
+        await session.adminFetch('/api/admin/stock/receipts/preview', { method: 'POST', body }),
+      )
+      preview.value = { key: linesKey.value, result }
+      formErrors.value = []
+    } catch (err) {
+      formErrors.value = apiFieldErrors(err)
+      error.value = apiErrorMessage(err)
+    }
+    return
+  }
   const body = {
     supplierName: f.supplierName,
     receivedOn: f.receivedOn,
@@ -137,6 +166,7 @@ await load()
               <th>Sản phẩm</th>
               <th class="admin-table-num">Tồn hiện tại</th>
               <th class="admin-table-num" style="min-width: 110px">Số lượng nhập</th>
+              <th v-if="previewed">Giữ cho đơn đặt trước</th>
               <th />
             </tr>
           </thead>
@@ -145,6 +175,7 @@ await load()
               <td>
                 <input
                   v-model="line.sku"
+                  aria-label="SKU"
                   class="form-input"
                   style="font-family: var(--adm-mono); font-size: 12px"
                   required
@@ -170,6 +201,16 @@ await load()
                 />
                 <small class="field-error-msg">{{ errorAt(`lines.${index}.quantity`) }}</small>
               </td>
+              <td v-if="previewed" style="font-size: 12px" data-testid="receipt-preview">
+                <template v-if="previewOf(index)?.forPreorders">
+                  {{ previewOf(index)!.forPreorders }} cho {{ previewOf(index)!.preorderOrders }} đơn
+                  <span v-if="previewOf(index)!.ordersCompleted"
+                    >({{ previewOf(index)!.ordersCompleted }} đơn về đủ)</span
+                  >
+                  · {{ previewOf(index)!.toStock }} thành hàng sẵn
+                </template>
+                <span v-else style="color: var(--adm-muted)">Tất cả thành hàng sẵn</span>
+              </td>
               <td style="text-align: right">
                 <button
                   v-if="form.lines.length > 1"
@@ -189,7 +230,9 @@ await load()
           <button type="button" class="btn btn-secondary btn-sm" @click="form.lines.push(emptyLine())">
             + Thêm dòng
           </button>
-          <button type="submit" class="btn btn-primary btn-sm">Ghi phiếu nhập</button>
+          <button type="submit" class="btn btn-primary btn-sm">
+            {{ previewed ? 'Ghi phiếu nhập' : 'Xem trước phần chia' }}
+          </button>
           <button type="button" class="btn btn-secondary btn-sm" @click="form = null">Hủy</button>
         </div>
       </form>

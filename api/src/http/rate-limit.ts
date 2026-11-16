@@ -18,6 +18,8 @@ export const RATE_LIMITS = {
   verificationEmailPerCustomer: { name: 'verification-email:customer', max: 3, windowMs: 60 * MINUTE },
   // Số tạm, chờ chủ doanh nghiệp xác nhận. Tính cả lần bị 409 vì mỗi lần thử đều giữ hàng trong chốc lát.
   checkoutPerIp: { name: 'checkout:ip', max: 5, windowMs: 60 * MINUTE },
+  // Mỗi lần trả phần còn lại tạo một link ở cổng; rộng hơn đặt mua vì trả không thành công thì khách thử lại.
+  payRemainderPerIp: { name: 'pay-remainder:ip', max: 10, windowMs: 60 * MINUTE },
 } satisfies Record<string, RateLimit>
 
 /**
