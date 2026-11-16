@@ -42,6 +42,18 @@ export async function loadAdminOrder(db: DbClient, storage: Storage, code: strin
   return {
     ...toPublicOrder(storage, order),
     customerId: order.customerId,
+    voucher:
+      order.voucherId === null
+        ? null
+        : {
+            id: order.voucherId,
+            code: order.voucherCode!,
+            kind: order.voucherKind!,
+            amount: order.voucherAmount === null ? null : Number(order.voucherAmount),
+            percent: order.voucherPercent,
+            maxDiscount: order.voucherMaxDiscount === null ? null : Number(order.voucherMaxDiscount),
+          },
+    subtotalAfterDiscount: Number(order.subtotal - order.discount),
     payments: order.paymentTransactions.map((t) => ({
       id: t.id,
       purpose: t.purpose,

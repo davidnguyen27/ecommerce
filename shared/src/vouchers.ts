@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { AuditActor } from './audit.ts'
-import { OrderKind } from './orders.ts'
+import { OrderKind, OrderStatus, PaymentStatus } from './orders.ts'
 import { PageQuery, pageOf } from './pagination.ts'
 
 /** Giảm số tiền cố định, hoặc giảm theo tỷ lệ có mức giảm tối đa (GLOSSARY "Mã giảm giá"). */
@@ -128,6 +128,27 @@ export type Voucher = z.infer<typeof Voucher>
 
 export const VoucherPage = pageOf(Voucher)
 export type VoucherPage = z.infer<typeof VoucherPage>
+
+/**
+ * Một đơn đã dùng mã (`GET /api/admin/vouchers/:id/orders`), mới nhất trước. Đơn đã hủy vẫn có trong danh sách nhưng
+ * `counted` là `false`: không chiếm lượt.
+ */
+export const VoucherOrder = z.object({
+  code: z.number(),
+  kind: OrderKind,
+  recipientName: z.string(),
+  email: z.string(),
+  status: OrderStatus,
+  paymentStatus: PaymentStatus,
+  discount: z.number(),
+  total: z.number(),
+  createdAt: z.string(),
+  counted: z.boolean(),
+})
+export type VoucherOrder = z.infer<typeof VoucherOrder>
+
+export const VoucherOrderPage = pageOf(VoucherOrder)
+export type VoucherOrderPage = z.infer<typeof VoucherOrderPage>
 
 // Khách áp mã khi đặt mua hoặc đặt trước.
 

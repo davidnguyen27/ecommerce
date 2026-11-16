@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Voucher, type FieldError, type VoucherCreate } from '@ecommerce/shared'
+import { Voucher, VoucherOrderPage, type FieldError, type VoucherCreate } from '@ecommerce/shared'
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: ['order.view', 'voucher.manage'] })
 
@@ -14,8 +14,30 @@ const notice = ref<string | null>(null)
 const errors = ref<FieldError[]>([])
 const url = `/api/admin/vouchers/${String(route.params.id)}`
 
+// Link sang trang Đơn hàng chỉ khi mở được trang đó; quyền lấy từ menu, không khai lại tại chỗ.
+const canOpen = (to: string) => {
+  const permission = ADMIN_MENU_ITEMS.find((item) => item.to === to)?.permission
+  return !permission || session.can(permission)
+}
+
+const ORDERS_PAGE_SIZE = 20
+const orders = ref<VoucherOrderPage | null>(null)
+const ordersPage = ref(1)
+const ordersLastPage = computed(() => Math.max(1, Math.ceil((orders.value?.total ?? 0) / ORDERS_PAGE_SIZE)))
+async function loadOrders(target = ordersPage.value) {
+  try {
+    orders.value = VoucherOrderPage.parse(
+      await session.adminFetch(`${url}/orders`, { query: { page: target, pageSize: ORDERS_PAGE_SIZE } }),
+    )
+    ordersPage.value = target
+  } catch (err) {
+    error.value = apiErrorMessage(err)
+  }
+}
+
 try {
   voucher.value = Voucher.parse(await session.adminFetch(url))
+  await loadOrders(1)
 } catch (err) {
   error.value = apiErrorMessage(err)
 }
@@ -164,5 +186,90 @@ async function disable() {
         </div>
       </dl>
     </div>
+    <template v-if="voucher && orders">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 24px">
+        <h2 class="admin-section-title">Đơn đã dùng mã</h2>
+        <NuxtLink
+          v-if="canOpen('/admin/orders') && orders.total > 0"
+          :to="{ path: '/admin/orders', query: { voucherCode: voucher.code } }"
+          style="font-size: 13px"
+        >
+          Lọc ở danh sách đơn
+        </NuxtLink>
+      </div>
+      <div class="admin-table-card">
+        <div v-if="orders.items.length === 0" style="padding: 32px; text-align: center; color: var(--adm-muted)">
+          Chưa có đơn nào dùng mã này.
+        </div>
+        <div v-else style="overflow-x: auto">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Mã đơn</th>
+                <th>Khách</th>
+                <th>Trạng thái</th>
+                <th class="admin-table-num">Tiền giảm</th>
+                <th class="admin-table-num">Tổng</th>
+                <th>Lúc đặt</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="o in orders.items" :key="o.code" data-testid="voucher-order">
+                <td>
+                  <NuxtLink v-if="canOpen('/admin/orders')" :to="`/admin/orders/${o.code}`" style="font-weight: 600">
+                    #{{ o.code }}
+                  </NuxtLink>
+                  <span v-else style="font-weight: 600">#{{ o.code }}</span>
+                  <div v-if="o.kind === 'preorder'" style="font-size: 12px; color: var(--adm-muted)">Đặt trước</div>
+                </td>
+                <td style="font-size: 12px">
+                  {{ o.recipientName }}
+                  <div style="color: var(--adm-muted)">{{ o.email }}</div>
+                </td>
+                <td style="font-size: 12px">
+                  {{ ORDER_STATUS_LABELS[o.status] }} · {{ PAYMENT_STATUS_LABELS[o.paymentStatus] }}
+                  <div v-if="!o.counted" style="color: var(--adm-muted)">Không tính lượt</div>
+                </td>
+                <td class="admin-table-num">{{ formatVnd(o.discount) }}</td>
+                <td class="admin-table-num">{{ formatVnd(o.total) }}</td>
+                <td style="white-space: nowrap; font-size: 12px">{{ formatDateTime(o.createdAt) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div
+          v-if="ordersLastPage > 1"
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            border-top: 1px solid var(--adm-border);
+          "
+        >
+          <div style="font-size: 12px; color: var(--adm-muted)">
+            Trang <strong>{{ ordersPage }}</strong> / <strong>{{ ordersLastPage }}</strong> ({{ orders.total }} đơn)
+          </div>
+          <div style="display: flex; gap: 8px">
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              :disabled="ordersPage <= 1"
+              @click="loadOrders(ordersPage - 1)"
+            >
+              ‹ Trang trước
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              :disabled="ordersPage >= ordersLastPage"
+              @click="loadOrders(ordersPage + 1)"
+            >
+              Trang sau ›
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
