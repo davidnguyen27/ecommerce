@@ -7,8 +7,10 @@ import {
   VoucherDraft,
   VoucherQuery,
   VoucherUpdate,
+  PageQuery,
   type FieldError,
   type Voucher,
+  type VoucherOrderPage,
   type VoucherPage,
 } from '@ecommerce/shared'
 import { audited } from '../audit/audited.ts'
@@ -98,152 +100,183 @@ const columns = (draft: Partial<Draft>) => ({
  * Không có endpoint xóa: mã đã phát ra là lời hứa với khách, chỉ tắt được.
  */
 export function adminVoucherRoutes(prisma: Db) {
-  return Router()
-    .use(requirePermission('order.view', 'voucher.manage'))
-    .get('/', async (req, res) => {
-      const query = parse(VoucherQuery, req.query)
-      const now = new Date()
-      const where: Prisma.VoucherWhereInput = {
-        ...(query.status !== 'all' ? voucherStatusWhere(query.status, now) : {}),
-        ...(query.q ? { code: { contains: query.q.toUpperCase() } } : {}),
-      }
-      const [rows, total] = await Promise.all([
-        prisma.voucher.findMany({
-          where,
-          include: VOUCHER_INCLUDE,
-          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-          ...pageWindow(query),
-        }),
-        prisma.voucher.count({ where }),
-      ])
-      const used = await usedRedemptions(
-        prisma,
-        rows.map((r) => r.id),
-      )
-      const body: VoucherPage = {
-        items: rows.map((row) => toVoucher(row, used.get(row.id) ?? 0, now)),
-        total,
-        page: query.page,
-        pageSize: query.pageSize,
-      }
-      res.json(body)
-    })
-    .get('/:id', async (req, res) => {
-      const { id } = parse(VoucherParams, req.params)
-      const body: Voucher = await loadVoucher(prisma, id)
-      res.json(body)
-    })
-    .post('/', requirePermission('voucher.manage'), async (req, res) => {
-      const input = parse(VoucherCreate, req.body)
-      const brandIds = sorted(input.brandIds)
-      const categoryIds = sorted(input.categoryIds)
-      const id = await audited(prisma, req, async (tx, audit) => {
-        await checkScope(tx, { brandIds, categoryIds })
-        const voucher = await tx.voucher
-          .create({
-            data: {
-              code: input.code,
-              ...columns(normalize(input)),
-              // Trường bắt buộc, nhắc lại để Prisma thấy kiểu không thiếu.
-              kind: input.kind,
-              startsAt: new Date(input.startsAt),
-              endsAt: new Date(input.endsAt),
-              createdById: currentStaff(req).id,
-              brands: { create: brandIds.map((brandId) => ({ brandId })) },
-              categories: { create: categoryIds.map((categoryId) => ({ categoryId })) },
-            },
-          })
-          .catch((err: unknown) => {
-            throw isUniqueViolation(err) ? codeTaken() : err
-          })
-        await audit({
-          action: 'voucher.create',
-          entityType: 'voucher',
-          entityId: voucher.id,
-          after: { ...input, ...normalize(input) },
-        })
-        return voucher.id
+  return (
+    Router()
+      .use(requirePermission('order.view', 'voucher.manage'))
+      .get('/', async (req, res) => {
+        const query = parse(VoucherQuery, req.query)
+        const now = new Date()
+        const where: Prisma.VoucherWhereInput = {
+          ...(query.status !== 'all' ? voucherStatusWhere(query.status, now) : {}),
+          ...(query.q ? { code: { contains: query.q.toUpperCase() } } : {}),
+        }
+        const [rows, total] = await Promise.all([
+          prisma.voucher.findMany({
+            where,
+            include: VOUCHER_INCLUDE,
+            orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+            ...pageWindow(query),
+          }),
+          prisma.voucher.count({ where }),
+        ])
+        const used = await usedRedemptions(
+          prisma,
+          rows.map((r) => r.id),
+        )
+        const body: VoucherPage = {
+          items: rows.map((row) => toVoucher(row, used.get(row.id) ?? 0, now)),
+          total,
+          page: query.page,
+          pageSize: query.pageSize,
+        }
+        res.json(body)
       })
-      const body: Voucher = await loadVoucher(prisma, id)
-      res.status(201).json(body)
-    })
-    .patch('/:id', requirePermission('voucher.manage'), async (req, res) => {
-      const { id } = parse(VoucherParams, req.params)
-      const input = normalize(parse(VoucherUpdate, req.body))
+      .get('/:id', async (req, res) => {
+        const { id } = parse(VoucherParams, req.params)
+        const body: Voucher = await loadVoucher(prisma, id)
+        res.json(body)
+      })
+      // Đơn đã dùng mã, kể cả đơn đã hủy (không chiếm lượt); mới nhất trước (ticket 06).
+      .get('/:id/orders', async (req, res) => {
+        const { id } = parse(VoucherParams, req.params)
+        const query = parse(PageQuery, req.query)
+        if (!(await prisma.voucher.findUnique({ where: { id }, select: { id: true } }))) throw notFound()
+        const where = { voucherId: id }
+        const [orders, total] = await Promise.all([
+          prisma.order.findMany({ where, orderBy: [{ createdAt: 'desc' }, { code: 'desc' }], ...pageWindow(query) }),
+          prisma.order.count({ where }),
+        ])
+        const body: VoucherOrderPage = {
+          items: orders.map((o) => ({
+            code: o.code,
+            kind: o.kind,
+            recipientName: o.recipientName,
+            email: o.email,
+            status: o.status,
+            paymentStatus: o.paymentStatus,
+            discount: Number(o.discount),
+            total: Number(o.total),
+            createdAt: o.createdAt.toISOString(),
+            counted: o.status !== 'cancelled',
+          })),
+          total,
+          page: query.page,
+          pageSize: query.pageSize,
+        }
+        res.json(body)
+      })
+      .post('/', requirePermission('voucher.manage'), async (req, res) => {
+        const input = parse(VoucherCreate, req.body)
+        const brandIds = sorted(input.brandIds)
+        const categoryIds = sorted(input.categoryIds)
+        const id = await audited(prisma, req, async (tx, audit) => {
+          await checkScope(tx, { brandIds, categoryIds })
+          const voucher = await tx.voucher
+            .create({
+              data: {
+                code: input.code,
+                ...columns(normalize(input)),
+                // Trường bắt buộc, nhắc lại để Prisma thấy kiểu không thiếu.
+                kind: input.kind,
+                startsAt: new Date(input.startsAt),
+                endsAt: new Date(input.endsAt),
+                createdById: currentStaff(req).id,
+                brands: { create: brandIds.map((brandId) => ({ brandId })) },
+                categories: { create: categoryIds.map((categoryId) => ({ categoryId })) },
+              },
+            })
+            .catch((err: unknown) => {
+              throw isUniqueViolation(err) ? codeTaken() : err
+            })
+          await audit({
+            action: 'voucher.create',
+            entityType: 'voucher',
+            entityId: voucher.id,
+            after: { ...input, ...normalize(input) },
+          })
+          return voucher.id
+        })
+        const body: Voucher = await loadVoucher(prisma, id)
+        res.status(201).json(body)
+      })
+      .patch('/:id', requirePermission('voucher.manage'), async (req, res) => {
+        const { id } = parse(VoucherParams, req.params)
+        const input = normalize(parse(VoucherUpdate, req.body))
 
-      await audited(prisma, req, async (tx, audit) => {
-        // Khóa mã: tạo đơn (ticket 03) cũng khóa dòng này, nên số lượt đã dùng không đổi giữa lúc kiểm và lúc ghi.
-        const [locked] = await tx.$queryRaw<{ id: string }[]>`
+        await audited(prisma, req, async (tx, audit) => {
+          // Khóa mã: tạo đơn (ticket 03) cũng khóa dòng này, nên số lượt đã dùng không đổi giữa lúc kiểm và lúc ghi.
+          const [locked] = await tx.$queryRaw<{ id: string }[]>`
           SELECT "id" FROM "voucher" WHERE "id" = ${id}::uuid FOR UPDATE`
-        if (!locked) throw notFound()
-        const row = await tx.voucher.findUniqueOrThrow({ where: { id }, include: VOUCHER_INCLUDE })
-        const current = draftOf(row)
+          if (!locked) throw notFound()
+          const row = await tx.voucher.findUniqueOrThrow({ where: { id }, include: VOUCHER_INCLUDE })
+          const current = draftOf(row)
 
-        const before: Partial<Draft> = {}
-        const after: Partial<Draft> = {}
-        for (const key of Object.keys(input) as (keyof Draft)[]) {
-          if (input[key] === undefined || JSON.stringify(input[key]) === JSON.stringify(current[key])) continue
-          Object.assign(before, { [key]: current[key] })
-          Object.assign(after, { [key]: input[key] })
-        }
-        // Không đổi gì thì không ghi gì, kể cả audit.
-        if (Object.keys(after).length === 0) return
-
-        if (row.disabledAt) throw new AppError(409, ErrorCode.CONFLICT, 'Mã đã tắt, không sửa được')
-        const used = (await usedRedemptions(tx, [id])).get(id) ?? 0
-        if (used > 0) {
-          const editable: readonly string[] = VOUCHER_FIELDS_EDITABLE_AFTER_USE
-          const locked = Object.keys(after).filter((key) => !editable.includes(key))
-          if (locked.length) {
-            throw new AppError(
-              409,
-              ErrorCode.CONFLICT,
-              'Mã đã có lượt dùng: chỉ đổi được mô tả, thời điểm kết thúc và tổng lượt',
-              locked.map((path) => ({ path, message: 'Mã đã có lượt dùng, không đổi được' })),
-            )
+          const before: Partial<Draft> = {}
+          const after: Partial<Draft> = {}
+          for (const key of Object.keys(input) as (keyof Draft)[]) {
+            if (input[key] === undefined || JSON.stringify(input[key]) === JSON.stringify(current[key])) continue
+            Object.assign(before, { [key]: current[key] })
+            Object.assign(after, { [key]: input[key] })
           }
-        }
-        if (after.totalLimit != null && after.totalLimit < used) {
-          throw conflictField('totalLimit', `Đã dùng ${used} lượt, tổng lượt không thấp hơn được`)
-        }
-        // Kiểm lại ràng buộc giữa các trường trên bản đã ghép, ví dụ đổi sang `percent` thì phải có mức tối đa.
-        parse(VoucherDraft, { ...current, ...after })
-        await checkScope(tx, { brandIds: after.brandIds, categoryIds: after.categoryIds })
+          // Không đổi gì thì không ghi gì, kể cả audit.
+          if (Object.keys(after).length === 0) return
 
-        await tx.voucher.update({ where: { id }, data: columns(after) })
-        if (after.brandIds) {
-          await tx.voucherBrand.deleteMany({ where: { voucherId: id } })
-          await tx.voucherBrand.createMany({ data: after.brandIds.map((brandId) => ({ voucherId: id, brandId })) })
-        }
-        if (after.categoryIds) {
-          await tx.voucherCategory.deleteMany({ where: { voucherId: id } })
-          await tx.voucherCategory.createMany({
-            data: after.categoryIds.map((categoryId) => ({ voucherId: id, categoryId })),
-          })
-        }
-        await audit({ action: 'voucher.update', entityType: 'voucher', entityId: id, before, after })
-      })
-      const body: Voucher = await loadVoucher(prisma, id)
-      res.json(body)
-    })
-    .post('/:id/disable', requirePermission('voucher.manage'), async (req, res) => {
-      const { id } = parse(VoucherParams, req.params)
-      await audited(prisma, req, async (tx, audit) => {
-        const [voucher] = await tx.$queryRaw<{ disabledAt: Date | null }[]>`
-          SELECT "disabled_at" AS "disabledAt" FROM "voucher" WHERE "id" = ${id}::uuid FOR UPDATE`
-        if (!voucher) throw notFound()
-        // Đã tắt thì không làm gì; không bật lại được.
-        if (voucher.disabledAt) return
-        const disabledAt = new Date()
-        await tx.voucher.update({ where: { id }, data: { disabledAt } })
-        await audit({
-          action: 'voucher.disable',
-          entityType: 'voucher',
-          entityId: id,
-          after: { disabledAt: disabledAt.toISOString() },
+          if (row.disabledAt) throw new AppError(409, ErrorCode.CONFLICT, 'Mã đã tắt, không sửa được')
+          const used = (await usedRedemptions(tx, [id])).get(id) ?? 0
+          if (used > 0) {
+            const editable: readonly string[] = VOUCHER_FIELDS_EDITABLE_AFTER_USE
+            const locked = Object.keys(after).filter((key) => !editable.includes(key))
+            if (locked.length) {
+              throw new AppError(
+                409,
+                ErrorCode.CONFLICT,
+                'Mã đã có lượt dùng: chỉ đổi được mô tả, thời điểm kết thúc và tổng lượt',
+                locked.map((path) => ({ path, message: 'Mã đã có lượt dùng, không đổi được' })),
+              )
+            }
+          }
+          if (after.totalLimit != null && after.totalLimit < used) {
+            throw conflictField('totalLimit', `Đã dùng ${used} lượt, tổng lượt không thấp hơn được`)
+          }
+          // Kiểm lại ràng buộc giữa các trường trên bản đã ghép, ví dụ đổi sang `percent` thì phải có mức tối đa.
+          parse(VoucherDraft, { ...current, ...after })
+          await checkScope(tx, { brandIds: after.brandIds, categoryIds: after.categoryIds })
+
+          await tx.voucher.update({ where: { id }, data: columns(after) })
+          if (after.brandIds) {
+            await tx.voucherBrand.deleteMany({ where: { voucherId: id } })
+            await tx.voucherBrand.createMany({ data: after.brandIds.map((brandId) => ({ voucherId: id, brandId })) })
+          }
+          if (after.categoryIds) {
+            await tx.voucherCategory.deleteMany({ where: { voucherId: id } })
+            await tx.voucherCategory.createMany({
+              data: after.categoryIds.map((categoryId) => ({ voucherId: id, categoryId })),
+            })
+          }
+          await audit({ action: 'voucher.update', entityType: 'voucher', entityId: id, before, after })
         })
+        const body: Voucher = await loadVoucher(prisma, id)
+        res.json(body)
       })
-      const body: Voucher = await loadVoucher(prisma, id)
-      res.json(body)
-    })
+      .post('/:id/disable', requirePermission('voucher.manage'), async (req, res) => {
+        const { id } = parse(VoucherParams, req.params)
+        await audited(prisma, req, async (tx, audit) => {
+          const [voucher] = await tx.$queryRaw<{ disabledAt: Date | null }[]>`
+          SELECT "disabled_at" AS "disabledAt" FROM "voucher" WHERE "id" = ${id}::uuid FOR UPDATE`
+          if (!voucher) throw notFound()
+          // Đã tắt thì không làm gì; không bật lại được.
+          if (voucher.disabledAt) return
+          const disabledAt = new Date()
+          await tx.voucher.update({ where: { id }, data: { disabledAt } })
+          await audit({
+            action: 'voucher.disable',
+            entityType: 'voucher',
+            entityId: id,
+            after: { disabledAt: disabledAt.toISOString() },
+          })
+        })
+        const body: Voucher = await loadVoucher(prisma, id)
+        res.json(body)
+      })
+  )
 }

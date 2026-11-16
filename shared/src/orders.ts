@@ -62,6 +62,8 @@ export const OrderLineView = z.object({
   price: z.number(),
   quantity: z.number(),
   lineTotal: z.number(),
+  /** Phần tiền giảm của mã chia cho dòng này; 0 khi đơn không dùng mã hoặc dòng ngoài phạm vi mã. */
+  discount: z.number(),
 })
 export type OrderLineView = z.infer<typeof OrderLineView>
 
@@ -150,6 +152,8 @@ export const AdminOrderQuery = PageQuery.extend({
   campaignId: z.uuid().optional(),
   /** `true`: chỉ đơn đặt trước quá hạn trả phần còn lại (đã cọc, chưa trả đủ). */
   remainderOverdue: z.stringbool().optional(),
+  /** Đơn đã dùng mã giảm giá này (không phân biệt hoa thường). */
+  voucherCode: z.string().trim().max(40).optional(),
   q: z.string().trim().max(200).optional(),
   sort: z.enum(['oldest', 'newest']).default('oldest'),
 })
@@ -236,6 +240,19 @@ export type OrderHistoryEntry = z.infer<typeof OrderHistoryEntry>
 export const AdminOrder = PublicOrder.extend({
   /** Tài khoản khách đặt hoặc được gắn đơn; `null` với đơn vãng lai. */
   customerId: z.string().nullable(),
+  /** Mã giảm giá như lúc đặt (loại, mức giảm), kèm id để mở trang mã; `null` khi đơn không dùng mã. */
+  voucher: z
+    .object({
+      id: z.string(),
+      code: z.string(),
+      kind: z.enum(['fixed', 'percent']),
+      amount: z.number().nullable(),
+      percent: z.number().nullable(),
+      maxDiscount: z.number().nullable(),
+    })
+    .nullable(),
+  /** Tiền hàng sau giảm, là số tiền ngưỡng miễn phí giao và tiền cọc tính trên đó. */
+  subtotalAfterDiscount: z.number(),
   payments: z.array(AdminPaymentTransaction),
   history: z.array(OrderHistoryEntry),
 })
