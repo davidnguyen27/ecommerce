@@ -6,7 +6,7 @@ import {
   type ReconciliationReason,
 } from '../generated/prisma/client.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
-import { dayVN, isoDay, vnd } from '../orders/format.ts'
+import { dayVN, isoDay, vnd, voucherLines } from '../orders/format.ts'
 import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../orders/orders.ts'
 import type { PaymentGateway } from './gateway.ts'
 
@@ -204,10 +204,6 @@ function awaitedPayment(order: Prisma.OrderGetPayload<object>): { purpose: Payme
   return null
 }
 
-/** Dòng mã giảm giá trong email tóm tắt đơn; không có gì khi đơn không dùng mã. */
-export const voucherLines = (order: { voucherCode: string | null; discount: bigint }) =>
-  order.voucherCode ? [`Mã giảm giá ${order.voucherCode}: -${vnd(order.discount)}`] : []
-
 /**
  * Xếp email "đã nhận thanh toán" (tóm tắt đơn, tổng tiền, link tra cứu có token mới) trong transaction của thay đổi
  * trạng thái. Dùng chung cho thanh toán bình thường và khôi phục đơn khi đối soát. `order.lines` xếp theo `position`.
@@ -270,6 +266,7 @@ export async function queueDepositReceivedEmail(
       '',
       `Chúng tôi đã nhận tiền cọc cho đơn đặt trước #${order.code}: ${line.productName} x ${line.quantity}.`,
       '',
+      ...voucherLines(order),
       `Tiền cọc đã nhận: ${vnd(depositAmount)}`,
       `Phần còn lại (gồm phí giao): ${vnd(remainingOf(order))}`,
       `Thời gian giao dự kiến: ${dayVN(isoDay(deliveryFrom))} – ${dayVN(isoDay(deliveryTo))}`,

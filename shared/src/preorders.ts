@@ -1,11 +1,12 @@
 import { z } from 'zod'
 import { AuditActor } from './audit.ts'
 import { AttributeValues } from './attributes.ts'
-import { CartLine, InvoiceInfo, ShippingAddress } from './checkout.ts'
+import { CartLine, InvoiceInfo, QuoteContact, ShippingAddress } from './checkout.ts'
 import { FulfillmentStatus, OrderStatus, PaymentStatus } from './orders.ts'
 import { PageQuery, pageOf } from './pagination.ts'
 import { PreorderOffer, ProductStatus, PublicImage, VariantStatus } from './products.ts'
 import { ProvinceCode } from './regions.ts'
+import { VoucherCodeInput, VoucherConflict, VoucherQuote } from './vouchers.ts'
 
 /** Trạng thái nhập hàng của đợt; "đã về kho" tính theo từng đơn, không nằm ở đây. */
 export const PreorderSupplyStatus = z.enum(['not_ordered', 'ordered', 'in_transit', 'issue'])
@@ -169,8 +170,8 @@ export type PreorderCampaignPage = z.infer<typeof PreorderCampaignPage>
 // Khách đặt trước (ADR 0012): không qua giỏ hàng, mỗi đơn một biến thể.
 
 /**
- * Tiền cọc của đơn đặt trước: phần trăm của đợt trên tiền hàng, làm tròn lên 1.000 VND, không vượt tiền hàng. API và
- * trang đặt trước dùng chung để khách thấy đúng số sẽ trả.
+ * Tiền cọc của đơn đặt trước: phần trăm của đợt trên tiền hàng sau giảm giá (spec M5), làm tròn lên 1.000 VND, không
+ * vượt số đó. API và trang đặt trước dùng chung để khách thấy đúng số sẽ trả.
  */
 export const depositFor = (subtotal: number, percent: number) =>
   Math.min(subtotal, Math.ceil((subtotal * percent) / 100 / 1000) * 1000)
@@ -180,6 +181,8 @@ export const PreorderQuoteRequest = z.object({
   variantId: z.uuid(),
   quantity: CartLine.shape.quantity,
   provinceCode: ProvinceCode.optional(),
+  voucherCode: VoucherCodeInput.optional(),
+  ...QuoteContact,
 })
 export type PreorderQuoteRequest = z.infer<typeof PreorderQuoteRequest>
 
@@ -201,11 +204,18 @@ export const PreorderQuote = z.object({
   /** Chỉ `in_stock`, `campaign`, `sold_out`, `discontinued`: giá và mức cọc là của chính báo giá này. */
   problem: z.lazy(() => PreorderChange).nullable(),
   subtotal: z.number().nullable(),
+  /** Kết quả áp mã; `null` khi không gửi mã. */
+  voucher: VoucherQuote.nullable(),
+  /** Tiền giảm của mã, 0 khi không có mã hoặc mã không áp được. Cọc, phí giao và tổng đều tính sau giảm. */
+  discount: z.number(),
   depositAmount: z.number().nullable(),
   shippingFee: z.number().nullable(),
   total: z.number().nullable(),
   /** Tổng phải trả trừ tiền cọc, gồm phí giao. */
   remainingAmount: z.number().nullable(),
+  /** Các khoản khi không dùng mã, để trang so sánh; bằng các trường trên khi không có tiền giảm. */
+  depositAmountWithoutVoucher: z.number().nullable(),
+  totalWithoutVoucher: z.number().nullable(),
   /** Chính sách đặt trước đang xuất bản; `null` khi chưa có, lúc đó chưa đặt trước được. */
   preorderPolicy: z.object({ slug: z.string(), title: z.string() }).nullable(),
   /** Chính sách đổi trả, bảo hành đang xuất bản của sản phẩm. */
@@ -231,6 +241,9 @@ export const PreorderRequest = z.object({
   /** Mọi khách phải tick: đã đọc điều kiện cọc, hủy/hoàn và hạn trả phần còn lại. */
   acceptPreorderPolicy: z.boolean().optional(),
   invoice: InvoiceInfo.optional(),
+  /** Mã giảm giá và tiền giảm khách đã thấy; khác lúc đặt thì 409 với `details.voucher`. */
+  voucherCode: VoucherCodeInput.optional(),
+  discount: z.number().int().min(0).default(0),
 })
 export type PreorderRequest = z.input<typeof PreorderRequest>
 
@@ -261,6 +274,12 @@ export const PayRemainderResult = z.object({
 })
 export type PayRemainderResult = z.infer<typeof PayRemainderResult>
 
-/** `error.details` của 409 khi đặt trước. Không có gì được ghi. */
-export const PreorderConflictDetails = z.object({ change: PreorderChange })
+/**
+ * `error.details` của 409 khi đặt trước: thay đổi của biến thể, đợt hay giá (`change`), hoặc (khi những thứ đó đều đúng)
+ * mã giảm giá không còn như khách đã thấy (`voucher`). Không có gì được ghi.
+ */
+export const PreorderConflictDetails = z.union([
+  z.object({ change: PreorderChange }),
+  z.object({ voucher: VoucherConflict }),
+])
 export type PreorderConflictDetails = z.infer<typeof PreorderConflictDetails>
