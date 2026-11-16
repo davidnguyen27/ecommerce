@@ -40,6 +40,9 @@ export const OrderPreorder = z.object({
   remainderDueAt: z.string().nullable(),
   /** Lúc bị gắn cờ quá hạn trả phần còn lại; `null` khi chưa quá hạn hoặc đã trả đủ. */
   remainderOverdueAt: z.string().nullable(),
+  /** Thời gian giao dự kiến hiện tại của đợt; khác `deliveryFrom`/`deliveryTo` (lúc đặt) khi nhân viên đã đổi. */
+  currentDeliveryFrom: z.string(),
+  currentDeliveryTo: z.string(),
 })
 export type OrderPreorder = z.infer<typeof OrderPreorder>
 

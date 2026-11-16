@@ -15,6 +15,7 @@ import type { Db, DbClient } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import { pageWindow } from '../http/pagination.ts'
+import type { EmailQueue } from '../jobs/jobs.ts'
 import { parse } from '../http/validation.ts'
 import {
   CAMPAIGN_INCLUDE,
@@ -25,6 +26,7 @@ import {
   toCampaignVariants,
   usedAllocations,
 } from '../preorders/campaigns.ts'
+import { notifyDeliveryChange } from '../preorders/delivery.ts'
 
 const CampaignParams = z.object({ id: z.uuid() })
 
@@ -68,7 +70,7 @@ const day = (date: Date) => date.toISOString().slice(0, 10)
  * Đợt đặt trước, mount tại `/preorder-campaigns`. Xem cần `order.view`; mở, sửa, đóng cần `preorder.manage`.
  * Không có endpoint xóa: đợt đã mở là lời hẹn với khách, chỉ đóng được.
  */
-export function adminPreorderCampaignRoutes(prisma: Db) {
+export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQueue; siteUrl: string }) {
   return Router()
     .use(requirePermission('order.view', 'preorder.manage'))
     .get('/', async (req, res) => {
@@ -258,12 +260,21 @@ export function adminPreorderCampaignRoutes(prisma: Db) {
         if (Object.keys(after).length === 0) return
         await tx.preorderCampaign.update({ where: { id }, data })
         for (const write of variantWrites) await write()
+        // Đổi thời gian giao dự kiến thì báo khách đã cọc chưa về hàng; các thay đổi khác không gửi thư (ticket 09).
+        const notified =
+          'deliveryFrom' in after || 'deliveryTo' in after
+            ? await notifyDeliveryChange(tx, mail, id, {
+                before: { from: day(campaign.deliveryFrom), to: day(campaign.deliveryTo) },
+                after: { from: deliveryFrom, to: deliveryTo },
+                staffId: currentStaff(req).id,
+              })
+            : 0
         await audit({
           action: 'preorder.campaign.update',
           entityType: 'preorder_campaign',
           entityId: id,
           before,
-          after,
+          after: notified > 0 ? { ...after, notifiedOrders: notified } : after,
         })
       })
       const body: PreorderCampaign = await loadCampaign(prisma, id)

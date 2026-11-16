@@ -53,6 +53,7 @@ const ORDER_EVENT_LABELS: Record<string, string> = {
   arrived: 'Hàng đã về đủ',
   remainder_reminded: 'Nhắc trả phần còn lại',
   remainder_overdue: 'Quá hạn trả phần còn lại',
+  delivery_changed: 'Đổi thời gian giao dự kiến',
   payment_flagged: 'Khoản tiền cần đối soát',
   cancelled: 'Hủy đơn',
   restored: 'Khôi phục đơn sau đối soát',
