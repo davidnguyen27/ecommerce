@@ -153,6 +153,8 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
               image: storedImageOf(found) ?? undefined,
               price: variant.price,
               quantity: line.quantity,
+              // `reserveStock` ở trên đã giữ đủ số lượng cho mọi dòng.
+              reservedQuantity: line.quantity,
             }
           })
           const subtotal = lines.reduce((sum, line) => sum + line.price * line.quantity, 0)

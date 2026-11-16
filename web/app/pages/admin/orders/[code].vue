@@ -179,6 +179,18 @@ await load()
                       <td colspan="4">Phần còn lại (gồm phí giao)</td>
                       <td class="admin-table-num">{{ formatVnd(order.preorder.remainingAmount) }}</td>
                     </tr>
+                    <tr>
+                      <td colspan="4">
+                        Hàng về
+                        <template v-if="order.preorder.remainderDueAt">
+                          đủ lúc {{ formatDateTime(order.preorder.arrivedAt!) }}, hạn trả phần còn lại
+                          {{ formatDateTime(order.preorder.remainderDueAt) }}
+                        </template>
+                      </td>
+                      <td class="admin-table-num">
+                        {{ order.preorder.arrivedQuantity }}/{{ order.preorder.quantity }}
+                      </td>
+                    </tr>
                   </template>
                 </tfoot>
               </table>

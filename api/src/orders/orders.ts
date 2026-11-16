@@ -22,6 +22,10 @@ export type OrderEventKind =
   | 'paid'
   /** Đơn đặt trước nhận đủ tiền cọc (M4). */
   | 'deposit_paid'
+  /** Phiếu nhập giữ một phần hàng về cho đơn đặt trước (`data`: biến thể, số lượng, phiếu nhập; ADR 0013). */
+  | 'stock_allocated'
+  /** Đơn đặt trước đã được giữ đủ hàng: bắt đầu hạn trả phần còn lại. */
+  | 'arrived'
   | 'payment_flagged'
   | 'cancelled'
   | 'preparing'
@@ -139,12 +143,21 @@ export function preorderOf(
     | 'deliveryTo'
     | 'remainderDays'
     | 'depositPaidAt'
+    | 'arrivedAt'
+    | 'remainderDueAt'
+    | 'lines'
   >,
 ): OrderPreorder | null {
   const { depositPercent, depositAmount, deliveryFrom, deliveryTo, remainderDays } = order
   if (order.kind !== 'preorder' || depositPercent === null || depositAmount === null) return null
   if (deliveryFrom === null || deliveryTo === null || remainderDays === null) return null
+  const quantity = order.lines.reduce((sum, line) => sum + line.quantity, 0)
   return {
+    // Đã về đủ thì là đủ, kể cả khi số đang giữ đã về 0 sau bàn giao vận chuyển.
+    arrivedQuantity: order.arrivedAt ? quantity : order.lines.reduce((sum, line) => sum + line.reservedQuantity, 0),
+    quantity,
+    arrivedAt: order.arrivedAt?.toISOString() ?? null,
+    remainderDueAt: order.remainderDueAt?.toISOString() ?? null,
     depositPercent,
     depositAmount: Number(depositAmount),
     remainingAmount: Number(order.total - depositAmount),

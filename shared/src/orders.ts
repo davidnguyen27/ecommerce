@@ -32,6 +32,12 @@ export const OrderPreorder = z.object({
   remainderDays: z.number(),
   /** Lúc cọc thành công; `null` khi chưa cọc. */
   depositPaidAt: z.string().nullable(),
+  /** Số cái đã được giữ từ hàng về, trên tổng số lượng của đơn (ADR 0013). */
+  arrivedQuantity: z.number(),
+  quantity: z.number(),
+  /** Lúc hàng về đủ và hạn trả phần còn lại; `null` khi chưa về đủ. */
+  arrivedAt: z.string().nullable(),
+  remainderDueAt: z.string().nullable(),
 })
 export type OrderPreorder = z.infer<typeof OrderPreorder>
 

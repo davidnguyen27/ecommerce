@@ -49,6 +49,8 @@ const ORDER_EVENT_LABELS: Record<string, string> = {
   created: 'Đặt mua',
   paid: 'Đã nhận đủ tiền',
   deposit_paid: 'Đã nhận tiền cọc',
+  stock_allocated: 'Giữ hàng nhập về cho đơn',
+  arrived: 'Hàng đã về đủ',
   payment_flagged: 'Khoản tiền cần đối soát',
   cancelled: 'Hủy đơn',
   restored: 'Khôi phục đơn sau đối soát',
