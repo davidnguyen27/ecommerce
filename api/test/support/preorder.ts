@@ -1,5 +1,7 @@
 import { PREORDER_POLICY_SLUG } from '@ecommerce/shared'
 import { expect } from 'vitest'
+import type { PaymentInfo } from '../../src/payments/gateway.ts'
+import { register } from './customer.ts'
 import { ADDRESS, shop } from './shop.ts'
 import { bearer } from './staff.ts'
 
@@ -71,4 +73,55 @@ export async function preorderShop(options?: { publishPolicy?: boolean }) {
   }
 
   return { ...app, open, quote, preorder, placed }
+}
+
+/** 1 đôi AM-41: tiền hàng 2.100.000 + phí giao 30.000, cọc 30% = 630.000, còn lại 1.500.000. */
+export const DEPOSIT = 630_000
+export const REMAINING = 1_500_000
+
+export const paid = (...payments: [amount: number, reference: string][]): PaymentInfo => ({
+  status: 'paid',
+  transactions: payments.map(([amount, reference]) => ({ reference, amount, paidAt: new Date() })),
+})
+
+/**
+ * Một đơn đặt trước 1 đôi AM-41 đã cọc. `arrive()` ghi phiếu nhập 1 đôi để đơn về đủ hàng. `payRemainder()` gọi API trả
+ * phần còn lại bằng token tra cứu; `settle(...)` cho cổng báo các khoản đã về qua link phần còn lại đầu tiên rồi hỏi cổng.
+ */
+export async function depositedPreorder({ signedIn = false } = {}) {
+  const app = await preorderShop()
+  const { request, token: adminToken, v41 } = app
+  const campaignId = await app.open([{ variantId: v41.id, allocation: 5 }])
+  // Khách đăng nhập thì đơn gắn với tài khoản và không cần tick chính sách bảo mật.
+  const customerToken = signedIn ? ((await register(request)).body.accessToken as string) : null
+  const res = customerToken
+    ? await app.preorder(campaignId, { acceptPrivacyPolicy: undefined }).set(bearer(customerToken))
+    : await app.preorder(campaignId)
+  expect(res.status).toBe(201)
+  const { code, token: orderToken } = res.body as { code: number; token: string }
+  const order = (query: Record<string, string> = {}) =>
+    request.get(`/api/orders/${code}`).query({ token: orderToken, ...query })
+  app.payments.payments.set(`${code}-deposit-1`, paid([DEPOSIT, `FT-DEP-${code}`]))
+  expect((await order({ refresh: '1' })).body.paymentStatus).toBe('deposit_paid')
+
+  const arrive = async () => {
+    const receipt = await request
+      .post('/api/admin/stock/receipts')
+      .set(bearer(adminToken))
+      .send({ supplierName: 'Nike VN', receivedOn: '2026-12-01', note: '', lines: [{ sku: 'AM-41', quantity: 1 }] })
+    expect(receipt.status).toBe(201)
+  }
+  const payRemainder = () => request.post(`/api/orders/${code}/pay-remainder`).query({ token: orderToken })
+  const settle = async (...payments: [amount: number, reference: string][]) => {
+    app.payments.payments.set(`${code}-remainder-1`, paid(...payments))
+    return order({ refresh: '1' })
+  }
+  const flags = async () => {
+    const detail = await request.get(`/api/admin/orders/${code}`).set(bearer(adminToken))
+    return (detail.body.payments as { purpose: string; reconciliation: { reason: string } | null }[]).map((p) => [
+      p.purpose,
+      p.reconciliation?.reason ?? null,
+    ])
+  }
+  return { ...app, code, orderToken, customerToken, order, arrive, payRemainder, settle, flags }
 }

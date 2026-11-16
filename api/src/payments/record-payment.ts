@@ -105,7 +105,8 @@ async function recordInTransaction(
         data:
           awaiting.purpose === 'deposit'
             ? { status: 'processing', paymentStatus: 'deposit_paid', depositPaidAt: new Date(), reservedUntil: null }
-            : { status: 'processing', paymentStatus: 'paid', reservedUntil: null },
+            : // Trả đủ phần còn lại thì hết quá hạn (ticket 08); đơn hàng sẵn không bao giờ có cờ này.
+              { status: 'processing', paymentStatus: 'paid', reservedUntil: null, remainderOverdueAt: null },
       })
       // Khoản trước bị gắn lệch tiền mà nay đủ: các mục đó không còn gì để kế toán xử lý.
       const settled = await tx.reconciliationItem.findMany({

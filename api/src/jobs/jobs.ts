@@ -4,12 +4,14 @@ import type { Mail, Mailer } from '../adapters/mailer.ts'
 import type { Db, DbClient } from '../db.ts'
 import { expireOrder, expireOverdueOrders } from '../orders/cancel-order.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
+import { processRemainderDeadlines } from '../preorders/deadlines.ts'
 import { deleteExpiredRecords } from './cleanup.ts'
 
 const SEND_EMAIL = 'send-email'
 const DELETE_EXPIRED = 'delete-expired'
 const EXPIRE_ORDER = 'expire-order'
 const EXPIRE_OVERDUE_ORDERS = 'expire-overdue-orders'
+const REMAINDER_DEADLINES = 'remainder-deadlines'
 
 /** Xếp thư vào hàng đợi; route chỉ cần phần này của `Jobs`. */
 export interface EmailQueue {
@@ -91,6 +93,13 @@ export class Jobs implements EmailQueue, OrderExpiryQueue {
     await this.#boss.work(EXPIRE_OVERDUE_ORDERS, async () => {
       const expired = await expireOverdueOrders(expireDeps)
       if (expired > 0) this.#logger.info({ expired }, 'Đã hủy đơn hết hạn giữ hàng')
+    })
+    // Đơn đặt trước đã về hàng: nhắc trước hạn trả phần còn lại và gắn cờ quá hạn, mỗi giờ.
+    await this.#boss.createQueue(REMAINDER_DEADLINES)
+    await this.#boss.schedule(REMAINDER_DEADLINES, '0 * * * *')
+    await this.#boss.work(REMAINDER_DEADLINES, async () => {
+      const result = await processRemainderDeadlines(expireDeps)
+      if (result.reminded > 0 || result.flagged > 0) this.#logger.info(result, 'Đã xử lý hạn trả phần còn lại')
     })
   }
 
