@@ -30,6 +30,8 @@ export type OrderEventKind =
   | 'remainder_reminded'
   /** Quá hạn trả phần còn lại: gắn cờ, không hủy đơn (`data.remainderDueAt`). */
   | 'remainder_overdue'
+  /** Nhân viên đổi thời gian giao dự kiến của đợt, khách được báo (`data.before`, `data.after`; ticket 09). */
+  | 'delivery_changed'
   | 'payment_flagged'
   | 'cancelled'
   | 'preparing'
@@ -94,6 +96,8 @@ export const ORDER_VIEW_INCLUDE = {
   lines: { orderBy: { position: 'asc' } },
   policyVersions: { include: { pageVersion: { include: { page: { select: { slug: true } } } } } },
   privacyPolicyVersion: { select: { version: true } },
+  // Thời gian giao dự kiến hiện tại của đợt, cạnh lời hẹn lúc đặt (ticket 09).
+  preorderCampaign: { select: { deliveryFrom: true, deliveryTo: true } },
 } as const satisfies Prisma.OrderInclude
 
 export type OrderForView = Prisma.OrderGetPayload<{ include: typeof ORDER_VIEW_INCLUDE }>
@@ -151,6 +155,7 @@ export function preorderOf(
     | 'remainderDueAt'
     | 'remainderOverdueAt'
     | 'lines'
+    | 'preorderCampaign'
   >,
 ): OrderPreorder | null {
   const { depositPercent, depositAmount, deliveryFrom, deliveryTo, remainderDays } = order
@@ -164,6 +169,8 @@ export function preorderOf(
     arrivedAt: order.arrivedAt?.toISOString() ?? null,
     remainderDueAt: order.remainderDueAt?.toISOString() ?? null,
     remainderOverdueAt: order.remainderOverdueAt?.toISOString() ?? null,
+    currentDeliveryFrom: (order.preorderCampaign?.deliveryFrom ?? deliveryFrom).toISOString().slice(0, 10),
+    currentDeliveryTo: (order.preorderCampaign?.deliveryTo ?? deliveryTo).toISOString().slice(0, 10),
     depositPercent,
     depositAmount: Number(depositAmount),
     remainingAmount: Number(order.total - depositAmount),

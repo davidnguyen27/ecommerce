@@ -61,6 +61,6 @@ export function adminRoutes(
       .use('/shipping-fees', adminShippingFeeRoutes(prisma))
       .use('/orders', adminOrderRoutes(prisma, storage, payments, mail))
       .use('/reconciliation', adminReconciliationRoutes(prisma, storage, mail))
-      .use('/preorder-campaigns', adminPreorderCampaignRoutes(prisma))
+      .use('/preorder-campaigns', adminPreorderCampaignRoutes(prisma, mail))
   )
 }

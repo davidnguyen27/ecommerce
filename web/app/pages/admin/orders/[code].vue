@@ -180,6 +180,21 @@ await load()
                       <td class="admin-table-num">{{ formatVnd(order.preorder.remainingAmount) }}</td>
                     </tr>
                     <tr>
+                      <td colspan="5">
+                        Giao dự kiến {{ formatDateOnly(order.preorder.currentDeliveryFrom) }} –
+                        {{ formatDateOnly(order.preorder.currentDeliveryTo) }}
+                        <template
+                          v-if="
+                            order.preorder.currentDeliveryFrom !== order.preorder.deliveryFrom ||
+                            order.preorder.currentDeliveryTo !== order.preorder.deliveryTo
+                          "
+                        >
+                          (lúc đặt {{ formatDateOnly(order.preorder.deliveryFrom) }} –
+                          {{ formatDateOnly(order.preorder.deliveryTo) }})
+                        </template>
+                      </td>
+                    </tr>
+                    <tr>
                       <td colspan="4">
                         Hàng về
                         <template v-if="order.preorder.remainderDueAt">

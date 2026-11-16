@@ -16,6 +16,13 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ cancel: []; payRemainder: [] }>()
 
+const deliveryText = (from: string, to: string) => `${formatDateOnly(from)} – ${formatDateOnly(to)}`
+// Nhân viên đã đổi thời gian giao của đợt sau khi khách đặt (ticket 09): hiện cả thời gian mới lẫn lời hẹn lúc đặt.
+const deliveryChanged = computed(() => {
+  const p = props.order.preorder
+  return p !== null && (p.currentDeliveryFrom !== p.deliveryFrom || p.currentDeliveryTo !== p.deliveryTo)
+})
+
 const awaitingRemainder = computed(
   () => props.order.paymentStatus === 'deposit_paid' && props.order.preorder?.remainderDueAt != null,
 )
@@ -251,9 +258,13 @@ const remainingText = computed(() => {
         </template>
       </dl>
       <p v-if="order.preorder" class="mt-4 text-sm text-muted-foreground" data-testid="order-preorder">
-        Đơn đặt trước. Giao dự kiến {{ formatDateOnly(order.preorder.deliveryFrom) }} –
-        {{ formatDateOnly(order.preorder.deliveryTo) }}; khi hàng về, bạn có {{ order.preorder.remainderDays }} ngày để
-        trả phần còn lại.
+        Đơn đặt trước. Giao dự kiến
+        <span data-testid="order-delivery">{{
+          deliveryText(order.preorder.currentDeliveryFrom, order.preorder.currentDeliveryTo)
+        }}</span
+        ><template v-if="deliveryChanged">
+          (đã đổi; lúc đặt là {{ deliveryText(order.preorder.deliveryFrom, order.preorder.deliveryTo) }})</template
+        >; khi hàng về, bạn có {{ order.preorder.remainderDays }} ngày để trả phần còn lại.
       </p>
       <p v-if="order.preorder?.arrivedAt" class="mt-3 text-sm" data-testid="order-arrived">
         Hàng đã về đủ lúc {{ formatDateTime(order.preorder.arrivedAt) }}.

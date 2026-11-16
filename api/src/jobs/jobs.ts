@@ -65,7 +65,10 @@ export class Jobs implements EmailQueue, OrderExpiryQueue {
     await this.#boss.start()
     // Nhà cung cấp email lỗi tạm thời thì thử lại, giãn dần.
     await this.#boss.createQueue(SEND_EMAIL, { notify: true, retryLimit: 5, retryDelay: 30, retryBackoff: true })
-    await this.#boss.work<Mail>(SEND_EMAIL, async ([job]) => {
+    // Nhiều thư xếp trong cùng một transaction (phiếu nhập làm nhiều đơn về đủ, đổi thời gian giao của đợt) chỉ sinh một
+    // NOTIFY: Postgres gộp các NOTIFY giống nhau trong một transaction. Worker lấy từng thư một (lỗi thì chỉ thư đó thử
+    // lại), nên các thư còn lại chờ lượt hỏi định kỳ: hạ từ 30 giây mặc định xuống 2 giây.
+    await this.#boss.work<Mail>(SEND_EMAIL, { notifyPollingIntervalSeconds: 2 }, async ([job]) => {
       if (job) await this.#mailer.send(job.data)
     })
     await this.#boss.createQueue(DELETE_EXPIRED)
