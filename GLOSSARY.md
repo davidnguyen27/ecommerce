@@ -113,7 +113,7 @@ Lần khách xác nhận giỏ hàng cùng thông tin nhận hàng; hệ thống
 _Avoid_: thanh toán (khi nói về bước tạo đơn)
 
 **Đơn hàng** (Order):
-Cam kết mua của khách, ghi lại các dòng đơn, địa chỉ nhận hàng, phí giao, tổng tiền và phiên bản chính sách tại thời điểm đặt mua; sửa giá hay chính sách sau đó không làm đơn thay đổi.
+Cam kết mua của khách, ghi lại các dòng đơn, địa chỉ nhận hàng, mã giảm giá đã dùng, phí giao, tổng tiền và phiên bản chính sách tại thời điểm đặt mua; sửa giá, mã giảm giá hay chính sách sau đó không làm đơn thay đổi.
 _Avoid_: đơn đặt hàng, giao dịch
 
 **Dòng đơn** (Order line):
@@ -140,6 +140,14 @@ _Avoid_: lỗi thanh toán, đơn treo
 **Hủy đơn** (Order cancellation):
 Kết thúc một đơn chưa thanh toán, do khách tự hủy, nhân viên hủy hoặc đơn hết thời hạn giữ hàng; hàng đang giữ được nhả. Không phải hoàn tiền.
 _Avoid_: hoàn đơn, xóa đơn
+
+**Mã giảm giá** (Voucher):
+Mã khách tự gõ khi đặt mua hoặc đặt trước để được giảm vào tiền hàng, theo số tiền cố định hoặc theo tỷ lệ có mức giảm tối đa. Mỗi đơn dùng tối đa một mã; nhiều khách dùng chung một mã trong giới hạn lượt. Không giảm phí giao.
+_Avoid_: coupon, khuyến mại (khi nói về mã khách gõ)
+
+**Lượt dùng** (Redemption):
+Một đơn chưa hủy đã dùng một mã giảm giá. Lượt bị chiếm từ lúc tạo đơn và được trả lại khi đơn bị hủy trước khi thanh toán. Khách được nhận diện theo email hoặc số điện thoại.
+_Avoid_: lần sử dụng, lượt áp
 
 **Phiếu soạn hàng** (Packing slip):
 Trang in cho nhân viên kho lấy đúng SKU và số lượng của một đơn, kèm địa chỉ nhận.
@@ -172,7 +180,7 @@ Số lượng tối đa của một biến thể mà một đợt đặt trướ
 _Avoid_: quota, hạn mức
 
 **Tiền cọc** (Deposit):
-Khoản khách trả trước cho đơn đặt trước, tính bằng tỷ lệ của đợt trên tiền hàng của đơn. Đã cọc không có nghĩa là đã trả đủ.
+Khoản khách trả trước cho đơn đặt trước, tính bằng tỷ lệ của đợt trên tiền hàng của đơn sau giảm giá. Đã cọc không có nghĩa là đã trả đủ.
 _Avoid_: tiền đặt trước, tạm ứng
 
 **Phần còn lại** (Remaining balance):
