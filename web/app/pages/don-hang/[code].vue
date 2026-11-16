@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PublicOrder } from '@ecommerce/shared'
+import { PayRemainderResult, PublicOrder } from '@ecommerce/shared'
 
 // Đơn là dữ liệu cá nhân, mở bằng token: chỉ nạp ở trình duyệt, HTML từ server không có gì của đơn.
 // Hai cách vào: link trong email (`?token=…`), hoặc trang kết quả khi cổng thanh toán đưa khách quay về
@@ -76,7 +76,33 @@ async function cancel() {
   }
 }
 
-const awaitingPayment = computed(() => isResult.value && order.value?.status === 'pending_payment')
+// Cổng đưa khách về mà đơn vẫn chờ tiền: chờ thanh toán (hay chờ cọc), hoặc đã về hàng mà chưa nhận phần còn lại.
+const awaitingPayment = computed(
+  () =>
+    isResult.value &&
+    (order.value?.status === 'pending_payment' ||
+      (order.value?.paymentStatus === 'deposit_paid' && order.value.preorder?.arrivedAt != null)),
+)
+
+// Trả phần còn lại của đơn đặt trước bằng chính token đang mở đơn; nhớ token để trang kết quả mở lại được đơn.
+const payingRemainder = ref(false)
+async function payRemainder() {
+  const token = lookupToken()
+  if (!token) return
+  payingRemainder.value = true
+  cancelError.value = null
+  try {
+    const result = PayRemainderResult.parse(
+      await $fetch(`/api/orders/${encodeURIComponent(code.value)}/pay-remainder`, { method: 'POST', query: { token } }),
+    )
+    rememberOrderToken(Number(code.value), token)
+    window.location.assign(result.checkoutUrl)
+  } catch (err) {
+    cancelError.value = apiErrorMessage(err)
+    payingRemainder.value = false
+    await load()
+  }
+}
 
 // Link email có token trong URL: không gửi URL này cho trang khác qua Referer.
 useHead({ meta: [{ name: 'referrer', content: 'no-referrer' }] })
@@ -103,7 +129,15 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
         <button type="button" class="btn-outline" :disabled="checking" @click="load">Kiểm tra lại</button>
       </div>
       <p v-if="cancelError" class="notice-error mt-8" role="alert">{{ cancelError }}</p>
-      <OrderView :order="order" class="mt-8" cancellable :cancelling="cancelling" @cancel="cancel" />
+      <OrderView
+        :order="order"
+        class="mt-8"
+        cancellable
+        :cancelling="cancelling"
+        :paying-remainder="payingRemainder"
+        @cancel="cancel"
+        @pay-remainder="payRemainder"
+      />
     </template>
   </main>
 </template>

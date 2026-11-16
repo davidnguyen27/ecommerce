@@ -1,5 +1,10 @@
 import type { Db, DbClient } from '../db.ts'
-import { Prisma, type PaymentSource, type ReconciliationReason } from '../generated/prisma/client.ts'
+import {
+  Prisma,
+  type PaymentPurpose,
+  type PaymentSource,
+  type ReconciliationReason,
+} from '../generated/prisma/client.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
 import { issueOrderLookupUrl, recordOrderEvent } from '../orders/orders.ts'
 import type { PaymentGateway } from './gateway.ts'
@@ -35,9 +40,10 @@ const vnd = (amount: bigint | number) => `${VND.format(amount)} ₫`
 
 /**
  * Hàm duy nhất ghi nhận tiền về cho đơn (ADR 0009), chạy nhiều lần vẫn một kết quả. Khóa đơn `FOR UPDATE` nên callback
- * và truy vấn cùng về thì lần sau thấy giao dịch lần trước đã ghi. Đơn hàng sẵn chờ thanh toán mà tổng các khoản trả
- * đủ bằng đúng tổng phải trả thì thành đã trả đủ; đơn đặt trước chờ cọc mà tổng các khoản cọc bằng đúng tiền cọc thì
- * thành đã cọc. Mọi trường hợp khác gắn cờ cần đối soát, không đổi trạng thái đơn.
+ * và truy vấn cùng về thì lần sau thấy giao dịch lần trước đã ghi. Đơn đang chờ một khoản (`awaitedPayment`) mà tổng
+ * các giao dịch đúng mục đích bằng đúng số phải nhận thì tiến một bước: đơn hàng sẵn thành đã trả đủ, đơn đặt trước
+ * chờ cọc thành đã cọc, đơn đặt trước đã về hàng thành đã trả đủ. Mọi trường hợp khác gắn cờ cần đối soát, không đổi
+ * trạng thái đơn.
  */
 export async function recordPayment(deps: RecordPaymentDeps, receipt: PaymentReceipt): Promise<RecordPaymentOutcome> {
   try {
@@ -82,54 +88,61 @@ async function recordInTransaction(
       payload: receipt.payload,
     },
   })
-  // Mỗi loại đơn chỉ được tất toán bằng khoản đúng mục đích: đơn hàng sẵn bằng các khoản trả đủ, đơn đặt trước chờ
-  // cọc bằng các khoản cọc (ticket 05). Phần còn lại của đơn đặt trước có luồng riêng (ticket 07).
-  const preorder = order.kind === 'preorder'
-  const due = preorder ? order.depositAmount : order.total
-  const { _sum } = await tx.paymentTransaction.aggregate({
-    where: { orderId: order.id, purpose: preorder ? 'deposit' : 'full' },
-    _sum: { amount: true },
-  })
-  const received = _sum.amount ?? 0n
+  // Khoản đơn đang chờ lúc này, nếu có: đơn hàng sẵn chờ thanh toán chờ các khoản trả đủ bằng tổng phải trả; đơn đặt
+  // trước chờ cọc chờ các khoản cọc bằng tiền cọc; đơn đặt trước đã cọc và đã về hàng chờ các khoản phần còn lại bằng
+  // phần còn lại (ticket 07). Mỗi bước chỉ được tất toán bằng khoản đúng mục đích của nó.
+  const awaiting = awaitedPayment(order)
   const eventData = { amount: receipt.amount, reference: receipt.reference, source: receipt.source }
 
-  if (order.status === 'pending_payment' && due !== null && received === due) {
-    await tx.order.update({
-      where: { id: order.id },
-      data: preorder
-        ? { status: 'processing', paymentStatus: 'deposit_paid', depositPaidAt: new Date(), reservedUntil: null }
-        : { status: 'processing', paymentStatus: 'paid', reservedUntil: null },
+  if (awaiting) {
+    const { _sum } = await tx.paymentTransaction.aggregate({
+      where: { orderId: order.id, purpose: awaiting.purpose },
+      _sum: { amount: true },
     })
-    // Khoản trước bị gắn lệch tiền mà nay đủ: các mục đó không còn gì để kế toán xử lý.
-    const settled = await tx.reconciliationItem.findMany({
-      where: { orderId: order.id, status: 'open', reason: 'amount_mismatch' },
-      select: { id: true },
-      orderBy: { createdAt: 'asc' },
-    })
-    const settledReconciliationItemIds = settled.map((item) => item.id)
-    await tx.reconciliationItem.updateMany({
-      where: { id: { in: settledReconciliationItemIds } },
-      data: { status: 'resolved', resolution: 'settled_by_payment', resolvedAt: new Date() },
-    })
-    await recordOrderEvent(
-      tx,
-      order.id,
-      preorder ? 'deposit_paid' : 'paid',
-      { type: 'system' },
-      settledReconciliationItemIds.length ? { ...eventData, settledReconciliationItemIds } : eventData,
-    )
-    if (preorder) await queueDepositReceivedEmail(tx, { emails, siteUrl }, order)
-    else await queuePaymentReceivedEmail(tx, { emails, siteUrl }, order)
-    return preorder ? 'deposit_paid' : 'paid'
+    if ((_sum.amount ?? 0n) === awaiting.due) {
+      await tx.order.update({
+        where: { id: order.id },
+        data:
+          awaiting.purpose === 'deposit'
+            ? { status: 'processing', paymentStatus: 'deposit_paid', depositPaidAt: new Date(), reservedUntil: null }
+            : { status: 'processing', paymentStatus: 'paid', reservedUntil: null },
+      })
+      // Khoản trước bị gắn lệch tiền mà nay đủ: các mục đó không còn gì để kế toán xử lý.
+      const settled = await tx.reconciliationItem.findMany({
+        where: { orderId: order.id, status: 'open', reason: 'amount_mismatch' },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
+      })
+      const settledReconciliationItemIds = settled.map((item) => item.id)
+      await tx.reconciliationItem.updateMany({
+        where: { id: { in: settledReconciliationItemIds } },
+        data: { status: 'resolved', resolution: 'settled_by_payment', resolvedAt: new Date() },
+      })
+      const outcome = awaiting.purpose === 'deposit' ? 'deposit_paid' : 'paid'
+      await recordOrderEvent(
+        tx,
+        order.id,
+        outcome,
+        { type: 'system' },
+        settledReconciliationItemIds.length ? { ...eventData, settledReconciliationItemIds } : eventData,
+      )
+      if (outcome === 'deposit_paid') await queueDepositReceivedEmail(tx, { emails, siteUrl }, order)
+      else await queuePaymentReceivedEmail(tx, { emails, siteUrl }, order)
+      return outcome
+    }
   }
 
-  // Đã cọc hay đã trả đủ thì khoản nào về thêm cũng là thừa, cho tới khi có luồng trả phần còn lại (ticket 07).
+  // Đơn đang chờ đúng khoản này mà tiền chưa khớp thì lệch tiền; không chờ khoản nào (đã trả đủ, hay hàng chưa về mà đã
+  // trả phần còn lại) thì tiền thừa.
+  const transactionPurpose = link?.purpose ?? 'full'
   const reason: ReconciliationReason =
     order.status === 'cancelled'
       ? 'paid_after_cancel'
-      : order.paymentStatus !== 'unpaid'
-        ? 'extra_payment'
-        : 'amount_mismatch'
+      : awaiting?.purpose === transactionPurpose
+        ? 'amount_mismatch'
+        : order.paymentStatus === 'unpaid'
+          ? 'amount_mismatch'
+          : 'extra_payment'
   await tx.reconciliationItem.create({
     data: {
       orderId: order.id,
@@ -179,6 +192,18 @@ export const PAYMENT_LINK_REFERENCES = {
 } as const satisfies Prisma.Order$paymentLinksArgs
 
 type OrderWithLines = Prisma.OrderGetPayload<{ include: { lines: true } }>
+
+/** Khoản đơn đang chờ: mục đích và số tiền phải nhận đủ; `null` khi đơn không chờ khoản nào. */
+function awaitedPayment(order: Prisma.OrderGetPayload<object>): { purpose: PaymentPurpose; due: bigint } | null {
+  if (order.kind === 'standard') {
+    return order.status === 'pending_payment' ? { purpose: 'full', due: order.total } : null
+  }
+  if (order.status === 'pending_payment') return { purpose: 'deposit', due: order.depositAmount! }
+  if (order.status === 'processing' && order.paymentStatus === 'deposit_paid' && order.arrivedAt) {
+    return { purpose: 'remainder', due: order.total - order.depositAmount! }
+  }
+  return null
+}
 
 /**
  * Xếp email "đã nhận thanh toán" (tóm tắt đơn, tổng tiền, link tra cứu có token mới) trong transaction của thay đổi

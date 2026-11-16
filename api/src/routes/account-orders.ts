@@ -1,7 +1,9 @@
 import { Router } from 'express'
-import { AccountOrderQuery, type AccountOrderPage, type PublicOrder } from '@ecommerce/shared'
+import { AccountOrderQuery, type AccountOrderPage, type PayRemainderResult, type PublicOrder } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
 import { authSubject } from '../auth/require-auth.ts'
+import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
+import { createRemainderLink } from '../preorders/remainder.ts'
 import { assertCancellable, cancelOrder } from '../orders/cancel-order.ts'
 import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
@@ -13,7 +15,8 @@ export function accountOrderRoutes({
   storage,
   payments,
   logger,
-}: Pick<AppDeps, 'prisma' | 'storage' | 'payments' | 'logger'>) {
+  siteUrl,
+}: Pick<AppDeps, 'prisma' | 'storage' | 'payments' | 'logger' | 'siteUrl'>) {
   return (
     Router()
       .get('/', async (req, res) => {
@@ -48,6 +51,20 @@ export function accountOrderRoutes({
       .get('/:code', async (req, res) => {
         const order = await findCustomerOrder(prisma, String(req.params.code), authSubject(req))
         const body: PublicOrder = toPublicOrder(storage, order)
+        res.set('Cache-Control', 'no-store').json(body)
+      })
+      // Trả phần còn lại của đơn đặt trước của chính mình; cấp kèm token tra cứu cho trang kết quả thanh toán.
+      .post('/:code/pay-remainder', async (req, res) => {
+        const order = await findCustomerOrder(prisma, String(req.params.code), authSubject(req))
+        await enforceRateLimits(
+          prisma,
+          res,
+          [{ limit: RATE_LIMITS.payRemainderPerIp, subject: String(req.ip) }],
+          'Bạn đã tạo quá nhiều lần thanh toán, vui lòng thử lại sau',
+        )
+        const body: PayRemainderResult = await createRemainderLink(prisma, { payments, siteUrl, req }, order.id, {
+          issueToken: true,
+        })
         res.set('Cache-Control', 'no-store').json(body)
       })
       // Khách hủy đơn chưa thanh toán của chính mình; đơn người khác hay mã lạ đều là 404.

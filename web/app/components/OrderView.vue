@@ -11,8 +11,14 @@ const props = defineProps<{
   /** Nơi dùng có đường hủy đơn (token hay tài khoản): hiện nút hủy khi đơn còn chờ thanh toán. */
   cancellable?: boolean
   cancelling?: boolean
+  /** Đang tạo link trả phần còn lại (nơi dùng gọi API khi nhận `payRemainder`). */
+  payingRemainder?: boolean
 }>()
-const emit = defineEmits<{ cancel: [] }>()
+const emit = defineEmits<{ cancel: []; payRemainder: [] }>()
+
+const awaitingRemainder = computed(
+  () => props.order.paymentStatus === 'deposit_paid' && props.order.preorder?.remainderDueAt != null,
+)
 
 // Đơn đặt trước chờ cọc chỉ giữ suất, không giữ hàng (ADR 0013).
 const isPreorder = computed(() => props.order.preorder !== null)
@@ -158,6 +164,30 @@ const remainingText = computed(() => {
       </button>
     </div>
 
+    <!-- Đơn đặt trước đã cọc và hàng đã về đủ: trả phần còn lại để shop chuẩn bị và giao hàng. -->
+    <div
+      v-if="awaitingRemainder && order.preorder"
+      class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+      role="status"
+      data-testid="order-remainder"
+    >
+      <span>
+        Hàng đã về. Vui lòng trả phần còn lại
+        <strong class="tabular-nums">{{ formatVnd(order.preorder.remainingAmount) }}</strong>
+        trước <strong>{{ formatDate(order.preorder.remainderDueAt!) }}</strong
+        >.
+      </span>
+      <button
+        type="button"
+        class="btn-primary"
+        :disabled="payingRemainder"
+        data-testid="order-pay-remainder"
+        @click="emit('payRemainder')"
+      >
+        {{ payingRemainder ? 'Đang tạo thanh toán…' : 'Trả phần còn lại' }}
+      </button>
+    </div>
+
     <slot name="actions" />
 
     <section aria-label="Các dòng trong đơn">
@@ -215,14 +245,8 @@ const remainingText = computed(() => {
         {{ formatDateOnly(order.preorder.deliveryTo) }}; khi hàng về, bạn có {{ order.preorder.remainderDays }} ngày để
         trả phần còn lại.
       </p>
-      <p
-        v-if="order.preorder?.remainderDueAt"
-        class="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
-        role="status"
-        data-testid="order-arrived"
-      >
-        Hàng đã về đủ. Hạn trả phần còn lại: <strong>{{ formatDate(order.preorder.remainderDueAt) }}</strong
-        >.
+      <p v-if="order.preorder?.arrivedAt" class="mt-3 text-sm" data-testid="order-arrived">
+        Hàng đã về đủ lúc {{ formatDateTime(order.preorder.arrivedAt) }}.
       </p>
       <p
         v-else-if="order.preorder && order.preorder.arrivedQuantity > 0"

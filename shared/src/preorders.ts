@@ -194,6 +194,18 @@ export const PreorderChange = z.discriminatedUnion('kind', [
 ])
 export type PreorderChange = z.infer<typeof PreorderChange>
 
+/**
+ * Response của `POST /api/orders/:code/pay-remainder` và `/api/account/orders/:code/pay-remainder`: link trả phần còn
+ * lại (mới mỗi lần) và hạn của nó. `token` là token tra cứu cấp thêm cho khách vào từ tài khoản, để trang kết quả mở
+ * được đơn khi cổng đưa khách về; `null` khi khách đã có token.
+ */
+export const PayRemainderResult = z.object({
+  checkoutUrl: z.string(),
+  expiresAt: z.string(),
+  token: z.string().nullable(),
+})
+export type PayRemainderResult = z.infer<typeof PayRemainderResult>
+
 /** `error.details` của 409 khi đặt trước. Không có gì được ghi. */
 export const PreorderConflictDetails = z.object({ change: PreorderChange })
 export type PreorderConflictDetails = z.infer<typeof PreorderConflictDetails>
