@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { customerRedemptions } from '../src/vouchers/vouchers.ts'
-import { shop } from './support/shop.ts'
+import { ADDRESS, shop } from './support/shop.ts'
 import { bearer, createStaff } from './support/staff.ts'
 
 const DAY = 24 * 60 * 60_000
@@ -38,14 +37,14 @@ async function vouchers() {
     expect(res.status).toBe(201)
     return res.body as { id: string; code: string; used: number; status: string }
   }
-  /**
-   * Một đơn chờ thanh toán (đặt mua qua API) gắn với mã. Chưa có đường đặt mua kèm mã (ticket 03), nên gắn mã bằng
-   * `prisma`; số lượt vẫn kiểm qua HTTP.
-   */
-  const redeemed = async (voucherId: string, body: Record<string, unknown> = {}) => {
-    const res = await app.checkout(body)
+  /** Khách thứ `n` (email, số điện thoại riêng) đặt 1 đôi AM-40 kèm mã, với tiền giảm như báo giá; đơn chờ thanh toán. */
+  const redeemed = async (voucher: { code: string }, n = 1) => {
+    const lines = [{ variantId: app.v40.id, quantity: 1 }]
+    const quote = await request.post('/api/checkout/quote').send({ lines, voucherCode: voucher.code })
+    expect(quote.body.voucher).toMatchObject({ applied: true })
+    const address = { ...ADDRESS, email: `khach${n}@example.com`, phone: `091000000${n}` }
+    const res = await app.checkout({ address, voucherCode: voucher.code, discount: quote.body.discount })
     expect(res.status).toBe(201)
-    await app.prisma.order.update({ where: { code: res.body.code }, data: { voucherId } })
     return res.body as { code: number }
   }
   return { ...app, create, update, disable, get, list, audits, created, redeemed }
@@ -176,7 +175,7 @@ describe('sửa mã giảm giá', () => {
   it('mã đã có lượt dùng chỉ sửa được mô tả, thời điểm kết thúc và tổng lượt (không dưới số đã dùng)', async () => {
     const app = await vouchers()
     const voucher = await app.created({ totalLimit: 10 })
-    await app.redeemed(voucher.id)
+    await app.redeemed(voucher)
     expect((await app.get(voucher.id)).body.used).toBe(1)
 
     for (const body of [
@@ -199,8 +198,8 @@ describe('sửa mã giảm giá', () => {
   it('giảm tổng lượt dưới số đã dùng thì 409; đơn đã hủy không tính lượt', async () => {
     const app = await vouchers()
     const voucher = await app.created()
-    const first = await app.redeemed(voucher.id)
-    await app.redeemed(voucher.id)
+    const first = await app.redeemed(voucher, 1)
+    await app.redeemed(voucher, 2)
 
     const below = await app.update(voucher.id, { totalLimit: 1 })
     expect(below.status).toBe(409)
@@ -242,7 +241,7 @@ describe('danh sách mã', () => {
     const expired = await app.created({ code: 'THU2026', startsAt: at(-20), endsAt: at(-10) })
     const disabled = await app.created({ code: 'LOI2026' })
     await app.disable(disabled.id)
-    await app.redeemed(active.id)
+    await app.redeemed(active)
 
     const ids = async (query: Record<string, string>) =>
       (await app.list(query)).body.items.map((v: { id: string }) => v.id)
@@ -256,23 +255,6 @@ describe('danh sách mã', () => {
     const all = await app.list()
     expect(all.body.total).toBe(4)
     expect(all.body.items.find((v: { id: string }) => v.id === active.id).used).toBe(1)
-  })
-})
-
-describe('lượt mỗi khách', () => {
-  // Chưa có đường HTTP nào kiểm lượt mỗi khách (ticket 03 mới dùng), nên gọi thẳng hàm.
-  it('đếm đơn chưa hủy trùng email (không phân biệt hoa thường) hoặc trùng số điện thoại', async () => {
-    const app = await vouchers()
-    const voucher = await app.created()
-    await app.redeemed(voucher.id)
-    const { email, phone } = await app.prisma.order.findFirstOrThrow({ select: { email: true, phone: true } })
-
-    expect(await customerRedemptions(app.prisma, voucher.id, { email: email.toUpperCase() })).toBe(1)
-    expect(await customerRedemptions(app.prisma, voucher.id, { phone })).toBe(1)
-    expect(await customerRedemptions(app.prisma, voucher.id, { email: 'khac@example.com', phone: '0900000000' })).toBe(
-      0,
-    )
-    expect(await customerRedemptions(app.prisma, voucher.id, {})).toBe(0)
   })
 })
 

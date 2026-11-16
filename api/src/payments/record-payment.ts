@@ -204,6 +204,10 @@ function awaitedPayment(order: Prisma.OrderGetPayload<object>): { purpose: Payme
   return null
 }
 
+/** Dòng mã giảm giá trong email tóm tắt đơn; không có gì khi đơn không dùng mã. */
+export const voucherLines = (order: { voucherCode: string | null; discount: bigint }) =>
+  order.voucherCode ? [`Mã giảm giá ${order.voucherCode}: -${vnd(order.discount)}`] : []
+
 /**
  * Xếp email "đã nhận thanh toán" (tóm tắt đơn, tổng tiền, link tra cứu có token mới) trong transaction của thay đổi
  * trạng thái. Dùng chung cho thanh toán bình thường và khôi phục đơn khi đối soát. `order.lines` xếp theo `position`.
@@ -231,6 +235,7 @@ export async function queuePaymentReceivedEmail(
       `Chúng tôi đã nhận đủ thanh toán cho đơn hàng #${order.code}.`,
       '',
       ...lines,
+      ...voucherLines(order),
       `Phí giao: ${vnd(order.shippingFee)}`,
       `Tổng cộng: ${vnd(order.total)}`,
       '',

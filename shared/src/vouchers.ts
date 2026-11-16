@@ -128,3 +128,56 @@ export type Voucher = z.infer<typeof Voucher>
 
 export const VoucherPage = pageOf(Voucher)
 export type VoucherPage = z.infer<typeof VoucherPage>
+
+// Khách áp mã khi đặt mua hoặc đặt trước.
+
+/**
+ * Vì sao mã không dùng được cho đơn này. `disabled` hiện cho khách như hết hạn; `changed` chỉ có khi đặt: tiền giảm khác
+ * số khách đã thấy (giá hay giỏ đổi), khách xem lại rồi xác nhận.
+ */
+export const VoucherReason = z.enum([
+  'not_found',
+  'not_started',
+  'expired',
+  'disabled',
+  'exhausted',
+  'customer_limit',
+  'below_minimum',
+  'not_applicable',
+  'sale_type',
+  'changed',
+])
+export type VoucherReason = z.infer<typeof VoucherReason>
+
+/** Mã khách gõ gửi lên báo giá và đặt mua; định dạng sai thì báo `not_found` thay vì lỗi form. */
+export const VoucherCodeInput = z.string().trim().min(1).max(40)
+
+/** Kết quả áp mã trong báo giá. `lines` là tiền giảm từng dòng; `shortfall` là số tiền hàng còn thiếu để đạt tối thiểu. */
+export const VoucherQuote = z.discriminatedUnion('applied', [
+  z.object({
+    applied: z.literal(true),
+    code: z.string(),
+    discount: z.number(),
+    lines: z.array(z.object({ variantId: z.string(), discount: z.number() })),
+  }),
+  z.object({
+    applied: z.literal(false),
+    code: z.string(),
+    reason: VoucherReason,
+    shortfall: z.number().optional(),
+  }),
+])
+export type VoucherQuote = z.infer<typeof VoucherQuote>
+
+/**
+ * `error.details.voucher` của 409 khi đặt kèm mã: lý do, tiền giảm mới khi mã vẫn áp được (`changed`), và tổng phải trả
+ * khi không dùng mã để khách chọn đặt tiếp không mã.
+ */
+export const VoucherConflict = z.object({
+  code: z.string(),
+  reason: VoucherReason,
+  discount: z.number().nullable(),
+  shortfall: z.number().optional(),
+  totalWithoutVoucher: z.number(),
+})
+export type VoucherConflict = z.infer<typeof VoucherConflict>
