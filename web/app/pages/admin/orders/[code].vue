@@ -63,6 +63,12 @@ function historyDetail(entry: OrderHistoryEntry) {
     total?: number
     carrier?: string
     trackingNumber?: string
+    voucherOverLimit?: { code: string; used: number; totalLimit: number }
+  }
+  // Khôi phục giữ phần giảm dù mã đã hết lượt (spec M5): báo để chủ doanh nghiệp thấy.
+  if (entry.action === 'restored' && data.voucherOverLimit) {
+    const { code, used, totalLimit } = data.voucherOverLimit
+    return `Mã ${code} vượt tổng lượt: đã dùng ${used}/${totalLimit}`
   }
   if (entry.action === 'handed_over' && data.carrier) return `${data.carrier} · ${data.trackingNumber}`
   if (entry.action === 'cancelled' && data.reason) {
