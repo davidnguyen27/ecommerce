@@ -24,6 +24,8 @@ export type OrderKind = z.infer<typeof OrderKind>
  * ngày được trả phần còn lại sau khi hàng về.
  */
 export const OrderPreorder = z.object({
+  /** Đợt của đơn; trang quản trị dẫn tới chi tiết đợt. */
+  campaignId: z.string(),
   depositPercent: z.number(),
   depositAmount: z.number(),
   remainingAmount: z.number(),
@@ -138,6 +140,12 @@ export const AdminOrderQuery = PageQuery.extend({
   status: z.union([OrderStatus, z.literal('all')]).default('processing'),
   paymentStatus: z.union([PaymentStatus, z.literal('all')]).default('paid'),
   fulfillmentStatus: z.union([FulfillmentStatus, z.literal('all')]).default('not_prepared'),
+  /** Đơn hàng sẵn hay đơn đặt trước (ticket 10). */
+  kind: z.union([OrderKind, z.literal('all')]).default('all'),
+  /** Đơn đặt trước của một đợt. */
+  campaignId: z.uuid().optional(),
+  /** `true`: chỉ đơn đặt trước quá hạn trả phần còn lại (đã cọc, chưa trả đủ). */
+  remainderOverdue: z.stringbool().optional(),
   q: z.string().trim().max(200).optional(),
   sort: z.enum(['oldest', 'newest']).default('oldest'),
 })

@@ -1,6 +1,7 @@
 import { STOCK_VIEW_PERMISSIONS, type Permission } from '@ecommerce/shared'
 import {
   BadgeCheck,
+  BellRing,
   CalendarClock,
   FileSpreadsheet,
   FileText,
@@ -67,6 +68,7 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
         icon: CalendarClock,
         permission: ['order.view', 'preorder.manage'],
       },
+      { to: '/admin/preorders/attention', label: 'Đặt trước cần xử lý', icon: BellRing, permission: 'order.view' },
       { to: '/admin/shipping-fees', label: 'Phí giao', icon: Truck, permission: 'price.edit' },
     ],
   },

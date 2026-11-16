@@ -64,6 +64,12 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
         ...(query.status !== 'all' && { status: query.status }),
         ...(query.paymentStatus !== 'all' && { paymentStatus: query.paymentStatus }),
         ...(query.fulfillmentStatus !== 'all' && { fulfillmentStatus: query.fulfillmentStatus }),
+        ...(query.kind !== 'all' && { kind: query.kind }),
+        ...(query.campaignId && { preorderCampaignId: query.campaignId }),
+        // Quá hạn trả phần còn lại: cờ còn đó nghĩa là chưa trả đủ (trả đủ thì xóa cờ, ticket 08).
+        ...(query.remainderOverdue !== undefined && {
+          remainderOverdueAt: query.remainderOverdue ? { not: null } : null,
+        }),
         ...(query.q && searchWhere(query.q)),
       }
       const direction = query.sort === 'oldest' ? 'asc' : 'desc'

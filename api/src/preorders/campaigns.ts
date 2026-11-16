@@ -104,7 +104,44 @@ export function toCampaignHeader(campaign: CampaignRow, now = new Date()) {
 }
 
 /** Biến thể của đợt theo thứ tự biến thể trên sản phẩm, kèm suất và số đã dùng. */
-export function toCampaignVariants(campaign: CampaignRow, used: Map<string, number> | undefined) {
+/** Số liệu một biến thể trong đợt, tính từ các đơn chưa hủy (xem `PreorderCampaignVariant`). */
+export type VariantStats = { used: number; deposited: number; pendingDeposit: number; arrived: number }
+
+/**
+ * Số liệu từng biến thể của các đợt, theo đợt rồi theo biến thể: số đã dùng, đã cọc (gồm đã trả đủ), đang chờ cọc, và
+ * đã về (đã về đủ thì tính đủ số lượng, kể cả khi bàn giao đã đưa số đang giữ về 0). Một câu SQL cho cả danh sách đợt.
+ */
+export async function campaignStats(db: DbClient, campaignIds: string[]) {
+  const stats = new Map<string, Map<string, VariantStats>>()
+  if (campaignIds.length === 0) return stats
+  const rows = await db.$queryRaw<
+    { campaignId: string; variantId: string; used: bigint; deposited: bigint; pending: bigint; arrived: bigint }[]
+  >`
+    SELECT o."preorder_campaign_id" AS "campaignId", l."variant_id" AS "variantId",
+      SUM(l."quantity") AS "used",
+      COALESCE(SUM(l."quantity") FILTER (WHERE o."payment_status" IN ('deposit_paid', 'paid')), 0) AS "deposited",
+      COALESCE(SUM(l."quantity") FILTER (WHERE o."status" = 'pending_payment'), 0) AS "pending",
+      SUM(CASE WHEN o."arrived_at" IS NOT NULL THEN l."quantity" ELSE l."reserved_quantity" END) AS "arrived"
+    FROM "order" o JOIN "order_line" l ON l."order_id" = o."id"
+    WHERE o."preorder_campaign_id" IN (${Prisma.join(campaignIds.map((id) => Prisma.sql`${id}::uuid`))})
+      AND o."status" <> 'cancelled'
+    GROUP BY o."preorder_campaign_id", l."variant_id"`
+  for (const row of rows) {
+    const byVariant = stats.get(row.campaignId) ?? new Map<string, VariantStats>()
+    byVariant.set(row.variantId, {
+      used: Number(row.used),
+      deposited: Number(row.deposited),
+      pendingDeposit: Number(row.pending),
+      arrived: Number(row.arrived),
+    })
+    stats.set(row.campaignId, byVariant)
+  }
+  return stats
+}
+
+const NO_ORDERS: VariantStats = { used: 0, deposited: 0, pendingDeposit: 0, arrived: 0 }
+
+export function toCampaignVariants(campaign: CampaignRow, stats: Map<string, VariantStats> | undefined) {
   return [...campaign.variants]
     .sort((a, b) => a.variant.sortOrder - b.variant.sortOrder || a.variant.sku.localeCompare(b.variant.sku))
     .map((v) => ({
@@ -113,13 +150,40 @@ export function toCampaignVariants(campaign: CampaignRow, used: Map<string, numb
       attributes: v.variant.attributes as PreorderCampaign['variants'][number]['attributes'],
       status: v.variant.status,
       allocation: v.allocation,
-      used: used?.get(v.variantId) ?? 0,
+      ...(stats?.get(v.variantId) ?? NO_ORDERS),
     }))
 }
 
 export async function loadCampaign(db: DbClient, id: string): Promise<PreorderCampaign> {
   const campaign = await db.preorderCampaign.findUnique({ where: { id }, include: CAMPAIGN_INCLUDE })
   if (!campaign) throw new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đợt đặt trước')
-  const used = await usedAllocations(db, [id])
-  return { ...toCampaignHeader(campaign), variants: toCampaignVariants(campaign, used.get(id)) }
+  const [stats, orders] = await Promise.all([
+    campaignStats(db, [id]),
+    // Đơn chưa hủy của đợt theo thứ tự cọc, cũng là thứ tự chia hàng về (ADR 0013); đơn chờ cọc sau cùng.
+    db.order.findMany({
+      where: { preorderCampaignId: id, status: { not: 'cancelled' } },
+      include: { lines: { orderBy: { position: 'asc' } } },
+      orderBy: [{ depositPaidAt: { sort: 'asc', nulls: 'last' } }, { code: 'asc' }],
+    }),
+  ])
+  return {
+    ...toCampaignHeader(campaign),
+    variants: toCampaignVariants(campaign, stats.get(id)),
+    orders: orders.map((order) => {
+      const line = order.lines[0]!
+      return {
+        code: order.code,
+        recipientName: order.recipientName,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        fulfillmentStatus: order.fulfillmentStatus,
+        sku: line.sku,
+        quantity: line.quantity,
+        arrivedQuantity: order.arrivedAt ? line.quantity : line.reservedQuantity,
+        depositPaidAt: order.depositPaidAt?.toISOString() ?? null,
+        remainderDueAt: order.remainderDueAt?.toISOString() ?? null,
+        remainderOverdueAt: order.remainderOverdueAt?.toISOString() ?? null,
+      }
+    }),
+  }
 }

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { AuditActor } from './audit.ts'
 import { AttributeValues } from './attributes.ts'
 import { CartLine, InvoiceInfo, ShippingAddress } from './checkout.ts'
+import { FulfillmentStatus, OrderStatus, PaymentStatus } from './orders.ts'
 import { PageQuery, pageOf } from './pagination.ts'
 import { PreorderOffer, ProductStatus, PublicImage, VariantStatus } from './products.ts'
 import { ProvinceCode } from './regions.ts'
@@ -92,7 +93,10 @@ const CampaignHeader = z.object({
   createdBy: AuditActor,
 })
 
-/** Một biến thể của đợt: suất và số đã dùng (tổng số lượng của đơn đặt trước chưa hủy). */
+/**
+ * Một biến thể của đợt: suất và số đã dùng (tổng số lượng của đơn đặt trước chưa hủy), trong đó số đã cọc (gồm cả đã trả
+ * đủ) và số đang chờ cọc; số đã về là số cái đã được giữ từ hàng nhập về cho các đơn đó.
+ */
 export const PreorderCampaignVariant = z.object({
   variantId: z.string(),
   sku: z.string(),
@@ -100,11 +104,61 @@ export const PreorderCampaignVariant = z.object({
   status: VariantStatus,
   allocation: z.number(),
   used: z.number(),
+  deposited: z.number(),
+  pendingDeposit: z.number(),
+  arrived: z.number(),
 })
 export type PreorderCampaignVariant = z.infer<typeof PreorderCampaignVariant>
 
-export const PreorderCampaign = CampaignHeader.extend({ variants: z.array(PreorderCampaignVariant) })
+/** Một đơn chưa hủy của đợt, ở chi tiết đợt; xếp theo lúc cọc (đơn chờ cọc sau cùng). */
+export const PreorderCampaignOrder = z.object({
+  code: z.number(),
+  recipientName: z.string(),
+  status: OrderStatus,
+  paymentStatus: PaymentStatus,
+  fulfillmentStatus: FulfillmentStatus,
+  sku: z.string(),
+  quantity: z.number(),
+  arrivedQuantity: z.number(),
+  depositPaidAt: z.string().nullable(),
+  remainderDueAt: z.string().nullable(),
+  remainderOverdueAt: z.string().nullable(),
+})
+export type PreorderCampaignOrder = z.infer<typeof PreorderCampaignOrder>
+
+export const PreorderCampaign = CampaignHeader.extend({
+  variants: z.array(PreorderCampaignVariant),
+  orders: z.array(PreorderCampaignOrder),
+})
 export type PreorderCampaign = z.infer<typeof PreorderCampaign>
+
+/**
+ * `GET /api/admin/preorder-campaigns/attention` (ticket 10): đơn đặt trước quá hạn trả phần còn lại, và đợt đang gặp sự
+ * cố nhập hàng mà còn đơn đã cọc chờ hàng. `total` là tổng số mục, cho số đếm ở bảng điều khiển.
+ */
+export const PreorderAttention = z.object({
+  overdueOrders: z.array(
+    z.object({
+      code: z.number(),
+      recipientName: z.string(),
+      phone: z.string(),
+      productName: z.string(),
+      remainingAmount: z.number(),
+      remainderDueAt: z.string(),
+      remainderOverdueAt: z.string(),
+    }),
+  ),
+  issueCampaigns: z.array(
+    z.object({
+      id: z.string(),
+      productName: z.string(),
+      supplyNote: z.string(),
+      waitingOrders: z.number(),
+    }),
+  ),
+  total: z.number(),
+})
+export type PreorderAttention = z.infer<typeof PreorderAttention>
 
 export const PreorderCampaignPage = pageOf(
   CampaignHeader.extend({ variantCount: z.number(), totalAllocation: z.number(), totalUsed: z.number() }),

@@ -2,6 +2,7 @@ import type {
   FulfillmentStatus,
   OrderCancelReason,
   OrderStatus,
+  PaymentPurpose,
   PaymentSource,
   PaymentStatus,
   ReconciliationReason,
@@ -64,6 +65,12 @@ const ORDER_EVENT_LABELS: Record<string, string> = {
   delivery_failed: 'Giao thất bại',
 }
 export const orderEventLabel = (kind: string) => ORDER_EVENT_LABELS[kind] ?? kind
+
+export const PAYMENT_PURPOSE_LABELS: Record<PaymentPurpose, string> = {
+  full: 'Trả đủ',
+  deposit: 'Tiền cọc',
+  remainder: 'Phần còn lại',
+}
 
 export const PAYMENT_SOURCE_LABELS: Record<PaymentSource, string> = {
   webhook: 'Webhook cổng',

@@ -5,7 +5,13 @@ definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'order.v
 
 const PAGE_SIZE = 50
 
-type Filters = Pick<AdminOrderQuery, 'status' | 'paymentStatus' | 'fulfillmentStatus' | 'sort'> & { q: string }
+type Filters = Pick<AdminOrderQuery, 'status' | 'paymentStatus' | 'fulfillmentStatus' | 'sort' | 'kind'> & {
+  q: string
+  /** Đơn đặt trước của một đợt; `''` là mọi đợt. */
+  campaignId: string
+  remainderOverdue: boolean
+}
+const ANY_ORDER = { kind: 'all', campaignId: '', remainderOverdue: false } as const
 // Mặc định giống API: hàng chờ soạn, đơn cũ trước để soạn theo thứ tự đặt.
 const TO_PREPARE: Filters = {
   status: 'processing',
@@ -13,13 +19,33 @@ const TO_PREPARE: Filters = {
   fulfillmentStatus: 'not_prepared',
   sort: 'oldest',
   q: '',
+  ...ANY_ORDER,
 }
-const ALL: Filters = { status: 'all', paymentStatus: 'all', fulfillmentStatus: 'all', sort: 'newest', q: '' }
+const ALL: Filters = {
+  status: 'all',
+  paymentStatus: 'all',
+  fulfillmentStatus: 'all',
+  sort: 'newest',
+  q: '',
+  ...ANY_ORDER,
+}
 
 const session = useAdminSession()
+const route = useRoute()
 const result = ref<AdminOrderPage | null>(null)
 const error = ref<string | null>(null)
-const filters = reactive<Filters>({ ...TO_PREPARE })
+// Trang chi tiết đợt và "Đặt trước cần xử lý" mở danh sách này với `?campaignId=` hay `?remainderOverdue=true`.
+const fromLink = typeof route.query.campaignId === 'string' || route.query.remainderOverdue === 'true'
+const filters = reactive<Filters>(
+  fromLink
+    ? {
+        ...ALL,
+        kind: 'preorder',
+        campaignId: typeof route.query.campaignId === 'string' ? route.query.campaignId : '',
+        remainderOverdue: route.query.remainderOverdue === 'true',
+      }
+    : { ...TO_PREPARE },
+)
 const page = ref(1)
 
 async function load() {
@@ -27,7 +53,14 @@ async function load() {
   try {
     result.value = AdminOrderPage.parse(
       await session.adminFetch('/api/admin/orders', {
-        query: { ...filters, q: filters.q.trim() || undefined, page: page.value, pageSize: PAGE_SIZE },
+        query: {
+          ...filters,
+          q: filters.q.trim() || undefined,
+          campaignId: filters.campaignId || undefined,
+          remainderOverdue: filters.remainderOverdue ? 'true' : undefined,
+          page: page.value,
+          pageSize: PAGE_SIZE,
+        },
       }),
     )
   } catch (err) {
@@ -113,6 +146,14 @@ await load()
             </select>
           </div>
           <div class="form-group" style="margin-bottom: 0">
+            <label class="form-label" for="orders-kind" style="font-size: 12px">Loại đơn</label>
+            <select id="orders-kind" v-model="filters.kind" class="form-select">
+              <option value="all">Tất cả</option>
+              <option value="standard">Hàng sẵn</option>
+              <option value="preorder">Đặt trước</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom: 0">
             <label class="form-label" for="orders-sort" style="font-size: 12px">Thứ tự</label>
             <select id="orders-sort" v-model="filters.sort" class="form-select">
               <option value="oldest">Cũ trước</option>
@@ -120,6 +161,19 @@ await load()
             </select>
           </div>
           <button type="submit" class="btn btn-primary btn-sm">Lọc</button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-top: 12px; font-size: 13px">
+          <label style="display: flex; gap: 6px; align-items: center">
+            <input v-model="filters.remainderOverdue" type="checkbox" />
+            Quá hạn trả phần còn lại
+          </label>
+          <span v-if="filters.campaignId" data-testid="orders-campaign-filter">
+            Đơn của một đợt đặt trước ·
+            <NuxtLink :to="`/admin/preorders/${filters.campaignId}`">xem đợt</NuxtLink> ·
+            <button type="button" class="btn btn-secondary btn-sm" @click="((filters.campaignId = ''), search())">
+              Bỏ lọc đợt
+            </button>
+          </span>
         </div>
       </form>
     </div>
@@ -151,6 +205,7 @@ await load()
                   <NuxtLink :to="`/admin/orders/${o.code}`" style="font-family: var(--adm-mono); font-weight: 600">
                     #{{ o.code }}
                   </NuxtLink>
+                  <div v-if="o.kind === 'preorder'" style="font-size: 11px; color: var(--adm-muted)">Đặt trước</div>
                 </td>
                 <td style="white-space: nowrap">{{ formatDateTime(o.createdAt) }}</td>
                 <td>
