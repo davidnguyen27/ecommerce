@@ -727,28 +727,32 @@ model Order {
 
   /// Bàn giao vận chuyển. Check constraint `order_handover_check`: có đủ cả ba khi và chỉ khi giao hàng đã tới
   /// `handed_over` (kể cả `delivered`, `failed`).
-  carrier            String?
-  trackingNumber     String?           @map("tracking_number")
-  handedOverAt       DateTime?         @map("handed_over_at")
-  kind               OrderKind         @default(standard)
+  carrier             String?
+  trackingNumber      String?           @map("tracking_number")
+  handedOverAt        DateTime?         @map("handed_over_at")
+  kind                OrderKind         @default(standard)
   /// Đợt của đơn đặt trước; đơn hàng sẵn để trống. Check `order_preorder_check`: đơn đặt trước có đủ đợt và các trường
   /// cọc bên dưới, đơn hàng sẵn không có trường nào.
-  preorderCampaignId String?           @map("preorder_campaign_id") @db.Uuid
-  preorderCampaign   PreorderCampaign? @relation(fields: [preorderCampaignId], references: [id], onDelete: Restrict)
+  preorderCampaignId  String?           @map("preorder_campaign_id") @db.Uuid
+  preorderCampaign    PreorderCampaign? @relation(fields: [preorderCampaignId], references: [id], onDelete: Restrict)
   /// Chụp từ đợt lúc đặt: phần trăm cọc, và tiền cọc VND (làm tròn lên 1.000, check `0 < deposit_amount <= subtotal`).
-  depositPercent     Int?              @map("deposit_percent")
-  depositAmount      BigInt?           @map("deposit_amount")
+  depositPercent      Int?              @map("deposit_percent")
+  depositAmount       BigInt?           @map("deposit_amount")
   /// Thời gian giao dự kiến lúc đặt; đợt có thể đổi về sau (ticket 09) nhưng đơn giữ lời hẹn ban đầu.
-  deliveryFrom       DateTime?         @map("delivery_from") @db.Date
-  deliveryTo         DateTime?         @map("delivery_to") @db.Date
+  deliveryFrom        DateTime?         @map("delivery_from") @db.Date
+  deliveryTo          DateTime?         @map("delivery_to") @db.Date
   /// Số ngày được trả phần còn lại từ lúc hàng về, chụp từ đợt.
-  remainderDays      Int?              @map("remainder_days")
+  remainderDays       Int?              @map("remainder_days")
   /// Lúc cọc thành công (hay lúc khôi phục từ đối soát); thứ tự chia hàng về (ADR 0013). Check `order_deposit_paid_check`.
-  depositPaidAt      DateTime?         @map("deposit_paid_at")
+  depositPaidAt       DateTime?         @map("deposit_paid_at")
   /// Lúc mọi cái của đơn đặt trước đã được giữ từ hàng về (GLOSSARY "Hàng đã về"); hạn trả phần còn lại tính từ đây
   /// (`remainder_days` ngày). Check `order_arrival_check`.
-  arrivedAt          DateTime?         @map("arrived_at")
-  remainderDueAt     DateTime?         @map("remainder_due_at")
+  arrivedAt           DateTime?         @map("arrived_at")
+  remainderDueAt      DateTime?         @map("remainder_due_at")
+  /// Lúc gửi email nhắc trả phần còn lại (một lần, khi còn ≤ 2 ngày). Check `order_remainder_deadline_check`.
+  remainderRemindedAt DateTime?         @map("remainder_reminded_at")
+  /// Lúc bị gắn cờ quá hạn trả phần còn lại; xóa khi trả đủ. Không hủy đơn, không mất cọc (M6).
+  remainderOverdueAt  DateTime?         @map("remainder_overdue_at")
 
   lines               OrderLine[]
   stockMovements      StockMovement[]

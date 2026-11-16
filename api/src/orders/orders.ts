@@ -26,6 +26,10 @@ export type OrderEventKind =
   | 'stock_allocated'
   /** Đơn đặt trước đã được giữ đủ hàng: bắt đầu hạn trả phần còn lại. */
   | 'arrived'
+  /** Đã gửi email nhắc trả phần còn lại (ticket 08). */
+  | 'remainder_reminded'
+  /** Quá hạn trả phần còn lại: gắn cờ, không hủy đơn (`data.remainderDueAt`). */
+  | 'remainder_overdue'
   | 'payment_flagged'
   | 'cancelled'
   | 'preparing'
@@ -145,6 +149,7 @@ export function preorderOf(
     | 'depositPaidAt'
     | 'arrivedAt'
     | 'remainderDueAt'
+    | 'remainderOverdueAt'
     | 'lines'
   >,
 ): OrderPreorder | null {
@@ -158,6 +163,7 @@ export function preorderOf(
     quantity,
     arrivedAt: order.arrivedAt?.toISOString() ?? null,
     remainderDueAt: order.remainderDueAt?.toISOString() ?? null,
+    remainderOverdueAt: order.remainderOverdueAt?.toISOString() ?? null,
     depositPercent,
     depositAmount: Number(depositAmount),
     remainingAmount: Number(order.total - depositAmount),

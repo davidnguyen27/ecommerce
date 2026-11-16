@@ -185,6 +185,9 @@ await load()
                         <template v-if="order.preorder.remainderDueAt">
                           đủ lúc {{ formatDateTime(order.preorder.arrivedAt!) }}, hạn trả phần còn lại
                           {{ formatDateTime(order.preorder.remainderDueAt) }}
+                          <strong v-if="order.preorder.remainderOverdueAt" style="color: #b45309">
+                            · Quá hạn trả phần còn lại</strong
+                          >
                         </template>
                       </td>
                       <td class="admin-table-num">

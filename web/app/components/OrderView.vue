@@ -167,11 +167,21 @@ const remainingText = computed(() => {
     <!-- Đơn đặt trước đã cọc và hàng đã về đủ: trả phần còn lại để shop chuẩn bị và giao hàng. -->
     <div
       v-if="awaitingRemainder && order.preorder"
-      class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+      :class="[
+        'flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3 text-sm',
+        order.preorder.remainderOverdueAt
+          ? 'border-amber-200 bg-amber-50 text-amber-900'
+          : 'border-emerald-200 bg-emerald-50 text-emerald-900',
+      ]"
       role="status"
       data-testid="order-remainder"
     >
-      <span>
+      <span v-if="order.preorder.remainderOverdueAt" data-testid="order-remainder-overdue">
+        Đã quá hạn trả phần còn lại ({{ formatDate(order.preorder.remainderDueAt!) }}). Hàng vẫn được giữ và bạn vẫn có
+        thể trả <strong class="tabular-nums">{{ formatVnd(order.preorder.remainingAmount) }}</strong
+        >; shop sẽ liên hệ với bạn.
+      </span>
+      <span v-else>
         Hàng đã về. Vui lòng trả phần còn lại
         <strong class="tabular-nums">{{ formatVnd(order.preorder.remainingAmount) }}</strong>
         trước <strong>{{ formatDate(order.preorder.remainderDueAt!) }}</strong

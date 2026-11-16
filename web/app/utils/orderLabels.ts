@@ -51,6 +51,8 @@ const ORDER_EVENT_LABELS: Record<string, string> = {
   deposit_paid: 'Đã nhận tiền cọc',
   stock_allocated: 'Giữ hàng nhập về cho đơn',
   arrived: 'Hàng đã về đủ',
+  remainder_reminded: 'Nhắc trả phần còn lại',
+  remainder_overdue: 'Quá hạn trả phần còn lại',
   payment_flagged: 'Khoản tiền cần đối soát',
   cancelled: 'Hủy đơn',
   restored: 'Khôi phục đơn sau đối soát',
