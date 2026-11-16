@@ -18,6 +18,7 @@ import { adminProductCommitmentRoutes } from './admin-product-commitments.ts'
 import { adminProductDocumentRoutes } from './admin-product-documents.ts'
 import { adminBulkImageRoutes, adminProductImageRoutes } from './admin-product-images.ts'
 import { adminProductPublishingRoutes } from './admin-product-publishing.ts'
+import { adminPreorderCampaignRoutes } from './admin-preorder-campaigns.ts'
 import { adminProductRoutes } from './admin-products.ts'
 import { adminLegalInfoRoutes } from './legal-info.ts'
 import { adminStaffRoutes } from './admin-staff.ts'
@@ -53,12 +54,13 @@ export function adminRoutes(
       .use('/products/:id/documents', adminProductDocumentRoutes(prisma, storage))
       .use('/products/:id/commitments', adminProductCommitmentRoutes(prisma))
       .use('/products', adminProductRoutes(prisma))
-      .use('/stock/receipts', adminStockReceiptRoutes(prisma))
+      .use('/stock/receipts', adminStockReceiptRoutes(prisma, mail))
       .use('/stock', adminStockRoutes(prisma))
       .use('/import', adminImportRoutes(prisma))
       .use('/images', adminBulkImageRoutes(prisma, storage))
       .use('/shipping-fees', adminShippingFeeRoutes(prisma))
       .use('/orders', adminOrderRoutes(prisma, storage, payments, mail))
       .use('/reconciliation', adminReconciliationRoutes(prisma, storage, mail))
+      .use('/preorder-campaigns', adminPreorderCampaignRoutes(prisma, mail))
   )
 }

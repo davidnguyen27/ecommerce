@@ -44,16 +44,13 @@ async function lockVariants(tx: Prisma.TransactionClient, variantIds: readonly s
   return { ids, locked: new Map(rows.map((row) => [row.id, row])) }
 }
 
-/** Mã các đơn đang giữ hàng của biến thể: chưa thanh toán, hoặc đã trả mà chưa bàn giao vận chuyển. */
+/**
+ * Mã các đơn đang giữ hàng của biến thể: đơn hàng sẵn chưa thanh toán hay đã trả mà chưa bàn giao, và đơn đặt trước đã
+ * được giữ một phần hay toàn bộ từ hàng về.
+ */
 export async function ordersHoldingVariant(db: DbClient, variantId: string): Promise<number[]> {
   const orders = await db.order.findMany({
-    where: {
-      lines: { some: { variantId } },
-      OR: [
-        { status: 'pending_payment' },
-        { status: 'processing', fulfillmentStatus: { in: ['not_prepared', 'preparing'] } },
-      ],
-    },
+    where: { lines: { some: { variantId, reservedQuantity: { gt: 0 } } } },
     select: { code: true },
     orderBy: { code: 'asc' },
   })

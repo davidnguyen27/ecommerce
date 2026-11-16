@@ -44,6 +44,7 @@ export async function loadAdminOrder(db: DbClient, storage: Storage, code: strin
     customerId: order.customerId,
     payments: order.paymentTransactions.map((t) => ({
       id: t.id,
+      purpose: t.purpose,
       amount: Number(t.amount),
       reference: t.reference,
       paidAt: t.paidAt.toISOString(),

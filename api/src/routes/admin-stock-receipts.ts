@@ -4,7 +4,9 @@ import {
   ErrorCode,
   STOCK_VIEW_PERMISSIONS,
   StockReceiptQuery,
+  StockReceiptPreviewRequest,
   StockReceiptRequest,
+  type StockReceiptPreview,
   type AuditActor,
   type FieldError,
   type StockReceipt,
@@ -17,6 +19,8 @@ import type { StockReceipt as StockReceiptRow } from '../generated/prisma/client
 import { AppError } from '../http/errors.ts'
 import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
+import type { EmailQueue } from '../jobs/jobs.ts'
+import { applyArrivals, planArrivals } from '../preorders/arrivals.ts'
 import { changeStock } from '../stock/stock.ts'
 
 const ReceiptParams = z.object({ id: z.uuid() })
@@ -59,11 +63,31 @@ async function loadReceipt(prisma: Db, id: string): Promise<StockReceipt> {
   }
 }
 
+/** Id biến thể theo SKU của các dòng định nhập; SKU trùng hay không có thì 400 theo dòng. */
+async function resolveLines(prisma: Db, lines: readonly { sku: string }[]) {
+  const variants = await prisma.productVariant.findMany({
+    where: { sku: { in: lines.map((l) => l.sku) } },
+    select: { id: true, sku: true },
+  })
+  const idOf = new Map(variants.map((v) => [v.sku, v.id]))
+  const fields: FieldError[] = []
+  const firstLine = new Map<string, number>()
+  lines.forEach(({ sku }, index) => {
+    const path = `lines.${index}.sku`
+    if (firstLine.has(sku)) fields.push({ path, message: `SKU ${sku} trùng với dòng ${firstLine.get(sku)! + 1}` })
+    else if (!idOf.has(sku)) fields.push({ path, message: `Không có biến thể nào có SKU ${sku}` })
+    firstLine.set(sku, firstLine.get(sku) ?? index)
+  })
+  if (fields.length) throw new AppError(400, ErrorCode.VALIDATION_ERROR, 'Phiếu nhập có dòng không hợp lệ', fields)
+  return idOf
+}
+
 /**
- * Phiếu nhập kho, mount tại `/stock/receipts`. Xem cùng quyền với trang tồn; tạo phiếu cần `stock.adjust`.
+ * Phiếu nhập kho, mount tại `/stock/receipts`. Xem cùng quyền với trang tồn; tạo phiếu và xem trước phần chia cho đơn
+ * đặt trước cần `stock.adjust`.
  * Không có endpoint sửa hay xóa: nhập sai thì làm điều chỉnh.
  */
-export function adminStockReceiptRoutes(prisma: Db) {
+export function adminStockReceiptRoutes(prisma: Db, mail: { emails: EmailQueue; siteUrl: string }) {
   return Router()
     .use(requirePermission(...STOCK_VIEW_PERMISSIONS))
     .get('/', async (req, res) => {
@@ -88,6 +112,28 @@ export function adminStockReceiptRoutes(prisma: Db) {
       }
       res.json(body)
     })
+    .post('/preview', requirePermission('stock.adjust'), async (req, res) => {
+      const input = parse(StockReceiptPreviewRequest, req.body)
+      const idOf = await resolveLines(prisma, input.lines)
+      const plans = await planArrivals(
+        prisma,
+        input.lines.map((line) => ({ variantId: idOf.get(line.sku)!, quantity: line.quantity })),
+      )
+      const body: StockReceiptPreview = {
+        lines: input.lines.map((line, index) => {
+          const plan = plans[index]!
+          return {
+            sku: line.sku,
+            quantity: line.quantity,
+            forPreorders: plan.received - plan.toStock,
+            preorderOrders: plan.allocations.length,
+            ordersCompleted: plan.allocations.filter((a) => a.fills).length,
+            toStock: plan.toStock,
+          }
+        }),
+      }
+      res.json(body)
+    })
     .get('/:id', async (req, res) => {
       const { id } = parse(ReceiptParams, req.params)
       const body: StockReceipt = await loadReceipt(prisma, id)
@@ -95,20 +141,7 @@ export function adminStockReceiptRoutes(prisma: Db) {
     })
     .post('/', requirePermission('stock.adjust'), async (req, res) => {
       const input = parse(StockReceiptRequest, req.body)
-      const variants = await prisma.productVariant.findMany({
-        where: { sku: { in: input.lines.map((l) => l.sku) } },
-        select: { id: true, sku: true },
-      })
-      const idOf = new Map(variants.map((v) => [v.sku, v.id]))
-      const fields: FieldError[] = []
-      const firstLine = new Map<string, number>()
-      input.lines.forEach(({ sku }, index) => {
-        const path = `lines.${index}.sku`
-        if (firstLine.has(sku)) fields.push({ path, message: `SKU ${sku} trùng với dòng ${firstLine.get(sku)! + 1}` })
-        else if (!idOf.has(sku)) fields.push({ path, message: `Không có biến thể nào có SKU ${sku}` })
-        firstLine.set(sku, firstLine.get(sku) ?? index)
-      })
-      if (fields.length) throw new AppError(400, ErrorCode.VALIDATION_ERROR, 'Phiếu nhập có dòng không hợp lệ', fields)
+      const idOf = await resolveLines(prisma, input.lines)
 
       const actorId = currentStaff(req).id
       const id = await audited(prisma, req, async (tx, audit) => {
@@ -129,6 +162,21 @@ export function adminStockReceiptRoutes(prisma: Db) {
             path: `lines.${index}.quantity`,
           })),
         )
+        // Hàng về giữ ngay cho đơn đặt trước đã cọc đang chờ, trong cùng transaction: không lúc nào biến thành hàng sẵn
+        // để khách khác mua mất (ADR 0013). Biến thể đã bị `changeStock` khóa.
+        const plans = await planArrivals(
+          tx,
+          input.lines.map((line) => ({ variantId: idOf.get(line.sku)!, quantity: line.quantity })),
+          { lock: true },
+        )
+        const arrivedOrderCodes = await applyArrivals(tx, mail, plans, receipt.id)
+        const preorderAllocations = plans.flatMap((plan) =>
+          plan.allocations.map((a) => ({
+            sku: locked.get(plan.variantId)!.sku,
+            orderCode: a.orderCode,
+            quantity: a.take,
+          })),
+        )
         await audit({
           action: 'stock.receipt.create',
           entityType: 'stock_receipt',
@@ -142,6 +190,7 @@ export function adminStockReceiptRoutes(prisma: Db) {
               quantity: m.quantity,
               onHandAfter: m.onHandAfter,
             })),
+            ...(preorderAllocations.length && { preorderAllocations, arrivedOrderCodes }),
           },
         })
         return receipt.id

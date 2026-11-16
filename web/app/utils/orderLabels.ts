@@ -2,6 +2,7 @@ import type {
   FulfillmentStatus,
   OrderCancelReason,
   OrderStatus,
+  PaymentPurpose,
   PaymentSource,
   PaymentStatus,
   ReconciliationReason,
@@ -17,6 +18,8 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   unpaid: 'Chưa thanh toán',
+  // Đã cọc không có nghĩa là đã trả đủ (GLOSSARY "Tiền cọc").
+  deposit_paid: 'Đã cọc',
   paid: 'Đã thanh toán',
 }
 
@@ -46,6 +49,12 @@ export const CANCEL_REASON_LABELS: Record<OrderCancelReason, string> = {
 const ORDER_EVENT_LABELS: Record<string, string> = {
   created: 'Đặt mua',
   paid: 'Đã nhận đủ tiền',
+  deposit_paid: 'Đã nhận tiền cọc',
+  stock_allocated: 'Giữ hàng nhập về cho đơn',
+  arrived: 'Hàng đã về đủ',
+  remainder_reminded: 'Nhắc trả phần còn lại',
+  remainder_overdue: 'Quá hạn trả phần còn lại',
+  delivery_changed: 'Đổi thời gian giao dự kiến',
   payment_flagged: 'Khoản tiền cần đối soát',
   cancelled: 'Hủy đơn',
   restored: 'Khôi phục đơn sau đối soát',
@@ -56,6 +65,12 @@ const ORDER_EVENT_LABELS: Record<string, string> = {
   delivery_failed: 'Giao thất bại',
 }
 export const orderEventLabel = (kind: string) => ORDER_EVENT_LABELS[kind] ?? kind
+
+export const PAYMENT_PURPOSE_LABELS: Record<PaymentPurpose, string> = {
+  full: 'Trả đủ',
+  deposit: 'Tiền cọc',
+  remainder: 'Phần còn lại',
+}
 
 export const PAYMENT_SOURCE_LABELS: Record<PaymentSource, string> = {
   webhook: 'Webhook cổng',

@@ -7,13 +7,46 @@ import { PublicImage } from './products.ts'
 export const OrderStatus = z.enum(['pending_payment', 'processing', 'completed', 'cancelled'])
 export type OrderStatus = z.infer<typeof OrderStatus>
 
-/** Trạng thái thanh toán; M4 thêm đặt cọc, M6 thêm hoàn tiền. */
-export const PaymentStatus = z.enum(['unpaid', 'paid'])
+/** Trạng thái thanh toán; `deposit_paid` chỉ có ở đơn đặt trước (đã cọc, chưa trả đủ). M6 thêm hoàn tiền. */
+export const PaymentStatus = z.enum(['unpaid', 'deposit_paid', 'paid'])
 export type PaymentStatus = z.infer<typeof PaymentStatus>
 
 /** Trạng thái giao hàng. */
 export const FulfillmentStatus = z.enum(['not_prepared', 'preparing', 'handed_over', 'delivered', 'failed'])
 export type FulfillmentStatus = z.infer<typeof FulfillmentStatus>
+
+/** Đơn hàng sẵn (qua giỏ hàng) hay đơn đặt trước (GLOSSARY "Đơn đặt trước"). */
+export const OrderKind = z.enum(['standard', 'preorder'])
+export type OrderKind = z.infer<typeof OrderKind>
+
+/**
+ * Phần đặt trước của đơn, chụp lúc đặt: mức cọc, tiền cọc, phần còn lại (gồm phí giao), thời gian giao dự kiến và số
+ * ngày được trả phần còn lại sau khi hàng về.
+ */
+export const OrderPreorder = z.object({
+  /** Đợt của đơn; trang quản trị dẫn tới chi tiết đợt. */
+  campaignId: z.string(),
+  depositPercent: z.number(),
+  depositAmount: z.number(),
+  remainingAmount: z.number(),
+  deliveryFrom: z.string(),
+  deliveryTo: z.string(),
+  remainderDays: z.number(),
+  /** Lúc cọc thành công; `null` khi chưa cọc. */
+  depositPaidAt: z.string().nullable(),
+  /** Số cái đã được giữ từ hàng về, trên tổng số lượng của đơn (ADR 0013). */
+  arrivedQuantity: z.number(),
+  quantity: z.number(),
+  /** Lúc hàng về đủ và hạn trả phần còn lại; `null` khi chưa về đủ. */
+  arrivedAt: z.string().nullable(),
+  remainderDueAt: z.string().nullable(),
+  /** Lúc bị gắn cờ quá hạn trả phần còn lại; `null` khi chưa quá hạn hoặc đã trả đủ. */
+  remainderOverdueAt: z.string().nullable(),
+  /** Thời gian giao dự kiến hiện tại của đợt; khác `deliveryFrom`/`deliveryTo` (lúc đặt) khi nhân viên đã đổi. */
+  currentDeliveryFrom: z.string(),
+  currentDeliveryTo: z.string(),
+})
+export type OrderPreorder = z.infer<typeof OrderPreorder>
 
 /** Vì sao đơn chưa thanh toán bị hủy: quá hạn giữ hàng, khách tự hủy, hay nhân viên hủy. */
 export const OrderCancelReason = z.enum(['expired', 'customer', 'staff'])
@@ -38,6 +71,9 @@ export type OrderLineView = z.infer<typeof OrderLineView>
  */
 export const PublicOrder = z.object({
   code: z.number(),
+  kind: OrderKind,
+  /** Có khi và chỉ khi đơn đặt trước. */
+  preorder: OrderPreorder.nullable(),
   status: OrderStatus,
   paymentStatus: PaymentStatus,
   fulfillmentStatus: FulfillmentStatus,
@@ -76,6 +112,7 @@ export type PublicOrder = z.infer<typeof PublicOrder>
 /** Một đơn trong lịch sử mua của khách (`GET /api/account/orders`). */
 export const AccountOrderSummary = z.object({
   code: z.number(),
+  kind: OrderKind,
   status: OrderStatus,
   paymentStatus: PaymentStatus,
   fulfillmentStatus: FulfillmentStatus,
@@ -103,6 +140,12 @@ export const AdminOrderQuery = PageQuery.extend({
   status: z.union([OrderStatus, z.literal('all')]).default('processing'),
   paymentStatus: z.union([PaymentStatus, z.literal('all')]).default('paid'),
   fulfillmentStatus: z.union([FulfillmentStatus, z.literal('all')]).default('not_prepared'),
+  /** Đơn hàng sẵn hay đơn đặt trước (ticket 10). */
+  kind: z.union([OrderKind, z.literal('all')]).default('all'),
+  /** Đơn đặt trước của một đợt. */
+  campaignId: z.uuid().optional(),
+  /** `true`: chỉ đơn đặt trước quá hạn trả phần còn lại (đã cọc, chưa trả đủ). */
+  remainderOverdue: z.stringbool().optional(),
   q: z.string().trim().max(200).optional(),
   sort: z.enum(['oldest', 'newest']).default('oldest'),
 })
@@ -122,6 +165,10 @@ export type AdminOrderPage = z.infer<typeof AdminOrderPage>
 /** Đường báo tiền về (`payment_source`). */
 export const PaymentSource = z.enum(['webhook', 'query', 'simulator', 'return'])
 export type PaymentSource = z.infer<typeof PaymentSource>
+
+/** Khoản một giao dịch thu: trả đủ đơn hàng sẵn, tiền cọc hay phần còn lại của đơn đặt trước. */
+export const PaymentPurpose = z.enum(['full', 'deposit', 'remainder'])
+export type PaymentPurpose = z.infer<typeof PaymentPurpose>
 
 /** Lý do khoản tiền cần đối soát. */
 export const ReconciliationReason = z.enum(['amount_mismatch', 'paid_after_cancel', 'extra_payment'])
@@ -152,6 +199,7 @@ export type ReconciliationDetail = z.infer<typeof ReconciliationDetail>
 /** Khoản tiền cổng báo về cho đơn; `reconciliation` có khi khoản đó bị gắn cờ cần đối soát. */
 export const AdminPaymentTransaction = z.object({
   id: z.string(),
+  purpose: PaymentPurpose,
   amount: z.number(),
   reference: z.string(),
   paidAt: z.string(),

@@ -94,6 +94,7 @@ function queryResponse(fields: Record<string, string>, secret = KEYS.hashSecret)
 
 const LINK = {
   orderCode: 100123,
+  purpose: 'full' as const,
   amount: 2_030_000,
   description: 'Thanh toán đơn hàng #100123',
   returnUrl: 'https://shop.test/don-hang/100123?ket-qua=1',

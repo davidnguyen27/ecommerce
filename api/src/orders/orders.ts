@@ -1,4 +1,4 @@
-import { ErrorCode, PublicImage, type AttributeValues, type PublicOrder } from '@ecommerce/shared'
+import { ErrorCode, PublicImage, type AttributeValues, type OrderPreorder, type PublicOrder } from '@ecommerce/shared'
 import { z } from 'zod'
 import type { Storage } from '../adapters/storage.ts'
 import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
@@ -6,6 +6,7 @@ import type { DbClient } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import { StoredImage, imageRenditions } from '../media/images.ts'
+import { isoDay } from './format.ts'
 
 /** Ảnh đại diện lưu trên dòng đơn: file trên bucket public kèm `alt`. */
 export const OrderLineImage = StoredImage.extend({ alt: z.string() })
@@ -20,6 +21,18 @@ export type OrderLineImage = z.infer<typeof OrderLineImage>
 export type OrderEventKind =
   | 'created'
   | 'paid'
+  /** Đơn đặt trước nhận đủ tiền cọc (M4). */
+  | 'deposit_paid'
+  /** Phiếu nhập giữ một phần hàng về cho đơn đặt trước (`data`: biến thể, số lượng, phiếu nhập; ADR 0013). */
+  | 'stock_allocated'
+  /** Đơn đặt trước đã được giữ đủ hàng: bắt đầu hạn trả phần còn lại. */
+  | 'arrived'
+  /** Đã gửi email nhắc trả phần còn lại (ticket 08). */
+  | 'remainder_reminded'
+  /** Quá hạn trả phần còn lại: gắn cờ, không hủy đơn (`data.remainderDueAt`). */
+  | 'remainder_overdue'
+  /** Nhân viên đổi thời gian giao dự kiến của đợt, khách được báo (`data.before`, `data.after`; ticket 09). */
+  | 'delivery_changed'
   | 'payment_flagged'
   | 'cancelled'
   | 'preparing'
@@ -84,6 +97,8 @@ export const ORDER_VIEW_INCLUDE = {
   lines: { orderBy: { position: 'asc' } },
   policyVersions: { include: { pageVersion: { include: { page: { select: { slug: true } } } } } },
   privacyPolicyVersion: { select: { version: true } },
+  // Thời gian giao dự kiến hiện tại của đợt, cạnh lời hẹn lúc đặt (ticket 09).
+  preorderCampaign: { select: { deliveryFrom: true, deliveryTo: true } },
 } as const satisfies Prisma.OrderInclude
 
 export type OrderForView = Prisma.OrderGetPayload<{ include: typeof ORDER_VIEW_INCLUDE }>
@@ -125,6 +140,61 @@ export async function findCustomerOrder(db: DbClient, code: string, customerId: 
   return order
 }
 
+/** Đơn đặt trước đã cọc mà chưa trả đủ: đang chờ hàng về hoặc chờ phần còn lại. */
+export const DEPOSITED_PREORDER = {
+  kind: 'preorder',
+  status: 'processing',
+  paymentStatus: 'deposit_paid',
+} as const satisfies Prisma.OrderWhereInput
+
+/** Phần còn lại của đơn đặt trước: tổng phải trả trừ tiền cọc, gồm phí giao (GLOSSARY "Phần còn lại"). */
+export const remainingOf = (order: { total: bigint; depositAmount: bigint | null }) =>
+  order.total - order.depositAmount!
+
+/** Phần đặt trước của đơn; `null` với đơn hàng sẵn (check `order_preorder_check` bảo đảm đủ trường). */
+export function preorderOf(
+  order: Pick<
+    OrderForView,
+    | 'kind'
+    | 'preorderCampaignId'
+    | 'total'
+    | 'depositPercent'
+    | 'depositAmount'
+    | 'deliveryFrom'
+    | 'deliveryTo'
+    | 'remainderDays'
+    | 'depositPaidAt'
+    | 'arrivedAt'
+    | 'remainderDueAt'
+    | 'remainderOverdueAt'
+    | 'lines'
+    | 'preorderCampaign'
+  >,
+): OrderPreorder | null {
+  const { depositPercent, depositAmount, deliveryFrom, deliveryTo, remainderDays } = order
+  if (order.kind !== 'preorder' || depositPercent === null || depositAmount === null) return null
+  if (deliveryFrom === null || deliveryTo === null || remainderDays === null) return null
+  const quantity = order.lines.reduce((sum, line) => sum + line.quantity, 0)
+  return {
+    campaignId: order.preorderCampaignId!,
+    // Đã về đủ thì là đủ, kể cả khi số đang giữ đã về 0 sau bàn giao vận chuyển.
+    arrivedQuantity: order.arrivedAt ? quantity : order.lines.reduce((sum, line) => sum + line.reservedQuantity, 0),
+    quantity,
+    arrivedAt: order.arrivedAt?.toISOString() ?? null,
+    remainderDueAt: order.remainderDueAt?.toISOString() ?? null,
+    remainderOverdueAt: order.remainderOverdueAt?.toISOString() ?? null,
+    currentDeliveryFrom: isoDay(order.preorderCampaign?.deliveryFrom ?? deliveryFrom),
+    currentDeliveryTo: isoDay(order.preorderCampaign?.deliveryTo ?? deliveryTo),
+    depositPercent,
+    depositAmount: Number(depositAmount),
+    remainingAmount: Number(remainingOf(order)),
+    deliveryFrom: isoDay(deliveryFrom),
+    deliveryTo: isoDay(deliveryTo),
+    remainderDays,
+    depositPaidAt: order.depositPaidAt?.toISOString() ?? null,
+  }
+}
+
 export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrder {
   const image = (value: Prisma.JsonValue): PublicImage | null => {
     if (value === null) return null
@@ -133,6 +203,8 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
   }
   return {
     code: order.code,
+    kind: order.kind,
+    preorder: preorderOf(order),
     status: order.status,
     paymentStatus: order.paymentStatus,
     fulfillmentStatus: order.fulfillmentStatus,

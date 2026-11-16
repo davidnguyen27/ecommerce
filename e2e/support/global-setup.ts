@@ -1,6 +1,6 @@
 // Bổ sung dữ liệu mà seed của smoke không có nhưng luồng mua hàng cần. Chạy lại trên cùng stack vẫn được:
 // bước nào đã có thì bỏ qua.
-import { PRIVACY_POLICY_SLUG } from '@ecommerce/shared'
+import { PREORDER_POLICY_SLUG, PRIVACY_POLICY_SLUG } from '@ecommerce/shared'
 import { AdminApi, BASE_URL, PROVINCE_CODE, SHIPPING_FEE, SKU, WAREHOUSE } from './stack.ts'
 
 export default async function globalSetup() {
@@ -15,16 +15,16 @@ export default async function globalSetup() {
     provinceFees: [{ provinceCode: PROVINCE_CODE, fee: SHIPPING_FEE }],
   })
 
-  // Khách vãng lai phải đồng ý chính sách bảo mật đã xuất bản thì mới đặt được.
-  const privacy =
-    (await api.pages()).items.find((page) => page.slug === PRIVACY_POLICY_SLUG) ??
-    (await api.createPage({
-      slug: PRIVACY_POLICY_SLUG,
-      kind: 'policy',
-      title: 'Chính sách bảo mật',
-      body: 'Dữ liệu dùng để giao hàng.',
-    }))
-  if (privacy.status !== 'published') await api.send('POST', `/api/admin/pages/${privacy.id}/publish`)
+  // Khách vãng lai phải đồng ý chính sách bảo mật đã xuất bản thì mới đặt được; đặt trước cần thêm chính sách đặt
+  // trước đã xuất bản.
+  const pages = (await api.pages()).items
+  for (const policy of [
+    { slug: PRIVACY_POLICY_SLUG, title: 'Chính sách bảo mật', body: 'Dữ liệu dùng để giao hàng.' },
+    { slug: PREORDER_POLICY_SLUG, title: 'Chính sách đặt trước', body: 'Cọc giữ suất; trả phần còn lại khi hàng về.' },
+  ]) {
+    const page = pages.find((p) => p.slug === policy.slug) ?? (await api.createPage({ ...policy, kind: 'policy' }))
+    if (page.status !== 'published') await api.send('POST', `/api/admin/pages/${page.id}/publish`)
+  }
 
   const staff = (await api.staff()).items
   if (!staff.some((member) => member.email === WAREHOUSE.email)) {
