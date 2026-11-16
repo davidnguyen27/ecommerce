@@ -23,11 +23,10 @@ import { AppError, invalidField } from '../http/errors.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { parse } from '../http/validation.ts'
 import { imageRenditions } from '../media/images.ts'
+import { isoDay } from '../orders/format.ts'
 import { recordOrderEvent } from '../orders/orders.ts'
 import { checkPreorder } from '../preorders/check.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
-
-const day = (date: Date) => date.toISOString().slice(0, 10)
 
 const conflict = (change: PreorderChange) => {
   const messages: Record<PreorderChange['kind'], string> = {
@@ -83,8 +82,8 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
         offer: campaign && {
           campaignId: campaign.id,
           depositPercent: campaign.depositPercent,
-          deliveryFrom: day(campaign.deliveryFrom),
-          deliveryTo: day(campaign.deliveryTo),
+          deliveryFrom: isoDay(campaign.deliveryFrom),
+          deliveryTo: isoDay(campaign.deliveryTo),
           remainderDays: campaign.remainderDays,
         },
         problem: problem && { kind: problem },

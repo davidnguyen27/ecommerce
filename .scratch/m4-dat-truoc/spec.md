@@ -96,7 +96,7 @@ Mốc này **chưa hủy được đơn đã cọc và chưa hoàn tiền** (M6)
   3. tính phí giao, tạo đơn `preorder` có thời hạn giữ 15 phút (`reserved_until`, dùng chung job hết hạn của M3), nhưng **không giữ hàng**: đơn chỉ chiếm suất;
   4. tạo link thanh toán với số tiền bằng tiền cọc.
   Trả về như `POST /api/checkout`.
-- Chưa có phiên bản chính sách đặt trước được xuất bản (slug cố định, như chính sách bảo mật), hoặc chưa cấu hình phí giao mặc định, thì `quote` và `preorders` trả 503.
+- Chưa cấu hình phí giao mặc định thì `quote` và `preorders` trả 503. Chưa có phiên bản chính sách đặt trước được xuất bản (slug cố định, như chính sách bảo mật) thì `preorders` trả 503, còn `quote` vẫn trả báo giá với `preorderPolicy: null` để trang hiện sản phẩm và lý do chưa nhận đặt (sửa sau review 2026-11-16, theo quyết định ở ticket 04).
 - Giới hạn tần suất và số đơn đang `pending_payment` theo email/số điện thoại dùng chung bộ đếm với `POST /api/checkout`.
 - Hết hạn và hủy đơn chưa cọc: như M3. Đơn đặt trước không có hàng đang giữ nên không có gì để nhả; suất tự trống ra vì đơn đã `cancelled`.
 

@@ -79,7 +79,7 @@ try {
             <thead>
               <tr>
                 <th>Sản phẩm</th>
-                <th class="admin-table-num">Đơn đã cọc chờ hàng</th>
+                <th class="admin-table-num">Đơn đã cọc chưa trả đủ</th>
                 <th>Ghi chú</th>
               </tr>
             </thead>
@@ -88,7 +88,7 @@ try {
                 <td>
                   <NuxtLink :to="`/admin/preorders/${c.id}`" style="font-weight: 600">{{ c.productName }}</NuxtLink>
                 </td>
-                <td class="admin-table-num">{{ c.waitingOrders }}</td>
+                <td class="admin-table-num">{{ c.depositedOrders }}</td>
                 <td style="font-size: 12px">{{ c.supplyNote || '—' }}</td>
               </tr>
             </tbody>

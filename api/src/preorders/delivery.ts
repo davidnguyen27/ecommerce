@@ -1,12 +1,12 @@
 import type { DbClient } from '../db.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
-import { issueOrderLookupUrl, recordOrderEvent } from '../orders/orders.ts'
+import { dayVN } from '../orders/format.ts'
+import { DEPOSITED_PREORDER, issueOrderLookupUrl, recordOrderEvent } from '../orders/orders.ts'
 
 /** Thời gian giao dự kiến, `YYYY-MM-DD`. */
 export type DeliveryWindow = { from: string; to: string }
 
-const dateVN = (day: string) => day.split('-').reverse().join('/')
-const windowText = ({ from, to }: DeliveryWindow) => `${dateVN(from)} – ${dateVN(to)}`
+const windowText = ({ from, to }: DeliveryWindow) => `${dayVN(from)} – ${dayVN(to)}`
 
 /**
  * Nhân viên đổi thời gian giao dự kiến của đợt (ticket 09): báo mọi khách đã cọc mà hàng chưa về đủ, trong transaction
@@ -21,9 +21,8 @@ export async function notifyDeliveryChange(
 ) {
   const orders = await tx.order.findMany({
     where: {
+      ...DEPOSITED_PREORDER,
       preorderCampaignId: campaignId,
-      status: 'processing',
-      paymentStatus: 'deposit_paid',
       arrivedAt: null,
     },
     include: { lines: { orderBy: { position: 'asc' } } },

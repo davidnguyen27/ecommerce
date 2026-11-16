@@ -6,7 +6,8 @@ import {
   type ReconciliationReason,
 } from '../generated/prisma/client.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
-import { issueOrderLookupUrl, recordOrderEvent } from '../orders/orders.ts'
+import { dayVN, isoDay, vnd } from '../orders/format.ts'
+import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../orders/orders.ts'
 import type { PaymentGateway } from './gateway.ts'
 
 /** Một khoản tiền cổng báo về, từ callback (nguồn `webhook`), truy vấn hay cổng giả lập. */
@@ -34,9 +35,6 @@ export type PaymentReceipt = {
 export type RecordPaymentOutcome = 'paid' | 'deposit_paid' | 'flagged' | 'duplicate' | 'unknown_order'
 
 export type RecordPaymentDeps = { prisma: Db; emails: EmailQueue; siteUrl: string }
-
-const VND = new Intl.NumberFormat('vi-VN')
-const vnd = (amount: bigint | number) => `${VND.format(amount)} ₫`
 
 /**
  * Hàm duy nhất ghi nhận tiền về cho đơn (ADR 0009), chạy nhiều lần vẫn một kết quả. Khóa đơn `FOR UPDATE` nên callback
@@ -201,7 +199,7 @@ function awaitedPayment(order: Prisma.OrderGetPayload<object>): { purpose: Payme
   }
   if (order.status === 'pending_payment') return { purpose: 'deposit', due: order.depositAmount! }
   if (order.status === 'processing' && order.paymentStatus === 'deposit_paid' && order.arrivedAt) {
-    return { purpose: 'remainder', due: order.total - order.depositAmount! }
+    return { purpose: 'remainder', due: remainingOf(order) }
   }
   return null
 }
@@ -243,8 +241,6 @@ export async function queuePaymentReceivedEmail(
   })
 }
 
-const day = (date: Date) => date.toISOString().slice(0, 10).split('-').reverse().join('/')
-
 /**
  * Xếp email "đã nhận cọc" của đơn đặt trước (tiền cọc, phần còn lại, thời gian giao dự kiến, link tra cứu có token
  * mới) trong transaction của thay đổi trạng thái. Dùng chung cho cọc về bình thường và khôi phục khi đối soát.
@@ -270,8 +266,8 @@ export async function queueDepositReceivedEmail(
       `Chúng tôi đã nhận tiền cọc cho đơn đặt trước #${order.code}: ${line.productName} x ${line.quantity}.`,
       '',
       `Tiền cọc đã nhận: ${vnd(depositAmount)}`,
-      `Phần còn lại (gồm phí giao): ${vnd(order.total - depositAmount)}`,
-      `Thời gian giao dự kiến: ${day(deliveryFrom)} – ${day(deliveryTo)}`,
+      `Phần còn lại (gồm phí giao): ${vnd(remainingOf(order))}`,
+      `Thời gian giao dự kiến: ${dayVN(isoDay(deliveryFrom))} – ${dayVN(isoDay(deliveryTo))}`,
       '',
       `Khi hàng về, chúng tôi sẽ gửi email để bạn trả phần còn lại trong ${remainderDays} ngày.`,
       '',

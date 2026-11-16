@@ -4,6 +4,11 @@ import { AdminProduct, PreorderCampaign, type FieldError, type PreorderCampaignU
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: ['order.view', 'preorder.manage'] })
 
 const session = useAdminSession()
+// Link sang trang khác (Đơn hàng, Sản phẩm) chỉ khi mở được trang đó; quyền lấy từ menu, không khai lại tại chỗ.
+const canOpen = (to: string) => {
+  const permission = ADMIN_MENU_ITEMS.find((item) => item.to === to)?.permission
+  return !permission || session.can(permission)
+}
 const route = useRoute()
 const canManage = computed(() => session.can('preorder.manage'))
 const campaign = ref<PreorderCampaign | null>(null)
@@ -26,8 +31,7 @@ async function startEditing() {
   errors.value = []
   notice.value = null
   // Thêm biến thể mới vào đợt cần đọc sản phẩm; không có quyền xem sản phẩm thì chỉ sửa được biến thể đã có trong đợt.
-  const productsPermission = ADMIN_MENU_ITEMS.find((item) => item.to === '/admin/products')?.permission
-  if (!product.value && campaign.value && productsPermission && session.can(productsPermission)) {
+  if (!product.value && campaign.value && canOpen('/admin/products')) {
     try {
       product.value = AdminProduct.parse(await session.adminFetch(`/api/admin/products/${campaign.value.product.id}`))
     } catch {
@@ -197,7 +201,11 @@ async function close() {
 
       <h2 class="admin-section-title" style="margin-top: 24px">
         Đơn theo thứ tự cọc
-        <NuxtLink :to="`/admin/orders?campaignId=${campaign.id}`" style="font-size: 12px; font-weight: 400">
+        <NuxtLink
+          v-if="canOpen('/admin/orders')"
+          :to="`/admin/orders?campaignId=${campaign.id}`"
+          style="font-size: 12px; font-weight: 400"
+        >
           · mở ở trang Đơn hàng
         </NuxtLink>
       </h2>
@@ -223,9 +231,14 @@ async function close() {
             <tbody>
               <tr v-for="o in campaign.orders" :key="o.code" data-testid="campaign-order">
                 <td>
-                  <NuxtLink :to="`/admin/orders/${o.code}`" style="font-family: var(--adm-mono); font-weight: 600">
+                  <NuxtLink
+                    v-if="canOpen('/admin/orders')"
+                    :to="`/admin/orders/${o.code}`"
+                    style="font-family: var(--adm-mono); font-weight: 600"
+                  >
                     #{{ o.code }}
                   </NuxtLink>
+                  <span v-else style="font-family: var(--adm-mono); font-weight: 600">#{{ o.code }}</span>
                 </td>
                 <td>{{ o.recipientName }}</td>
                 <td style="font-family: var(--adm-mono); font-size: 12px">{{ o.sku }}</td>

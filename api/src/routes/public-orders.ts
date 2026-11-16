@@ -1,7 +1,6 @@
 import { Router } from 'express'
 import type { PayRemainderResult, PublicOrder } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
-import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { createRemainderLink } from '../preorders/remainder.ts'
 import { assertCancellable, cancelOrder } from '../orders/cancel-order.ts'
 import { findOrderByToken, toPublicOrder } from '../orders/orders.ts'
@@ -36,13 +35,7 @@ export function publicOrderRoutes({ prisma, storage, emails, siteUrl, payments, 
       // Đơn đặt trước đã về hàng: link trả phần còn lại. Người cầm link tra cứu trả được, như hủy đơn chưa thanh toán.
       .post('/:code/pay-remainder', async (req, res) => {
         const order = await findOrderByToken(prisma, String(req.params.code), tokenOf(req.query))
-        await enforceRateLimits(
-          prisma,
-          res,
-          [{ limit: RATE_LIMITS.payRemainderPerIp, subject: String(req.ip) }],
-          'Bạn đã tạo quá nhiều lần thanh toán, vui lòng thử lại sau',
-        )
-        const body: PayRemainderResult = await createRemainderLink(prisma, { payments, siteUrl, req }, order.id)
+        const body: PayRemainderResult = await createRemainderLink(prisma, { payments, siteUrl, req, res }, order.id)
         res.set('Cache-Control', 'no-store').json(body)
       })
       .post('/:code/cancel', async (req, res) => {

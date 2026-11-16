@@ -3,6 +3,7 @@ import type { Audit } from '../audit/audited.ts'
 import type { DbClient } from '../db.ts'
 import { AppError } from '../http/errors.ts'
 import type { OrderLine } from '../generated/prisma/client.ts'
+import { vnd } from '../orders/format.ts'
 import { recordOrderEvent } from '../orders/orders.ts'
 import { usedAllocations } from '../preorders/campaigns.ts'
 import { reserveStock } from '../stock/stock.ts'
@@ -63,7 +64,6 @@ export async function restoreOrder(
   })
   const received = _sum.amount ?? 0n
   if (received !== due) {
-    const vnd = (amount: bigint) => `${new Intl.NumberFormat('vi-VN').format(amount)} ₫`
     const message = preorder
       ? `Tiền cọc đã nhận ${vnd(received)} khác tiền cọc của đơn ${vnd(due)}`
       : `Tổng đã nhận ${vnd(received)} khác tổng phải trả của đơn ${vnd(due)}`

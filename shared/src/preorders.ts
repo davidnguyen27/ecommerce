@@ -134,7 +134,7 @@ export type PreorderCampaign = z.infer<typeof PreorderCampaign>
 
 /**
  * `GET /api/admin/preorder-campaigns/attention` (ticket 10): đơn đặt trước quá hạn trả phần còn lại, và đợt đang gặp sự
- * cố nhập hàng mà còn đơn đã cọc chờ hàng. `total` là tổng số mục, cho số đếm ở bảng điều khiển.
+ * cố nhập hàng mà còn đơn đã cọc chưa trả đủ. `total` là tổng số mục, cho số đếm ở bảng điều khiển.
  */
 export const PreorderAttention = z.object({
   overdueOrders: z.array(
@@ -153,7 +153,8 @@ export const PreorderAttention = z.object({
       id: z.string(),
       productName: z.string(),
       supplyNote: z.string(),
-      waitingOrders: z.number(),
+      /** Đơn đã cọc mà chưa trả đủ (chờ hàng về hay chờ phần còn lại). */
+      depositedOrders: z.number(),
     }),
   ),
   total: z.number(),

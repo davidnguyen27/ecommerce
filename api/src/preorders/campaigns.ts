@@ -3,6 +3,7 @@ import { ACTOR_SELECT } from '../audit/audited.ts'
 import type { DbClient } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
+import { isoDay } from '../orders/format.ts'
 
 /** Đợt đang mở (GLOSSARY "Đợt đặt trước"): chưa đóng tay và chưa tới hạn đóng. */
 export const isCampaignOpen = (campaign: { closedAt: Date | null; closesAt: Date }, now = new Date()) =>
@@ -65,8 +66,8 @@ export async function preorderOffers(db: DbClient, variantIds: readonly string[]
     offers.set(row.variantId, {
       campaignId: row.campaignId,
       depositPercent: row.depositPercent,
-      deliveryFrom: day(row.deliveryFrom),
-      deliveryTo: day(row.deliveryTo),
+      deliveryFrom: isoDay(row.deliveryFrom),
+      deliveryTo: isoDay(row.deliveryTo),
     })
   }
   return offers
@@ -82,16 +83,14 @@ export const CAMPAIGN_INCLUDE = {
 
 type CampaignRow = Prisma.PreorderCampaignGetPayload<{ include: typeof CAMPAIGN_INCLUDE }>
 
-const day = (date: Date) => date.toISOString().slice(0, 10)
-
 /** Phần đầu đợt dùng chung cho danh sách và chi tiết; ngày giao lưu kiểu DATE, trả `YYYY-MM-DD`. */
 export function toCampaignHeader(campaign: CampaignRow, now = new Date()) {
   return {
     id: campaign.id,
     product: campaign.product,
     depositPercent: campaign.depositPercent,
-    deliveryFrom: day(campaign.deliveryFrom),
-    deliveryTo: day(campaign.deliveryTo),
+    deliveryFrom: isoDay(campaign.deliveryFrom),
+    deliveryTo: isoDay(campaign.deliveryTo),
     closesAt: campaign.closesAt.toISOString(),
     remainderDays: campaign.remainderDays,
     supplyStatus: campaign.supplyStatus,
@@ -103,7 +102,6 @@ export function toCampaignHeader(campaign: CampaignRow, now = new Date()) {
   }
 }
 
-/** Biến thể của đợt theo thứ tự biến thể trên sản phẩm, kèm suất và số đã dùng. */
 /** Số liệu một biến thể trong đợt, tính từ các đơn chưa hủy (xem `PreorderCampaignVariant`). */
 export type VariantStats = { used: number; deposited: number; pendingDeposit: number; arrived: number }
 
@@ -141,6 +139,7 @@ export async function campaignStats(db: DbClient, campaignIds: string[]) {
 
 const NO_ORDERS: VariantStats = { used: 0, deposited: 0, pendingDeposit: 0, arrived: 0 }
 
+/** Biến thể của đợt theo thứ tự biến thể trên sản phẩm, kèm suất và số liệu đơn. */
 export function toCampaignVariants(campaign: CampaignRow, stats: Map<string, VariantStats> | undefined) {
   return [...campaign.variants]
     .sort((a, b) => a.variant.sortOrder - b.variant.sortOrder || a.variant.sku.localeCompare(b.variant.sku))

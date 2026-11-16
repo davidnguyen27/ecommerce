@@ -1,7 +1,8 @@
 import type { Db, DbClient } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
-import { issueOrderLookupUrl, recordOrderEvent } from '../orders/orders.ts'
+import { dateVN, vnd } from '../orders/format.ts'
+import { DEPOSITED_PREORDER, issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../orders/orders.ts'
 
 /** Nhắc khi còn từ chừng này tới hạn trả phần còn lại trở xuống. */
 export const REMINDER_WINDOW_MS = 2 * 24 * 60 * 60_000
@@ -10,9 +11,7 @@ export type DeadlineDeps = { prisma: Db; emails: EmailQueue; siteUrl: string }
 
 /** Đơn đặt trước đã cọc, đã về hàng, chưa trả phần còn lại: còn đang trong hạn trả. */
 const AWAITING_REMAINDER = {
-  kind: 'preorder',
-  status: 'processing',
-  paymentStatus: 'deposit_paid',
+  ...DEPOSITED_PREORDER,
   arrivedAt: { not: null },
 } as const satisfies Prisma.OrderWhereInput
 
@@ -79,10 +78,6 @@ async function lockAwaiting(tx: Prisma.TransactionClient, id: string) {
   })
 }
 
-const VND = new Intl.NumberFormat('vi-VN')
-const vnd = (amount: bigint) => `${VND.format(amount)} ₫`
-const dateVN = (date: Date) => date.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
-
 /** Email nhắc trả phần còn lại: số tiền, hạn trả, link trang đơn (token mới). Bản nháp chờ chủ doanh nghiệp duyệt. */
 async function queueReminderEmail(
   tx: DbClient,
@@ -97,7 +92,7 @@ async function queueReminderEmail(
       `Chào ${order.recipientName},`,
       '',
       `Hàng của đơn đặt trước #${order.code} đã về và đang được giữ cho bạn.`,
-      `Phần còn lại cần trả: ${vnd(order.total - order.depositAmount!)}, hạn ${dateVN(order.remainderDueAt!)}.`,
+      `Phần còn lại cần trả: ${vnd(remainingOf(order))}, hạn ${dateVN(order.remainderDueAt!)}.`,
       '',
       `Trả phần còn lại tại trang đơn hàng: ${link}`,
     ].join('\n'),
