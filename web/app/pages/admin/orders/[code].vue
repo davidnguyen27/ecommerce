@@ -163,6 +163,23 @@ await load()
                     <td colspan="4" style="font-weight: 600">Tổng</td>
                     <td class="admin-table-num" style="font-weight: 600">{{ formatVnd(order.total) }}</td>
                   </tr>
+                  <template v-if="order.preorder">
+                    <tr>
+                      <td colspan="4">
+                        Tiền cọc {{ order.preorder.depositPercent }}%
+                        {{
+                          order.preorder.depositPaidAt
+                            ? `(đã cọc ${formatDateTime(order.preorder.depositPaidAt)})`
+                            : '(chưa cọc)'
+                        }}
+                      </td>
+                      <td class="admin-table-num">{{ formatVnd(order.preorder.depositAmount) }}</td>
+                    </tr>
+                    <tr>
+                      <td colspan="4">Phần còn lại (gồm phí giao)</td>
+                      <td class="admin-table-num">{{ formatVnd(order.preorder.remainingAmount) }}</td>
+                    </tr>
+                  </template>
                 </tfoot>
               </table>
             </div>

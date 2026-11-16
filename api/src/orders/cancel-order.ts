@@ -133,7 +133,8 @@ export async function expireOrder(deps: ExpireDeps, orderId: string, overdueAt?:
 /** Nơi gọi qua HTTP: đơn đã trả thì 409. */
 export function assertCancellable(outcome: CancelOutcome) {
   if (outcome === 'not_pending') {
-    throw new AppError(409, ErrorCode.CONFLICT, 'Đơn đã thanh toán, không hủy được')
+    // Đã trả đủ hay đã cọc thì hủy kéo theo hoàn tiền, thuộc M6.
+    throw new AppError(409, ErrorCode.CONFLICT, 'Đơn đã thanh toán hoặc đã cọc, không hủy được')
   }
 }
 

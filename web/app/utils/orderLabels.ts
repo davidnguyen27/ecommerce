@@ -17,6 +17,8 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   unpaid: 'Chưa thanh toán',
+  // Đã cọc không có nghĩa là đã trả đủ (GLOSSARY "Tiền cọc").
+  deposit_paid: 'Đã cọc',
   paid: 'Đã thanh toán',
 }
 
@@ -46,6 +48,7 @@ export const CANCEL_REASON_LABELS: Record<OrderCancelReason, string> = {
 const ORDER_EVENT_LABELS: Record<string, string> = {
   created: 'Đặt mua',
   paid: 'Đã nhận đủ tiền',
+  deposit_paid: 'Đã nhận tiền cọc',
   payment_flagged: 'Khoản tiền cần đối soát',
   cancelled: 'Hủy đơn',
   restored: 'Khôi phục đơn sau đối soát',

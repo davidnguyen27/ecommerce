@@ -7,8 +7,8 @@ import { PublicImage } from './products.ts'
 export const OrderStatus = z.enum(['pending_payment', 'processing', 'completed', 'cancelled'])
 export type OrderStatus = z.infer<typeof OrderStatus>
 
-/** Trạng thái thanh toán; M4 thêm đặt cọc, M6 thêm hoàn tiền. */
-export const PaymentStatus = z.enum(['unpaid', 'paid'])
+/** Trạng thái thanh toán; `deposit_paid` chỉ có ở đơn đặt trước (đã cọc, chưa trả đủ). M6 thêm hoàn tiền. */
+export const PaymentStatus = z.enum(['unpaid', 'deposit_paid', 'paid'])
 export type PaymentStatus = z.infer<typeof PaymentStatus>
 
 /** Trạng thái giao hàng. */
@@ -30,6 +30,8 @@ export const OrderPreorder = z.object({
   deliveryFrom: z.string(),
   deliveryTo: z.string(),
   remainderDays: z.number(),
+  /** Lúc cọc thành công; `null` khi chưa cọc. */
+  depositPaidAt: z.string().nullable(),
 })
 export type OrderPreorder = z.infer<typeof OrderPreorder>
 
