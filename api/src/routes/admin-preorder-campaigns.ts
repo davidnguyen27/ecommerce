@@ -17,6 +17,8 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import { pageWindow } from '../http/pagination.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
+import { isoDay } from '../orders/format.ts'
+import { DEPOSITED_PREORDER, remainingOf } from '../orders/orders.ts'
 import { parse } from '../http/validation.ts'
 import {
   CAMPAIGN_INCLUDE,
@@ -66,8 +68,6 @@ const mustBeFuture = (closesAt: string, now: Date) => {
   if (new Date(closesAt) <= now) throw invalidField('closesAt', 'Hạn đóng phải ở tương lai')
 }
 
-const day = (date: Date) => date.toISOString().slice(0, 10)
-
 /**
  * Đợt đặt trước, mount tại `/preorder-campaigns`. Xem cần `order.view`; mở, sửa, đóng cần `preorder.manage`.
  * Không có endpoint xóa: đợt đã mở là lời hẹn với khách, chỉ đóng được.
@@ -116,21 +116,21 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
         }
         res.json(body)
       })
-      // Trước \`/:id\`: "Đặt trước cần xử lý" (ticket 10). Đơn quá hạn trả phần còn lại, và đợt gặp sự cố nhập hàng mà còn
-      // đơn đã cọc đang chờ hàng.
+      // Trước `/:id`: "Đặt trước cần xử lý" (ticket 10). Đơn quá hạn trả phần còn lại, và đợt gặp sự cố nhập hàng mà còn
+      // đơn đã cọc chưa trả đủ.
       .get('/attention', requirePermission('order.view'), async (_req, res) => {
-        const waiting = { status: 'processing', paymentStatus: 'deposit_paid' } as const
         const [overdue, issues] = await Promise.all([
           prisma.order.findMany({
-            where: { kind: 'preorder', ...waiting, remainderOverdueAt: { not: null } },
+            where: { ...DEPOSITED_PREORDER, remainderOverdueAt: { not: null } },
             include: { lines: { orderBy: { position: 'asc' } } },
             orderBy: [{ remainderDueAt: 'asc' }, { code: 'asc' }],
           }),
           prisma.preorderCampaign.findMany({
-            where: { supplyStatus: 'issue', orders: { some: { ...waiting, arrivedAt: null } } },
+            // Mọi đơn đã cọc mà chưa trả đủ, kể cả đơn đã về hàng: khách của đợt gặp sự cố đều cần được liên hệ.
+            where: { supplyStatus: 'issue', orders: { some: DEPOSITED_PREORDER } },
             include: {
               product: { select: { name: true } },
-              _count: { select: { orders: { where: { ...waiting, arrivedAt: null } } } },
+              _count: { select: { orders: { where: DEPOSITED_PREORDER } } },
             },
             orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           }),
@@ -141,7 +141,7 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
             recipientName: order.recipientName,
             phone: order.phone,
             productName: order.lines[0]!.productName,
-            remainingAmount: Number(order.total - order.depositAmount!),
+            remainingAmount: Number(remainingOf(order)),
             remainderDueAt: order.remainderDueAt!.toISOString(),
             remainderOverdueAt: order.remainderOverdueAt!.toISOString(),
           })),
@@ -149,7 +149,7 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
             id: campaign.id,
             productName: campaign.product.name,
             supplyNote: campaign.supplyNote,
-            waitingOrders: campaign._count.orders,
+            depositedOrders: campaign._count.orders,
           })),
           total: overdue.length + issues.length,
         }
@@ -242,13 +242,14 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
             if (hasOrders) throw conflict('Đợt đã có đơn, không đổi được số ngày trả phần còn lại')
             data.remainderDays = input.remainderDays
           }
-          const deliveryFrom = input.deliveryFrom ?? day(campaign.deliveryFrom)
-          const deliveryTo = input.deliveryTo ?? day(campaign.deliveryTo)
+          const deliveryFrom = input.deliveryFrom ?? isoDay(campaign.deliveryFrom)
+          const deliveryTo = input.deliveryTo ?? isoDay(campaign.deliveryTo)
           if (deliveryFrom > deliveryTo) throw invalidField('deliveryTo', 'Ngày giao muộn nhất phải sau ngày sớm nhất')
-          if (change('deliveryFrom', day(campaign.deliveryFrom), input.deliveryFrom)) {
+          if (change('deliveryFrom', isoDay(campaign.deliveryFrom), input.deliveryFrom)) {
             data.deliveryFrom = new Date(deliveryFrom)
           }
-          if (change('deliveryTo', day(campaign.deliveryTo), input.deliveryTo)) data.deliveryTo = new Date(deliveryTo)
+          if (change('deliveryTo', isoDay(campaign.deliveryTo), input.deliveryTo))
+            data.deliveryTo = new Date(deliveryTo)
           const closesAt = input.closesAt && new Date(input.closesAt).toISOString()
           if (change('closesAt', campaign.closesAt.toISOString(), closesAt)) {
             // Đổi hạn của đợt đã đóng là mở lại đợt, ngoài phạm vi M4.
@@ -310,7 +311,7 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
           const notified =
             'deliveryFrom' in after || 'deliveryTo' in after
               ? await notifyDeliveryChange(tx, mail, id, {
-                  before: { from: day(campaign.deliveryFrom), to: day(campaign.deliveryTo) },
+                  before: { from: isoDay(campaign.deliveryFrom), to: isoDay(campaign.deliveryTo) },
                   after: { from: deliveryFrom, to: deliveryTo },
                   staffId: currentStaff(req).id,
                 })

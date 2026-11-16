@@ -26,7 +26,7 @@ Spec: mục "API quản trị", "Web".
 - `OrderPreorder.campaignId`. Trang đơn admin có link tới đợt; bảng giao dịch có cột "Khoản" (`PAYMENT_PURPOSE_LABELS`: trả đủ / tiền cọc / phần còn lại).
 - `GET /api/admin/preorder-campaigns/attention` (`order.view`, đặt trước `/:id`), trả `PreorderAttention`:
   - `overdueOrders`: đơn đặt trước `processing` + `deposit_paid` còn cờ quá hạn, xếp theo hạn trả;
-  - `issueCampaigns`: đợt `supply_status = issue` còn đơn đã cọc chưa về hàng, kèm số đơn đó;
+  - `issueCampaigns`: đợt `supply_status = issue` còn đơn đã cọc chưa trả đủ (kể cả đơn đã về hàng), kèm số đơn đó (`depositedOrders`). Ban đầu chỉ tính đơn chưa về hàng; review 2026-11-16 chỉ ra lệch so với spec "đợt đang `issue` có đơn đã cọc", nên đã sửa;
   - `total` cho dashboard.
 - Web:
   - trang Đơn hàng có bộ lọc loại đơn, ô "Quá hạn trả phần còn lại", nhận `?campaignId=` và `?remainderOverdue=true` từ link, và nhãn "Đặt trước" dưới mã đơn;

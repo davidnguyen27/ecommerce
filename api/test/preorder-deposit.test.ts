@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { InMemoryMailer } from '../src/adapters/mailer.ts'
 import { expireOverdueOrders } from '../src/orders/cancel-order.ts'
 import type { PaymentInfo } from '../src/payments/gateway.ts'
-import { preorderShop } from './support/preorder.ts'
+import { depositedPreorder, preorderShop } from './support/preorder.ts'
 import { ADDRESS } from './support/shop.ts'
 import { bearer } from './support/staff.ts'
 import { ipnParams, signedIpn, txnRefOf } from './support/vnpay.ts'
@@ -152,6 +152,15 @@ describe('ghi nhận cọc', () => {
 })
 
 describe('đơn đã cọc', () => {
+  it('khách đăng nhập cũng không hủy được qua tài khoản (409), đơn vẫn đã cọc', async () => {
+    const app = await depositedPreorder({ signedIn: true })
+
+    const res = await app.request.post(`/api/account/orders/${app.code}/cancel`).set(bearer(app.customerToken!))
+
+    expect(res.status).toBe(409)
+    expect((await app.order()).body).toMatchObject({ status: 'processing', paymentStatus: 'deposit_paid' })
+  })
+
   it('không hủy được: khách qua link tra cứu và nhân viên đều nhận 409', async () => {
     const app = await pendingPreorder()
     await app.payDeposit()

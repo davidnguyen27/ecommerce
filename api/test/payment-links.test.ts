@@ -33,27 +33,27 @@ async function pendingOrder() {
     app.prisma.paymentLink.create({
       data: { orderId, purpose, amount, gatewayReference, expiresAt: inMinutes(15) },
     })
-  return { ...app, code, orderId, orderToken, order, refresh, transactions, addLink }
+  const placed = res.body as { checkoutUrl: string; reservedUntil: string }
+  return { ...app, code, orderId, orderToken, placed, order, refresh, transactions, addLink }
 }
 
 describe('link thanh toán', () => {
-  it('đặt mua lưu một link trả đủ: đúng tổng phải trả, hạn bằng hạn giữ hàng, mã bên cổng do cổng trả', async () => {
-    const { prisma, orderId, payments } = await pendingOrder()
+  it('đặt mua tạo một link trả đủ: đúng tổng phải trả, hạn bằng hạn giữ hàng, mã bên cổng do cổng trả', async () => {
+    const { code, placed, payments, refresh, transactions } = await pendingOrder()
 
-    const links = await prisma.paymentLink.findMany({ where: { orderId } })
-    const order = await prisma.order.findUniqueOrThrow({ where: { id: orderId } })
-
-    expect(links).toEqual([
+    expect(payments.created).toEqual([
       expect.objectContaining({
+        orderCode: code,
         purpose: 'full',
-        amount: BigInt(TOTAL),
-        gatewayReference: String(order.code),
-        expiresAt: order.reservedUntil,
+        amount: TOTAL,
+        expiresAt: new Date(placed.reservedUntil),
       }),
     ])
-    expect(payments.created).toEqual([
-      expect.objectContaining({ orderCode: order.code, purpose: 'full', amount: TOTAL }),
-    ])
+    expect(placed.checkoutUrl).toBe(`https://pay.test/${code}`)
+    // Link được lưu với mã cổng trả: cổng báo tiền về theo mã đó thì giao dịch mang mục đích trả đủ.
+    payments.payments.set(String(code), paidInfo(TOTAL, 'FT-LINK'))
+    expect((await refresh()).body).toMatchObject({ paymentStatus: 'paid' })
+    expect(await transactions()).toEqual([expect.objectContaining({ purpose: 'full', reference: 'FT-LINK' })])
   })
 
   it('đơn có link dựng như migration chuyển sang (hạn 15 phút từ lúc đặt): refresh=1 vẫn ghi nhận, giao dịch là trả đủ', async () => {
@@ -129,6 +129,7 @@ describe('link thanh toán', () => {
   it('hai link không mang cùng mã đơn bên cổng', async () => {
     const { code, addLink } = await pendingOrder()
 
+    // Ràng buộc unique của DB: chưa có route nào tạo được link trùng mã để chạm tới qua HTTP, nên thử bằng prisma.
     await expect(addLink('deposit', 600_000, String(code))).rejects.toMatchObject({ code: 'P2002' })
   })
 
@@ -137,6 +138,7 @@ describe('link thanh toán', () => {
     payments.payments.set(String(code), paidInfo(TOTAL, 'FT-1'))
     await refresh()
 
+    // Trigger chặn sửa: API không có đường sửa giao dịch nào, nên thử bằng SQL trực tiếp (CODING_STANDARDS "Test").
     await expect(
       prisma.$executeRaw`UPDATE "payment_transaction" SET "purpose" = 'deposit' WHERE "reference" = 'FT-1'`,
     ).rejects.toThrow(/chỉ cho phép thêm mới/)

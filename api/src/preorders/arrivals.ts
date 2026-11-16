@@ -1,7 +1,9 @@
 import type { DbClient } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
-import { issueOrderLookupUrl, recordOrderEvent } from '../orders/orders.ts'
+import { dateVN, vnd } from '../orders/format.ts'
+import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../orders/orders.ts'
+import { reserveStock } from '../stock/stock.ts'
 
 /** Phần hàng về của một biến thể giữ cho một dòng đơn đặt trước. */
 export type Allocation = {
@@ -78,7 +80,9 @@ export async function applyArrivals(
   for (const plan of plans) {
     const reserved = plan.allocations.reduce((sum, a) => sum + a.take, 0)
     if (reserved === 0) continue
-    await tx.productVariant.update({ where: { id: plan.variantId }, data: { reserved: { increment: reserved } } })
+    // Qua module kho, cùng đường khóa với `changeStock`. Tồn vừa được cộng đủ số hàng về, phần chia không vượt số đó.
+    const reservation = await reserveStock(tx, [{ variantId: plan.variantId, quantity: reserved }])
+    if (!reservation.ok) throw new Error(`Không giữ được ${reserved} cho đơn đặt trước của biến thể ${plan.variantId}`)
     for (const allocation of plan.allocations) {
       await tx.orderLine.update({
         where: { id: allocation.lineId },
@@ -114,10 +118,6 @@ export async function applyArrivals(
   return arrived
 }
 
-const VND = new Intl.NumberFormat('vi-VN')
-const vnd = (amount: bigint | number) => `${VND.format(amount)} ₫`
-const dateVN = (date: Date) => date.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
-
 type OrderWithLines = Prisma.OrderGetPayload<{ include: { lines: true } }>
 
 /** Email "Hàng đã về": phần còn lại phải trả, hạn trả, link trang đơn (có token mới). Bản nháp chờ chủ doanh nghiệp duyệt. */
@@ -136,7 +136,7 @@ async function queueArrivedEmail(
       '',
       `Hàng của đơn đặt trước #${order.code} đã về kho: ${line.productName} x ${line.quantity}.`,
       '',
-      `Phần còn lại cần trả (gồm phí giao): ${vnd(order.total - (order.depositAmount ?? 0n))}`,
+      `Phần còn lại cần trả (gồm phí giao): ${vnd(remainingOf(order))}`,
       `Hạn trả: ${dateVN(order.remainderDueAt!)}`,
       '',
       `Trả phần còn lại tại trang đơn hàng: ${link}`,

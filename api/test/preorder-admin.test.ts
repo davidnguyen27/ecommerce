@@ -103,7 +103,7 @@ describe('đơn đặt trước ở trang quản trị', () => {
 })
 
 describe('đặt trước cần xử lý', () => {
-  it('có đơn quá hạn trả phần còn lại và đợt gặp sự cố còn đơn đã cọc chờ hàng; không có gì thì rỗng', async () => {
+  it('có đơn quá hạn trả phần còn lại và đợt gặp sự cố còn đơn đã cọc chưa trả đủ (kể cả đơn đã về hàng); không có gì thì rỗng', async () => {
     const app = await adminView()
     expect((await app.attention()).body).toEqual({ overdueOrders: [], issueCampaigns: [], total: 0 })
 
@@ -131,13 +131,13 @@ describe('đặt trước cần xử lý', () => {
         },
       ],
       issueCampaigns: [
-        { id: app.campaignId, productName: 'Air Max', supplyNote: 'Nhà cung cấp báo trễ', waitingOrders: 1 },
+        { id: app.campaignId, productName: 'Air Max', supplyNote: 'Nhà cung cấp báo trễ', depositedOrders: 2 },
       ],
       total: 2,
     })
   })
 
-  it('đợt gặp sự cố nhưng không còn đơn đã cọc chờ hàng thì không cần xử lý', async () => {
+  it('đợt gặp sự cố nhưng không có đơn nào đã cọc chưa trả đủ thì không cần xử lý', async () => {
     const app = await preorderShop()
     const campaignId = await app.open()
     await app.placed(campaignId)

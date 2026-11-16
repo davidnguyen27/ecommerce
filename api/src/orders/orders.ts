@@ -6,6 +6,7 @@ import type { DbClient } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import { StoredImage, imageRenditions } from '../media/images.ts'
+import { isoDay } from './format.ts'
 
 /** Ảnh đại diện lưu trên dòng đơn: file trên bucket public kèm `alt`. */
 export const OrderLineImage = StoredImage.extend({ alt: z.string() })
@@ -139,6 +140,17 @@ export async function findCustomerOrder(db: DbClient, code: string, customerId: 
   return order
 }
 
+/** Đơn đặt trước đã cọc mà chưa trả đủ: đang chờ hàng về hoặc chờ phần còn lại. */
+export const DEPOSITED_PREORDER = {
+  kind: 'preorder',
+  status: 'processing',
+  paymentStatus: 'deposit_paid',
+} as const satisfies Prisma.OrderWhereInput
+
+/** Phần còn lại của đơn đặt trước: tổng phải trả trừ tiền cọc, gồm phí giao (GLOSSARY "Phần còn lại"). */
+export const remainingOf = (order: { total: bigint; depositAmount: bigint | null }) =>
+  order.total - order.depositAmount!
+
 /** Phần đặt trước của đơn; `null` với đơn hàng sẵn (check `order_preorder_check` bảo đảm đủ trường). */
 export function preorderOf(
   order: Pick<
@@ -171,13 +183,13 @@ export function preorderOf(
     arrivedAt: order.arrivedAt?.toISOString() ?? null,
     remainderDueAt: order.remainderDueAt?.toISOString() ?? null,
     remainderOverdueAt: order.remainderOverdueAt?.toISOString() ?? null,
-    currentDeliveryFrom: (order.preorderCampaign?.deliveryFrom ?? deliveryFrom).toISOString().slice(0, 10),
-    currentDeliveryTo: (order.preorderCampaign?.deliveryTo ?? deliveryTo).toISOString().slice(0, 10),
+    currentDeliveryFrom: isoDay(order.preorderCampaign?.deliveryFrom ?? deliveryFrom),
+    currentDeliveryTo: isoDay(order.preorderCampaign?.deliveryTo ?? deliveryTo),
     depositPercent,
     depositAmount: Number(depositAmount),
-    remainingAmount: Number(order.total - depositAmount),
-    deliveryFrom: deliveryFrom.toISOString().slice(0, 10),
-    deliveryTo: deliveryTo.toISOString().slice(0, 10),
+    remainingAmount: Number(remainingOf(order)),
+    deliveryFrom: isoDay(deliveryFrom),
+    deliveryTo: isoDay(deliveryTo),
     remainderDays,
     depositPaidAt: order.depositPaidAt?.toISOString() ?? null,
   }

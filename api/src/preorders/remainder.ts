@@ -1,9 +1,11 @@
 import { ErrorCode, RESERVATION_MINUTES, type PayRemainderResult } from '@ecommerce/shared'
-import type { Request } from 'express'
+import type { Request, Response } from 'express'
 import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
 import { createOrderPaymentLink } from '../checkout/order-snapshot.ts'
 import type { Db } from '../db.ts'
 import { AppError, isUniqueViolation } from '../http/errors.ts'
+import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
+import { remainingOf } from '../orders/orders.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 
 const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, message)
@@ -13,15 +15,23 @@ const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, mess
  * hạn `RESERVATION_MINUTES` phút; link hết hạn không đổi gì của đơn, khách gọi lại là có link khác. Khóa đơn `FOR UPDATE`
  * như ghi nhận thanh toán, nên không tạo link cho đơn vừa được trả đủ.
  *
+ * Giới hạn tần suất theo IP trước khi làm gì (`payRemainderPerIp`): mỗi lần gọi tạo một link ở cổng.
+ *
  * `issueToken`: cấp thêm token tra cứu (chỉ lưu hash) để trình duyệt mở được trang kết quả khi cổng đưa khách về; dùng
  * khi khách vào từ tài khoản, chưa có token của đơn.
  */
 export async function createRemainderLink(
   prisma: Db,
-  deps: { payments: PaymentGateway; siteUrl: string; req: Request },
+  deps: { payments: PaymentGateway; siteUrl: string; req: Request; res: Response },
   orderId: string,
   { issueToken = false }: { issueToken?: boolean } = {},
 ): Promise<PayRemainderResult> {
+  await enforceRateLimits(
+    prisma,
+    deps.res,
+    [{ limit: RATE_LIMITS.payRemainderPerIp, subject: String(deps.req.ip) }],
+    'Bạn đã tạo quá nhiều lần thanh toán, vui lòng thử lại sau',
+  )
   try {
     return await prisma.$transaction(
       async (tx) => {
@@ -35,7 +45,7 @@ export async function createRemainderLink(
         const expiresAt = new Date(Date.now() + RESERVATION_MINUTES * 60_000)
         const checkoutUrl = await createOrderPaymentLink(tx, deps, order, {
           purpose: 'remainder',
-          amount: Number(order.total - order.depositAmount!),
+          amount: Number(remainingOf(order)),
           description: `Thanh toán phần còn lại đơn hàng #${order.code}`,
           expiresAt,
         })
