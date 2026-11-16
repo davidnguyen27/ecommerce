@@ -637,6 +637,8 @@ enum OrderStatus {
 
 enum PaymentStatus {
   unpaid
+  /// Đơn đặt trước đã nhận cọc, chưa trả phần còn lại (M4); đơn hàng sẵn không bao giờ ở trạng thái này.
+  deposit_paid
   paid
 
   @@map("payment_status")
@@ -741,6 +743,8 @@ model Order {
   deliveryTo         DateTime?         @map("delivery_to") @db.Date
   /// Số ngày được trả phần còn lại từ lúc hàng về, chụp từ đợt.
   remainderDays      Int?              @map("remainder_days")
+  /// Lúc cọc thành công (hay lúc khôi phục từ đối soát); thứ tự chia hàng về (ADR 0013). Check `order_deposit_paid_check`.
+  depositPaidAt      DateTime?         @map("deposit_paid_at")
 
   lines               OrderLine[]
   stockMovements      StockMovement[]
@@ -758,6 +762,7 @@ model Order {
   @@index([email, status])
   @@index([phone, status])
   @@index([preorderCampaignId])
+  @@index([depositPaidAt])
   @@map("order")
 }
 

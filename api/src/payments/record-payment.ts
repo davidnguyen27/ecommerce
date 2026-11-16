@@ -23,10 +23,10 @@ export type PaymentReceipt = {
 }
 
 /**
- * `paid`: đơn vừa thành đã trả đủ. `flagged`: khoản tiền cần đối soát. `duplicate`: khoản này đã ghi từ trước.
- * `unknown_order`: không có đơn mang mã này.
+ * `paid`: đơn vừa thành đã trả đủ. `deposit_paid`: đơn đặt trước vừa nhận đủ cọc. `flagged`: khoản tiền cần đối soát.
+ * `duplicate`: khoản này đã ghi từ trước. `unknown_order`: không có đơn mang mã này.
  */
-export type RecordPaymentOutcome = 'paid' | 'flagged' | 'duplicate' | 'unknown_order'
+export type RecordPaymentOutcome = 'paid' | 'deposit_paid' | 'flagged' | 'duplicate' | 'unknown_order'
 
 export type RecordPaymentDeps = { prisma: Db; emails: EmailQueue; siteUrl: string }
 
@@ -35,8 +35,9 @@ const vnd = (amount: bigint | number) => `${VND.format(amount)} ₫`
 
 /**
  * Hàm duy nhất ghi nhận tiền về cho đơn (ADR 0009), chạy nhiều lần vẫn một kết quả. Khóa đơn `FOR UPDATE` nên callback
- * và truy vấn cùng về thì lần sau thấy giao dịch lần trước đã ghi. Đơn chờ thanh toán mà tổng đã nhận bằng đúng tổng
- * phải trả thì thành đã trả đủ; mọi trường hợp khác gắn cờ cần đối soát, không đổi trạng thái đơn.
+ * và truy vấn cùng về thì lần sau thấy giao dịch lần trước đã ghi. Đơn hàng sẵn chờ thanh toán mà tổng các khoản trả
+ * đủ bằng đúng tổng phải trả thì thành đã trả đủ; đơn đặt trước chờ cọc mà tổng các khoản cọc bằng đúng tiền cọc thì
+ * thành đã cọc. Mọi trường hợp khác gắn cờ cần đối soát, không đổi trạng thái đơn.
  */
 export async function recordPayment(deps: RecordPaymentDeps, receipt: PaymentReceipt): Promise<RecordPaymentOutcome> {
   try {
@@ -81,18 +82,23 @@ async function recordInTransaction(
       payload: receipt.payload,
     },
   })
-  // Chỉ khoản trả đủ mới làm đơn hàng sẵn thành đã trả; cọc và phần còn lại có luồng riêng (M4).
+  // Mỗi loại đơn chỉ được tất toán bằng khoản đúng mục đích: đơn hàng sẵn bằng các khoản trả đủ, đơn đặt trước chờ
+  // cọc bằng các khoản cọc (ticket 05). Phần còn lại của đơn đặt trước có luồng riêng (ticket 07).
+  const preorder = order.kind === 'preorder'
+  const due = preorder ? order.depositAmount : order.total
   const { _sum } = await tx.paymentTransaction.aggregate({
-    where: { orderId: order.id, purpose: 'full' },
+    where: { orderId: order.id, purpose: preorder ? 'deposit' : 'full' },
     _sum: { amount: true },
   })
   const received = _sum.amount ?? 0n
   const eventData = { amount: receipt.amount, reference: receipt.reference, source: receipt.source }
 
-  if (order.status === 'pending_payment' && received === order.total) {
+  if (order.status === 'pending_payment' && due !== null && received === due) {
     await tx.order.update({
       where: { id: order.id },
-      data: { status: 'processing', paymentStatus: 'paid', reservedUntil: null },
+      data: preorder
+        ? { status: 'processing', paymentStatus: 'deposit_paid', depositPaidAt: new Date(), reservedUntil: null }
+        : { status: 'processing', paymentStatus: 'paid', reservedUntil: null },
     })
     // Khoản trước bị gắn lệch tiền mà nay đủ: các mục đó không còn gì để kế toán xử lý.
     const settled = await tx.reconciliationItem.findMany({
@@ -108,18 +114,20 @@ async function recordInTransaction(
     await recordOrderEvent(
       tx,
       order.id,
-      'paid',
+      preorder ? 'deposit_paid' : 'paid',
       { type: 'system' },
       settledReconciliationItemIds.length ? { ...eventData, settledReconciliationItemIds } : eventData,
     )
-    await queuePaymentReceivedEmail(tx, { emails, siteUrl }, order)
-    return 'paid'
+    if (preorder) await queueDepositReceivedEmail(tx, { emails, siteUrl }, order)
+    else await queuePaymentReceivedEmail(tx, { emails, siteUrl }, order)
+    return preorder ? 'deposit_paid' : 'paid'
   }
 
+  // Đã cọc hay đã trả đủ thì khoản nào về thêm cũng là thừa, cho tới khi có luồng trả phần còn lại (ticket 07).
   const reason: ReconciliationReason =
     order.status === 'cancelled'
       ? 'paid_after_cancel'
-      : order.paymentStatus === 'paid'
+      : order.paymentStatus !== 'unpaid'
         ? 'extra_payment'
         : 'amount_mismatch'
   await tx.reconciliationItem.create({
@@ -205,6 +213,43 @@ export async function queuePaymentReceivedEmail(
       `Xem đơn hàng: ${link}`,
       '',
       'Chúng tôi sẽ báo cho bạn khi đơn được giao cho đơn vị vận chuyển.',
+    ].join('\n'),
+  })
+}
+
+const day = (date: Date) => date.toISOString().slice(0, 10).split('-').reverse().join('/')
+
+/**
+ * Xếp email "đã nhận cọc" của đơn đặt trước (tiền cọc, phần còn lại, thời gian giao dự kiến, link tra cứu có token
+ * mới) trong transaction của thay đổi trạng thái. Dùng chung cho cọc về bình thường và khôi phục khi đối soát.
+ */
+export async function queueDepositReceivedEmail(
+  tx: DbClient,
+  { emails, siteUrl }: Pick<RecordPaymentDeps, 'emails' | 'siteUrl'>,
+  order: OrderWithLines,
+) {
+  const { depositAmount, deliveryFrom, deliveryTo, remainderDays } = order
+  if (depositAmount === null || deliveryFrom === null || deliveryTo === null || remainderDays === null) {
+    throw new Error(`Đơn ${order.code} không phải đơn đặt trước`)
+  }
+  const link = await issueOrderLookupUrl(tx, siteUrl, order)
+  const line = order.lines[0]!
+  // Bản nháp, chờ chủ doanh nghiệp duyệt nội dung.
+  await emails.sendEmail(tx, {
+    to: order.email,
+    subject: `Đã nhận tiền cọc đơn đặt trước #${order.code}`,
+    text: [
+      `Chào ${order.recipientName},`,
+      '',
+      `Chúng tôi đã nhận tiền cọc cho đơn đặt trước #${order.code}: ${line.productName} x ${line.quantity}.`,
+      '',
+      `Tiền cọc đã nhận: ${vnd(depositAmount)}`,
+      `Phần còn lại (gồm phí giao): ${vnd(order.total - depositAmount)}`,
+      `Thời gian giao dự kiến: ${day(deliveryFrom)} – ${day(deliveryTo)}`,
+      '',
+      `Khi hàng về, chúng tôi sẽ gửi email để bạn trả phần còn lại trong ${remainderDays} ngày.`,
+      '',
+      `Xem đơn hàng: ${link}`,
     ].join('\n'),
   })
 }

@@ -20,6 +20,8 @@ export type OrderLineImage = z.infer<typeof OrderLineImage>
 export type OrderEventKind =
   | 'created'
   | 'paid'
+  /** Đơn đặt trước nhận đủ tiền cọc (M4). */
+  | 'deposit_paid'
   | 'payment_flagged'
   | 'cancelled'
   | 'preparing'
@@ -129,7 +131,14 @@ export async function findCustomerOrder(db: DbClient, code: string, customerId: 
 export function preorderOf(
   order: Pick<
     OrderForView,
-    'kind' | 'total' | 'depositPercent' | 'depositAmount' | 'deliveryFrom' | 'deliveryTo' | 'remainderDays'
+    | 'kind'
+    | 'total'
+    | 'depositPercent'
+    | 'depositAmount'
+    | 'deliveryFrom'
+    | 'deliveryTo'
+    | 'remainderDays'
+    | 'depositPaidAt'
   >,
 ): OrderPreorder | null {
   const { depositPercent, depositAmount, deliveryFrom, deliveryTo, remainderDays } = order
@@ -142,6 +151,7 @@ export function preorderOf(
     deliveryFrom: deliveryFrom.toISOString().slice(0, 10),
     deliveryTo: deliveryTo.toISOString().slice(0, 10),
     remainderDays,
+    depositPaidAt: order.depositPaidAt?.toISOString() ?? null,
   }
 }
 
