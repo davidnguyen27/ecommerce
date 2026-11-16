@@ -236,6 +236,12 @@ const remainingText = computed(() => {
           <dt class="text-muted-foreground">Tổng tiền hàng</dt>
           <dd class="tabular-nums">{{ formatVnd(order.subtotal) }}</dd>
         </div>
+        <div v-if="order.voucherCode" class="flex justify-between gap-4" data-testid="order-discount">
+          <dt class="text-muted-foreground">
+            Mã giảm giá <span class="font-mono">{{ order.voucherCode }}</span>
+          </dt>
+          <dd class="tabular-nums">−{{ formatVnd(order.discount) }}</dd>
+        </div>
         <div class="flex justify-between gap-4">
           <dt class="text-muted-foreground">Phí giao</dt>
           <dd class="tabular-nums">{{ order.shippingFee === 0 ? 'Miễn phí' : formatVnd(order.shippingFee) }}</dd>

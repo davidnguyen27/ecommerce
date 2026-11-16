@@ -705,7 +705,7 @@ model Order {
   /// Số nhà, đường.
   streetAddress     String             @map("street_address")
   note              String             @default("")
-  /// VND. Check constraint: `total = subtotal + shipping_fee`.
+  /// VND. Check constraint: `total = subtotal - discount + shipping_fee`.
   subtotal          BigInt
   shippingFee       BigInt             @map("shipping_fee")
   total             BigInt
@@ -741,9 +741,17 @@ model Order {
   /// Chụp từ đợt lúc đặt: phần trăm cọc, và tiền cọc VND (làm tròn lên 1.000, check `0 < deposit_amount <= subtotal`).
   depositPercent      Int?              @map("deposit_percent")
   depositAmount       BigInt?           @map("deposit_amount")
-  /// Mã giảm giá đã dùng; các giá trị chụp lúc đặt thêm ở M5 ticket 03.
+  /// Mã giảm giá đã dùng, cùng các giá trị chụp lúc đặt (check `order_voucher_check`: có mã thì có đủ, không có thì
+  /// không có trường nào và `discount = 0`). Sửa hay tắt mã sau đó không đổi đơn.
   voucherId           String?           @map("voucher_id") @db.Uuid
   voucher             Voucher?          @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  voucherCode         String?           @map("voucher_code")
+  voucherKind         VoucherKind?      @map("voucher_kind")
+  voucherAmount       BigInt?           @map("voucher_amount")
+  voucherPercent      Int?              @map("voucher_percent")
+  voucherMaxDiscount  BigInt?           @map("voucher_max_discount")
+  /// Tiền giảm VND, trừ vào tiền hàng; check `0 <= discount <= subtotal`.
+  discount            BigInt            @default(0)
   /// Thời gian giao dự kiến lúc đặt; đợt có thể đổi về sau (ticket 09) nhưng đơn giữ lời hẹn ban đầu.
   deliveryFrom        DateTime?         @map("delivery_from") @db.Date
   deliveryTo          DateTime?         @map("delivery_to") @db.Date
@@ -802,6 +810,8 @@ model OrderLine {
   /// Số đang giữ trong kho cho dòng này, 0–`quantity` (check constraint). Đơn hàng sẵn: bằng `quantity` từ lúc giữ tới
   /// lúc hủy hay bàn giao; đơn đặt trước: tăng dần theo phiếu nhập (ADR 0013). Hủy và bàn giao đưa về 0.
   reservedQuantity Int            @default(0) @map("reserved_quantity")
+  /// Phần tiền giảm của đơn chia cho dòng này, VND; 0–tiền hàng của dòng (check constraint).
+  discount         BigInt         @default(0)
 
   @@unique([orderId, position])
   @@index([variantId])

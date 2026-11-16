@@ -96,6 +96,10 @@ export const PublicOrder = z.object({
   note: z.string(),
   lines: z.array(OrderLineView),
   subtotal: z.number(),
+  /** Mã giảm giá đã dùng lúc đặt; `null` khi không dùng mã. */
+  voucherCode: z.string().nullable(),
+  /** Tiền giảm của mã, trừ vào tiền hàng; 0 khi không dùng mã. */
+  discount: z.number(),
   shippingFee: z.number(),
   total: z.number(),
   /** Phiên bản chính sách đổi trả, bảo hành gắn với sản phẩm trong đơn lúc đặt mua. */

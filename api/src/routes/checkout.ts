@@ -10,6 +10,7 @@ import {
   type CheckoutQuote,
   type CheckoutResult,
   type QuoteLine,
+  type VoucherQuote,
 } from '@ecommerce/shared'
 import { wardName } from '@ecommerce/shared/wards'
 import type { AppDeps } from '../app.ts'
@@ -26,6 +27,9 @@ import { imageRenditions } from '../media/images.ts'
 import { recordOrderEvent } from '../orders/orders.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
 import { enoughStockIds, reserveStock } from '../stock/stock.ts'
+import { checkVoucher, voucherSnapshot, type VoucherLine } from '../vouchers/apply.ts'
+
+const VOUCHER_RATE_MESSAGE = 'Bạn đã thử mã giảm giá quá nhiều lần, vui lòng thử lại sau'
 
 /** Đặt mua của khách, không cần đăng nhập; kèm access token khách thì đơn gắn với tài khoản. */
 export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, orderExpiry }: AppDeps) {
@@ -58,15 +62,59 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
         }
       })
       const subtotal = lines.reduce((sum, line) => sum + (line.lineTotal ?? 0), 0)
-      const shippingFee = input.provinceCode === undefined ? null : shippingFeeFor(config, input.provinceCode, subtotal)
+
+      let voucher: VoucherQuote | null = null
+      if (input.voucherCode !== undefined) {
+        await enforceRateLimits(
+          prisma,
+          res,
+          [{ limit: RATE_LIMITS.voucherCheckPerIp, subject: String(req.ip) }],
+          VOUCHER_RATE_MESSAGE,
+        )
+        // Chỉ các dòng mua được (còn bán, còn hàng) tính vào tiền hàng, như `subtotal`.
+        const buyable = lines.flatMap(({ variantId, quantity, lineTotal, price }): VoucherLine[] => {
+          const snapshot = variants.get(variantId)?.snapshot
+          return lineTotal === null || !snapshot || price === null
+            ? []
+            : [{ variantId, brandId: snapshot.brandId, categoryId: snapshot.categoryId, price, quantity }]
+        })
+        const check = await checkVoucher(prisma, input.voucherCode, {
+          saleType: 'standard',
+          lines: buyable,
+          customer: { email: input.email, phone: input.phone },
+        })
+        voucher = check.ok
+          ? {
+              applied: true,
+              code: check.voucher.code,
+              discount: Number(check.discount),
+              lines: check.lines.map((l) => ({ variantId: l.variantId, discount: Number(l.discount) })),
+            }
+          : {
+              applied: false,
+              code: check.code,
+              reason: check.reason,
+              ...(check.shortfall !== undefined && { shortfall: Number(check.shortfall) }),
+            }
+      }
+      const discount = voucher?.applied ? voucher.discount : 0
+      // Ngưỡng miễn phí giao so với tiền hàng sau giảm (spec M5).
+      const feeFor = (goods: number) =>
+        input.provinceCode === undefined ? null : shippingFeeFor(config, input.provinceCode, goods)
+      const shippingFee = feeFor(subtotal - discount)
+      const shippingFeeWithoutVoucher = feeFor(subtotal)
 
       const body: CheckoutQuote = {
         lines,
         groundShippingOnly: [...variants.values()].some((v) => v.variant !== null && v.snapshot?.groundShippingOnly),
         subtotal,
+        voucher,
+        discount,
         freeShippingThreshold: config.freeShippingThreshold,
         shippingFee,
-        total: shippingFee === null ? null : subtotal + shippingFee,
+        total: shippingFee === null ? null : subtotal - discount + shippingFee,
+        shippingFeeWithoutVoucher,
+        totalWithoutVoucher: shippingFeeWithoutVoucher === null ? null : subtotal + shippingFeeWithoutVoucher,
         policies: policies.map(({ slug, title }) => ({ slug, title })),
       }
       res.json(body)
@@ -158,8 +206,46 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
             }
           })
           const subtotal = lines.reduce((sum, line) => sum + line.price * line.quantity, 0)
-          const shippingFee = shippingFeeFor(config, address.provinceCode, subtotal)
-          const total = subtotal + shippingFee
+
+          // Mã kiểm sau khi các dòng đã đúng: tiền giảm phụ thuộc giá và số lượng. Khóa dòng mã sau dòng biến thể.
+          const applied =
+            input.voucherCode === undefined
+              ? null
+              : await (async () => {
+                  const check = await checkVoucher(tx, input.voucherCode!, {
+                    saleType: 'standard',
+                    lines: lines.map(({ variantId, price, quantity }) => {
+                      const snapshot = variants.get(variantId)!.snapshot!
+                      return { variantId, brandId: snapshot.brandId, categoryId: snapshot.categoryId, price, quantity }
+                    }),
+                    customer: { email: address.email, phone: address.phone },
+                    lock: true,
+                  })
+                  if (check.ok && Number(check.discount) === input.discount) return check
+                  const details: CheckoutConflictDetails = {
+                    lines: [],
+                    voucher: {
+                      code: check.ok ? check.voucher.code : check.code,
+                      reason: check.ok ? 'changed' : check.reason,
+                      discount: check.ok ? Number(check.discount) : null,
+                      ...(!check.ok && check.shortfall !== undefined && { shortfall: Number(check.shortfall) }),
+                      totalWithoutVoucher: subtotal + shippingFeeFor(config, address.provinceCode, subtotal),
+                    },
+                  }
+                  throw new AppError(
+                    409,
+                    ErrorCode.CONFLICT,
+                    check.ok
+                      ? 'Tiền giảm của mã đã thay đổi, hãy xem lại trước khi đặt mua'
+                      : 'Mã giảm giá không còn dùng được cho đơn này',
+                    undefined,
+                    details,
+                  )
+                })()
+          const discount = applied ? Number(applied.discount) : 0
+          const lineDiscounts = new Map(applied?.lines.map((l) => [l.variantId, l.discount]))
+          const shippingFee = shippingFeeFor(config, address.provinceCode, subtotal - discount)
+          const total = subtotal - discount + shippingFee
           const policies = await livePolicyVersions(tx, variants.values())
           const reservedUntil = new Date(Date.now() + RESERVATION_MINUTES * 60_000)
 
@@ -182,9 +268,10 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
               subtotal,
               shippingFee,
               total,
+              ...(applied && voucherSnapshot(applied.voucher, applied.discount)),
               lookupTokenHash: hashOpaqueToken(token),
               reservedUntil,
-              lines: { create: lines },
+              lines: { create: lines.map((line) => ({ ...line, discount: lineDiscounts.get(line.variantId) ?? 0n })) },
               policyVersions: { create: policies.map(({ id }) => ({ pageVersionId: id })) },
             },
           })
@@ -193,7 +280,7 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
             order.id,
             'created',
             { type: 'customer', customerId: customerId ?? undefined },
-            { total },
+            { total, ...(applied && { voucherCode: applied.voucher.code, discount }) },
           )
           await orderExpiry.scheduleOrderExpiry(tx, order.id, reservedUntil)
           // Trang đặt mua lần sau tự điền; cùng transaction nên đặt hỏng thì địa chỉ cũ giữ nguyên.

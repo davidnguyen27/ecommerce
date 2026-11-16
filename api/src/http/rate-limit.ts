@@ -20,6 +20,8 @@ export const RATE_LIMITS = {
   checkoutPerIp: { name: 'checkout:ip', max: 5, windowMs: 60 * MINUTE },
   // Mỗi lần trả phần còn lại tạo một link ở cổng; rộng hơn đặt mua vì trả không thành công thì khách thử lại.
   payRemainderPerIp: { name: 'pay-remainder:ip', max: 10, windowMs: 60 * MINUTE },
+  // Báo giá kèm mã giảm giá: chặn dò mã (spec M5, số tạm).
+  voucherCheckPerIp: { name: 'voucher-check:ip', max: 10, windowMs: MINUTE },
 } satisfies Record<string, RateLimit>
 
 /**
