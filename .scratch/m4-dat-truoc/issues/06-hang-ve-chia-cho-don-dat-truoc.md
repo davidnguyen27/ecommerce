@@ -19,7 +19,7 @@ Spec: mục "Hàng về", ADR 0013.
 
 **Quyết định khi triển khai (2026-11-16):**
 - Migration `20261116000300_preorder_arrivals`:
-  - `order_line.reserved_quantity` (mặc định 0, check `0..quantity`). Bước điền: dòng của đơn hàng sẵn đang giữ hàng (chờ thanh toán, hoặc đã trả mà chưa bàn giao) nhận `reserved_quantity = quantity`. **Bước điền mới được rà bằng mắt, chưa chạy trên dữ liệu thật hay dữ liệu dựng.**
+  - `order_line.reserved_quantity` (mặc định 0, check `0..quantity`). Bước điền: dòng của đơn hàng sẵn đang giữ hàng (chờ thanh toán, hoặc đã trả mà chưa bàn giao) nhận `reserved_quantity = quantity`. Bước điền đã được chạy thử ngày 2026-11-16 trên Postgres tạm dừng ở migration ngay trước (xem cuối ticket).
   - `order.arrived_at` và `remainder_due_at`, với check `order_arrival_check`: cả hai cùng trống, hoặc đơn đặt trước đã cọc có cả hai và hạn sau lúc về.
   Đã đối chiếu với schema trên Postgres tạm: không lệch.
 - **`reserved_quantity` luôn là số đang thực sự giữ** cho dòng:
@@ -41,3 +41,9 @@ Spec: mục "Hàng về", ADR 0013.
   - trang đơn admin có dòng hàng về kèm lúc về đủ và hạn trả;
   - nhãn sự kiện mới.
 - Test: `api/test/preorder-arrivals.test.ts` (7 test). Các test bàn giao và hủy của M3 đã phủ việc `reserved_quantity` được ghi và nhả đúng cho đơn hàng sẵn. Toàn bộ bộ test API (46 file, 506 test) và test web (12) qua.
+
+**Kiểm bước điền dữ liệu của migration (2026-11-16, sau review):**
+- Postgres 17 tạm, chạy các migration tới `20261116000200_order_deposit_paid_at`. Chèn 9 đơn, mỗi đơn một dòng: hàng sẵn chờ thanh toán, đã trả chưa soạn, đang soạn, đã bàn giao, đã giao, giao thất bại, đã hủy; đặt trước chờ cọc, đã cọc. Khóa ngoại được tắt trong phiên chèn (`session_replication_role = replica`) để khỏi dựng sản phẩm; check constraint vẫn chạy.
+- Chạy `20261116000300_preorder_arrivals`: ba đơn đang giữ hàng (chờ thanh toán, đã trả chưa soạn, đang soạn) nhận `reserved_quantity = quantity`; sáu đơn còn lại nhận 0. Đúng với mọi trường hợp; các check constraint mới không lỗi với dữ liệu cũ.
+- Sau khi deploy lên DB thật, chạy câu sau để chắc số đang giữ của biến thể khớp với tổng của dòng đơn (kết quả phải là 0):
+  `SELECT count(*) FROM product_variant v WHERE v.reserved <> COALESCE((SELECT SUM(l.reserved_quantity) FROM order_line l WHERE l.variant_id = v.id), 0);`
