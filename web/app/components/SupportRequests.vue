@@ -2,6 +2,7 @@
 import type {
   CreatableSupportKind,
   CreateSupportRequest,
+  ExchangeOptions,
   OrderLineView,
   PublicSupportSummary,
   SupportReturnReason,
@@ -46,6 +47,30 @@ const images = ref<File[]>([])
 // Yêu cầu đã tạo mà có ảnh gửi không được: vẫn mở được yêu cầu, báo ảnh nào lỗi.
 const createdLink = ref<string | null>(null)
 
+// Đổi hàng (ticket 05): biến thể đổi được tải khi khách chọn loại "Đổi hàng"; mỗi dòng chọn số lượng và biến thể mới.
+const exchange = ref<ExchangeOptions | null>(null)
+const swaps = reactive<Record<string, { chosen: boolean; quantity: number; toVariantId: string }>>({})
+watch(
+  () => form.kind,
+  async (kind) => {
+    if (kind !== 'exchange' || exchange.value) return
+    try {
+      exchange.value = await props.client.exchangeOptions(props.orderCode)
+      for (const line of exchange.value.lines) {
+        swaps[line.variantId] ??= { chosen: false, quantity: 1, toVariantId: line.options[0]?.variantId ?? '' }
+      }
+    } catch (err) {
+      error.value = apiErrorMessage(err)
+    }
+  },
+)
+const productName = (variantId: string) => props.returnLines?.find((l) => l.variantId === variantId)?.productName
+const chosenSwaps = computed(() =>
+  Object.entries(swaps)
+    .filter(([, s]) => s.chosen && s.toVariantId)
+    .map(([variantId, s]) => ({ variantId, quantity: s.quantity, toVariantId: s.toVariantId })),
+)
+
 async function load() {
   try {
     items.value = await props.client.list()
@@ -66,7 +91,11 @@ async function submit() {
       ...(props.orderCode !== undefined && { orderCode: props.orderCode }),
     }
     const body: CreateSupportRequest =
-      form.kind === 'return' ? { ...base, kind: 'return', lines: chosenLines.value } : { ...base, kind: form.kind }
+      form.kind === 'return'
+        ? { ...base, kind: 'return', lines: chosenLines.value }
+        : form.kind === 'exchange'
+          ? { ...base, kind: 'exchange', lines: chosenSwaps.value }
+          : { ...base, kind: form.kind }
     const created = await props.client.create(body)
     // Ảnh gắn vào tin đầu tiên của yêu cầu vừa tạo.
     const firstMessage = created.messages[0]!.id
@@ -106,6 +135,7 @@ async function submit() {
           <option value="other">Hỏi hoặc nhờ việc khác</option>
           <option v-if="canCancel" value="cancel">Hủy đơn đã thanh toán</option>
           <option v-if="canReturn" value="return">Trả hàng</option>
+          <option v-if="canReturn" value="exchange">Đổi size hoặc màu</option>
         </select>
       </label>
       <fieldset v-if="form.kind === 'return'" class="space-y-3" data-testid="support-return-lines">
@@ -127,6 +157,48 @@ async function submit() {
               <option v-for="(label, value) in RETURN_REASON_LABELS" :key="value" :value="value">{{ label }}</option>
             </select>
           </template>
+        </div>
+      </fieldset>
+      <fieldset v-if="form.kind === 'exchange'" class="space-y-3" data-testid="support-exchange-lines">
+        <legend class="font-medium">Sản phẩm muốn đổi</legend>
+        <p class="text-muted-foreground">
+          Chỉ đổi được sang biến thể cùng giá, còn hàng. Cửa hàng gửi hàng mới sau khi nhận hàng bạn gửi về.
+        </p>
+        <p v-if="!exchange" class="text-muted-foreground">Đang tải…</p>
+        <div v-for="line in exchange?.lines ?? []" :key="line.variantId" class="flex flex-wrap items-center gap-3">
+          <template v-if="line.returnable > 0 && line.options.length > 0">
+            <label class="flex items-center gap-2">
+              <input
+                v-model="swaps[line.variantId]!.chosen"
+                type="checkbox"
+                :data-testid="`support-exchange-${line.heldSku}`"
+              />
+              {{ productName(line.variantId) }} <span class="text-muted-foreground">{{ line.heldSku }}</span>
+            </label>
+            <template v-if="swaps[line.variantId]!.chosen">
+              <select
+                v-model.number="swaps[line.variantId]!.quantity"
+                class="field-input w-20"
+                aria-label="Số lượng đổi"
+              >
+                <option v-for="q in line.returnable" :key="q" :value="q">{{ q }}</option>
+              </select>
+              <select
+                v-model="swaps[line.variantId]!.toVariantId"
+                class="field-input w-56"
+                aria-label="Đổi sang"
+                :data-testid="`support-exchange-to-${line.heldSku}`"
+              >
+                <option v-for="o in line.options" :key="o.variantId" :value="o.variantId">
+                  {{ o.label || o.sku }} ({{ o.sku }})
+                </option>
+              </select>
+            </template>
+          </template>
+          <p v-else class="text-muted-foreground">
+            {{ productName(line.variantId) }} {{ line.heldSku }}:
+            {{ line.returnable > 0 ? 'chưa có biến thể cùng giá còn hàng để đổi' : 'đã nằm trong yêu cầu khác' }}
+          </p>
         </div>
       </fieldset>
       <p v-if="form.kind === 'cancel'" class="text-muted-foreground">
@@ -151,7 +223,11 @@ async function submit() {
         <button
           type="submit"
           class="btn-primary"
-          :disabled="sending || (form.kind === 'return' && chosenLines.length === 0)"
+          :disabled="
+            sending ||
+            (form.kind === 'return' && chosenLines.length === 0) ||
+            (form.kind === 'exchange' && chosenSwaps.length === 0)
+          "
           data-testid="support-submit"
         >
           {{ sending ? 'Đang gửi…' : 'Gửi yêu cầu' }}

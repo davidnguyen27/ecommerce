@@ -132,7 +132,7 @@ describe('gửi yêu cầu trả hàng', () => {
     // Dòng có 2 đôi, yêu cầu trước đã chiếm 1: trả 2 nữa thì vượt.
     const over = await ask(placed, [{ variantId: v40.id, quantity: 2, reason: 'other' }])
     expect(over.status).toBe(409)
-    expect(over.body.error.message).toContain('chỉ còn trả được 1')
+    expect(over.body.error.message).toContain('chỉ còn trả hay đổi được 1')
   })
 
   it('hai yêu cầu cùng lúc trên cùng dòng: chỉ một được nếu tổng vượt số lượng', async () => {

@@ -7,6 +7,7 @@ import {
   DecideSupportRequest,
   ProposeReturnRefund,
   ReceiveSupportReturn,
+  ShipExchangeRequest,
   ErrorCode,
   SUPPORT_CLOSED_STATUSES,
   type AdminSupportPage,
@@ -38,6 +39,7 @@ import {
   receiveSupportReturn,
   returnRefundHint,
 } from '../support/returns.ts'
+import { shipExchange } from '../support/exchanges.ts'
 
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy yêu cầu')
 const requestCode = (code: string) => {
@@ -81,6 +83,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
           ...(query.unassigned && { assigneeId: null }),
           ...(query.assignee && { assigneeId: query.assignee === 'me' ? staffId : query.assignee }),
           ...(query.orderCode !== undefined && { order: { code: query.orderCode } }),
+          ...(query.exchangeOverdue && { exchangeOverdueAt: { not: null }, receivedAt: null }),
         }
         const [requests, total] = await Promise.all([
           prisma.supportRequest.findMany({
@@ -126,7 +129,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
             kind: input.kind,
             subject: input.subject,
             message: input.message,
-            lines: input.kind === 'return' ? input.lines : undefined,
+            lines: 'lines' in input ? input.lines : undefined,
             creator: { type: 'staff', staffId },
             ...(order ? { order } : { customer: customer! }),
           })
@@ -200,6 +203,14 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
         await audited(prisma, req, (tx, audit) => receiveSupportReturn(tx, audit, code, staffId, input))
+        res.json(await load(code))
+      })
+      // Đổi hàng: kho bàn giao biến thể mới sau khi đã nhận hàng cũ (ADR 0015).
+      .post('/:code/exchange-ship', requirePermission('order.fulfill'), async (req, res) => {
+        const input = parse(ShipExchangeRequest, req.body)
+        const code = requestCode(String(req.params.code))
+        const staffId = currentStaff(req).id
+        await audited(prisma, req, (tx, audit) => shipExchange(tx, mail, audit, code, staffId, input))
         res.json(await load(code))
       })
       .post('/:code/refund', requirePermission('support.handle'), async (req, res) => {

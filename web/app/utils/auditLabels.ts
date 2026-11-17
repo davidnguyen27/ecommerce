@@ -56,6 +56,7 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'support.decide': 'Chấp nhận/từ chối yêu cầu hỗ trợ',
   'support.receive': 'Nhận hàng khách gửi về',
   'support.refund_propose': 'Đề xuất hoàn tiền trả hàng',
+  'support.exchange_ship': 'Bàn giao hàng đổi',
   'return_window.update': 'Sửa hạn đổi trả',
   'order.cancel_paid': 'Hủy đơn đã nhận tiền',
   'preorder.campaign.cancel_unsupplied': 'Hủy các đơn chờ hàng (đợt không nhập được hàng)',

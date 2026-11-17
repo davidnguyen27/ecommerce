@@ -24,8 +24,8 @@ const Body = z
   .max(5000, 'Nội dung tối đa 5.000 ký tự')
 const Subject = z.string({ error: 'Nhập tiêu đề' }).trim().min(1, 'Nhập tiêu đề').max(200, 'Tiêu đề tối đa 200 ký tự')
 
-/** Loại khách và nhân viên đang tạo được (spec M6b ticket 01, 03, 04). */
-export const CreatableSupportKind = z.enum(['other', 'cancel', 'return'])
+/** Loại khách và nhân viên đang tạo được (spec M6b ticket 01, 03, 04, 05). */
+export const CreatableSupportKind = z.enum(['other', 'cancel', 'return', 'exchange'])
 export type CreatableSupportKind = z.infer<typeof CreatableSupportKind>
 
 /** Lý do trả hàng: lỗi, không vừa, không đúng mô tả, khác. */
@@ -39,6 +39,25 @@ export const ReturnLineInput = z.object({
   reason: SupportReturnReason,
 })
 export type ReturnLineInput = z.infer<typeof ReturnLineInput>
+
+/**
+ * Một dòng muốn đổi (ADR 0015): dòng đơn theo biến thể gốc của nó, số lượng, và biến thể muốn nhận (cùng sản phẩm, cùng
+ * giá, còn hàng; API kiểm).
+ */
+export const ExchangeLineInput = z.object({
+  variantId: z.string(),
+  quantity: z.number().int().min(1, 'Số lượng ít nhất là 1').max(5),
+  toVariantId: z.string(),
+})
+export type ExchangeLineInput = z.infer<typeof ExchangeLineInput>
+
+const ExchangeLines = z
+  .array(ExchangeLineInput)
+  .min(1, 'Chọn ít nhất một sản phẩm muốn đổi')
+  .max(20)
+  .refine((lines) => new Set(lines.map((l) => l.variantId)).size === lines.length, {
+    message: 'Mỗi sản phẩm chỉ chọn một lần',
+  })
 
 const CreateBase = z.object({
   subject: Subject,
@@ -65,6 +84,7 @@ export const CreateSupportRequest = z.discriminatedUnion('kind', [
   CreateBase.extend({ kind: z.literal('other') }),
   CreateBase.extend({ kind: z.literal('cancel') }),
   CreateBase.extend({ kind: z.literal('return'), lines: ReturnLines }),
+  CreateBase.extend({ kind: z.literal('exchange'), lines: ExchangeLines }),
 ])
 export type CreateSupportRequest = z.input<typeof CreateSupportRequest>
 
@@ -122,6 +142,8 @@ export const SupportLineView = z.object({
   productName: z.string(),
   quantity: z.number(),
   reason: SupportReturnReason.nullable(),
+  /** Đổi hàng: SKU biến thể khách nhận. */
+  toSku: z.string().nullable(),
 })
 export type SupportLineView = z.infer<typeof SupportLineView>
 
@@ -133,6 +155,8 @@ export const PublicSupportRequest = PublicSupportSummary.extend({
   decision: SupportDecision.nullable(),
   /** Lúc cửa hàng đã nhận hàng khách gửi về. */
   receivedAt: z.string().nullable(),
+  /** Đổi hàng: lần giao biến thể mới (đơn vị vận chuyển, mã vận đơn, lúc bàn giao). */
+  exchangeShipment: z.object({ carrier: z.string(), trackingNumber: z.string(), handedOverAt: z.string() }).nullable(),
   previousRequestCode: z.number().nullable(),
   resolvedAt: z.string().nullable(),
   messages: z.array(PublicSupportMessage),
@@ -151,6 +175,8 @@ export const AdminSupportQuery = PageQuery.extend({
   unassigned: z.stringbool().optional(),
   /** Mã đơn: yêu cầu của một đơn. */
   orderCode: z.coerce.number().int().positive().optional(),
+  /** `true`: chỉ yêu cầu đổi bị gắn cờ quá hạn gửi hàng cũ. */
+  exchangeOverdue: z.stringbool().optional(),
 })
 export type AdminSupportQuery = z.input<typeof AdminSupportQuery>
 
@@ -179,6 +205,9 @@ export const AdminSupportLine = SupportLineView.extend({
   heldSku: z.string(),
   restockedQuantity: z.number(),
   writtenOffQuantity: z.number(),
+  /** Đổi hàng: biến thể khách nhận và số đang giữ cho nó trong kho. */
+  exchangeVariantId: z.string().nullable(),
+  reservedQuantity: z.number(),
 })
 export type AdminSupportLine = z.infer<typeof AdminSupportLine>
 
@@ -189,6 +218,9 @@ export const AdminSupportRequest = AdminSupportSummary.extend({
   decidedAt: z.string().nullable(),
   receivedAt: z.string().nullable(),
   receivedBy: Actor.nullable(),
+  exchangeShipment: z.object({ carrier: z.string(), trackingNumber: z.string(), handedOverAt: z.string() }).nullable(),
+  /** Đổi hàng đã chấp nhận quá 14 ngày chưa nhận hàng cũ: lúc job gắn cờ. */
+  exchangeOverdueAt: z.string().nullable(),
   /** Hạn đổi trả chụp lúc gửi: số ngày (null là nhóm hàng không cấu hình), lúc giao, số ngày đã quá. */
   returnWindow: z
     .object({ days: z.number().nullable(), deliveredAt: z.string().nullable(), overdueDays: z.number().nullable() })
@@ -222,6 +254,7 @@ export const AdminCreateSupportRequest = z
     AdminCreateBase.extend({ kind: z.literal('other') }),
     AdminCreateBase.extend({ kind: z.literal('cancel') }),
     AdminCreateBase.extend({ kind: z.literal('return'), lines: ReturnLines }),
+    AdminCreateBase.extend({ kind: z.literal('exchange'), lines: ExchangeLines }),
   ])
   .refine((v) => v.orderCode !== undefined || v.customerEmail !== undefined, {
     message: 'Cần mã đơn hoặc email tài khoản khách',
@@ -288,3 +321,26 @@ export type ReturnWindowItem = z.infer<typeof ReturnWindowItem>
 /** `GET` và `PUT /api/admin/return-windows`: đủ năm nhóm hàng. */
 export const ReturnWindowList = z.object({ items: z.array(ReturnWindowItem) })
 export type ReturnWindowList = z.infer<typeof ReturnWindowList>
+
+/** Body kho bàn giao biến thể đổi cho đơn vị vận chuyển (ADR 0015): chỉ sau khi đã nhận hàng cũ. */
+export const ShipExchangeRequest = z.object({
+  carrier: z.string().trim().min(1, 'Cần đơn vị vận chuyển').max(100),
+  trackingNumber: z.string().trim().min(1, 'Cần mã vận đơn').max(100),
+})
+export type ShipExchangeRequest = z.input<typeof ShipExchangeRequest>
+
+/**
+ * Biến thể đổi được của từng dòng đơn đã giao (`GET …/support-requests/exchange-options`): cùng sản phẩm, cùng giá với
+ * dòng, đang bán, còn hàng, khác biến thể khách đang giữ. `variantId` của dòng là biến thể gốc (khóa của dòng đơn).
+ */
+export const ExchangeOptions = z.object({
+  lines: z.array(
+    z.object({
+      variantId: z.string(),
+      heldSku: z.string(),
+      returnable: z.number(),
+      options: z.array(z.object({ variantId: z.string(), sku: z.string(), label: z.string() })),
+    }),
+  ),
+})
+export type ExchangeOptions = z.infer<typeof ExchangeOptions>

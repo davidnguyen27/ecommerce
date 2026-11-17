@@ -1,4 +1,5 @@
 import {
+  ExchangeOptions,
   PublicSupportList,
   PublicSupportRequest,
   type CreateSupportRequest,
@@ -16,6 +17,8 @@ export type SupportClient = {
   say: (code: number, message: string) => Promise<PublicSupportRequest>
   /** Tải một ảnh vào tin `messageId` của chính khách (gửi tin trước, rồi tải ảnh). */
   attach: (code: number, messageId: string, file: File) => Promise<PublicSupportRequest>
+  /** Biến thể đổi được của từng dòng đơn (form đổi hàng). Tài khoản khách cần `orderCode`. */
+  exchangeOptions: (orderCode?: number) => Promise<ExchangeOptions>
   /** Đường dẫn trang chi tiết một yêu cầu. */
   linkTo: (code: number) => string
 }
@@ -39,6 +42,12 @@ function clientOf(base: string, call: Fetch, linkTo: (code: number) => string): 
         await call(`${base}/${code}/messages/${messageId}/attachments`, { method: 'POST', body }),
       )
     },
+    exchangeOptions: async (orderCode) =>
+      ExchangeOptions.parse(
+        await call(
+          orderCode === undefined ? base + '/exchange-options' : base + '/exchange-options' + '?orderCode=' + orderCode,
+        ),
+      ),
     linkTo,
   }
 }

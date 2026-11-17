@@ -5,6 +5,7 @@ import type { Db, DbClient } from '../db.ts'
 import { expireOrder, expireOverdueOrders } from '../orders/cancel-order.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 import { processRemainderDeadlines } from '../preorders/deadlines.ts'
+import { flagOverdueExchanges } from '../support/exchanges.ts'
 import { deleteExpiredRecords } from './cleanup.ts'
 
 const SEND_EMAIL = 'send-email'
@@ -12,6 +13,7 @@ const DELETE_EXPIRED = 'delete-expired'
 const EXPIRE_ORDER = 'expire-order'
 const EXPIRE_OVERDUE_ORDERS = 'expire-overdue-orders'
 const REMAINDER_DEADLINES = 'remainder-deadlines'
+const OVERDUE_EXCHANGES = 'overdue-exchanges'
 
 /** Xếp thư vào hàng đợi; route chỉ cần phần này của `Jobs`. */
 /** Gửi email cho khách: hàng đợi thư và địa chỉ website để dựng link tra cứu đơn. */
@@ -106,6 +108,13 @@ export class Jobs implements EmailQueue, OrderExpiryQueue {
     await this.#boss.work(REMAINDER_DEADLINES, async () => {
       const result = await processRemainderDeadlines(expireDeps)
       if (result.reminded > 0 || result.flagged > 0) this.#logger.info(result, 'Đã xử lý hạn trả phần còn lại')
+    })
+    // Đổi hàng đã chấp nhận quá 14 ngày chưa nhận hàng cũ: gắn cờ cho nhân viên, mỗi sáng (spec M6b).
+    await this.#boss.createQueue(OVERDUE_EXCHANGES)
+    await this.#boss.schedule(OVERDUE_EXCHANGES, '0 7 * * *', null, { tz: 'Asia/Ho_Chi_Minh' })
+    await this.#boss.work(OVERDUE_EXCHANGES, async () => {
+      const flagged = await flagOverdueExchanges(this.#prisma)
+      if (flagged > 0) this.#logger.info({ flagged }, 'Đã gắn cờ yêu cầu đổi quá hạn gửi hàng')
     })
   }
 

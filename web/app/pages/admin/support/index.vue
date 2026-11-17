@@ -17,6 +17,7 @@ const filters = reactive({
   kind: 'all' as NonNullable<AdminSupportQuery['kind']>,
   mine: false,
   unassigned: route.query.unassigned === 'true',
+  exchangeOverdue: route.query.exchangeOverdue === 'true',
 })
 const page = ref(1)
 
@@ -30,6 +31,7 @@ async function load() {
           kind: filters.kind,
           assignee: filters.mine ? 'me' : undefined,
           unassigned: filters.unassigned ? 'true' : undefined,
+          exchangeOverdue: filters.exchangeOverdue ? 'true' : undefined,
           page: page.value,
           pageSize: PAGE_SIZE,
         },
@@ -96,6 +98,15 @@ await load()
         <label style="display: flex; gap: 6px; align-items: center; font-size: 13px">
           <input v-model="filters.mine" type="checkbox" @change="filter" />
           Của tôi
+        </label>
+        <label style="display: flex; gap: 6px; align-items: center; font-size: 13px">
+          <input
+            v-model="filters.exchangeOverdue"
+            type="checkbox"
+            data-testid="support-exchange-overdue"
+            @change="filter"
+          />
+          Đổi hàng quá hạn gửi
         </label>
       </div>
     </div>

@@ -162,7 +162,11 @@ if (canAssign.value) {
           </div>
         </div>
 
-        <AdminSupportReturnPanel v-if="request.kind === 'return'" :request="request" @update="request = $event" />
+        <AdminSupportReturnPanel
+          v-if="request.kind === 'return' || request.kind === 'exchange'"
+          :request="request"
+          @update="request = $event"
+        />
 
         <div
           v-if="request.kind === 'cancel' && request.orderCode && canCancelPaid && !closed"
