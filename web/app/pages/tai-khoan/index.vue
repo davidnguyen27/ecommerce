@@ -3,6 +3,7 @@ import { CUSTOMER_PASSWORD_MIN_LENGTH, type CustomerProfile } from '@ecommerce/s
 
 // Phiên khách chỉ có ở trình duyệt nên trang này nạp dữ liệu sau khi mount, không qua SSR.
 const session = useCustomerSession()
+const supportClient = accountSupportClient(session.accountFetch)
 const profile = ref<CustomerProfile | null>(null)
 const notice = ref<string | null>(null)
 const sending = ref(false)
@@ -91,6 +92,7 @@ useSeo({ title: 'Tài khoản', description: 'Thông tin tài khoản khách hà
         </p>
       </section>
       <AccountOrders class="mt-6" />
+      <SupportRequests :client="supportClient" class="mt-6" />
       <form class="mt-6 space-y-5 rounded-lg border border-border bg-card p-6 sm:p-8" @submit.prevent="changePassword">
         <h2>Đổi mật khẩu</h2>
         <label class="field">

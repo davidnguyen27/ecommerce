@@ -1,0 +1,356 @@
+import {
+  ErrorCode,
+  SUPPORT_CLOSED_STATUSES,
+  type AdminSupportReply,
+  type AdminSupportRequest,
+  type AdminSupportSummary,
+  type PublicSupportRequest,
+  type PublicSupportSummary,
+  type SupportRequestKind,
+  type SupportRequestStatus,
+} from '@ecommerce/shared'
+import type { Audit } from '../audit/audited.ts'
+import { ACTOR_SELECT } from '../audit/audited.ts'
+import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
+import { permissionsOf } from '../auth/permissions.ts'
+import type { DbClient } from '../db.ts'
+import type { Prisma } from '../generated/prisma/client.ts'
+import { AppError, invalidField } from '../http/errors.ts'
+import type { CustomerMail } from '../jobs/jobs.ts'
+
+/**
+ * Yêu cầu hỗ trợ (GLOSSARY, spec M6b): việc khách nhờ cửa hàng xử lý, gồm chuỗi tin, người phụ trách và trạng thái
+ * `new` → `in_progress` ⇄ `waiting_customer` → `resolved` hoặc `rejected` (kết thúc, không mở lại). Mọi thay đổi chạy
+ * dưới khóa dòng yêu cầu `FOR UPDATE`; tạo yêu cầu khóa đơn (hay tài khoản) để đếm yêu cầu đang mở cho đúng.
+ */
+
+/** Tối đa số yêu cầu chưa kết thúc trên một đơn, hay trên một tài khoản với yêu cầu không gắn đơn (số tạm). */
+export const MAX_OPEN_REQUESTS = 3
+
+const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy yêu cầu')
+const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, message)
+const isClosed = (status: SupportRequestStatus) => SUPPORT_CLOSED_STATUSES.includes(status)
+
+/** Đủ để dựng yêu cầu như khách hay nhân viên thấy. */
+export const SUPPORT_INCLUDE = {
+  order: { select: { code: true } },
+  assignee: { select: ACTOR_SELECT },
+  createdByStaff: { select: ACTOR_SELECT },
+  previousRequest: { select: { code: true } },
+  messages: { include: { staff: { select: ACTOR_SELECT } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+} as const satisfies Prisma.SupportRequestInclude
+
+export type SupportForView = Prisma.SupportRequestGetPayload<{ include: typeof SUPPORT_INCLUDE }>
+
+const publicMessages = (request: SupportForView) => request.messages.filter((m) => !m.internal)
+
+function summary(request: SupportForView): PublicSupportSummary {
+  const visible = publicMessages(request)
+  return {
+    code: request.code,
+    kind: request.kind,
+    status: request.status,
+    subject: request.subject,
+    orderCode: request.order?.code ?? null,
+    createdAt: request.createdAt.toISOString(),
+    lastMessageAt: (visible.at(-1)?.createdAt ?? request.createdAt).toISOString(),
+  }
+}
+
+/** Yêu cầu như khách thấy: không có ghi chú nội bộ, người phụ trách hay tên nhân viên. */
+export function toPublicSupport(request: SupportForView): PublicSupportRequest {
+  return {
+    ...summary(request),
+    previousRequestCode: request.previousRequest?.code ?? null,
+    resolvedAt: request.resolvedAt?.toISOString() ?? null,
+    messages: publicMessages(request).map((m) => ({
+      id: m.id,
+      author: m.author,
+      body: m.body,
+      createdAt: m.createdAt.toISOString(),
+    })),
+  }
+}
+
+export const toPublicSupportSummary = summary
+
+export function toAdminSupportSummary(request: SupportForView): AdminSupportSummary {
+  return {
+    ...summary(request),
+    // Nhân viên thấy cả ghi chú nội bộ, nên tin cuối là tin cuối bất kỳ.
+    lastMessageAt: (request.messages.at(-1)?.createdAt ?? request.createdAt).toISOString(),
+    contactEmail: request.contactEmail,
+    contactName: request.contactName,
+    assignee: request.assignee,
+  }
+}
+
+export function toAdminSupport(request: SupportForView): AdminSupportRequest {
+  return {
+    ...toAdminSupportSummary(request),
+    customerId: request.customerId,
+    createdBy: request.createdBy,
+    createdByStaff: request.createdByStaff,
+    previousRequestCode: request.previousRequest?.code ?? null,
+    resolvedAt: request.resolvedAt?.toISOString() ?? null,
+    messages: request.messages.map((m) => ({
+      id: m.id,
+      author: m.author,
+      body: m.body,
+      createdAt: m.createdAt.toISOString(),
+      internal: m.internal,
+      staff: m.staff,
+    })),
+  }
+}
+
+/** Ai tạo yêu cầu: khách (đăng nhập hay cầm link đơn), nhân viên tạo hộ, hay hệ thống. */
+export type SupportCreator = { type: 'customer' } | { type: 'staff'; staffId: string } | { type: 'system' }
+
+export type NewSupportRequest = {
+  kind: SupportRequestKind
+  subject: string
+  message: string
+  /** Đơn của yêu cầu; khách và email liên hệ lấy từ đơn. */
+  order?: { id: string; code: number; email: string; recipientName: string; customerId: string | null }
+  /** Tài khoản khách, khi yêu cầu không gắn đơn. */
+  customer?: { id: string; email: string }
+  previousRequestCode?: number
+  creator: SupportCreator
+}
+
+/**
+ * Tạo yêu cầu cùng tin đầu tiên, rồi xếp email "đã nhận yêu cầu". Khóa đơn (hay tài khoản) `FOR UPDATE` rồi đếm yêu cầu
+ * chưa kết thúc: đủ `MAX_OPEN_REQUESTS` thì 409. Yêu cầu trước đó phải của cùng đơn (hay tài khoản) và đã kết thúc.
+ * Trả yêu cầu vừa tạo.
+ */
+export async function createSupportRequest(tx: DbClient, mail: CustomerMail, input: NewSupportRequest) {
+  const { order, customer } = input
+  if (!order && !customer) throw new Error('Yêu cầu cần đơn hoặc tài khoản khách')
+  const owner: Prisma.SupportRequestWhereInput = order
+    ? { orderId: order.id }
+    : { customerId: customer!.id, orderId: null }
+  if (order) await tx.$queryRaw`SELECT "id" FROM "order" WHERE "id" = ${order.id}::uuid FOR UPDATE`
+  else await tx.$queryRaw`SELECT "id" FROM "customer" WHERE "id" = ${customer!.id}::uuid FOR UPDATE`
+
+  const open = await tx.supportRequest.count({
+    where: { ...owner, status: { notIn: [...SUPPORT_CLOSED_STATUSES] } },
+  })
+  if (open >= MAX_OPEN_REQUESTS) {
+    throw conflict(`Đã có ${open} yêu cầu đang xử lý; vui lòng chờ hoặc gửi thêm tin vào yêu cầu đó`)
+  }
+
+  let previousRequestId: string | null = null
+  if (input.previousRequestCode !== undefined) {
+    const previous = await tx.supportRequest.findFirst({
+      where: { ...owner, code: input.previousRequestCode },
+      select: { id: true, status: true },
+    })
+    if (!previous) throw invalidField('previousRequestCode', 'Không tìm thấy yêu cầu trước đó')
+    if (!isClosed(previous.status)) throw invalidField('previousRequestCode', 'Yêu cầu trước đó vẫn đang xử lý')
+    previousRequestId = previous.id
+  }
+
+  const staffId = input.creator.type === 'staff' ? input.creator.staffId : null
+  const request = await tx.supportRequest.create({
+    data: {
+      kind: input.kind,
+      subject: input.subject,
+      orderId: order?.id ?? null,
+      customerId: order ? order.customerId : customer!.id,
+      contactEmail: order?.email ?? customer!.email,
+      contactName: order?.recipientName ?? null,
+      createdBy: input.creator.type,
+      createdByStaffId: staffId,
+      previousRequestId,
+      messages: { create: { author: input.creator.type, staffId, body: input.message } },
+    },
+    include: SUPPORT_INCLUDE,
+  })
+  await queueSupportEmail(tx, mail, request, 'created')
+  return request
+}
+
+/** Khóa dòng yêu cầu `FOR UPDATE` rồi đọc lại dưới khóa. */
+export async function lockSupportRequest(tx: DbClient, where: Prisma.SupportRequestWhereInput) {
+  const found = await tx.supportRequest.findFirst({ where, select: { id: true } })
+  if (!found) throw notFound()
+  await tx.$queryRaw`SELECT "id" FROM "support_request" WHERE "id" = ${found.id}::uuid FOR UPDATE`
+  return tx.supportRequest.findUniqueOrThrow({ where: { id: found.id }, include: SUPPORT_INCLUDE })
+}
+
+/**
+ * Khách gửi tin vào yêu cầu của mình (`where` đã giới hạn theo tài khoản hay theo đơn của token). Yêu cầu đã kết thúc
+ * thì 409. Đang chờ khách thì về đang xử lý. Không gửi email cho nhân viên (spec M6b).
+ */
+export async function addCustomerMessage(tx: DbClient, where: Prisma.SupportRequestWhereInput, body: string) {
+  const request = await lockSupportRequest(tx, where)
+  if (isClosed(request.status)) throw conflict('Yêu cầu đã kết thúc; hãy gửi yêu cầu mới nếu cần')
+  await tx.supportMessage.create({ data: { requestId: request.id, author: 'customer', body } })
+  await tx.supportRequest.update({
+    where: { id: request.id },
+    data: { status: request.status === 'waiting_customer' ? 'in_progress' : request.status, updatedAt: new Date() },
+  })
+  return tx.supportRequest.findUniqueOrThrow({ where: { id: request.id }, include: SUPPORT_INCLUDE })
+}
+
+/**
+ * Nhân viên trả lời, ghi chú nội bộ, và/hoặc chuyển trạng thái. Phải có tin hoặc trạng thái mới; yêu cầu đã kết thúc
+ * thì 409. Email: tin gửi khách thì gửi email trả lời (kèm trạng thái kết thúc nếu có); chỉ kết thúc thì gửi email
+ * kết thúc; ghi chú nội bộ không gửi gì. Audit `support.reply`, `support.note`, `support.status`.
+ */
+export async function staffReply(
+  tx: DbClient,
+  mail: CustomerMail,
+  audit: Audit,
+  code: number,
+  staffId: string,
+  input: Pick<AdminSupportReply, 'message' | 'status'> & { internal: boolean },
+) {
+  if (!input.message && !input.status) throw invalidField('message', 'Nhập nội dung hoặc chọn trạng thái mới')
+  if (input.internal && !input.message) throw invalidField('message', 'Ghi chú nội bộ cần nội dung')
+  const request = await lockSupportRequest(tx, { code })
+  if (isClosed(request.status)) throw conflict('Yêu cầu đã kết thúc, không đổi được nữa')
+  // Không có tin và trạng thái không đổi: không ghi gì (CODING_STANDARDS "Ghi dữ liệu ở API quản trị").
+  if (!input.message && input.status === request.status) return request
+
+  if (input.message) {
+    await tx.supportMessage.create({
+      data: { requestId: request.id, author: 'staff', staffId, internal: input.internal, body: input.message },
+    })
+  }
+  const status = input.status ?? request.status
+  const closing = isClosed(status)
+  await tx.supportRequest.update({
+    where: { id: request.id },
+    data: { status, resolvedAt: closing ? new Date() : null, updatedAt: new Date() },
+  })
+  const entries = []
+  if (input.message) {
+    entries.push({
+      action: input.internal ? 'support.note' : 'support.reply',
+      entityType: 'support_request',
+      entityId: request.id,
+      after: { code, internal: input.internal, message: input.message },
+    })
+  }
+  if (status !== request.status) {
+    entries.push({
+      action: 'support.status',
+      entityType: 'support_request',
+      entityId: request.id,
+      before: { status: request.status },
+      after: { status },
+    })
+  }
+  await audit(entries)
+
+  const updated = await tx.supportRequest.findUniqueOrThrow({ where: { id: request.id }, include: SUPPORT_INCLUDE })
+  if (input.message && !input.internal) await queueSupportEmail(tx, mail, updated, 'reply', input.message)
+  else if (closing && status !== request.status) {
+    await queueSupportEmail(tx, mail, updated, status === 'resolved' ? 'resolved' : 'rejected')
+  }
+  return updated
+}
+
+/**
+ * Nhân viên nhận yêu cầu về mình: chỉ khi chưa ai nhận (hay đã là của mình). Yêu cầu mới thành đang xử lý. Yêu cầu đã
+ * có người khác nhận thì 409: owner giao lại bằng `assignSupportRequest`.
+ */
+export async function claimSupportRequest(tx: DbClient, audit: Audit, code: number, staffId: string) {
+  const request = await lockSupportRequest(tx, { code })
+  if (isClosed(request.status)) throw conflict('Yêu cầu đã kết thúc')
+  if (request.assigneeId === staffId) return request
+  if (request.assigneeId) throw conflict(`Yêu cầu đã được ${request.assignee!.name} nhận`)
+  await tx.supportRequest.update({
+    where: { id: request.id },
+    data: { assigneeId: staffId, status: request.status === 'new' ? 'in_progress' : request.status },
+  })
+  await audit({
+    action: 'support.assign',
+    entityType: 'support_request',
+    entityId: request.id,
+    before: { assigneeId: null, status: request.status },
+    after: { assigneeId: staffId, status: request.status === 'new' ? 'in_progress' : request.status },
+  })
+  return tx.supportRequest.findUniqueOrThrow({ where: { id: request.id }, include: SUPPORT_INCLUDE })
+}
+
+/**
+ * Owner giao yêu cầu cho một nhân viên (hay bỏ giao với `null`). Người được giao phải còn hoạt động và có
+ * `support.handle`. Không đổi gì thì không ghi audit.
+ */
+export async function assignSupportRequest(tx: DbClient, audit: Audit, code: number, assigneeId: string | null) {
+  const request = await lockSupportRequest(tx, { code })
+  if (isClosed(request.status)) throw conflict('Yêu cầu đã kết thúc')
+  if (request.assigneeId === assigneeId) return request
+  if (assigneeId) {
+    const staff = await tx.staff.findUnique({ where: { id: assigneeId }, select: { roles: true, lockedAt: true } })
+    if (!staff || staff.lockedAt || !permissionsOf(staff.roles).includes('support.handle')) {
+      throw invalidField('staffId', 'Nhân viên này không xử lý được yêu cầu hỗ trợ')
+    }
+  }
+  const status = assigneeId && request.status === 'new' ? 'in_progress' : request.status
+  await tx.supportRequest.update({ where: { id: request.id }, data: { assigneeId, status } })
+  await audit({
+    action: 'support.assign',
+    entityType: 'support_request',
+    entityId: request.id,
+    before: { assigneeId: request.assigneeId, status: request.status },
+    after: { assigneeId, status },
+  })
+  return tx.supportRequest.findUniqueOrThrow({ where: { id: request.id }, include: SUPPORT_INCLUDE })
+}
+
+/**
+ * Link trang yêu cầu gửi trong email. Yêu cầu của tài khoản: trang tài khoản. Yêu cầu của đơn vãng lai: trang yêu cầu
+ * kèm mã đơn và token tra cứu đơn mới (chỉ lưu hash) như email đơn hàng.
+ */
+async function requestUrl(tx: DbClient, siteUrl: string, request: SupportForView) {
+  if (request.customerId) return new URL(`/tai-khoan/yeu-cau/${request.code}`, siteUrl).toString()
+  const token = newOpaqueToken()
+  await tx.orderLookupToken.create({ data: { orderId: request.orderId!, tokenHash: hashOpaqueToken(token) } })
+  const url = new URL(`/yeu-cau/${request.code}`, siteUrl)
+  url.searchParams.set('don', String(request.order!.code))
+  url.searchParams.set('token', token)
+  return url.toString()
+}
+
+type SupportEmail = 'created' | 'reply' | 'resolved' | 'rejected'
+
+/** Xếp email cho khách trong transaction của thay đổi. Nội dung là bản nháp, chờ chủ doanh nghiệp duyệt. */
+async function queueSupportEmail(
+  tx: DbClient,
+  { emails, siteUrl }: CustomerMail,
+  request: SupportForView,
+  kind: SupportEmail,
+  message?: string,
+) {
+  const link = await requestUrl(tx, siteUrl, request)
+  const title = `#YC${request.code} ${request.subject}`
+  const subjects: Record<SupportEmail, string> = {
+    created: `Đã nhận yêu cầu ${title}`,
+    reply: `Cửa hàng đã trả lời yêu cầu ${title}`,
+    resolved: `Yêu cầu ${title} đã được xử lý xong`,
+    rejected: `Yêu cầu ${title} không được chấp nhận`,
+  }
+  const closingLine =
+    request.status === 'resolved'
+      ? 'Yêu cầu đã được xử lý xong.'
+      : request.status === 'rejected'
+        ? 'Yêu cầu đã được đóng.'
+        : null
+  const body: Record<SupportEmail, string[]> = {
+    created: ['Chúng tôi đã nhận yêu cầu của bạn và sẽ phản hồi sớm.'],
+    reply: ['Cửa hàng đã trả lời:', '', message ?? '', ...(closingLine ? ['', closingLine] : [])],
+    resolved: ['Yêu cầu của bạn đã được xử lý xong.'],
+    rejected: ['Yêu cầu của bạn không được chấp nhận. Xem trao đổi trong yêu cầu để biết lý do.'],
+  }
+  await emails.sendEmail(tx, {
+    to: request.contactEmail,
+    subject: subjects[kind],
+    text: [`Chào ${request.contactName ?? 'bạn'},`, '', ...body[kind], '', `Xem và trả lời yêu cầu: ${link}`].join(
+      '\n',
+    ),
+  })
+}
