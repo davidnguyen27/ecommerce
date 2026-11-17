@@ -105,6 +105,12 @@ export const ORDER_VIEW_INCLUDE = {
   privacyPolicyVersion: { select: { version: true } },
   // Thời gian giao dự kiến hiện tại của đợt, cạnh lời hẹn lúc đặt (ticket 09).
   preorderCampaign: { select: { deliveryFrom: true, deliveryTo: true } },
+  // Đã nhận và các khoản hoàn khách thấy (ADR 0014).
+  paymentTransactions: { select: { amount: true } },
+  refunds: {
+    select: { amount: true, status: true, createdAt: true, completedAt: true },
+    orderBy: { createdAt: 'asc' },
+  },
 } as const satisfies Prisma.OrderInclude
 
 export type OrderForView = Prisma.OrderGetPayload<{ include: typeof ORDER_VIEW_INCLUDE }>
@@ -217,6 +223,7 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
     createdAt: order.createdAt.toISOString(),
     reservedUntil: order.reservedUntil?.toISOString() ?? null,
     cancelReason: order.cancelReason,
+    cancelCause: order.cancelCause,
     cancelledAt: order.cancelledAt?.toISOString() ?? null,
     address: {
       recipientName: order.recipientName,
@@ -268,5 +275,15 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
             trackingNumber: order.trackingNumber,
             handedOverAt: order.handedOverAt.toISOString(),
           },
+    received: order.paymentTransactions.reduce((sum, t) => sum + Number(t.amount), 0),
+    // Khoản thất bại không hiện: khách chỉ cần biết tiền đang về hay đã về; kế toán tạo lại khoản mới nếu cần.
+    refunds: order.refunds
+      .filter((r) => r.status !== 'failed')
+      .map((r) => ({
+        amount: Number(r.amount),
+        status: r.status === 'succeeded' ? 'refunded' : 'refunding',
+        createdAt: r.createdAt.toISOString(),
+        completedAt: r.completedAt?.toISOString() ?? null,
+      })),
   }
 }

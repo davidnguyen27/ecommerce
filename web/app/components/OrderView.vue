@@ -120,6 +120,19 @@ const remainingText = computed(() => {
         Quay lại giỏ hàng
       </button>
     </div>
+    <!-- Đơn đã nhận tiền bị cửa hàng hủy (M6a): lý do và tiền hoàn; hoàn tiền theo dõi riêng (ADR 0014). -->
+    <div
+      v-else-if="order.status === 'cancelled' && order.cancelCause"
+      class="space-y-2 rounded-md border border-border bg-card px-4 py-3 text-sm"
+      role="status"
+      data-testid="order-cancelled"
+    >
+      <p>
+        Đơn đã được cửa hàng hủy{{ order.cancelledAt ? ` lúc ${formatDateTime(order.cancelledAt)}` : '' }} vì
+        {{ CANCEL_CAUSE_CUSTOMER_TEXT[order.cancelCause] }}.
+      </p>
+      <p v-if="order.refunds.length === 0">Đơn này không được hoàn tiền theo chính sách đã áp dụng cho đơn.</p>
+    </div>
     <p
       v-else-if="order.status === 'cancelled'"
       class="rounded-md border border-border bg-card px-4 py-3 text-sm"
@@ -129,6 +142,32 @@ const remainingText = computed(() => {
       Đơn đã được hủy{{ order.cancelledAt ? ` lúc ${formatDateTime(order.cancelledAt)}` : '' }}. {{ heldThing }} giữ cho
       đơn đã được nhả.
     </p>
+
+    <section
+      v-if="order.refunds.length"
+      class="rounded-lg border border-border bg-card p-5 text-sm"
+      data-testid="order-refunds"
+    >
+      <h2 class="font-semibold">Hoàn tiền</h2>
+      <p class="mt-1 text-muted-foreground">
+        Đã thanh toán {{ formatVnd(order.received) }}. Tùy ngân hàng, tiền hoàn có thể cần vài ngày làm việc để về tài
+        khoản.
+      </p>
+      <ul class="mt-3 divide-y divide-border">
+        <li
+          v-for="(refund, index) in order.refunds"
+          :key="index"
+          class="flex flex-wrap items-center justify-between gap-2 py-2"
+          data-testid="order-refund"
+        >
+          <span class="font-semibold tabular-nums">{{ formatVnd(refund.amount) }}</span>
+          <span v-if="refund.status === 'refunded'">
+            Đã hoàn{{ refund.completedAt ? ` ngày ${formatDate(refund.completedAt)}` : '' }}
+          </span>
+          <span v-else class="text-muted-foreground">Đang hoàn</span>
+        </li>
+      </ul>
+    </section>
 
     <dl
       v-if="order.shipment"

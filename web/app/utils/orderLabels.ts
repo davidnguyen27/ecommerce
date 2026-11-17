@@ -1,5 +1,6 @@
 import type {
   FulfillmentStatus,
+  OrderCancelCause,
   OrderCancelReason,
   OrderStatus,
   PaymentPurpose,
@@ -45,6 +46,24 @@ export const CANCEL_REASON_LABELS: Record<OrderCancelReason, string> = {
   expired: 'Hết hạn giữ hàng',
   customer: 'Khách tự hủy',
   staff: 'Nhân viên hủy',
+}
+
+/** Lý do nhân viên hủy đơn đã nhận tiền, như nhân viên thấy. */
+export const CANCEL_CAUSE_LABELS: Record<OrderCancelCause, string> = {
+  changed_mind: 'Khách đổi ý',
+  remainder_overdue: 'Quá hạn trả phần còn lại',
+  supply_failed: 'Không nhập được hàng',
+  delivery_failed: 'Giao thất bại',
+  other: 'Khác',
+}
+
+/** Lý do hủy đơn đã nhận tiền, như khách thấy ở trang đơn. */
+export const CANCEL_CAUSE_CUSTOMER_TEXT: Record<OrderCancelCause, string> = {
+  changed_mind: 'theo yêu cầu của bạn',
+  remainder_overdue: 'đã quá hạn trả phần còn lại',
+  supply_failed: 'cửa hàng không nhập được hàng',
+  delivery_failed: 'đơn vị vận chuyển không giao được hàng',
+  other: 'cửa hàng không thực hiện được đơn',
 }
 
 /** Sự kiện trong lịch sử đơn (`OrderEventKind` ở API). Loại chưa có ở đây thì hiện nguyên mã. */

@@ -669,6 +669,17 @@ enum OrderCancelReason {
   @@map("order_cancel_reason")
 }
 
+/// Lý do nhân viên hủy đơn đã nhận tiền (M6a); đơn chưa thanh toán không có.
+enum OrderCancelCause {
+  changed_mind
+  remainder_overdue
+  supply_failed
+  delivery_failed
+  other
+
+  @@map("order_cancel_cause")
+}
+
 /// Đơn hàng sẵn (qua giỏ hàng) hay đơn đặt trước (GLOSSARY "Đơn đặt trước", ADR 0012).
 enum OrderKind {
   standard
@@ -719,6 +730,10 @@ model Order {
   /// Có khi và chỉ khi đơn `cancelled` (check constraint `order_cancellation_check`).
   cancelReason      OrderCancelReason? @map("cancel_reason")
   cancelledAt       DateTime?          @map("cancelled_at")
+  /// Có khi và chỉ khi đơn bị hủy lúc đã nhận tiền. Check `order_cancel_cause_check`.
+  cancelCause       OrderCancelCause?  @map("cancel_cause")
+  /// Ghi chú nội bộ lúc hủy; bắt buộc khi số hoàn thấp hơn số còn hoàn được. Khách không thấy.
+  cancelNote        String?            @map("cancel_note")
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
 
