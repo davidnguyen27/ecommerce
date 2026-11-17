@@ -1,5 +1,6 @@
 import type {
   FulfillmentStatus,
+  OrderCancelCause,
   OrderCancelReason,
   OrderStatus,
   PaymentPurpose,
@@ -7,6 +8,8 @@ import type {
   PaymentStatus,
   ReconciliationReason,
   ReconciliationResolution,
+  RefundOrigin,
+  RefundStatus,
 } from '@ecommerce/shared'
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
@@ -29,6 +32,7 @@ export const FULFILLMENT_STATUS_LABELS: Record<FulfillmentStatus, string> = {
   handed_over: 'Đã bàn giao vận chuyển',
   delivered: 'Đã giao',
   failed: 'Giao thất bại',
+  returned: 'Hàng đã hoàn về kho',
 }
 
 /** Giá trị thuộc tính biến thể nối bằng " · ", không kèm đơn vị (dòng giỏ, dòng đơn không có schema thuộc tính). */
@@ -45,6 +49,15 @@ export const CANCEL_REASON_LABELS: Record<OrderCancelReason, string> = {
   staff: 'Nhân viên hủy',
 }
 
+/** Lý do nhân viên hủy đơn đã nhận tiền, như nhân viên thấy. */
+export const CANCEL_CAUSE_LABELS: Record<OrderCancelCause, string> = {
+  changed_mind: 'Khách đổi ý',
+  remainder_overdue: 'Quá hạn trả phần còn lại',
+  supply_failed: 'Không nhập được hàng',
+  delivery_failed: 'Giao thất bại',
+  other: 'Khác',
+}
+
 /** Sự kiện trong lịch sử đơn (`OrderEventKind` ở API). Loại chưa có ở đây thì hiện nguyên mã. */
 const ORDER_EVENT_LABELS: Record<string, string> = {
   created: 'Đặt mua',
@@ -58,11 +71,17 @@ const ORDER_EVENT_LABELS: Record<string, string> = {
   payment_flagged: 'Khoản tiền cần đối soát',
   cancelled: 'Hủy đơn',
   restored: 'Khôi phục đơn sau đối soát',
-  reconciliation_resolved: 'Đối soát: đã xử lý ngoài hệ thống',
+  reconciliation_resolved: 'Đóng mục cần đối soát',
+  refund_created: 'Tạo khoản hoàn tiền',
+  refund_succeeded: 'Đã hoàn tiền',
+  refund_failed: 'Hoàn tiền thất bại',
   preparing: 'Bắt đầu chuẩn bị',
   handed_over: 'Bàn giao vận chuyển',
   delivered: 'Đã giao',
   delivery_failed: 'Giao thất bại',
+  redelivered: 'Giao lại',
+  returned_to_stock: 'Nhận hàng hoàn về',
+  restocked_for_redelivery: 'Giao lại từ kho',
 }
 export const orderEventLabel = (kind: string) => ORDER_EVENT_LABELS[kind] ?? kind
 
@@ -83,10 +102,25 @@ export const RECONCILIATION_RESOLUTION_LABELS: Record<ReconciliationResolution, 
   restored: 'Đã khôi phục đơn',
   handled_externally: 'Đã xử lý ngoài hệ thống',
   settled_by_payment: 'Đã đủ tiền nhờ khoản sau',
+  refunded: 'Đã tạo khoản hoàn tiền',
 }
 
 export const RECONCILIATION_REASON_LABELS: Record<ReconciliationReason, string> = {
   amount_mismatch: 'Lệch số tiền',
   paid_after_cancel: 'Tiền về sau khi hủy',
   extra_payment: 'Trả thừa',
+}
+
+/** Trạng thái một khoản hoàn (ADR 0014). */
+export const REFUND_STATUS_LABELS: Record<RefundStatus, string> = {
+  pending: 'Chờ hoàn',
+  processing: 'Cổng đang xử lý',
+  succeeded: 'Đã hoàn',
+  failed: 'Thất bại',
+}
+
+export const REFUND_ORIGIN_LABELS: Record<RefundOrigin, string> = {
+  cancellation: 'Hủy đơn',
+  reconciliation: 'Đối soát',
+  retry: 'Tạo lại',
 }

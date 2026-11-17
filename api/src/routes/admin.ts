@@ -7,6 +7,7 @@ import type { FulfillmentMail } from '../orders/fulfill-order.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 import { adminOrderRoutes } from './admin-orders.ts'
 import { adminReconciliationRoutes, type ReconciliationDeps } from './admin-reconciliation.ts'
+import { adminRefundRoutes } from './admin-refunds.ts'
 import { adminAttributeSchemaRoutes } from './admin-attribute-schemas.ts'
 import { adminAuditRoutes } from './admin-audit.ts'
 import { adminBrandRoutes } from './admin-brands.ts'
@@ -61,7 +62,8 @@ export function adminRoutes(
       .use('/images', adminBulkImageRoutes(prisma, storage))
       .use('/shipping-fees', adminShippingFeeRoutes(prisma))
       .use('/orders', adminOrderRoutes(prisma, storage, payments, mail))
-      .use('/reconciliation', adminReconciliationRoutes(prisma, storage, mail))
+      .use('/reconciliation', adminReconciliationRoutes(prisma, storage, payments, mail))
+      .use('/refunds', adminRefundRoutes(prisma, storage, payments, mail))
       .use('/preorder-campaigns', adminPreorderCampaignRoutes(prisma, mail))
       .use('/vouchers', adminVoucherRoutes(prisma))
   )

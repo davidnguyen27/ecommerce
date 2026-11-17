@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PublicOrder } from '@ecommerce/shared'
+import { ORDER_CANCEL_CAUSE_CUSTOMER_TEXT, type PublicOrder } from '@ecommerce/shared'
 
 /**
  * Một đơn như khách thấy: trạng thái đơn, thanh toán và giao hàng tách riêng, thời gian giữ hàng còn lại,
@@ -23,8 +23,12 @@ const deliveryChanged = computed(() => {
   return p !== null && (p.currentDeliveryFrom !== p.deliveryFrom || p.currentDeliveryTo !== p.deliveryTo)
 })
 
+// Đơn đã hủy giữ trạng thái thanh toán "đã cọc" (ADR 0014) nhưng không còn phần nào phải trả.
 const awaitingRemainder = computed(
-  () => props.order.paymentStatus === 'deposit_paid' && props.order.preorder?.remainderDueAt != null,
+  () =>
+    props.order.status === 'processing' &&
+    props.order.paymentStatus === 'deposit_paid' &&
+    props.order.preorder?.remainderDueAt != null,
 )
 
 // Đơn đặt trước chờ cọc chỉ giữ suất, không giữ hàng (ADR 0013).
@@ -120,6 +124,19 @@ const remainingText = computed(() => {
         Quay lại giỏ hàng
       </button>
     </div>
+    <!-- Đơn đã nhận tiền bị cửa hàng hủy (M6a): lý do và tiền hoàn; hoàn tiền theo dõi riêng (ADR 0014). -->
+    <div
+      v-else-if="order.status === 'cancelled' && order.cancelCause"
+      class="space-y-2 rounded-md border border-border bg-card px-4 py-3 text-sm"
+      role="status"
+      data-testid="order-cancelled"
+    >
+      <p>
+        Đơn đã được cửa hàng hủy{{ order.cancelledAt ? ` lúc ${formatDateTime(order.cancelledAt)}` : '' }} vì
+        {{ ORDER_CANCEL_CAUSE_CUSTOMER_TEXT[order.cancelCause] }}.
+      </p>
+      <p v-if="order.refunds.length === 0">Đơn này không được hoàn tiền theo chính sách đã áp dụng cho đơn.</p>
+    </div>
     <p
       v-else-if="order.status === 'cancelled'"
       class="rounded-md border border-border bg-card px-4 py-3 text-sm"
@@ -129,6 +146,32 @@ const remainingText = computed(() => {
       Đơn đã được hủy{{ order.cancelledAt ? ` lúc ${formatDateTime(order.cancelledAt)}` : '' }}. {{ heldThing }} giữ cho
       đơn đã được nhả.
     </p>
+
+    <section
+      v-if="order.refunds.length"
+      class="rounded-lg border border-border bg-card p-5 text-sm"
+      data-testid="order-refunds"
+    >
+      <h2 class="font-semibold">Hoàn tiền</h2>
+      <p class="mt-1 text-muted-foreground">
+        Đã thanh toán {{ formatVnd(order.received) }}. Tùy ngân hàng, tiền hoàn có thể cần vài ngày làm việc để về tài
+        khoản.
+      </p>
+      <ul class="mt-3 divide-y divide-border">
+        <li
+          v-for="(refund, index) in order.refunds"
+          :key="index"
+          class="flex flex-wrap items-center justify-between gap-2 py-2"
+          data-testid="order-refund"
+        >
+          <span class="font-semibold tabular-nums">{{ formatVnd(refund.amount) }}</span>
+          <span v-if="refund.status === 'refunded'">
+            Đã hoàn{{ refund.completedAt ? ` ngày ${formatDate(refund.completedAt)}` : '' }}
+          </span>
+          <span v-else class="text-muted-foreground">Đang hoàn</span>
+        </li>
+      </ul>
+    </section>
 
     <dl
       v-if="order.shipment"
@@ -157,6 +200,14 @@ const remainingText = computed(() => {
       data-testid="delivery-failed"
     >
       Đơn vị vận chuyển chưa giao được đơn này. Shop sẽ liên hệ với bạn để sắp xếp lại việc giao hàng.
+    </p>
+    <p
+      v-else-if="order.fulfillmentStatus === 'returned' && order.status === 'processing'"
+      class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+      role="status"
+      data-testid="delivery-returned"
+    >
+      Hàng chưa giao được đã được trả về shop. Shop sẽ liên hệ với bạn để giao lại hoặc xử lý đơn.
     </p>
 
     <div v-if="cancellable && order.status === 'pending_payment'">

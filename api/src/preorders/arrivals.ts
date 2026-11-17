@@ -65,15 +65,21 @@ export async function planArrivals(
 }
 
 /**
- * Áp kế hoạch chia hàng trong transaction ghi phiếu nhập: cộng số đang giữ của dòng đơn và của biến thể (tồn đã được cộng
- * trước đó nên vẫn `reserved <= on_hand`). Đơn nào mọi dòng đã được giữ đủ thì thành hàng đã về: có lúc về, hạn trả phần
+ * Hàng được chia từ đâu, ghi vào sự kiện đơn: một phiếu nhập, hoặc phần hàng đã giữ của một đơn đặt trước vừa bị hủy
+ * (M6a).
+ */
+export type ArrivalSource = { receiptId: string } | { fromOrderCode: number }
+
+/**
+ * Áp kế hoạch chia hàng trong transaction ghi phiếu nhập, hoặc khi hủy một đơn đặt trước đang giữ hàng: cộng số đang
+ * giữ của dòng đơn và của biến thể (hàng đã có trong tồn và không còn giữ cho ai nên vẫn `reserved <= on_hand`). Đơn nào mọi dòng đã được giữ đủ thì thành hàng đã về: có lúc về, hạn trả phần
  * còn lại (`remainder_days` ngày sau), sự kiện đơn và email "Hàng đã về". Trả mã các đơn vừa về đủ.
  */
 export async function applyArrivals(
   tx: Prisma.TransactionClient,
   { emails, siteUrl }: { emails: EmailQueue; siteUrl: string },
   plans: readonly ArrivalPlan[],
-  receiptId: string,
+  source: ArrivalSource,
   now = new Date(),
 ) {
   const touched = new Set<string>()
@@ -93,7 +99,7 @@ export async function applyArrivals(
         allocation.orderId,
         'stock_allocated',
         { type: 'system' },
-        { variantId: plan.variantId, quantity: allocation.take, receiptId },
+        { variantId: plan.variantId, quantity: allocation.take, ...source },
       )
       touched.add(allocation.orderId)
     }
@@ -111,7 +117,7 @@ export async function applyArrivals(
       data: { arrivedAt: now, remainderDueAt: new Date(now.getTime() + before.remainderDays! * DAY) },
       include: { lines: { orderBy: { position: 'asc' } } },
     })
-    await recordOrderEvent(tx, orderId, 'arrived', { type: 'system' }, { receiptId })
+    await recordOrderEvent(tx, orderId, 'arrived', { type: 'system' }, source)
     await queueArrivedEmail(tx, { emails, siteUrl }, order)
     arrived.push(order.code)
   }

@@ -81,7 +81,9 @@ const awaitingPayment = computed(
   () =>
     isResult.value &&
     (order.value?.status === 'pending_payment' ||
-      (order.value?.paymentStatus === 'deposit_paid' && order.value.preorder?.arrivedAt != null)),
+      (order.value?.status === 'processing' &&
+        order.value.paymentStatus === 'deposit_paid' &&
+        order.value.preorder?.arrivedAt != null)),
 )
 
 // Trả phần còn lại của đơn đặt trước bằng chính token đang mở đơn; nhớ token để trang kết quả mở lại được đơn.

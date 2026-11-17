@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { AdminProduct, PreorderCampaign, type FieldError, type PreorderCampaignUpdate } from '@ecommerce/shared'
+import {
+  AdminProduct,
+  CancelUnsuppliedResult,
+  PreorderCampaign,
+  UnsuppliedPreview,
+  type FieldError,
+  type PreorderCampaignUpdate,
+} from '@ecommerce/shared'
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: ['order.view', 'preorder.manage'] })
 
@@ -7,6 +14,8 @@ const session = useAdminSession()
 const canOpen = session.canOpen
 const route = useRoute()
 const canManage = computed(() => session.can('preorder.manage'))
+// Đợt không nhập được hàng (M6a): hủy đơn đã nhận tiền và đóng đợt là hai quyền, cần cả hai.
+const canCancelUnsupplied = computed(() => canManage.value && session.can('order.cancel_paid'))
 const campaign = ref<PreorderCampaign | null>(null)
 const product = ref<AdminProduct | null>(null)
 const editing = ref(false)
@@ -70,6 +79,41 @@ async function close() {
     busy.value = false
   }
 }
+
+/** Xem trước các đơn chờ hàng sẽ bị hủy; có giá trị thì đang mở khối xác nhận. */
+const unsupplied = ref<UnsuppliedPreview | null>(null)
+const unsuppliedNote = ref('')
+
+async function openUnsupplied() {
+  error.value = null
+  notice.value = null
+  try {
+    unsupplied.value = UnsuppliedPreview.parse(await session.adminFetch(`${url}/cancel-unsupplied`))
+  } catch (err) {
+    error.value = apiErrorMessage(err)
+  }
+}
+
+async function cancelUnsupplied() {
+  if (!unsupplied.value) return
+  const { orders, refundTotal } = unsupplied.value
+  if (!confirm(`Hủy ${orders.length} đơn và tạo khoản hoàn tổng ${formatVnd(refundTotal)}? Đợt sẽ bị đóng.`)) return
+  busy.value = true
+  error.value = null
+  try {
+    const result = CancelUnsuppliedResult.parse(
+      await session.adminFetch(`${url}/cancel-unsupplied`, { method: 'POST', body: { note: unsuppliedNote.value } }),
+    )
+    campaign.value = result.campaign
+    unsupplied.value = null
+    unsuppliedNote.value = ''
+    notice.value = `Đã hủy ${result.cancelledOrderCodes.length} đơn chờ hàng và đóng đợt`
+  } catch (err) {
+    error.value = apiErrorMessage(err)
+  } finally {
+    busy.value = false
+  }
+}
 </script>
 
 <template>
@@ -100,6 +144,16 @@ async function close() {
         >
           Đóng đợt
         </button>
+        <button
+          v-if="canCancelUnsupplied && campaign && !editing && !unsupplied"
+          type="button"
+          class="btn btn-danger btn-sm"
+          data-testid="campaign-cancel-unsupplied"
+          :disabled="busy"
+          @click="openUnsupplied"
+        >
+          Hủy các đơn chờ hàng (không nhập được)
+        </button>
         <NuxtLink to="/admin/preorders" class="btn btn-secondary btn-sm">‹ Danh sách đợt</NuxtLink>
       </div>
     </div>
@@ -110,6 +164,54 @@ async function close() {
     <div v-if="notice" class="admin-alert admin-alert-success" role="status">
       <span>{{ notice }}</span>
     </div>
+
+    <form
+      v-if="unsupplied"
+      class="admin-panel"
+      style="padding: 16px 20px; margin-bottom: 20px"
+      data-testid="campaign-unsupplied"
+      @submit.prevent="cancelUnsupplied"
+    >
+      <h2 class="admin-section-title">Không nhập được hàng</h2>
+      <p v-if="unsupplied.orders.length === 0" style="margin: 0 0 12px; font-size: 13px">
+        Không có đơn đã cọc nào đang chờ hàng. Xác nhận sẽ chỉ đóng đợt.
+      </p>
+      <template v-else>
+        <p style="margin: 0 0 8px; font-size: 13px">
+          {{ unsupplied.orders.length }} đơn đã cọc chưa có hàng về đủ sẽ bị hủy, mỗi đơn hoàn đủ số đã nhận; tổng
+          <strong>{{ formatVnd(unsupplied.refundTotal) }}</strong
+          >. Đơn đã về đủ hàng hay đã trả đủ không bị hủy.
+        </p>
+        <ul style="margin: 0 0 12px; padding-left: 18px; font-size: 13px">
+          <li v-for="o in unsupplied.orders" :key="o.code">
+            #{{ o.code }} · {{ o.recipientName }} · hoàn {{ formatVnd(o.refundAmount) }}
+          </li>
+        </ul>
+      </template>
+      <div class="form-group">
+        <label class="form-label" for="unsupplied-note">Ghi chú (nhà cung cấp báo gì)</label>
+        <textarea
+          id="unsupplied-note"
+          v-model="unsuppliedNote"
+          class="form-textarea"
+          rows="2"
+          maxlength="2000"
+          required
+          data-testid="campaign-unsupplied-note"
+        />
+      </div>
+      <div style="display: flex; gap: 8px">
+        <button
+          type="submit"
+          class="btn btn-danger btn-sm"
+          data-testid="campaign-unsupplied-submit"
+          :disabled="busy || !unsuppliedNote.trim()"
+        >
+          Hủy đơn và đóng đợt
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" :disabled="busy" @click="unsupplied = null">Thôi</button>
+      </div>
+    </form>
 
     <div v-if="campaign && editing" class="admin-panel" style="padding: 16px 20px">
       <AdminPreorderCampaignForm

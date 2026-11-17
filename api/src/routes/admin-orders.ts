@@ -1,5 +1,13 @@
 import { Router, type Request, type Response } from 'express'
-import { AdminOrderQuery, HandoverRequest, type AdminOrder, type AdminOrderPage } from '@ecommerce/shared'
+import {
+  AdminOrderQuery,
+  CancelPaidOrderRequest,
+  HandoverRequest,
+  RedeliverRequest,
+  ReturnToStockRequest,
+  type AdminOrder,
+  type AdminOrderPage,
+} from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
 import { audited } from '../audit/audited.ts'
 import { currentStaff, requirePermission } from '../auth/staff-context.ts'
@@ -9,11 +17,15 @@ import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
 import { loadAdminOrder } from '../orders/admin-order.ts'
 import { assertCancellable, cancelInTransaction, cancelPaymentLinks } from '../orders/cancel-order.ts'
+import { cancelPaidOrder } from '../orders/cancel-paid-order.ts'
 import {
   deliverOrder,
   failDelivery,
   handOverOrder,
   prepareOrder,
+  redeliverOrder,
+  restockForRedelivery,
+  returnToStock,
   type FulfillmentAudit,
   type FulfillmentMail,
 } from '../orders/fulfill-order.ts'
@@ -53,7 +65,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
         const entry = await run(tx, order.id, currentStaff(req).id, req)
         await audit({ ...entry, entityType: 'order', entityId: order.id })
       })
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, code)
       res.json(body)
     }
 
@@ -72,6 +84,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
         }),
         ...(query.q && searchWhere(query.q)),
         ...(query.voucherCode && { voucherCode: query.voucherCode.toUpperCase() }),
+        ...(query.refund === 'open' && { refunds: { some: { status: { in: ['pending', 'processing'] } } } }),
       }
       const direction = query.sort === 'oldest' ? 'asc' : 'desc'
       const [orders, total] = await Promise.all([
@@ -106,7 +119,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       res.json(body)
     })
     .get('/:code', requirePermission('order.view'), async (req, res) => {
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, String(req.params.code))
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, String(req.params.code))
       res.json(body)
     })
     .post('/:code/cancel', requirePermission('order.fulfill'), async (req, res) => {
@@ -130,7 +143,19 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       assertCancellable(outcome)
       if (outcome === 'cancelled') await cancelPaymentLinks({ payments, logger: req.log }, order)
       // Đơn đã hủy từ trước cũng trả đơn hiện tại, không ghi gì.
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, code)
+      res.json(body)
+    })
+    .post('/:code/cancel-paid', requirePermission('order.cancel_paid'), async (req, res) => {
+      const input = parse(CancelPaidOrderRequest, req.body)
+      const code = String(req.params.code)
+      const order = await findOrder(code)
+      const staffId = currentStaff(req).id
+      await audited(prisma, req, (tx, audit) => cancelPaidOrder(tx, mail, audit, order.id, staffId, input))
+      // Đơn đặt trước có thể còn link trả phần còn lại: hủy sau khi commit như hủy đơn chưa trả; tiền về sau đó thành
+      // cần đối soát. Link đã trả xong của đơn hàng sẵn hủy cũng không sao: lỗi chỉ được log.
+      await cancelPaymentLinks({ payments, logger: req.log }, order)
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, code)
       res.json(body)
     })
     .post(
@@ -154,5 +179,24 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       '/:code/delivery-failed',
       requirePermission('order.fulfill'),
       transition((tx, orderId, staffId) => failDelivery(tx, mail.emails, orderId, staffId)),
+    )
+    .post(
+      '/:code/redeliver',
+      requirePermission('order.fulfill'),
+      transition((tx, orderId, staffId, req) =>
+        redeliverOrder(tx, orderId, staffId, parse(RedeliverRequest, req.body)),
+      ),
+    )
+    .post(
+      '/:code/return-to-stock',
+      requirePermission('order.fulfill'),
+      transition((tx, orderId, staffId, req) =>
+        returnToStock(tx, orderId, staffId, parse(ReturnToStockRequest, req.body)),
+      ),
+    )
+    .post(
+      '/:code/restock-redeliver',
+      requirePermission('order.fulfill'),
+      transition((tx, orderId, staffId) => restockForRedelivery(tx, orderId, staffId)),
     )
 }

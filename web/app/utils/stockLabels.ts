@@ -12,4 +12,5 @@ export const STOCK_KIND_LABELS: Record<StockMovementKind, string> = {
   adjustment: 'Điều chỉnh',
   opening: 'Tồn đầu kỳ',
   sale: 'Xuất bán',
+  return: 'Hàng hoàn về',
 }

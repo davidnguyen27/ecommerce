@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import {
+  CancelUnsuppliedRequest,
   ErrorCode,
   PreorderCampaignCreate,
   PreorderCampaignQuery,
@@ -9,6 +10,8 @@ import {
   type PreorderCampaign,
   type PreorderAttention,
   type PreorderCampaignPage,
+  type CancelUnsuppliedResult,
+  type UnsuppliedPreview,
 } from '@ecommerce/shared'
 import { audited } from '../audit/audited.ts'
 import { currentStaff, requirePermission } from '../auth/staff-context.ts'
@@ -31,6 +34,7 @@ import {
   usedAllocations,
 } from '../preorders/campaigns.ts'
 import { notifyDeliveryChange } from '../preorders/delivery.ts'
+import { cancelUnsupplied, previewUnsupplied } from '../preorders/unsupplied.ts'
 
 const CampaignParams = z.object({ id: z.uuid() })
 
@@ -348,5 +352,26 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
         const body: PreorderCampaign = await loadCampaign(prisma, id)
         res.json(body)
       })
+      .get('/:id/cancel-unsupplied', async (req, res) => {
+        const { id } = parse(CampaignParams, req.params)
+        const body: UnsuppliedPreview = await previewUnsupplied(prisma, id)
+        res.json(body)
+      })
+      // Hủy đơn đã nhận tiền và đóng đợt là hai quyền khác nhau: cần cả hai.
+      .post(
+        '/:id/cancel-unsupplied',
+        requirePermission('order.cancel_paid'),
+        requirePermission('preorder.manage'),
+        async (req, res) => {
+          const { id } = parse(CampaignParams, req.params)
+          const { note } = parse(CancelUnsuppliedRequest, req.body)
+          const staffId = currentStaff(req).id
+          const cancelledOrderCodes = await audited(prisma, req, (tx, audit) =>
+            cancelUnsupplied(tx, mail, audit, id, staffId, note),
+          )
+          const body: CancelUnsuppliedResult = { cancelledOrderCodes, campaign: await loadCampaign(prisma, id) }
+          res.json(body)
+        },
+      )
   )
 }

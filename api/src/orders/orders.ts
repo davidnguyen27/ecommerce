@@ -39,10 +39,22 @@ export type OrderEventKind =
   | 'handed_over'
   /** Kế toán khôi phục đơn đã hủy khi tiền về đủ (đối soát). */
   | 'restored'
-  /** Kế toán đóng mục cần đối soát vì đã xử lý ngoài hệ thống. */
+  /** Kế toán đóng mục cần đối soát: đã xử lý ngoài hệ thống, hoặc bằng hoàn tiền (`data.resolution = refunded`). */
   | 'reconciliation_resolved'
+  /** Một khoản hoàn được tạo, chờ kế toán thực hiện (`data`: `refundId`, `amount`, `origin`; ADR 0014). */
+  | 'refund_created'
+  /** Khoản hoàn đã xong: thủ công, cổng báo thành công, hoặc kế toán chốt. */
+  | 'refund_succeeded'
+  /** Khoản hoàn thất bại; tạo lại được. */
+  | 'refund_failed'
   | 'delivered'
   | 'delivery_failed'
+  /** Giao lại đơn giao thất bại với mã vận đơn mới (`data.previous`: mã cũ; M6a). */
+  | 'redelivered'
+  /** Kho nhận hàng hoàn về: từng dòng nhập lại tồn hay hỏng/mất (`data.lines`). */
+  | 'returned_to_stock'
+  /** Giao lại từ kho: giữ hàng lại cho đơn, quay về chưa chuẩn bị. */
+  | 'restocked_for_redelivery'
 
 /** Ai làm: nhân viên, khách (có id khi đã đăng nhập) hoặc hệ thống. */
 export type OrderEventActor =
@@ -99,6 +111,12 @@ export const ORDER_VIEW_INCLUDE = {
   privacyPolicyVersion: { select: { version: true } },
   // Thời gian giao dự kiến hiện tại của đợt, cạnh lời hẹn lúc đặt (ticket 09).
   preorderCampaign: { select: { deliveryFrom: true, deliveryTo: true } },
+  // Đã nhận và các khoản hoàn khách thấy (ADR 0014).
+  paymentTransactions: { select: { amount: true } },
+  refunds: {
+    select: { amount: true, status: true, createdAt: true, completedAt: true },
+    orderBy: { createdAt: 'asc' },
+  },
 } as const satisfies Prisma.OrderInclude
 
 export type OrderForView = Prisma.OrderGetPayload<{ include: typeof ORDER_VIEW_INCLUDE }>
@@ -211,6 +229,7 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
     createdAt: order.createdAt.toISOString(),
     reservedUntil: order.reservedUntil?.toISOString() ?? null,
     cancelReason: order.cancelReason,
+    cancelCause: order.cancelCause,
     cancelledAt: order.cancelledAt?.toISOString() ?? null,
     address: {
       recipientName: order.recipientName,
@@ -262,5 +281,15 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
             trackingNumber: order.trackingNumber,
             handedOverAt: order.handedOverAt.toISOString(),
           },
+    received: order.paymentTransactions.reduce((sum, t) => sum + Number(t.amount), 0),
+    // Khoản thất bại không hiện: khách chỉ cần biết tiền đang về hay đã về; kế toán tạo lại khoản mới nếu cần.
+    refunds: order.refunds
+      .filter((r) => r.status !== 'failed')
+      .map((r) => ({
+        amount: Number(r.amount),
+        status: r.status === 'succeeded' ? 'refunded' : 'refunding',
+        createdAt: r.createdAt.toISOString(),
+        completedAt: r.completedAt?.toISOString() ?? null,
+      })),
   }
 }

@@ -1,6 +1,14 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { z } from 'zod'
-import { PaymentGatewayError, type PaymentGateway, type PaymentInfo, type PaymentLinkRequest } from './gateway.ts'
+import {
+  PaymentGatewayError,
+  type PaymentGateway,
+  type PaymentInfo,
+  type PaymentLinkRequest,
+  type RefundRequest,
+  type RefundResult,
+  type StoredTransaction,
+} from './gateway.ts'
 
 // Theo tài liệu VNPAY (https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html và
 // .../truy-van-hoan-tien/querydr&refund.html, đọc 2026-11-11). Những điểm đánh dấu "kiểm trên sandbox" tài liệu chưa
@@ -158,6 +166,45 @@ const QUERY_RESPONSE_FIELDS = [
   'vnp_PromotionAmount',
 ] as const
 
+/** Thứ tự trường của chuỗi ký response hoàn tiền, nối bằng `|` (tài liệu querydr&refund, đọc 2026-11-17). */
+const REFUND_RESPONSE_FIELDS = [
+  'vnp_ResponseId',
+  'vnp_Command',
+  'vnp_ResponseCode',
+  'vnp_Message',
+  'vnp_TmnCode',
+  'vnp_TxnRef',
+  'vnp_Amount',
+  'vnp_BankCode',
+  'vnp_PayDate',
+  'vnp_TransactionNo',
+  'vnp_TransactionType',
+  'vnp_TransactionStatus',
+  'vnp_OrderInfo',
+] as const
+
+/**
+ * `vnp_TxnRef` của giao dịch gốc, lấy từ payload đã lưu (IPN, trang quay về hay truy vấn đều mang trường này); không có
+ * thì giao dịch không hoàn qua VNPAY được.
+ */
+function storedTxnRef(transaction: StoredTransaction) {
+  const payload = transaction.payload as { vnp_TxnRef?: unknown } | null
+  const ref = typeof payload?.vnp_TxnRef === 'string' ? payload.vnp_TxnRef : null
+  return ref && parseTxnRef(ref) ? ref : null
+}
+
+/**
+ * Ánh xạ kết quả lệnh hoàn (tài liệu): `00` kèm trạng thái `00` là đã hoàn; kèm `05` (VNPAY đang xử lý) hay `06` (đã
+ * gửi ngân hàng) là đang xử lý; `94` (đã có yêu cầu hoàn đang xử lý) cũng là đang xử lý; còn lại là bị từ chối.
+ */
+export function refundOutcome(body: { vnp_ResponseCode?: string; vnp_TransactionStatus?: string }) {
+  if (body.vnp_ResponseCode === '94') return 'processing' as const
+  if (body.vnp_ResponseCode !== '00') return 'rejected' as const
+  if (body.vnp_TransactionStatus === '00') return 'succeeded' as const
+  if (body.vnp_TransactionStatus === '05' || body.vnp_TransactionStatus === '06') return 'processing' as const
+  return 'rejected' as const
+}
+
 /**
  * Cổng VNPAY (ADR 0010). Link thanh toán là URL ký sẵn, không gọi VNPAY; truy vấn gọi API `querydr` bằng `fetch`,
  * không tự thử lại. `vnp_OrderInfo` không mang thông tin khách.
@@ -245,6 +292,63 @@ export class VnpayPaymentGateway implements PaymentGateway {
     // 01: chưa hoàn tất (khách chưa trả xong); 02: lỗi; các mã khác (hoàn tiền, nghi gian lận) để nhân viên xem.
     if (body.vnp_TransactionStatus === '01') return { status: 'pending', transactions: [] }
     return { status: 'failed', transactions: [] }
+  }
+
+  canRefund(transaction: StoredTransaction) {
+    return transaction.source !== 'simulator' && storedTxnRef(transaction) !== null
+  }
+
+  /**
+   * Lệnh `refund` (ADR 0014): hoàn đủ (`02`) hay một phần (`03`) một giao dịch gốc. Chuỗi ký theo thứ tự trường của
+   * tài liệu, nối bằng `|`, HMAC-SHA512 như mọi lệnh khác (tài liệu chỉ ghi `hashWithSecureType`; chưa xác minh được trên
+   * sandbox, ticket 06). Response `00` phải đúng chữ ký; mã lỗi thì không có gì để tin nên không kiểm.
+   */
+  async refund(request: RefundRequest): Promise<RefundResult> {
+    const ref = storedTxnRef(request.transaction)
+    const parsed = ref && parseTxnRef(ref)
+    if (!ref || !parsed)
+      throw new PaymentGatewayError('VNPAY: giao dịch gốc thiếu vnp_TxnRef, không hoàn qua cổng được')
+    const { tmnCode, hashSecret } = this.options
+    const body = {
+      // Id khoản hoàn bỏ gạch: 32 ký tự chữ số, không trùng trong ngày như tài liệu đòi.
+      vnp_RequestId: request.refundId.replace(/-/g, ''),
+      vnp_Version: VERSION,
+      vnp_Command: 'refund',
+      vnp_TmnCode: tmnCode,
+      vnp_TransactionType: request.full ? '02' : '03',
+      vnp_TxnRef: ref,
+      vnp_Amount: String(request.amount * 100),
+      vnp_TransactionNo: request.transaction.reference,
+      vnp_TransactionDate: parsed.createDate,
+      vnp_CreateBy: request.createdBy.replace(/-/g, ''),
+      vnp_CreateDate: vnDateTime(this.now()),
+      vnp_IpAddr: this.options.serverIp ?? '127.0.0.1',
+      vnp_OrderInfo: `Hoan tien don ${request.orderCode}`,
+    }
+    const signed = [
+      body.vnp_RequestId,
+      body.vnp_Version,
+      body.vnp_Command,
+      body.vnp_TmnCode,
+      body.vnp_TransactionType,
+      body.vnp_TxnRef,
+      body.vnp_Amount,
+      body.vnp_TransactionNo,
+      body.vnp_TransactionDate,
+      body.vnp_CreateBy,
+      body.vnp_CreateDate,
+      body.vnp_IpAddr,
+      body.vnp_OrderInfo,
+    ].join('|')
+    const response = await this.call({ ...body, vnp_SecureHash: vnpayHmac(signed, hashSecret) })
+    if (response.vnp_ResponseCode === '00') {
+      const expected = vnpayHmac(REFUND_RESPONSE_FIELDS.map((field) => response[field] ?? '').join('|'), hashSecret)
+      if (!sameHex(response.vnp_SecureHash, expected))
+        throw new PaymentGatewayError('VNPAY: response hoàn tiền sai chữ ký')
+    }
+    const status = refundOutcome(response)
+    const message = `VNPAY ${response.vnp_ResponseCode}/${response.vnp_TransactionStatus ?? '-'}: ${response.vnp_Message ?? ''}`
+    return { status, message: message.trim(), payload: response }
   }
 
   async cancelLink() {
