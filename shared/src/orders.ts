@@ -60,6 +60,28 @@ export type OrderPreorder = z.infer<typeof OrderPreorder>
 export const OrderCancelReason = z.enum(['expired', 'customer', 'staff'])
 export type OrderCancelReason = z.infer<typeof OrderCancelReason>
 
+/**
+ * Vì sao nhân viên hủy đơn đã nhận tiền (M6a): khách đổi ý, quá hạn trả phần còn lại, không nhập được hàng, giao thất
+ * bại, khác. Chỉ có ở đơn đã nhận tiền; khi đó `cancelReason` là `staff`.
+ */
+export const OrderCancelCause = z.enum([
+  'changed_mind',
+  'remainder_overdue',
+  'supply_failed',
+  'delivery_failed',
+  'other',
+])
+export type OrderCancelCause = z.infer<typeof OrderCancelCause>
+
+/** Một khoản hoàn như khách thấy: số tiền, đang hoàn hay đã hoàn, ngày tạo và ngày xong. Không có ghi chú nội bộ. */
+export const PublicRefund = z.object({
+  amount: z.number(),
+  status: z.enum(['refunding', 'refunded']),
+  createdAt: z.string(),
+  completedAt: z.string().nullable(),
+})
+export type PublicRefund = z.infer<typeof PublicRefund>
+
 /** Dòng đơn như lúc đặt mua. */
 export const OrderLineView = z.object({
   variantId: z.string(),
@@ -92,6 +114,8 @@ export const PublicOrder = z.object({
   reservedUntil: z.string().nullable(),
   /** Có khi đơn `cancelled`. */
   cancelReason: OrderCancelReason.nullable(),
+  /** Có khi nhân viên hủy đơn đã nhận tiền. */
+  cancelCause: OrderCancelCause.nullable(),
   cancelledAt: z.string().nullable(),
   address: z.object({
     recipientName: z.string(),
@@ -120,6 +144,10 @@ export const PublicOrder = z.object({
   invoice: z.object({ companyName: z.string(), taxCode: z.string(), address: z.string() }).nullable(),
   /** Bàn giao vận chuyển: đơn vị vận chuyển, mã vận đơn, lúc bàn giao; `null` khi chưa bàn giao. */
   shipment: z.object({ carrier: z.string(), trackingNumber: z.string(), handedOverAt: z.string() }).nullable(),
+  /** VND, tổng mọi khoản tiền đã về cho đơn. */
+  received: z.number(),
+  /** Các khoản hoàn chưa thất bại, cũ trước (ADR 0014). */
+  refunds: z.array(PublicRefund),
 })
 export type PublicOrder = z.infer<typeof PublicOrder>
 
@@ -265,12 +293,14 @@ export const AdminOrder = PublicOrder.extend({
   /** Tiền hàng sau giảm, là số tiền ngưỡng miễn phí giao và tiền cọc tính trên đó. */
   subtotalAfterDiscount: z.number(),
   payments: z.array(AdminPaymentTransaction),
-  /** VND: tổng mọi khoản đã về, tổng đã hoàn xong, tổng đang hoàn (chờ hoàn hoặc cổng đang xử lý); ADR 0014. */
-  received: z.number(),
+  /** Ghi chú nội bộ lúc hủy đơn đã nhận tiền. */
+  cancelNote: z.string().nullable(),
+  /** VND: tổng đã hoàn xong, tổng đang hoàn (chờ hoàn hoặc cổng đang xử lý); đã nhận ở `received`. ADR 0014. */
   refunded: z.number(),
   refunding: z.number(),
   /** Còn hoàn được: đã nhận trừ mọi khoản hoàn chưa thất bại. */
   refundable: z.number(),
+  /** Mọi khoản hoàn kể cả thất bại, đủ thông tin nội bộ; thay cho `refunds` của khách. */
   refunds: z.array(AdminRefund),
   history: z.array(OrderHistoryEntry),
 })
@@ -282,3 +312,14 @@ export const HandoverRequest = z.object({
   trackingNumber: z.string().trim().min(1, 'Cần mã vận đơn').max(100),
 })
 export type HandoverRequest = z.infer<typeof HandoverRequest>
+
+/**
+ * Body của `POST /api/admin/orders/:code/cancel-paid`: lý do và số tiền đề xuất hoàn (0 tới số còn hoàn được). Số hoàn
+ * thấp hơn số còn hoàn được thì ghi chú bắt buộc; `supply_failed` luôn hoàn đủ. Kiểm ở API vì cần số tiền của đơn.
+ */
+export const CancelPaidOrderRequest = z.object({
+  cause: OrderCancelCause,
+  refundAmount: z.number().int().min(0, 'Số tiền hoàn không âm'),
+  note: z.string().trim().max(2000).optional(),
+})
+export type CancelPaidOrderRequest = z.input<typeof CancelPaidOrderRequest>

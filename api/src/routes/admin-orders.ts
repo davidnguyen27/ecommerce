@@ -1,5 +1,11 @@
 import { Router, type Request, type Response } from 'express'
-import { AdminOrderQuery, HandoverRequest, type AdminOrder, type AdminOrderPage } from '@ecommerce/shared'
+import {
+  AdminOrderQuery,
+  CancelPaidOrderRequest,
+  HandoverRequest,
+  type AdminOrder,
+  type AdminOrderPage,
+} from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
 import { audited } from '../audit/audited.ts'
 import { currentStaff, requirePermission } from '../auth/staff-context.ts'
@@ -9,6 +15,7 @@ import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
 import { loadAdminOrder } from '../orders/admin-order.ts'
 import { assertCancellable, cancelInTransaction, cancelPaymentLinks } from '../orders/cancel-order.ts'
+import { cancelPaidOrder } from '../orders/cancel-paid-order.ts'
 import {
   deliverOrder,
   failDelivery,
@@ -131,6 +138,15 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       assertCancellable(outcome)
       if (outcome === 'cancelled') await cancelPaymentLinks({ payments, logger: req.log }, order)
       // Đơn đã hủy từ trước cũng trả đơn hiện tại, không ghi gì.
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
+      res.json(body)
+    })
+    .post('/:code/cancel-paid', requirePermission('order.cancel_paid'), async (req, res) => {
+      const input = parse(CancelPaidOrderRequest, req.body)
+      const code = String(req.params.code)
+      const order = await findOrder(code)
+      const staffId = currentStaff(req).id
+      await audited(prisma, req, (tx, audit) => cancelPaidOrder(tx, mail, audit, order.id, staffId, input))
       const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
       res.json(body)
     })

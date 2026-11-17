@@ -58,6 +58,7 @@ export async function loadAdminOrder(db: DbClient, storage: Storage, code: strin
   return {
     ...toPublicOrder(storage, order),
     customerId: order.customerId,
+    cancelNote: order.cancelNote,
     voucher:
       order.voucherId === null
         ? null
@@ -87,7 +88,6 @@ export async function loadAdminOrder(db: DbClient, storage: Storage, code: strin
         resolvedAt: t.reconciliationItem.resolvedAt?.toISOString() ?? null,
       },
     })),
-    received,
     refunded,
     refunding,
     refundable: received - refunded - refunding,
