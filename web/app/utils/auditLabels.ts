@@ -45,6 +45,8 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'refund.execute_manual': 'Ghi hoàn tiền thủ công',
   'refund.settle': 'Chốt khoản hoàn cổng đang xử lý',
   'refund.retry': 'Tạo lại khoản hoàn thất bại',
+  'order.cancel_paid': 'Hủy đơn đã nhận tiền',
+  'preorder.campaign.cancel_unsupplied': 'Hủy các đơn chờ hàng (đợt không nhập được hàng)',
   'order.prepare': 'Bắt đầu chuẩn bị đơn',
   'order.hand_over': 'Bàn giao vận chuyển',
   'order.deliver': 'Đánh dấu đã giao',

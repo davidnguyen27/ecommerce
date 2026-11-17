@@ -38,6 +38,7 @@ export async function cancelPaidOrder(
   orderId: string,
   staffId: string,
   input: CancelPaidOrderRequest,
+  { reallocate = true }: { reallocate?: boolean } = {},
 ) {
   const [locked] = await tx.$queryRaw<
     { status: string; paymentStatus: string; fulfillmentStatus: string; kind: string }[]
@@ -94,13 +95,16 @@ export async function cancelPaidOrder(
     { reason: 'staff', cause: input.cause, refundAmount: Number(refundAmount) },
   )
   // Sau khi đơn đã `cancelled`: `planArrivals` chỉ chọn đơn đặt trước đang chờ, nên không chia lại cho chính đơn này.
-  const plans = released.length
-    ? await planArrivals(
-        tx,
-        released.map((l) => ({ variantId: l.variantId, quantity: l.reservedQuantity })),
-        { lock: true },
-      )
-    : []
+  // `reallocate: false` (hủy hàng loạt khi đợt không nhập được hàng): phần đã giữ thành hàng sẵn, không chuyền qua các
+  // đơn cùng đợt sắp bị hủy.
+  const plans =
+    reallocate && released.length
+      ? await planArrivals(
+          tx,
+          released.map((l) => ({ variantId: l.variantId, quantity: l.reservedQuantity })),
+          { lock: true },
+        )
+      : []
   const arrivedOrderCodes = plans.length ? await applyArrivals(tx, mail, plans, { fromOrderCode: order.code }) : []
   const reallocated = plans.flatMap((p) =>
     p.allocations.map((a) => ({ orderCode: a.orderCode, variantId: p.variantId, quantity: a.take })),
