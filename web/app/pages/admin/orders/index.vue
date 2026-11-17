@@ -10,8 +10,10 @@ type Filters = Pick<AdminOrderQuery, 'status' | 'paymentStatus' | 'fulfillmentSt
   /** Đơn đặt trước của một đợt; `''` là mọi đợt. */
   campaignId: string
   remainderOverdue: boolean
+  /** Đơn đã dùng mã giảm giá này; `''` là không lọc. */
+  voucherCode: string
 }
-const ANY_ORDER = { kind: 'all', campaignId: '', remainderOverdue: false } as const
+const ANY_ORDER = { kind: 'all', campaignId: '', remainderOverdue: false, voucherCode: '' } as const
 // Mặc định giống API: hàng chờ soạn, đơn cũ trước để soạn theo thứ tự đặt.
 const TO_PREPARE: Filters = {
   status: 'processing',
@@ -37,14 +39,16 @@ const error = ref<string | null>(null)
 // Trang chi tiết đợt và "Đặt trước cần xử lý" mở danh sách này với `?campaignId=` hay `?remainderOverdue=true`.
 const fromLink = typeof route.query.campaignId === 'string' || route.query.remainderOverdue === 'true'
 const filters = reactive<Filters>(
-  fromLink
-    ? {
-        ...ALL,
-        kind: 'preorder',
-        campaignId: typeof route.query.campaignId === 'string' ? route.query.campaignId : '',
-        remainderOverdue: route.query.remainderOverdue === 'true',
-      }
-    : { ...TO_PREPARE },
+  typeof route.query.voucherCode === 'string'
+    ? { ...ALL, voucherCode: route.query.voucherCode }
+    : fromLink
+      ? {
+          ...ALL,
+          kind: 'preorder',
+          campaignId: typeof route.query.campaignId === 'string' ? route.query.campaignId : '',
+          remainderOverdue: route.query.remainderOverdue === 'true',
+        }
+      : { ...TO_PREPARE },
 )
 const page = ref(1)
 
@@ -57,6 +61,7 @@ async function load() {
           ...filters,
           q: filters.q.trim() || undefined,
           campaignId: filters.campaignId || undefined,
+          voucherCode: filters.voucherCode.trim() || undefined,
           remainderOverdue: filters.remainderOverdue ? 'true' : undefined,
           page: page.value,
           pageSize: PAGE_SIZE,
@@ -121,6 +126,17 @@ await load()
           <div class="form-group" style="margin-bottom: 0">
             <label class="form-label" for="orders-q" style="font-size: 12px">Mã đơn, số điện thoại, email</label>
             <input id="orders-q" v-model="filters.q" type="search" class="form-input" maxlength="200" />
+          </div>
+          <div class="form-group" style="margin-bottom: 0">
+            <label class="form-label" for="orders-voucher" style="font-size: 12px">Mã giảm giá</label>
+            <input
+              id="orders-voucher"
+              v-model="filters.voucherCode"
+              type="search"
+              class="form-input"
+              maxlength="40"
+              style="text-transform: uppercase"
+            />
           </div>
           <div class="form-group" style="margin-bottom: 0">
             <label class="form-label" for="orders-status" style="font-size: 12px">Trạng thái đơn</label>

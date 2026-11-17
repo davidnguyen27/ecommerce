@@ -8,6 +8,7 @@ import { recordOrderEvent } from '../orders/orders.ts'
 import { usedAllocations } from '../preorders/campaigns.ts'
 import { reserveStock } from '../stock/stock.ts'
 import { queueDepositReceivedEmail, queuePaymentReceivedEmail, type RecordPaymentDeps } from './record-payment.ts'
+import { usedRedemptions } from '../vouchers/vouchers.ts'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy mục cần đối soát')
@@ -100,6 +101,7 @@ export async function restoreOrder(
       reservedUntil: null,
     },
   })
+  const voucherOverLimit = await voucherOverLimitOf(tx, order)
   const openItems = await tx.reconciliationItem.findMany({
     where: { orderId: order.id, status: 'open' },
     select: { id: true },
@@ -115,18 +117,38 @@ export async function restoreOrder(
     order.id,
     'restored',
     { type: 'staff', staffId },
-    { received: Number(received), reconciliationItemIds },
+    { received: Number(received), reconciliationItemIds, ...(voucherOverLimit && { voucherOverLimit }) },
   )
   await audit({
     action: 'reconciliation.restore',
     entityType: 'order',
     entityId: order.id,
     before: { status: order.status, paymentStatus: order.paymentStatus, cancelReason: order.cancelReason },
-    after: { status: 'processing', paymentStatus, reconciliationItemIds },
+    after: {
+      status: 'processing',
+      paymentStatus,
+      reconciliationItemIds,
+      ...(voucherOverLimit && { voucherOverLimit }),
+    },
   })
   if (preorder) await queueDepositReceivedEmail(tx, deps, order)
   else await queuePaymentReceivedEmail(tx, deps, order)
   return order.code
+}
+
+/**
+ * Khôi phục giữ nguyên phần giảm đã chụp và không kiểm lại mã (spec M5): khách đã trả đúng số tiền ghi trên đơn. Khi vì
+ * thế mà số lượt đã dùng (đã tính đơn vừa khôi phục) vượt tổng lượt của mã, trả thông tin để ghi vào sự kiện và audit.
+ */
+async function voucherOverLimitOf(tx: DbClient, order: { voucherId: string | null; voucherCode: string | null }) {
+  if (!order.voucherId) return null
+  const { totalLimit } = await tx.voucher.findUniqueOrThrow({
+    where: { id: order.voucherId },
+    select: { totalLimit: true },
+  })
+  if (totalLimit === null) return null
+  const used = (await usedRedemptions(tx, [order.voucherId])).get(order.voucherId) ?? 0
+  return used > totalLimit ? { code: order.voucherCode!, used, totalLimit } : null
 }
 
 /**

@@ -6,7 +6,7 @@ import {
   type ReconciliationReason,
 } from '../generated/prisma/client.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
-import { dayVN, isoDay, vnd } from '../orders/format.ts'
+import { dayVN, isoDay, vnd, voucherLines } from '../orders/format.ts'
 import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../orders/orders.ts'
 import type { PaymentGateway } from './gateway.ts'
 
@@ -231,6 +231,7 @@ export async function queuePaymentReceivedEmail(
       `Chúng tôi đã nhận đủ thanh toán cho đơn hàng #${order.code}.`,
       '',
       ...lines,
+      ...voucherLines(order),
       `Phí giao: ${vnd(order.shippingFee)}`,
       `Tổng cộng: ${vnd(order.total)}`,
       '',
@@ -265,6 +266,7 @@ export async function queueDepositReceivedEmail(
       '',
       `Chúng tôi đã nhận tiền cọc cho đơn đặt trước #${order.code}: ${line.productName} x ${line.quantity}.`,
       '',
+      ...voucherLines(order),
       `Tiền cọc đã nhận: ${vnd(depositAmount)}`,
       `Phần còn lại (gồm phí giao): ${vnd(remainingOf(order))}`,
       `Thời gian giao dự kiến: ${dayVN(isoDay(deliveryFrom))} – ${dayVN(isoDay(deliveryTo))}`,

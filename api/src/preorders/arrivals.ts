@@ -1,7 +1,7 @@
 import type { DbClient } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
-import { dateVN, vnd } from '../orders/format.ts'
+import { dateVN, vnd, voucherLines } from '../orders/format.ts'
 import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../orders/orders.ts'
 import { reserveStock } from '../stock/stock.ts'
 
@@ -136,6 +136,7 @@ async function queueArrivedEmail(
       '',
       `Hàng của đơn đặt trước #${order.code} đã về kho: ${line.productName} x ${line.quantity}.`,
       '',
+      ...voucherLines(order),
       `Phần còn lại cần trả (gồm phí giao): ${vnd(remainingOf(order))}`,
       `Hạn trả: ${dateVN(order.remainderDueAt!)}`,
       '',

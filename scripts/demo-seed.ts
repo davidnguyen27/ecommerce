@@ -379,6 +379,33 @@ async function ensureShippingFee(token: string) {
   console.log('Đã đặt phí giao mặc định 30.000đ')
 }
 
+/**
+ * Mã giảm giá mẫu để thử ở local (M5): `DEMO10` giảm 10%, tối đa 500.000, cho cả hàng sẵn và đặt trước, hết hạn sau một
+ * năm. Không tạo ở bản deploy: mã nằm trong repo công khai thì ai cũng dùng được.
+ */
+async function ensureDemoVoucher(token: string) {
+  if (!LOCAL) return
+  const found = (await api('/api/admin/vouchers?q=DEMO10', { token })).items as { code: string }[]
+  if (found.some((v) => v.code === 'DEMO10')) return
+  const now = Date.now()
+  await api('/api/admin/vouchers', {
+    method: 'POST',
+    token,
+    body: {
+      code: 'DEMO10',
+      description: 'Mã mẫu của demo-seed',
+      kind: 'percent',
+      percent: 10,
+      maxDiscount: 500_000,
+      startsAt: new Date(now - 60_000).toISOString(),
+      endsAt: new Date(now + 365 * 24 * 60 * 60_000).toISOString(),
+      saleTypes: ['standard', 'preorder'],
+      perCustomerLimit: 5,
+    },
+  })
+  console.log('Đã tạo mã giảm giá mẫu DEMO10 (giảm 10%, tối đa 500.000đ)')
+}
+
 async function main() {
   const existing = await fetch(`${BASE}/api/brands/nike`)
   if (existing.ok) {
@@ -386,6 +413,7 @@ async function main() {
     // Dữ liệu demo cũ (trước M3) chưa có phí giao: bổ sung để đặt mua được.
     const token = String((await api('/api/admin/auth/login', { method: 'POST', body: OWNER })).accessToken)
     await ensureShippingFee(token)
+    await ensureDemoVoucher(token)
     console.log(loginHint())
     return
   }
@@ -437,6 +465,7 @@ async function main() {
     },
   })
   await ensureShippingFee(token)
+  await ensureDemoVoucher(token)
 
   const brandIds: Record<string, string> = {}
   for (const brand of BRANDS) {

@@ -18,6 +18,7 @@ const notice = ref<string | null>(null)
 const busy = ref(false)
 
 const canFulfill = computed(() => session.can('order.fulfill'))
+const canOpen = session.canOpen
 
 function setOrder(value: unknown) {
   order.value = AdminOrder.parse(value)
@@ -63,6 +64,12 @@ function historyDetail(entry: OrderHistoryEntry) {
     total?: number
     carrier?: string
     trackingNumber?: string
+    voucherOverLimit?: { code: string; used: number; totalLimit: number }
+  }
+  // Khôi phục giữ phần giảm dù mã đã hết lượt (spec M5): báo để chủ doanh nghiệp thấy.
+  if (entry.action === 'restored' && data.voucherOverLimit) {
+    const { code, used, totalLimit } = data.voucherOverLimit
+    return `Mã ${code} vượt tổng lượt: đã dùng ${used}/${totalLimit}`
   }
   if (entry.action === 'handed_over' && data.carrier) return `${data.carrier} · ${data.trackingNumber}`
   if (entry.action === 'cancelled' && data.reason) {
@@ -147,13 +154,38 @@ await load()
                     </td>
                     <td class="admin-table-num">{{ formatVnd(line.price) }}</td>
                     <td class="admin-table-num">{{ line.quantity }}</td>
-                    <td class="admin-table-num">{{ formatVnd(line.lineTotal) }}</td>
+                    <td class="admin-table-num">
+                      {{ formatVnd(line.lineTotal) }}
+                      <div v-if="line.discount > 0" style="font-size: 12px; color: var(--adm-muted)">
+                        giảm {{ formatVnd(line.discount) }}
+                      </div>
+                    </td>
                   </tr>
                 </tbody>
                 <tfoot>
                   <tr>
                     <td colspan="4">Tạm tính</td>
                     <td class="admin-table-num">{{ formatVnd(order.subtotal) }}</td>
+                  </tr>
+                  <tr v-if="order.voucher" data-testid="admin-order-discount">
+                    <td colspan="4">
+                      Mã giảm giá
+                      <NuxtLink
+                        v-if="canOpen('/admin/vouchers')"
+                        :to="`/admin/vouchers/${order.voucher.id}`"
+                        style="font-family: var(--adm-mono)"
+                        >{{ order.voucher.code }}</NuxtLink
+                      >
+                      <span v-else style="font-family: var(--adm-mono)">{{ order.voucher.code }}</span>
+                      <span style="font-size: 12px; color: var(--adm-muted)">
+                        ({{ voucherValueLabel(order.voucher) }})</span
+                      >
+                    </td>
+                    <td class="admin-table-num">−{{ formatVnd(order.discount) }}</td>
+                  </tr>
+                  <tr v-if="order.voucher">
+                    <td colspan="4">Tiền hàng sau giảm</td>
+                    <td class="admin-table-num">{{ formatVnd(order.subtotalAfterDiscount) }}</td>
                   </tr>
                   <tr>
                     <td colspan="4">Phí giao</td>

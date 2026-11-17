@@ -11,6 +11,7 @@ import {
   type PreorderChange,
   type PreorderConflictDetails,
   type PreorderQuote,
+  type VoucherQuote,
 } from '@ecommerce/shared'
 import { wardName } from '@ecommerce/shared/wards'
 import type { AppDeps } from '../app.ts'
@@ -27,6 +28,7 @@ import { isoDay } from '../orders/format.ts'
 import { recordOrderEvent } from '../orders/orders.ts'
 import { checkPreorder } from '../preorders/check.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
+import { applyVoucherToOrder, quoteVoucher, voucherSnapshot } from '../vouchers/apply.ts'
 
 const conflict = (change: PreorderChange) => {
   const messages: Record<PreorderChange['kind'], string> = {
@@ -64,12 +66,40 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
       const policies = await livePolicyVersions(prisma, [found])
       const image = variant && storedImageOf(found)
       const subtotal = variant ? variant.price * input.quantity : null
-      const shippingFee =
-        subtotal === null || input.provinceCode === undefined
-          ? null
-          : shippingFeeFor(config, input.provinceCode, subtotal)
-      const total = subtotal === null || shippingFee === null ? null : subtotal + shippingFee
-      const depositAmount = subtotal === null || !campaign ? null : depositFor(subtotal, campaign.depositPercent)
+
+      let voucher: VoucherQuote | null = null
+      if (input.voucherCode !== undefined) {
+        voucher = await quoteVoucher(prisma, req, res, input.voucherCode, {
+          saleType: 'preorder',
+          lines:
+            variant && snapshot
+              ? [
+                  {
+                    variantId: variant.id,
+                    brandId: snapshot.brandId,
+                    categoryId: snapshot.categoryId,
+                    price: variant.price,
+                    quantity: input.quantity,
+                  },
+                ]
+              : [],
+          customer: { email: input.email, phone: input.phone },
+        })
+      }
+      const discount = voucher?.applied ? voucher.discount : 0
+      /** Phí giao, tổng và tiền cọc khi tiền hàng được giảm `discount` (spec M5: ngưỡng và cọc tính sau giảm). */
+      const amounts = (discount: number) => {
+        if (subtotal === null) return { shippingFee: null, total: null, depositAmount: null }
+        const goods = subtotal - discount
+        const shippingFee = input.provinceCode === undefined ? null : shippingFeeFor(config, input.provinceCode, goods)
+        return {
+          shippingFee,
+          total: shippingFee === null ? null : goods + shippingFee,
+          depositAmount: campaign ? depositFor(goods, campaign.depositPercent) : null,
+        }
+      }
+      const { shippingFee, total, depositAmount } = amounts(discount)
+      const withoutVoucher = amounts(0)
 
       const body: PreorderQuote = {
         variantId: input.variantId,
@@ -88,10 +118,14 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
         },
         problem: problem && { kind: problem },
         subtotal,
+        voucher,
+        discount,
         depositAmount,
         shippingFee,
         total,
         remainingAmount: total === null || depositAmount === null ? null : total - depositAmount,
+        depositAmountWithoutVoucher: withoutVoucher.depositAmount,
+        totalWithoutVoucher: withoutVoucher.total,
         preorderPolicy: preorderPolicy && { slug: preorderPolicy.page.slug, title: preorderPolicy.title },
         policies: policies.map(({ slug, title }) => ({ slug, title })),
         groundShippingOnly: Boolean(variant && snapshot?.groundShippingOnly),
@@ -148,9 +182,34 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
           if (problem === 'sold_out') throw conflict({ kind: 'sold_out' })
 
           const subtotal = variant.price * input.quantity
-          const shippingFee = shippingFeeFor(config, address.provinceCode, subtotal)
-          const total = subtotal + shippingFee
-          const depositAmount = depositFor(subtotal, campaign.depositPercent)
+
+          // Mã kiểm sau biến thể, đợt và giá: tiền giảm phụ thuộc giá và số lượng. Khóa dòng mã sau dòng suất.
+          const applied =
+            input.voucherCode === undefined
+              ? null
+              : await applyVoucherToOrder(tx, input.voucherCode, {
+                  saleType: 'preorder',
+                  lines: [
+                    {
+                      variantId: variant.id,
+                      brandId: found.snapshot!.brandId,
+                      categoryId: found.snapshot!.categoryId,
+                      price: variant.price,
+                      quantity: input.quantity,
+                    },
+                  ],
+                  customer: { email: address.email, phone: address.phone },
+                  seenDiscount: input.discount,
+                  withoutVoucher: {
+                    totalWithoutVoucher: subtotal + shippingFeeFor(config, address.provinceCode, subtotal),
+                    depositAmountWithoutVoucher: depositFor(subtotal, campaign.depositPercent),
+                  },
+                  detailsOf: (voucher): PreorderConflictDetails => ({ voucher }),
+                })
+          const discount = applied ? Number(applied.discount) : 0
+          const shippingFee = shippingFeeFor(config, address.provinceCode, subtotal - discount)
+          const total = subtotal - discount + shippingFee
+          const depositAmount = depositFor(subtotal - discount, campaign.depositPercent)
           const policies = await livePolicyVersions(tx, [found])
           const reservedUntil = new Date(Date.now() + RESERVATION_MINUTES * 60_000)
 
@@ -180,6 +239,7 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
               subtotal,
               shippingFee,
               total,
+              ...(applied && voucherSnapshot(applied.voucher, applied.discount)),
               lookupTokenHash: hashOpaqueToken(token),
               // Hạn trả cọc; đơn chờ cọc chiếm suất tới hạn này, không giữ hàng.
               reservedUntil,
@@ -193,6 +253,8 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
                   image: storedImageOf(found) ?? undefined,
                   price: variant.price,
                   quantity: input.quantity,
+                  // Đơn một dòng: dòng nhận cả phần giảm.
+                  discount: applied?.discount ?? 0n,
                 },
               },
               policyVersions: {
@@ -207,7 +269,12 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
             order.id,
             'created',
             { type: 'customer', customerId: customerId ?? undefined },
-            { total, depositAmount, campaignId: campaign.id },
+            {
+              total,
+              depositAmount,
+              campaignId: campaign.id,
+              ...(applied && { voucherCode: applied.voucher.code, discount }),
+            },
           )
           await orderExpiry.scheduleOrderExpiry(tx, order.id, reservedUntil)
           if (customerId) {

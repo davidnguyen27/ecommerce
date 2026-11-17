@@ -1,7 +1,7 @@
 import type { Db, DbClient } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
-import { dateVN, vnd } from '../orders/format.ts'
+import { dateVN, vnd, voucherLines } from '../orders/format.ts'
 import { DEPOSITED_PREORDER, issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../orders/orders.ts'
 
 /** Nhắc khi còn từ chừng này tới hạn trả phần còn lại trở xuống. */
@@ -92,6 +92,7 @@ async function queueReminderEmail(
       `Chào ${order.recipientName},`,
       '',
       `Hàng của đơn đặt trước #${order.code} đã về và đang được giữ cho bạn.`,
+      ...voucherLines(order),
       `Phần còn lại cần trả: ${vnd(remainingOf(order))}, hạn ${dateVN(order.remainderDueAt!)}.`,
       '',
       `Trả phần còn lại tại trang đơn hàng: ${link}`,

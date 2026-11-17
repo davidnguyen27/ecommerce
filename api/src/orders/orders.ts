@@ -232,8 +232,11 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
       price: Number(line.price),
       quantity: line.quantity,
       lineTotal: Number(line.price) * line.quantity,
+      discount: Number(line.discount),
     })),
     subtotal: Number(order.subtotal),
+    voucherCode: order.voucherCode,
+    discount: Number(order.discount),
     shippingFee: Number(order.shippingFee),
     total: Number(order.total),
     policies: order.policyVersions

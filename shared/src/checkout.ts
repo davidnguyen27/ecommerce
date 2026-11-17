@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { AttributeValues } from './attributes.ts'
 import { PublicImage } from './products.ts'
 import { ProvinceCode } from './regions.ts'
+import { VoucherCodeInput, VoucherConflict, VoucherQuote } from './vouchers.ts'
 
 /** Số cái tối đa của một biến thể trong một đơn. */
 export const MAX_QUANTITY_PER_VARIANT = 5
@@ -39,10 +40,31 @@ const linesOf = <T extends z.ZodType<{ variantId: string }>>(line: T) =>
 /** Các dòng giỏ hàng gửi lên `quote`. */
 export const CartLines = linesOf(CartLine)
 
-/** Body của `POST /api/checkout/quote`. Thiếu `provinceCode` (trang giỏ hàng) thì không tính phí giao. */
+/**
+ * Email và số điện thoại khách đang nhập, gửi kèm báo giá có mã để kiểm lượt mỗi khách. Chưa nhập xong (sai định dạng)
+ * thì coi như chưa có, không báo lỗi form.
+ */
+export const QuoteContact = {
+  email: z
+    .email()
+    .transform((email) => email.toLowerCase())
+    .optional()
+    .catch(undefined),
+  phone: z
+    .lazy(() => PhoneNumber)
+    .optional()
+    .catch(undefined),
+}
+
+/**
+ * Body của `POST /api/checkout/quote`. Thiếu `provinceCode` (trang giỏ hàng) thì không tính phí giao. `voucherCode` là
+ * mã khách gõ ở trang đặt mua.
+ */
 export const CheckoutQuoteRequest = z.object({
   lines: CartLines,
   provinceCode: ProvinceCode.optional(),
+  voucherCode: VoucherCodeInput.optional(),
+  ...QuoteContact,
 })
 export type CheckoutQuoteRequest = z.infer<typeof CheckoutQuoteRequest>
 
@@ -77,11 +99,19 @@ export const CheckoutQuote = z.object({
   groundShippingOnly: z.boolean(),
   /** Tổng tiền hàng của các dòng mua được (còn bán và còn hàng). */
   subtotal: z.number(),
+  /** Kết quả áp mã; `null` khi không gửi mã. */
+  voucher: VoucherQuote.nullable(),
+  /** Tiền giảm của mã, 0 khi không có mã hoặc mã không áp được. */
+  discount: z.number(),
+  /** Ngưỡng so với tiền hàng sau giảm. */
   freeShippingThreshold: z.number().nullable(),
-  /** `null` khi chưa chọn tỉnh/thành; 0 khi được miễn phí giao. */
+  /** `null` khi chưa chọn tỉnh/thành; 0 khi được miễn phí giao. Tính trên tiền hàng sau giảm. */
   shippingFee: z.number().nullable(),
-  /** Tổng phải trả = tổng tiền hàng + phí giao; `null` khi chưa chọn tỉnh/thành. */
+  /** Tổng phải trả = tiền hàng − tiền giảm + phí giao; `null` khi chưa chọn tỉnh/thành. */
   total: z.number().nullable(),
+  /** Phí giao và tổng khi không dùng mã, để trang so sánh; bằng hai trường trên khi không có tiền giảm. */
+  shippingFeeWithoutVoucher: z.number().nullable(),
+  totalWithoutVoucher: z.number().nullable(),
   /** Chính sách đổi trả, bảo hành đang xuất bản của các sản phẩm còn bán trong giỏ, để trang đặt mua hiện link. */
   policies: z.array(z.object({ slug: z.string(), title: z.string() })),
 })
@@ -141,6 +171,9 @@ export const CheckoutRequest = z.object({
   acceptPrivacyPolicy: z.boolean().optional(),
   /** Xuất hóa đơn công ty, không bắt buộc. */
   invoice: InvoiceInfo.optional(),
+  /** Mã giảm giá và tiền giảm khách đã thấy; khác lúc đặt thì 409 với `details.voucher`. */
+  voucherCode: VoucherCodeInput.optional(),
+  discount: z.number().int().min(0).default(0),
 })
 export type CheckoutRequest = z.input<typeof CheckoutRequest>
 
@@ -153,9 +186,13 @@ export const CheckoutLineChange = z.discriminatedUnion('kind', [
 ])
 export type CheckoutLineChange = z.infer<typeof CheckoutLineChange>
 
-/** `error.details` của 409 khi đặt mua: thay đổi của từng dòng có vấn đề. Không có gì được ghi. */
+/**
+ * `error.details` của 409 khi đặt mua: thay đổi của từng dòng có vấn đề, hoặc (khi mọi dòng đều đúng) mã giảm giá không
+ * còn như khách đã thấy. Không có gì được ghi.
+ */
 export const CheckoutConflictDetails = z.object({
   lines: z.array(z.object({ variantId: z.string(), change: CheckoutLineChange })),
+  voucher: VoucherConflict.optional(),
 })
 export type CheckoutConflictDetails = z.infer<typeof CheckoutConflictDetails>
 

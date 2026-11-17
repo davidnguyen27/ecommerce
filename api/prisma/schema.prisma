@@ -50,6 +50,7 @@ model Staff {
   orderEvents              OrderEvent[]
   resolvedReconciliations  ReconciliationItem[]
   preorderCampaigns        PreorderCampaign[]
+  vouchers                 Voucher[]
 
   @@map("staff")
 }
@@ -236,6 +237,7 @@ model Brand {
 
   products        Product[]
   productVersions ProductVersion[]
+  vouchers        VoucherBrand[]
 
   @@map("brand")
 }
@@ -267,6 +269,7 @@ model Category {
 
   products        Product[]
   productVersions ProductVersion[]
+  vouchers        VoucherCategory[]
 
   @@index([parentId])
   @@map("category")
@@ -702,7 +705,7 @@ model Order {
   /// Số nhà, đường.
   streetAddress     String             @map("street_address")
   note              String             @default("")
-  /// VND. Check constraint: `total = subtotal + shipping_fee`.
+  /// VND. Check constraint: `total = subtotal - discount + shipping_fee`.
   subtotal          BigInt
   shippingFee       BigInt             @map("shipping_fee")
   total             BigInt
@@ -735,9 +738,20 @@ model Order {
   /// cọc bên dưới, đơn hàng sẵn không có trường nào.
   preorderCampaignId  String?           @map("preorder_campaign_id") @db.Uuid
   preorderCampaign    PreorderCampaign? @relation(fields: [preorderCampaignId], references: [id], onDelete: Restrict)
-  /// Chụp từ đợt lúc đặt: phần trăm cọc, và tiền cọc VND (làm tròn lên 1.000, check `0 < deposit_amount <= subtotal`).
+  /// Chụp từ đợt lúc đặt: phần trăm cọc, và tiền cọc VND (làm tròn lên 1.000, tính trên tiền hàng sau giảm, check `0 < deposit_amount <= subtotal - discount`).
   depositPercent      Int?              @map("deposit_percent")
   depositAmount       BigInt?           @map("deposit_amount")
+  /// Mã giảm giá đã dùng, cùng các giá trị chụp lúc đặt (check `order_voucher_check`: có mã thì có đủ, không có thì
+  /// không có trường nào và `discount = 0`). Sửa hay tắt mã sau đó không đổi đơn.
+  voucherId           String?           @map("voucher_id") @db.Uuid
+  voucher             Voucher?          @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  voucherCode         String?           @map("voucher_code")
+  voucherKind         VoucherKind?      @map("voucher_kind")
+  voucherAmount       BigInt?           @map("voucher_amount")
+  voucherPercent      Int?              @map("voucher_percent")
+  voucherMaxDiscount  BigInt?           @map("voucher_max_discount")
+  /// Tiền giảm VND, trừ vào tiền hàng; check `0 <= discount <= subtotal`.
+  discount            BigInt            @default(0)
   /// Thời gian giao dự kiến lúc đặt; đợt có thể đổi về sau (ticket 09) nhưng đơn giữ lời hẹn ban đầu.
   deliveryFrom        DateTime?         @map("delivery_from") @db.Date
   deliveryTo          DateTime?         @map("delivery_to") @db.Date
@@ -771,6 +785,7 @@ model Order {
   @@index([phone, status])
   @@index([preorderCampaignId])
   @@index([depositPaidAt])
+  @@index([voucherId])
   @@map("order")
 }
 
@@ -795,6 +810,8 @@ model OrderLine {
   /// Số đang giữ trong kho cho dòng này, 0–`quantity` (check constraint). Đơn hàng sẵn: bằng `quantity` từ lúc giữ tới
   /// lúc hủy hay bàn giao; đơn đặt trước: tăng dần theo phiếu nhập (ADR 0013). Hủy và bàn giao đưa về 0.
   reservedQuantity Int            @default(0) @map("reserved_quantity")
+  /// Phần tiền giảm của đơn chia cho dòng này, VND; 0–tiền hàng của dòng (check constraint).
+  discount         BigInt         @default(0)
 
   @@unique([orderId, position])
   @@index([variantId])
@@ -1016,4 +1033,69 @@ model PreorderCampaignVariant {
   @@id([campaignId, variantId])
   @@index([variantId])
   @@map("preorder_campaign_variant")
+}
+
+enum VoucherKind {
+  fixed
+  percent
+
+  @@map("voucher_kind")
+}
+
+/// Mã giảm giá (GLOSSARY "Mã giảm giá"). Không xóa, chỉ tắt. Số lượt đã dùng tính từ đơn chưa hủy, không lưu bộ đếm.
+model Voucher {
+  id               String      @id @default(uuid()) @db.Uuid
+  /// Chữ hoa và số, 4–20 ký tự; check `voucher_code_check`.
+  code             String      @unique
+  description      String      @default("")
+  kind             VoucherKind
+  /// Check `voucher_kind_check`: `fixed` có `amount` (VND); `percent` có `percent` (1–50) và `max_discount` (VND).
+  amount           BigInt?
+  percent          Int?
+  maxDiscount      BigInt?     @map("max_discount")
+  minSubtotal      BigInt      @default(0) @map("min_subtotal")
+  startsAt         DateTime    @map("starts_at")
+  /// Check `ends_at > starts_at`.
+  endsAt           DateTime    @map("ends_at")
+  /// Hình thức bán được áp; ít nhất một.
+  saleTypes        OrderKind[] @map("sale_types")
+  /// Trống là không giới hạn.
+  totalLimit       Int?        @map("total_limit")
+  perCustomerLimit Int         @default(1) @map("per_customer_limit")
+  disabledAt       DateTime?   @map("disabled_at")
+  createdById      String      @map("created_by_id") @db.Uuid
+  createdBy        Staff       @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  brands     VoucherBrand[]
+  categories VoucherCategory[]
+  orders     Order[]
+
+  @@index([createdAt])
+  @@map("voucher")
+}
+
+/// Phạm vi theo thương hiệu; mã không có dòng nào là mọi thương hiệu.
+model VoucherBrand {
+  voucherId String  @map("voucher_id") @db.Uuid
+  voucher   Voucher @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  brandId   String  @map("brand_id") @db.Uuid
+  brand     Brand   @relation(fields: [brandId], references: [id], onDelete: Restrict)
+
+  @@id([voucherId, brandId])
+  @@index([brandId])
+  @@map("voucher_brand")
+}
+
+/// Phạm vi theo danh mục, gồm cả con cháu; mã không có dòng nào là mọi danh mục.
+model VoucherCategory {
+  voucherId  String   @map("voucher_id") @db.Uuid
+  voucher    Voucher  @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  categoryId String   @map("category_id") @db.Uuid
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@id([voucherId, categoryId])
+  @@index([categoryId])
+  @@map("voucher_category")
 }

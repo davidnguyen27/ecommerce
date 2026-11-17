@@ -23,6 +23,8 @@ export const Permission = z.enum([
   'payment.reconcile',
   /** Mở, sửa, đóng đợt đặt trước; cập nhật tiến độ nhập hàng và thời gian giao dự kiến. */
   'preorder.manage',
+  /** Tạo, sửa, tắt mã giảm giá. */
+  'voucher.manage',
 ])
 export type Permission = z.infer<typeof Permission>
 

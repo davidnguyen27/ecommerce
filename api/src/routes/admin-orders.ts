@@ -71,6 +71,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
           remainderOverdueAt: query.remainderOverdue ? { not: null } : null,
         }),
         ...(query.q && searchWhere(query.q)),
+        ...(query.voucherCode && { voucherCode: query.voucherCode.toUpperCase() }),
       }
       const direction = query.sort === 'oldest' ? 'asc' : 'desc'
       const [orders, total] = await Promise.all([
