@@ -12,6 +12,9 @@ const error = ref<string | null>(null)
 const open = ref(false)
 const sending = ref(false)
 const form = reactive({ subject: '', message: '' })
+const images = ref<File[]>([])
+// Yêu cầu đã tạo mà có ảnh gửi không được: vẫn mở được yêu cầu, báo ảnh nào lỗi.
+const createdLink = ref<string | null>(null)
 
 async function load() {
   try {
@@ -33,6 +36,14 @@ async function submit() {
       message: form.message,
       ...(props.orderCode !== undefined && { orderCode: props.orderCode }),
     })
+    // Ảnh gắn vào tin đầu tiên của yêu cầu vừa tạo.
+    const firstMessage = created.messages[0]!.id
+    const uploaded = await attachAll((file) => props.client.attach(created.code, firstMessage, file), images.value)
+    if (uploaded.error) {
+      error.value = uploaded.error
+      createdLink.value = props.client.linkTo(created.code)
+      return
+    }
     await navigateTo(props.client.linkTo(created.code))
   } catch (err) {
     error.value = apiErrorMessage(err)
@@ -51,7 +62,10 @@ async function submit() {
       </button>
     </div>
 
-    <p v-if="error" role="alert" class="notice-error mt-3">{{ error }}</p>
+    <p v-if="error" role="alert" class="notice-error mt-3">
+      {{ error }}
+      <NuxtLink v-if="createdLink" :to="createdLink" class="link">Mở yêu cầu đã gửi</NuxtLink>
+    </p>
 
     <form v-if="open" class="mt-4 space-y-4" data-testid="support-form" @submit.prevent="submit">
       <label class="field">
@@ -68,6 +82,7 @@ async function submit() {
           data-testid="support-message"
         />
       </label>
+      <SupportImagePicker v-model="images" input-id="support-new-images" />
       <div class="flex gap-3">
         <button type="submit" class="btn-primary" :disabled="sending" data-testid="support-submit">
           {{ sending ? 'Đang gửi…' : 'Gửi yêu cầu' }}

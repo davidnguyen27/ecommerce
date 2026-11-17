@@ -41,12 +41,29 @@ export type CreateSupportRequest = z.input<typeof CreateSupportRequest>
 export const SupportMessageRequest = z.object({ message: Body })
 export type SupportMessageRequest = z.input<typeof SupportMessageRequest>
 
+/** Ảnh đính kèm: jpeg, png, webp, tối đa 5 MB mỗi ảnh (spec M6b). */
+export const SUPPORT_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+/** Tối đa số ảnh trên một tin và trên một yêu cầu. */
+export const SUPPORT_IMAGES_PER_MESSAGE = 5
+export const SUPPORT_IMAGES_PER_REQUEST = 20
+
+/** Một ảnh đính kèm: URL ký có hạn (5 phút), chỉ trả cho người xem được yêu cầu. */
+export const SupportAttachmentView = z.object({
+  id: z.string(),
+  url: z.string(),
+  contentType: z.string(),
+  width: z.number(),
+  height: z.number(),
+})
+export type SupportAttachmentView = z.infer<typeof SupportAttachmentView>
+
 /** Một tin như khách thấy: không có ghi chú nội bộ, không có tên nhân viên (khách thấy "Cửa hàng"). */
 export const PublicSupportMessage = z.object({
   id: z.string(),
   author: SupportAuthor,
   body: z.string(),
   createdAt: z.string(),
+  attachments: z.array(SupportAttachmentView),
 })
 export type PublicSupportMessage = z.infer<typeof PublicSupportMessage>
 

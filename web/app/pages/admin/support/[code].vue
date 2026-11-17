@@ -18,6 +18,7 @@ const canHandle = computed(() => session.can('support.handle'))
 const canAssign = computed(() => session.can('staff.manage'))
 const staff = ref<StaffSummary[]>([])
 const reply = reactive({ message: '', internal: false, status: '' as '' | NonNullable<AdminSupportReply['status']> })
+const images = ref<File[]>([])
 
 async function load() {
   try {
@@ -44,12 +45,32 @@ async function act(path: string, body?: Record<string, unknown>) {
 }
 
 async function send() {
+  const hadMessage = reply.message.trim().length > 0
   const ok = await act('reply', {
     message: reply.message.trim() || undefined,
     internal: reply.internal,
     status: reply.status || undefined,
   })
-  if (ok) Object.assign(reply, { message: '', internal: false, status: '' })
+  if (!ok) return
+  // Ảnh gắn vào tin vừa gửi (tin cuối là của chính nhân viên); chỉ khi có tin.
+  const own = hadMessage ? request.value!.messages.at(-1)!.id : null
+  Object.assign(reply, { message: '', internal: false, status: '' })
+  if (!own || images.value.length === 0) return
+  busy.value = true
+  const uploaded = await attachAll(async (file) => {
+    const body = new FormData()
+    body.append('file', file)
+    return AdminSupportRequest.parse(
+      await session.adminFetch(`/api/admin/support-requests/${code}/messages/${own}/attachments`, {
+        method: 'POST',
+        body,
+      }),
+    )
+  }, images.value)
+  busy.value = false
+  images.value = []
+  if (uploaded.request) request.value = uploaded.request
+  if (uploaded.error) error.value = uploaded.error
 }
 
 const assignee = ref('')
@@ -111,6 +132,7 @@ if (canAssign.value) {
               <strong v-if="m.internal" style="color: #b45309"> · Ghi chú nội bộ</strong>
             </div>
             <div style="white-space: pre-line; font-size: 13px">{{ m.body }}</div>
+            <SupportAttachments :attachments="m.attachments" />
           </div>
         </div>
 
@@ -126,6 +148,7 @@ if (canAssign.value) {
               maxlength="5000"
             />
           </div>
+          <SupportImagePicker v-model="images" input-id="admin-support-images" admin style="margin-bottom: 12px" />
           <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 12px">
             <label style="display: flex; gap: 6px; align-items: center; font-size: 13px">
               <input v-model="reply.internal" type="checkbox" data-testid="admin-support-internal" />

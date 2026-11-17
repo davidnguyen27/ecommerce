@@ -1,6 +1,9 @@
 import {
   ErrorCode,
   SUPPORT_CLOSED_STATUSES,
+  SUPPORT_IMAGES_PER_MESSAGE,
+  SUPPORT_IMAGES_PER_REQUEST,
+  type SupportAttachmentView,
   type AdminSupportReply,
   type AdminSupportRequest,
   type AdminSupportSummary,
@@ -9,6 +12,7 @@ import {
   type SupportRequestKind,
   type SupportRequestStatus,
 } from '@ecommerce/shared'
+import type { Storage } from '../adapters/storage.ts'
 import type { Audit } from '../audit/audited.ts'
 import { ACTOR_SELECT } from '../audit/audited.ts'
 import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
@@ -17,6 +21,7 @@ import type { DbClient } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import type { CustomerMail } from '../jobs/jobs.ts'
+import { DOCUMENT_URL_TTL_SECONDS } from '../media/documents.ts'
 
 /**
  * Yêu cầu hỗ trợ (GLOSSARY, spec M6b): việc khách nhờ cửa hàng xử lý, gồm chuỗi tin, người phụ trách và trạng thái
@@ -37,7 +42,13 @@ export const SUPPORT_INCLUDE = {
   assignee: { select: ACTOR_SELECT },
   createdByStaff: { select: ACTOR_SELECT },
   previousRequest: { select: { code: true } },
-  messages: { include: { staff: { select: ACTOR_SELECT } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+  messages: {
+    include: {
+      staff: { select: ACTOR_SELECT },
+      attachments: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+    },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  },
 } as const satisfies Prisma.SupportRequestInclude
 
 export type SupportForView = Prisma.SupportRequestGetPayload<{ include: typeof SUPPORT_INCLUDE }>
@@ -57,18 +68,36 @@ function summary(request: SupportForView): PublicSupportSummary {
   }
 }
 
-/** Yêu cầu như khách thấy: không có ghi chú nội bộ, người phụ trách hay tên nhân viên. */
-export function toPublicSupport(request: SupportForView): PublicSupportRequest {
+type ViewMessage = SupportForView['messages'][number]
+
+/** Ảnh của một tin kèm URL ký 5 phút (bucket private), chỉ dựng khi trả cho người đã được phép xem yêu cầu. */
+async function attachmentsOf(storage: Storage, message: ViewMessage): Promise<SupportAttachmentView[]> {
+  return Promise.all(
+    message.attachments.map(async (a) => ({
+      id: a.id,
+      url: await storage.signedUrl(a.key, DOCUMENT_URL_TTL_SECONDS),
+      contentType: a.contentType,
+      width: a.width,
+      height: a.height,
+    })),
+  )
+}
+
+/** Yêu cầu như khách thấy: không có ghi chú nội bộ (cả ảnh của ghi chú), người phụ trách hay tên nhân viên. */
+export async function toPublicSupport(storage: Storage, request: SupportForView): Promise<PublicSupportRequest> {
   return {
     ...summary(request),
     previousRequestCode: request.previousRequest?.code ?? null,
     resolvedAt: request.resolvedAt?.toISOString() ?? null,
-    messages: publicMessages(request).map((m) => ({
-      id: m.id,
-      author: m.author,
-      body: m.body,
-      createdAt: m.createdAt.toISOString(),
-    })),
+    messages: await Promise.all(
+      publicMessages(request).map(async (m) => ({
+        id: m.id,
+        author: m.author,
+        body: m.body,
+        createdAt: m.createdAt.toISOString(),
+        attachments: await attachmentsOf(storage, m),
+      })),
+    ),
   }
 }
 
@@ -85,7 +114,7 @@ export function toAdminSupportSummary(request: SupportForView): AdminSupportSumm
   }
 }
 
-export function toAdminSupport(request: SupportForView): AdminSupportRequest {
+export async function toAdminSupport(storage: Storage, request: SupportForView): Promise<AdminSupportRequest> {
   return {
     ...toAdminSupportSummary(request),
     customerId: request.customerId,
@@ -93,14 +122,17 @@ export function toAdminSupport(request: SupportForView): AdminSupportRequest {
     createdByStaff: request.createdByStaff,
     previousRequestCode: request.previousRequest?.code ?? null,
     resolvedAt: request.resolvedAt?.toISOString() ?? null,
-    messages: request.messages.map((m) => ({
-      id: m.id,
-      author: m.author,
-      body: m.body,
-      createdAt: m.createdAt.toISOString(),
-      internal: m.internal,
-      staff: m.staff,
-    })),
+    messages: await Promise.all(
+      request.messages.map(async (m) => ({
+        id: m.id,
+        author: m.author,
+        body: m.body,
+        createdAt: m.createdAt.toISOString(),
+        internal: m.internal,
+        staff: m.staff,
+        attachments: await attachmentsOf(storage, m),
+      })),
+    ),
   }
 }
 
@@ -353,4 +385,41 @@ async function queueSupportEmail(
       '\n',
     ),
   })
+}
+
+/** Ảnh chỉ gắn được vào tin của chính mình, trong khoảng này sau khi gửi tin (spec M6b ticket 02). */
+export const ATTACH_WINDOW_MS = 30 * 60_000
+
+/** Ai gắn ảnh: khách (tin của khách), hay một nhân viên (tin của chính nhân viên đó). */
+export type AttachmentAuthor = { type: 'customer' } | { type: 'staff'; staffId: string }
+
+/**
+ * Ghi một ảnh đã lưu vào tin `messageId` của yêu cầu (`where` giới hạn theo người xem). Dưới khóa dòng yêu cầu: yêu cầu
+ * chưa kết thúc; tin của chính người gắn, gửi chưa quá 30 phút; tin chưa đủ 5 ảnh và yêu cầu chưa đủ 20 ảnh. Sai thì
+ * 404 (tin lạ) hay 409; nơi gọi xóa file đã lưu khi lỗi. Trả id yêu cầu.
+ */
+export async function recordAttachment(
+  tx: DbClient,
+  where: Prisma.SupportRequestWhereInput,
+  messageId: string,
+  author: AttachmentAuthor,
+  image: { key: string; contentType: string; sizeBytes: number; width: number; height: number },
+  now = new Date(),
+) {
+  const request = await lockSupportRequest(tx, where)
+  if (isClosed(request.status)) throw conflict('Yêu cầu đã kết thúc, không gửi thêm ảnh được')
+  const message = request.messages.find((m) => m.id === messageId)
+  const own =
+    message && (author.type === 'customer' ? message.author === 'customer' : message.staffId === author.staffId)
+  if (!message || !own) throw new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy tin để gắn ảnh')
+  if (now.getTime() - message.createdAt.getTime() > ATTACH_WINDOW_MS) {
+    throw conflict('Tin đã gửi quá 30 phút, hãy gửi ảnh kèm một tin mới')
+  }
+  if (message.attachments.length >= SUPPORT_IMAGES_PER_MESSAGE) {
+    throw conflict(`Mỗi tin tối đa ${SUPPORT_IMAGES_PER_MESSAGE} ảnh`)
+  }
+  const total = request.messages.reduce((sum, m) => sum + m.attachments.length, 0)
+  if (total >= SUPPORT_IMAGES_PER_REQUEST) throw conflict(`Mỗi yêu cầu tối đa ${SUPPORT_IMAGES_PER_REQUEST} ảnh`)
+  await tx.supportAttachment.create({ data: { requestId: request.id, messageId, ...image } })
+  return request.id
 }
