@@ -98,6 +98,7 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
     items: [
       { to: '/admin/pages', label: 'Trang bài viết', icon: FileText, permission: 'content.edit' },
       { to: '/admin/legal-info', label: 'Thông tin pháp lý', icon: Scale, permission: 'content.edit' },
+      { to: '/admin/return-windows', label: 'Hạn đổi trả', icon: CalendarClock, permission: 'content.edit' },
     ],
   },
 ]

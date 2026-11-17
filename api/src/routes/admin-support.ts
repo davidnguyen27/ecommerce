@@ -4,6 +4,9 @@ import {
   AdminSupportQuery,
   AdminSupportReply,
   AssignSupportRequest,
+  DecideSupportRequest,
+  ProposeReturnRefund,
+  ReceiveSupportReturn,
   ErrorCode,
   SUPPORT_CLOSED_STATUSES,
   type AdminSupportPage,
@@ -29,6 +32,12 @@ import {
   toAdminSupport,
   toAdminSupportSummary,
 } from '../support/support.ts'
+import {
+  decideSupportRequest,
+  proposeReturnRefund,
+  receiveSupportReturn,
+  returnRefundHint,
+} from '../support/returns.ts'
 
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy yêu cầu')
 const requestCode = (code: string) => {
@@ -45,7 +54,10 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
   const load = async (code: number) => {
     const request = await prisma.supportRequest.findUnique({ where: { code }, include: SUPPORT_INCLUDE })
     if (!request) throw notFound()
-    const body: AdminSupportRequest = await toAdminSupport(storage, request)
+    const body: AdminSupportRequest = {
+      ...(await toAdminSupport(storage, request)),
+      returnRefund: await returnRefundHint(prisma, request),
+    }
     return body
   }
   return (
@@ -114,6 +126,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
             kind: input.kind,
             subject: input.subject,
             message: input.message,
+            lines: input.kind === 'return' ? input.lines : undefined,
             creator: { type: 'staff', staffId },
             ...(order ? { order } : { customer: customer! }),
           })
@@ -174,6 +187,28 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
           res.status(201).json(await load(code))
         },
       )
+      // Trả hàng (ticket 04): chấp nhận/từ chối, kho nhận hàng về, đề xuất hoàn.
+      .post('/:code/decide', requirePermission('support.handle'), async (req, res) => {
+        const input = parse(DecideSupportRequest, req.body)
+        const code = requestCode(String(req.params.code))
+        const staffId = currentStaff(req).id
+        await audited(prisma, req, (tx, audit) => decideSupportRequest(tx, mail, audit, code, staffId, input))
+        res.json(await load(code))
+      })
+      .post('/:code/receive', requirePermission('order.fulfill'), async (req, res) => {
+        const input = parse(ReceiveSupportReturn, req.body)
+        const code = requestCode(String(req.params.code))
+        const staffId = currentStaff(req).id
+        await audited(prisma, req, (tx, audit) => receiveSupportReturn(tx, audit, code, staffId, input))
+        res.json(await load(code))
+      })
+      .post('/:code/refund', requirePermission('support.handle'), async (req, res) => {
+        const input = parse(ProposeReturnRefund, req.body)
+        const code = requestCode(String(req.params.code))
+        const staffId = currentStaff(req).id
+        await audited(prisma, req, (tx, audit) => proposeReturnRefund(tx, mail, audit, code, staffId, input))
+        res.json(await load(code))
+      })
       .post('/:code/assign', requirePermission('staff.manage'), async (req, res) => {
         const { staffId } = parse(AssignSupportRequest, req.body)
         const code = requestCode(String(req.params.code))

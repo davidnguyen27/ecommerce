@@ -150,6 +150,9 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
         v-if="supportClient"
         :client="supportClient"
         :can-cancel="canRequestCancel(order)"
+        :return-lines="
+          order.status === 'completed' && order.fulfillmentStatus === 'delivered' ? order.lines : undefined
+        "
         class="mt-8"
       />
     </template>

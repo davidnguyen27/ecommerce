@@ -75,6 +75,7 @@ function customerSupportRoutes({ prisma, emails, siteUrl, storage }: Deps, scope
             subject: input.subject,
             message: input.message,
             previousRequestCode: input.previousRequestCode,
+            lines: input.kind === 'return' ? input.lines : undefined,
             creator: { type: 'customer' },
             ...owner,
           }),

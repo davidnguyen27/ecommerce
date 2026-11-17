@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ProductType } from './catalog.ts'
 import { PageQuery, pageOf } from './pagination.ts'
 
 /** Loại yêu cầu hỗ trợ (GLOSSARY "Yêu cầu hỗ trợ"); mọi loại trừ `other` gắn với một đơn. */
@@ -23,23 +24,48 @@ const Body = z
   .max(5000, 'Nội dung tối đa 5.000 ký tự')
 const Subject = z.string({ error: 'Nhập tiêu đề' }).trim().min(1, 'Nhập tiêu đề').max(200, 'Tiêu đề tối đa 200 ký tự')
 
-/**
- * Body khách gửi để tạo yêu cầu: loại `other` hay `cancel` (hủy đơn đã nhận tiền, cần đơn). Trả, đổi, bảo hành được thêm
- * cùng phần xử lý riêng của chúng.
- * `previousRequestCode`: nối tiếp một yêu cầu đã kết thúc của chính khách.
- */
-/** Loại khách và nhân viên đang tạo được (spec M6b ticket 01, 03). */
-export const CreatableSupportKind = z.enum(['other', 'cancel'])
+/** Loại khách và nhân viên đang tạo được (spec M6b ticket 01, 03, 04). */
+export const CreatableSupportKind = z.enum(['other', 'cancel', 'return'])
 export type CreatableSupportKind = z.infer<typeof CreatableSupportKind>
 
-export const CreateSupportRequest = z.object({
-  kind: CreatableSupportKind,
+/** Lý do trả hàng: lỗi, không vừa, không đúng mô tả, khác. */
+export const SupportReturnReason = z.enum(['defective', 'wrong_fit', 'not_as_described', 'other'])
+export type SupportReturnReason = z.infer<typeof SupportReturnReason>
+
+/** Một dòng muốn trả: theo biến thể của dòng đơn (mỗi đơn một dòng cho mỗi biến thể), số lượng và lý do. */
+export const ReturnLineInput = z.object({
+  variantId: z.string(),
+  quantity: z.number().int().min(1, 'Số lượng ít nhất là 1').max(5),
+  reason: SupportReturnReason,
+})
+export type ReturnLineInput = z.infer<typeof ReturnLineInput>
+
+const CreateBase = z.object({
   subject: Subject,
   message: Body,
+  /** Nối tiếp một yêu cầu đã kết thúc của chính khách. */
   previousRequestCode: z.number().int().positive().optional(),
   /** Chỉ ở trang tài khoản: gắn yêu cầu vào một đơn của chính khách. Đường link tra cứu đơn đã có đơn trong URL. */
   orderCode: z.number().int().positive().optional(),
 })
+
+const ReturnLines = z
+  .array(ReturnLineInput)
+  .min(1, 'Chọn ít nhất một sản phẩm muốn trả')
+  .max(20)
+  .refine((lines) => new Set(lines.map((l) => l.variantId)).size === lines.length, {
+    message: 'Mỗi sản phẩm chỉ chọn một lần',
+  })
+
+/**
+ * Body khách gửi để tạo yêu cầu, theo loại: `other`; `cancel` (hủy đơn đã nhận tiền, cần đơn); `return` (trả hàng
+ * đã giao, cần đơn và các dòng muốn trả). Đổi hàng và bảo hành được thêm cùng phần xử lý riêng.
+ */
+export const CreateSupportRequest = z.discriminatedUnion('kind', [
+  CreateBase.extend({ kind: z.literal('other') }),
+  CreateBase.extend({ kind: z.literal('cancel') }),
+  CreateBase.extend({ kind: z.literal('return'), lines: ReturnLines }),
+])
 export type CreateSupportRequest = z.input<typeof CreateSupportRequest>
 
 /** Body khách gửi tin vào yêu cầu. */
@@ -89,7 +115,24 @@ export const PublicSupportList = z.object({ items: z.array(PublicSupportSummary)
 export type PublicSupportList = z.infer<typeof PublicSupportList>
 
 /** Chi tiết yêu cầu như khách thấy. */
+/** Một dòng của yêu cầu như khách thấy: sản phẩm, số lượng, lý do. */
+export const SupportLineView = z.object({
+  id: z.string(),
+  sku: z.string(),
+  productName: z.string(),
+  quantity: z.number(),
+  reason: SupportReturnReason.nullable(),
+})
+export type SupportLineView = z.infer<typeof SupportLineView>
+
+export const SupportDecision = z.enum(['accepted', 'rejected'])
+export type SupportDecision = z.infer<typeof SupportDecision>
+
 export const PublicSupportRequest = PublicSupportSummary.extend({
+  lines: z.array(SupportLineView),
+  decision: SupportDecision.nullable(),
+  /** Lúc cửa hàng đã nhận hàng khách gửi về. */
+  receivedAt: z.string().nullable(),
   previousRequestCode: z.number().nullable(),
   resolvedAt: z.string().nullable(),
   messages: z.array(PublicSupportMessage),
@@ -128,7 +171,32 @@ export const AdminSupportMessage = PublicSupportMessage.extend({
 })
 export type AdminSupportMessage = z.infer<typeof AdminSupportMessage>
 
+/** Dòng ở trang quản trị: thêm kết quả nhận hàng về và biến thể kho thực nhận. */
+export const AdminSupportLine = SupportLineView.extend({
+  orderLineId: z.string(),
+  /** Biến thể khách đang giữ của dòng, là biến thể kho nhận về. */
+  heldVariantId: z.string(),
+  heldSku: z.string(),
+  restockedQuantity: z.number(),
+  writtenOffQuantity: z.number(),
+})
+export type AdminSupportLine = z.infer<typeof AdminSupportLine>
+
 export const AdminSupportRequest = AdminSupportSummary.extend({
+  lines: z.array(AdminSupportLine),
+  decision: SupportDecision.nullable(),
+  decidedBy: Actor.nullable(),
+  decidedAt: z.string().nullable(),
+  receivedAt: z.string().nullable(),
+  receivedBy: Actor.nullable(),
+  /** Hạn đổi trả chụp lúc gửi: số ngày (null là nhóm hàng không cấu hình), lúc giao, số ngày đã quá. */
+  returnWindow: z
+    .object({ days: z.number().nullable(), deliveredAt: z.string().nullable(), overdueDays: z.number().nullable() })
+    .nullable(),
+  /** Trả hàng đã nhận về mà chưa đề xuất hoàn: số hoàn gợi ý (trừ phần giảm, không gồm phí giao) và số còn hoàn được. */
+  returnRefund: z.object({ suggested: z.number(), refundable: z.number() }).nullable(),
+  /** Khoản hoàn sinh từ yêu cầu (trả hàng). */
+  refunds: z.array(z.object({ id: z.string(), amount: z.number(), status: z.string() })),
   customerId: z.string().nullable(),
   createdBy: SupportAuthor,
   createdByStaff: Actor.nullable(),
@@ -142,20 +210,25 @@ export type AdminSupportRequest = z.infer<typeof AdminSupportRequest>
  * Body của `POST /api/admin/support-requests`: nhân viên tạo hộ khách gọi điện hay nhắn tin. Gắn với một đơn
  * (`orderCode`), hoặc với tài khoản khách (`customerEmail`) khi không gắn đơn.
  */
+const AdminCreateBase = z.object({
+  orderCode: z.number().int().positive().optional(),
+  customerEmail: z.email('Email không hợp lệ').trim().toLowerCase().optional(),
+  subject: Subject,
+  message: Body,
+})
+
 export const AdminCreateSupportRequest = z
-  .object({
-    kind: CreatableSupportKind,
-    orderCode: z.number().int().positive().optional(),
-    customerEmail: z.email('Email không hợp lệ').trim().toLowerCase().optional(),
-    subject: Subject,
-    message: Body,
-  })
+  .discriminatedUnion('kind', [
+    AdminCreateBase.extend({ kind: z.literal('other') }),
+    AdminCreateBase.extend({ kind: z.literal('cancel') }),
+    AdminCreateBase.extend({ kind: z.literal('return'), lines: ReturnLines }),
+  ])
   .refine((v) => v.orderCode !== undefined || v.customerEmail !== undefined, {
     message: 'Cần mã đơn hoặc email tài khoản khách',
     path: ['orderCode'],
   })
   .refine((v) => v.kind === 'other' || v.orderCode !== undefined, {
-    message: 'Yêu cầu hủy đơn cần mã đơn',
+    message: 'Yêu cầu này cần mã đơn',
     path: ['orderCode'],
   })
 export type AdminCreateSupportRequest = z.input<typeof AdminCreateSupportRequest>
@@ -174,3 +247,44 @@ export type AdminSupportReply = z.input<typeof AdminSupportReply>
 /** Body giao người phụ trách: id nhân viên, hay `null` để bỏ giao. Nhận việc cho chính mình dùng `/claim`. */
 export const AssignSupportRequest = z.object({ staffId: z.string().uuid().nullable() })
 export type AssignSupportRequest = z.input<typeof AssignSupportRequest>
+
+/** Body chấp nhận hay từ chối yêu cầu trả (đổi, bảo hành): kèm tin cho khách (hướng dẫn gửi hàng, hay lý do từ chối). */
+export const DecideSupportRequest = z.object({
+  decision: SupportDecision,
+  message: Body,
+})
+export type DecideSupportRequest = z.input<typeof DecideSupportRequest>
+
+/** Body kho nhận hàng về: mỗi dòng của yêu cầu, số nhập lại tồn và số ghi hỏng; tổng bằng số lượng dòng. */
+export const ReceiveSupportReturn = z.object({
+  lines: z
+    .array(
+      z.object({
+        lineId: z.string(),
+        restocked: z.number().int().min(0),
+        writtenOff: z.number().int().min(0),
+      }),
+    )
+    .min(1)
+    .max(20),
+})
+export type ReceiveSupportReturn = z.input<typeof ReceiveSupportReturn>
+
+/** Body đề xuất hoàn sau khi đã nhận hàng trả về: số hoàn, ghi chú (bắt buộc khi thấp hơn gợi ý), tin cho khách. */
+export const ProposeReturnRefund = z.object({
+  refundAmount: z.number().int().min(0, 'Số tiền hoàn không âm'),
+  note: z.string().trim().max(2000).optional(),
+  message: Body.optional(),
+})
+export type ProposeReturnRefund = z.input<typeof ProposeReturnRefund>
+
+/** Hạn đổi trả của một nhóm hàng: số ngày tính từ lúc giao; `null` là không cảnh báo (GLOSSARY "Hạn đổi trả"). */
+export const ReturnWindowItem = z.object({
+  productType: ProductType,
+  days: z.number().int().min(0, 'Số ngày không âm').max(365, 'Tối đa 365 ngày').nullable(),
+})
+export type ReturnWindowItem = z.infer<typeof ReturnWindowItem>
+
+/** `GET` và `PUT /api/admin/return-windows`: đủ năm nhóm hàng. */
+export const ReturnWindowList = z.object({ items: z.array(ReturnWindowItem) })
+export type ReturnWindowList = z.infer<typeof ReturnWindowList>

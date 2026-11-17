@@ -55,6 +55,8 @@ model Staff {
   assignedSupportRequests  SupportRequest[]     @relation("SupportAssignee")
   createdSupportRequests   SupportRequest[]     @relation("SupportCreatedBy")
   supportMessages          SupportMessage[]
+  decidedSupportRequests   SupportRequest[]     @relation("SupportDecidedBy")
+  receivedSupportRequests  SupportRequest[]     @relation("SupportReceivedBy")
   preorderCampaigns        PreorderCampaign[]
   vouchers                 Voucher[]
 
@@ -364,10 +366,11 @@ model ProductVariant {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
-  images            ProductImageVariant[]
-  stockMovements    StockMovement[]
-  orderLines        OrderLine[]
-  preorderCampaigns PreorderCampaignVariant[]
+  images               ProductImageVariant[]
+  stockMovements       StockMovement[]
+  orderLines           OrderLine[]
+  preorderCampaigns    PreorderCampaignVariant[]
+  supportReceivedLines SupportRequestLine[]
 
   @@map("product_variant")
 }
@@ -395,32 +398,36 @@ enum StockAdjustmentReason {
 
 /// Sổ xuất nhập. Append-only: trigger trong migration chặn UPDATE, DELETE và TRUNCATE.
 model StockMovement {
-  id          String                 @id @default(uuid()) @db.Uuid
+  id               String                 @id @default(uuid()) @db.Uuid
   /// Thứ tự ghi, để sắp xếp ổn định khi nhiều dòng trùng thời điểm.
-  seq         BigInt                 @unique @default(autoincrement())
-  variantId   String                 @map("variant_id") @db.Uuid
-  variant     ProductVariant         @relation(fields: [variantId], references: [id], onDelete: Restrict)
-  kind        StockMovementKind
+  seq              BigInt                 @unique @default(autoincrement())
+  variantId        String                 @map("variant_id") @db.Uuid
+  variant          ProductVariant         @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  kind             StockMovementKind
   /// Có dấu: dương là tăng, âm là giảm; khác 0.
-  quantity    Int
-  onHandAfter Int                    @map("on_hand_after")
+  quantity         Int
+  onHandAfter      Int                    @map("on_hand_after")
   /// Chỉ có ở điều chỉnh (check constraint).
-  reason      StockAdjustmentReason?
-  note        String                 @default("")
+  reason           StockAdjustmentReason?
+  note             String                 @default("")
   /// Chỉ có, và luôn có, ở dòng nhập kho (check constraint).
-  receiptId   String?                @map("receipt_id") @db.Uuid
-  receipt     StockReceipt?          @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+  receiptId        String?                @map("receipt_id") @db.Uuid
+  receipt          StockReceipt?          @relation(fields: [receiptId], references: [id], onDelete: Restrict)
   /// Chỉ có, và luôn có, ở dòng xuất bán (check constraint).
-  orderId     String?                @map("order_id") @db.Uuid
-  order       Order?                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  actorId     String                 @map("actor_id") @db.Uuid
-  actor       Staff                  @relation(fields: [actorId], references: [id], onDelete: Restrict)
-  createdAt   DateTime               @default(now()) @map("created_at")
+  orderId          String?                @map("order_id") @db.Uuid
+  order            Order?                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Hàng trả về (hay hàng đổi giao đi) của một yêu cầu hỗ trợ (M6b); chỉ với loại `return` hay `sale`.
+  supportRequestId String?                @map("support_request_id") @db.Uuid
+  supportRequest   SupportRequest?        @relation(fields: [supportRequestId], references: [id], onDelete: Restrict)
+  actorId          String                 @map("actor_id") @db.Uuid
+  actor            Staff                  @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt        DateTime               @default(now()) @map("created_at")
 
   @@index([variantId, seq])
   @@index([createdAt])
   @@index([receiptId])
   @@index([orderId])
+  @@index([supportRequestId])
   @@map("stock_movement")
 }
 
@@ -844,6 +851,8 @@ model OrderLine {
   /// Phần tiền giảm của đơn chia cho dòng này, VND; 0–tiền hàng của dòng (check constraint).
   discount           BigInt         @default(0)
 
+  supportLines SupportRequestLine[]
+
   @@unique([orderId, position])
   @@index([variantId])
   @@map("order_line")
@@ -991,6 +1000,8 @@ enum RefundOrigin {
   cancellation
   reconciliation
   retry
+  /// Trả hàng sau khi giao (M6b): có `supportRequestId`.
+  return
 
   @@map("refund_origin")
 }
@@ -1026,6 +1037,9 @@ model Refund {
   reconciliationItemId String?             @unique @map("reconciliation_item_id") @db.Uuid
   reconciliationItem   ReconciliationItem? @relation(fields: [reconciliationItemId], references: [id], onDelete: Restrict)
   /// Có khi và chỉ khi `origin = retry`: khoản thất bại được tạo lại; mỗi khoản thất bại tạo lại được một lần.
+  /// Có khi và chỉ khi `origin = return` (M6b).
+  supportRequestId     String?             @map("support_request_id") @db.Uuid
+  supportRequest       SupportRequest?     @relation(fields: [supportRequestId], references: [id], onDelete: Restrict)
   retryOfId            String?             @unique @map("retry_of_id") @db.Uuid
   retryOf              Refund?             @relation("RefundRetry", fields: [retryOfId], references: [id], onDelete: Restrict)
   retriedBy            Refund?             @relation("RefundRetry")
@@ -1271,9 +1285,25 @@ model SupportRequest {
   updatedAt         DateTime             @updatedAt @map("updated_at")
   /// Có khi và chỉ khi `resolved` hoặc `rejected`.
   resolvedAt        DateTime?            @map("resolved_at")
+  /// Chấp nhận hay từ chối (trả, đổi, bảo hành); có người và lúc quyết. Check `support_request_decision_check`.
+  decision          SupportDecision?
+  decidedById       String?              @map("decided_by_id") @db.Uuid
+  decidedBy         Staff?               @relation("SupportDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
+  decidedAt         DateTime?            @map("decided_at")
+  /// Kho đã nhận hàng khách gửi về; chỉ sau khi chấp nhận.
+  receivedAt        DateTime?            @map("received_at")
+  receivedById      String?              @map("received_by_id") @db.Uuid
+  receivedBy        Staff?               @relation("SupportReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+  /// Hạn đổi trả chụp lúc gửi yêu cầu trả hay đổi: số ngày, lúc giao, số ngày đã quá (GLOSSARY "Hạn đổi trả").
+  returnWindowDays  Int?                 @map("return_window_days")
+  deliveredAt       DateTime?            @map("delivered_at")
+  overdueDays       Int?                 @map("overdue_days")
 
-  messages    SupportMessage[]
-  attachments SupportAttachment[]
+  messages       SupportMessage[]
+  attachments    SupportAttachment[]
+  lines          SupportRequestLine[]
+  stockMovements StockMovement[]
+  refunds        Refund[]
 
   @@index([orderId])
   @@index([customerId])
@@ -1317,4 +1347,53 @@ model SupportAttachment {
   @@index([requestId])
   @@index([messageId])
   @@map("support_attachment")
+}
+
+/// Lý do trả hàng khách chọn.
+enum SupportReturnReason {
+  defective
+  wrong_fit
+  not_as_described
+  other
+
+  @@map("support_return_reason")
+}
+
+/// Nhân viên chấp nhận hay từ chối yêu cầu trả, đổi, bảo hành.
+enum SupportDecision {
+  accepted
+  rejected
+
+  @@map("support_decision")
+}
+
+/// Một dòng đơn trong yêu cầu trả (đổi, bảo hành): số lượng, lý do, và kết quả kho nhận hàng về.
+model SupportRequestLine {
+  id                 String               @id @default(uuid()) @db.Uuid
+  requestId          String               @map("request_id") @db.Uuid
+  request            SupportRequest       @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  orderLineId        String               @map("order_line_id") @db.Uuid
+  orderLine          OrderLine            @relation(fields: [orderLineId], references: [id], onDelete: Restrict)
+  quantity           Int
+  reason             SupportReturnReason?
+  /// Kết quả nhận hàng về: số nhập lại tồn và số ghi hỏng; tổng không vượt `quantity` (check).
+  restockedQuantity  Int                  @default(0) @map("restocked_quantity")
+  writtenOffQuantity Int                  @default(0) @map("written_off_quantity")
+  /// Biến thể kho thực nhận (biến thể khách đang giữ của dòng).
+  receivedVariantId  String?              @map("received_variant_id") @db.Uuid
+  receivedVariant    ProductVariant?      @relation(fields: [receivedVariantId], references: [id], onDelete: Restrict)
+  createdAt          DateTime             @default(now()) @map("created_at")
+
+  @@unique([requestId, orderLineId])
+  @@index([orderLineId])
+  @@map("support_request_line")
+}
+
+/// Hạn đổi trả theo nhóm hàng (GLOSSARY): số ngày tính từ lúc giao; chỉ để cảnh báo nhân viên.
+model ReturnWindow {
+  productType ProductType @id @map("product_type")
+  days        Int
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@map("return_window")
 }
