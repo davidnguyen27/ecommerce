@@ -4,7 +4,8 @@ Read this before driving the real app on this machine: placing an order, logging
 
 ## Data and accounts
 
-- `node scripts/demo-seed.ts` fills an empty local DB with pages, legal info, brands, published products and the default shipping fee, and prints the admin login. On a DB that already has demo data it only adds what is missing (the shipping fee) and prints the login.
+- `node scripts/demo-seed.ts` fills an empty local DB with pages, legal info, brands, published products and the default shipping fee, and prints the admin login. On a DB that already has demo data it only adds what is missing (the shipping fee, the sample voucher) and prints the login.
+- Sample voucher (local only): `DEMO10`, 10% off goods capped at 500.000đ, valid for a year, for both in-stock checkout and pre-orders, 5 uses per customer. Type it in the "Mã giảm giá" box on `/dat-mua` or the pre-order page. The seed never creates it on a deployed demo.
 - Admin login: the `OWNER` constant at the top of `scripts/demo-seed.ts`. Write through the admin API rather than SQL, so changes go through `audited()`.
 - Without a default shipping fee the cart shows "Cửa hàng chưa sẵn sàng nhận đơn": that is ticket 01's intended behaviour, fixed by the seed above.
 
