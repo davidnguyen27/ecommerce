@@ -1,7 +1,10 @@
 import { z } from 'zod'
 
-/** Hoàn tiền sinh ra từ đâu: hủy đơn đã nhận tiền, giải quyết mục cần đối soát, hay tạo lại từ một khoản thất bại. */
-export const RefundOrigin = z.enum(['cancellation', 'reconciliation', 'retry'])
+/**
+ * Hoàn tiền sinh ra từ đâu: hủy đơn đã nhận tiền, giải quyết mục cần đối soát, tạo lại từ một khoản thất bại, hay trả
+ * hàng sau khi giao (M6b).
+ */
+export const RefundOrigin = z.enum(['cancellation', 'reconciliation', 'retry', 'return'])
 export type RefundOrigin = z.infer<typeof RefundOrigin>
 
 /**

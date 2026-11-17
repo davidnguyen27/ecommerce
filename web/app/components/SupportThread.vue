@@ -49,6 +49,24 @@ const authorLabel = (author: string) => (author === 'customer' ? 'Bạn' : autho
       <template v-if="request.previousRequestCode"> · tiếp theo yêu cầu #YC{{ request.previousRequestCode }}</template>
     </p>
 
+    <section
+      v-if="request.lines.length"
+      class="rounded-lg border border-border bg-card p-4 text-sm"
+      data-testid="support-lines"
+    >
+      <ul class="space-y-1">
+        <li v-for="line in request.lines" :key="line.id">
+          {{ line.productName }} <span class="text-muted-foreground">{{ line.sku }}</span> × {{ line.quantity }}
+          <span v-if="line.reason" class="text-muted-foreground"> · {{ RETURN_REASON_LABELS[line.reason] }}</span>
+        </li>
+      </ul>
+      <p v-if="request.decision === 'accepted'" class="mt-2">
+        Cửa hàng đã chấp nhận.<template v-if="request.receivedAt">
+          Đã nhận hàng bạn gửi về lúc {{ formatDateTime(request.receivedAt) }}.</template
+        >
+      </p>
+    </section>
+
     <ol class="space-y-3">
       <li
         v-for="m in request.messages"

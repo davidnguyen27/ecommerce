@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import type { CreatableSupportKind, PublicSupportSummary } from '@ecommerce/shared'
+import type {
+  CreatableSupportKind,
+  CreateSupportRequest,
+  OrderLineView,
+  PublicSupportSummary,
+  SupportReturnReason,
+} from '@ecommerce/shared'
 
 /**
  * Danh sách yêu cầu hỗ trợ của khách và form gửi yêu cầu mới (spec M6b). Dùng ở trang đơn (yêu cầu của đơn) và trang
@@ -11,7 +17,25 @@ const props = defineProps<{
   title?: string
   /** Đơn đang xem gửi được yêu cầu hủy (`canRequestCancel`): hiện loại "Hủy đơn" (spec M6b ticket 03). */
   canCancel?: boolean
+  /** Dòng của đơn đã giao: có thì hiện loại "Trả hàng" và cho chọn dòng muốn trả (ticket 04). */
+  returnLines?: OrderLineView[]
 }>()
+
+const canReturn = computed(() => (props.returnLines?.length ?? 0) > 0)
+// Mỗi dòng đơn: có trả không, bao nhiêu, vì sao. API kiểm lại số còn trả được.
+const picks = reactive<Record<string, { chosen: boolean; quantity: number; reason: SupportReturnReason }>>({})
+watch(
+  () => props.returnLines,
+  (lines) => {
+    for (const line of lines ?? []) picks[line.variantId] ??= { chosen: false, quantity: 1, reason: 'wrong_fit' }
+  },
+  { immediate: true },
+)
+const chosenLines = computed(() =>
+  Object.entries(picks)
+    .filter(([, p]) => p.chosen)
+    .map(([variantId, p]) => ({ variantId, quantity: p.quantity, reason: p.reason })),
+)
 
 const items = ref<PublicSupportSummary[] | null>(null)
 const error = ref<string | null>(null)
@@ -36,12 +60,14 @@ async function submit() {
   sending.value = true
   error.value = null
   try {
-    const created = await props.client.create({
-      kind: form.kind,
+    const base = {
       subject: form.subject,
       message: form.message,
       ...(props.orderCode !== undefined && { orderCode: props.orderCode }),
-    })
+    }
+    const body: CreateSupportRequest =
+      form.kind === 'return' ? { ...base, kind: 'return', lines: chosenLines.value } : { ...base, kind: form.kind }
+    const created = await props.client.create(body)
     // Ảnh gắn vào tin đầu tiên của yêu cầu vừa tạo.
     const firstMessage = created.messages[0]!.id
     const uploaded = await attachAll((file) => props.client.attach(created.code, firstMessage, file), images.value)
@@ -74,13 +100,35 @@ async function submit() {
     </p>
 
     <form v-if="open" class="mt-4 space-y-4" data-testid="support-form" @submit.prevent="submit">
-      <label v-if="canCancel" class="field">
+      <label v-if="canCancel || canReturn" class="field">
         Bạn cần gì
         <select v-model="form.kind" class="field-input" data-testid="support-kind">
           <option value="other">Hỏi hoặc nhờ việc khác</option>
-          <option value="cancel">Hủy đơn đã thanh toán</option>
+          <option v-if="canCancel" value="cancel">Hủy đơn đã thanh toán</option>
+          <option v-if="canReturn" value="return">Trả hàng</option>
         </select>
       </label>
+      <fieldset v-if="form.kind === 'return'" class="space-y-3" data-testid="support-return-lines">
+        <legend class="font-medium">Sản phẩm muốn trả</legend>
+        <div v-for="line in returnLines" :key="line.variantId" class="flex flex-wrap items-center gap-3">
+          <label class="flex items-center gap-2">
+            <input
+              v-model="picks[line.variantId]!.chosen"
+              type="checkbox"
+              :data-testid="`support-return-${line.sku}`"
+            />
+            {{ line.productName }} <span class="text-muted-foreground">{{ line.sku }}</span>
+          </label>
+          <template v-if="picks[line.variantId]!.chosen">
+            <select v-model.number="picks[line.variantId]!.quantity" class="field-input w-20" aria-label="Số lượng trả">
+              <option v-for="q in line.quantity" :key="q" :value="q">{{ q }}</option>
+            </select>
+            <select v-model="picks[line.variantId]!.reason" class="field-input w-44" aria-label="Lý do trả">
+              <option v-for="(label, value) in RETURN_REASON_LABELS" :key="value" :value="value">{{ label }}</option>
+            </select>
+          </template>
+        </div>
+      </fieldset>
       <p v-if="form.kind === 'cancel'" class="text-muted-foreground">
         Cửa hàng sẽ hủy đơn và báo số tiền hoàn theo chính sách đã áp dụng cho đơn.
       </p>
@@ -100,7 +148,12 @@ async function submit() {
       </label>
       <SupportImagePicker v-model="images" input-id="support-new-images" />
       <div class="flex gap-3">
-        <button type="submit" class="btn-primary" :disabled="sending" data-testid="support-submit">
+        <button
+          type="submit"
+          class="btn-primary"
+          :disabled="sending || (form.kind === 'return' && chosenLines.length === 0)"
+          data-testid="support-submit"
+        >
           {{ sending ? 'Đang gửi…' : 'Gửi yêu cầu' }}
         </button>
         <button type="button" class="btn-outline" :disabled="sending" @click="open = false">Thôi</button>

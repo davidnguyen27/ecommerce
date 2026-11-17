@@ -124,4 +124,5 @@ export const REFUND_ORIGIN_LABELS: Record<RefundOrigin, string> = {
   cancellation: 'Hủy đơn',
   reconciliation: 'Đối soát',
   retry: 'Tạo lại',
+  return: 'Trả hàng',
 }

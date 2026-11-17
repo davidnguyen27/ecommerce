@@ -1,4 +1,4 @@
-import type { SupportRequestKind, SupportRequestStatus } from '@ecommerce/shared'
+import type { SupportRequestKind, SupportRequestStatus, SupportReturnReason } from '@ecommerce/shared'
 
 export const SUPPORT_KIND_LABELS: Record<SupportRequestKind, string> = {
   cancel: 'Hủy đơn',
@@ -27,3 +27,10 @@ export const SUPPORT_STATUS_CUSTOMER_LABELS: Record<SupportRequestStatus, string
 }
 
 export const isSupportClosed = (status: SupportRequestStatus) => status === 'resolved' || status === 'rejected'
+
+export const RETURN_REASON_LABELS: Record<SupportReturnReason, string> = {
+  defective: 'Hàng lỗi',
+  wrong_fit: 'Không vừa',
+  not_as_described: 'Không đúng mô tả',
+  other: 'Lý do khác',
+}

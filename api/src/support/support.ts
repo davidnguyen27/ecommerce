@@ -15,6 +15,7 @@ import {
   type PublicSupportSummary,
   type SupportRequestKind,
   type SupportRequestStatus,
+  type SupportReturnReason,
 } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
 import type { Audit } from '../audit/audited.ts'
@@ -26,6 +27,7 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import type { CustomerMail } from '../jobs/jobs.ts'
 import { DOCUMENT_URL_TTL_SECONDS } from '../media/documents.ts'
+import { planReturnLines, returnWindowSnapshot } from './returns.ts'
 
 /**
  * Yêu cầu hỗ trợ (GLOSSARY, spec M6b): việc khách nhờ cửa hàng xử lý, gồm chuỗi tin, người phụ trách và trạng thái
@@ -36,9 +38,9 @@ import { DOCUMENT_URL_TTL_SECONDS } from '../media/documents.ts'
 /** Tối đa số yêu cầu chưa kết thúc trên một đơn, hay trên một tài khoản với yêu cầu không gắn đơn (số tạm). */
 export const MAX_OPEN_REQUESTS = 3
 
-const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy yêu cầu')
-const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, message)
-const isClosed = (status: SupportRequestStatus) => SUPPORT_CLOSED_STATUSES.includes(status)
+export const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy yêu cầu')
+export const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, message)
+export const isClosed = (status: SupportRequestStatus) => SUPPORT_CLOSED_STATUSES.includes(status)
 
 /** Đủ để dựng yêu cầu như khách hay nhân viên thấy. */
 export const SUPPORT_INCLUDE = {
@@ -53,6 +55,16 @@ export const SUPPORT_INCLUDE = {
     },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   },
+  lines: {
+    include: {
+      orderLine: { select: { id: true, sku: true, productName: true, variantId: true, quantity: true } },
+      receivedVariant: { select: { id: true, sku: true } },
+    },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  },
+  decidedBy: { select: ACTOR_SELECT },
+  receivedBy: { select: ACTOR_SELECT },
+  refunds: { select: { id: true, amount: true, status: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
 } as const satisfies Prisma.SupportRequestInclude
 
 export type SupportForView = Prisma.SupportRequestGetPayload<{ include: typeof SUPPORT_INCLUDE }>
@@ -93,6 +105,15 @@ export async function toPublicSupport(storage: Storage, request: SupportForView)
     ...summary(request),
     previousRequestCode: request.previousRequest?.code ?? null,
     resolvedAt: request.resolvedAt?.toISOString() ?? null,
+    lines: request.lines.map((l) => ({
+      id: l.id,
+      sku: l.orderLine.sku,
+      productName: l.orderLine.productName,
+      quantity: l.quantity,
+      reason: l.reason,
+    })),
+    decision: request.decision,
+    receivedAt: request.receivedAt?.toISOString() ?? null,
     messages: await Promise.all(
       publicMessages(request).map(async (m) => ({
         id: m.id,
@@ -126,6 +147,35 @@ export async function toAdminSupport(storage: Storage, request: SupportForView):
     createdByStaff: request.createdByStaff,
     previousRequestCode: request.previousRequest?.code ?? null,
     resolvedAt: request.resolvedAt?.toISOString() ?? null,
+    lines: request.lines.map((l) => ({
+      id: l.id,
+      orderLineId: l.orderLine.id,
+      sku: l.orderLine.sku,
+      productName: l.orderLine.productName,
+      quantity: l.quantity,
+      reason: l.reason,
+      // Ticket 04: khách luôn giữ biến thể gốc; đổi hàng (ticket 05) đổi biến thể này. Kho nhận về đúng biến thể đã ghi.
+      heldVariantId: l.receivedVariant?.id ?? l.orderLine.variantId,
+      heldSku: l.receivedVariant?.sku ?? l.orderLine.sku,
+      restockedQuantity: l.restockedQuantity,
+      writtenOffQuantity: l.writtenOffQuantity,
+    })),
+    decision: request.decision,
+    decidedBy: request.decidedBy,
+    decidedAt: request.decidedAt?.toISOString() ?? null,
+    receivedAt: request.receivedAt?.toISOString() ?? null,
+    receivedBy: request.receivedBy,
+    returnWindow:
+      request.kind === 'return' || request.kind === 'exchange'
+        ? {
+            days: request.returnWindowDays,
+            deliveredAt: request.deliveredAt?.toISOString() ?? null,
+            overdueDays: request.overdueDays,
+          }
+        : null,
+    // Route điền khi đã nhận hàng mà chưa đề xuất hoàn (cần đọc thêm DB).
+    returnRefund: null,
+    refunds: request.refunds.map((r) => ({ id: r.id, amount: Number(r.amount), status: r.status })),
     messages: await Promise.all(
       request.messages.map(async (m) => ({
         id: m.id,
@@ -152,6 +202,8 @@ export type NewSupportRequest = {
   /** Tài khoản khách, khi yêu cầu không gắn đơn. */
   customer?: { id: string; email: string }
   previousRequestCode?: number
+  /** Trả hàng: các dòng theo biến thể, số lượng, lý do (ticket 04). */
+  lines?: readonly { variantId: string; quantity: number; reason: SupportReturnReason }[]
   creator: SupportCreator
 }
 
@@ -178,6 +230,9 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
         'Chỉ gửi yêu cầu hủy được khi đơn đã thanh toán (hoặc đã cọc) và chưa giao cho đơn vị vận chuyển. Đơn chưa thanh toán thì bạn tự hủy được ở trang đơn; đơn đã giao đi thì gửi yêu cầu trả hàng sau khi nhận.',
       )
     }
+    if (input.kind === 'return' && !(locked!.status === 'completed' && locked!.fulfillmentStatus === 'delivered')) {
+      throw conflict('Chỉ trả được hàng của đơn đã giao xong')
+    }
   } else await tx.$queryRaw`SELECT "id" FROM "customer" WHERE "id" = ${customer!.id}::uuid FOR UPDATE`
 
   const open = await tx.supportRequest.count({
@@ -198,8 +253,12 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
     previousRequestId = previous.id
   }
 
+  // Trả hàng: dòng hợp lệ, số lượng còn trả được (dưới khóa đơn), hạn đổi trả chụp lúc gửi.
+  const returnLines = input.kind === 'return' ? await planReturnLines(tx, order!.id, input.lines ?? []) : []
+  const window = input.kind === 'return' ? await returnWindowSnapshot(tx, order!.id, returnLines) : null
+
   const staffId = input.creator.type === 'staff' ? input.creator.staffId : null
-  const request = await tx.supportRequest.create({
+  const created = await tx.supportRequest.create({
     data: {
       kind: input.kind,
       subject: input.subject,
@@ -211,9 +270,18 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
       createdByStaffId: staffId,
       previousRequestId,
       messages: { create: { author: input.creator.type, staffId, body: input.message } },
+      ...(window && {
+        returnWindowDays: window.days,
+        deliveredAt: window.deliveredAt,
+        overdueDays: window.overdueDays,
+      }),
+      lines: {
+        create: returnLines.map((l) => ({ orderLineId: l.orderLineId, quantity: l.quantity, reason: l.reason })),
+      },
     },
-    include: SUPPORT_INCLUDE,
+    select: { id: true },
   })
+  const request = await tx.supportRequest.findUniqueOrThrow({ where: { id: created.id }, include: SUPPORT_INCLUDE })
   await queueSupportEmail(tx, mail, request, 'created')
   return request
 }
@@ -363,10 +431,13 @@ async function requestUrl(tx: DbClient, siteUrl: string, request: SupportForView
   return url.toString()
 }
 
-type SupportEmail = 'created' | 'reply' | 'resolved' | 'rejected'
+export type SupportEmail = 'created' | 'reply' | 'accepted' | 'resolved' | 'rejected'
 
-/** Xếp email cho khách trong transaction của thay đổi. Nội dung là bản nháp, chờ chủ doanh nghiệp duyệt. */
-async function queueSupportEmail(
+/**
+ * Xếp email cho khách trong transaction của thay đổi; `message` là lời của nhân viên kèm theo (trả lời, hướng dẫn gửi
+ * hàng, lý do từ chối, số tiền hoàn). Nội dung là bản nháp, chờ chủ doanh nghiệp duyệt.
+ */
+export async function queueSupportEmail(
   tx: DbClient,
   { emails, siteUrl }: CustomerMail,
   request: SupportForView,
@@ -378,6 +449,7 @@ async function queueSupportEmail(
   const subjects: Record<SupportEmail, string> = {
     created: `Đã nhận yêu cầu ${title}`,
     reply: `Cửa hàng đã trả lời yêu cầu ${title}`,
+    accepted: `Yêu cầu ${title} đã được chấp nhận`,
     resolved: `Yêu cầu ${title} đã được xử lý xong`,
     rejected: `Yêu cầu ${title} không được chấp nhận`,
   }
@@ -390,8 +462,11 @@ async function queueSupportEmail(
   const body: Record<SupportEmail, string[]> = {
     created: ['Chúng tôi đã nhận yêu cầu của bạn và sẽ phản hồi sớm.'],
     reply: ['Cửa hàng đã trả lời:', '', message ?? '', ...(closingLine ? ['', closingLine] : [])],
-    resolved: ['Yêu cầu của bạn đã được xử lý xong.'],
-    rejected: ['Yêu cầu của bạn không được chấp nhận. Xem trao đổi trong yêu cầu để biết lý do.'],
+    accepted: ['Cửa hàng đã chấp nhận yêu cầu của bạn:', '', message ?? ''],
+    resolved: ['Yêu cầu của bạn đã được xử lý xong.', ...(message ? ['', message] : [])],
+    rejected: message
+      ? ['Yêu cầu của bạn không được chấp nhận:', '', message]
+      : ['Yêu cầu của bạn không được chấp nhận. Xem trao đổi trong yêu cầu để biết lý do.'],
   }
   await emails.sendEmail(tx, {
     to: request.contactEmail,

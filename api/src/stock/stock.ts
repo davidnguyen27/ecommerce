@@ -105,8 +105,10 @@ export type StockChange = {
   note?: string
   /** Phiếu nhập; bắt buộc với loại `receipt` (check constraint). */
   receiptId?: string
-  /** Đơn của dòng xuất bán; bắt buộc với loại `sale` (check constraint). */
+  /** Đơn của dòng xuất bán hay hàng hoàn về; bắt buộc với loại `sale`, `return` (check constraint). */
   orderId?: string
+  /** Yêu cầu hỗ trợ của hàng trả về hay hàng đổi giao đi (M6b). */
+  supportRequestId?: string
   /**
    * Số đang giữ nhả cùng lúc với thay đổi này (dương): bàn giao vận chuyển trừ tồn và số giữ của đơn cùng nhau, nên
    * chốt "tồn không thấp hơn số đang giữ" tính trên số giữ còn lại.
@@ -179,6 +181,7 @@ export async function changeStock(
           note: m.note ?? '',
           receiptId: m.receiptId ?? null,
           orderId: m.orderId ?? null,
+          supportRequestId: m.supportRequestId ?? null,
           actorId,
         },
       }),
