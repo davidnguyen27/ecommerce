@@ -1272,7 +1272,8 @@ model SupportRequest {
   /// Có khi và chỉ khi `resolved` hoặc `rejected`.
   resolvedAt        DateTime?            @map("resolved_at")
 
-  messages SupportMessage[]
+  messages    SupportMessage[]
+  attachments SupportAttachment[]
 
   @@index([orderId])
   @@index([customerId])
@@ -1293,6 +1294,27 @@ model SupportMessage {
   body      String
   createdAt DateTime       @default(now()) @map("created_at")
 
+  attachments SupportAttachment[]
+
   @@index([requestId, createdAt])
   @@map("support_message")
+}
+
+/// Ảnh đính kèm một tin trong yêu cầu hỗ trợ (spec M6b): đã mã hóa lại (bỏ EXIF), nằm ở bucket `private` dưới `key`.
+model SupportAttachment {
+  id          String         @id @default(uuid()) @db.Uuid
+  requestId   String         @map("request_id") @db.Uuid
+  request     SupportRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  messageId   String         @map("message_id") @db.Uuid
+  message     SupportMessage @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  key         String         @unique
+  contentType String         @map("content_type")
+  sizeBytes   Int            @map("size_bytes")
+  width       Int
+  height      Int
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  @@index([requestId])
+  @@index([messageId])
+  @@map("support_attachment")
 }

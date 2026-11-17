@@ -14,11 +14,16 @@ export type SupportClient = {
   create: (body: CreateSupportRequest) => Promise<PublicSupportRequest>
   get: (code: number) => Promise<PublicSupportRequest>
   say: (code: number, message: string) => Promise<PublicSupportRequest>
+  /** Tải một ảnh vào tin `messageId` của chính khách (gửi tin trước, rồi tải ảnh). */
+  attach: (code: number, messageId: string, file: File) => Promise<PublicSupportRequest>
   /** Đường dẫn trang chi tiết một yêu cầu. */
   linkTo: (code: number) => string
 }
 
-type Fetch = (path: string, options?: { method?: 'POST'; body?: Record<string, unknown> }) => Promise<unknown>
+type Fetch = (
+  path: string,
+  options?: { method?: 'POST'; body?: Record<string, unknown> | FormData },
+) => Promise<unknown>
 
 function clientOf(base: string, call: Fetch, linkTo: (code: number) => string): SupportClient {
   return {
@@ -27,6 +32,13 @@ function clientOf(base: string, call: Fetch, linkTo: (code: number) => string): 
     get: async (code) => PublicSupportRequest.parse(await call(`${base}/${code}`)),
     say: async (code, message) =>
       PublicSupportRequest.parse(await call(`${base}/${code}/messages`, { method: 'POST', body: { message } })),
+    attach: async (code, messageId, file) => {
+      const body = new FormData()
+      body.append('file', file)
+      return PublicSupportRequest.parse(
+        await call(`${base}/${code}/messages/${messageId}/attachments`, { method: 'POST', body }),
+      )
+    },
     linkTo,
   }
 }
@@ -46,4 +58,20 @@ export function guestSupportClient(orderCode: number, token: string) {
     call,
     (code) => `/yeu-cau/${code}?don=${orderCode}&token=${encodeURIComponent(token)}`,
   )
+}
+
+/** Tải lần lượt `files` vào một tin; trả yêu cầu mới nhất và lỗi đầu tiên (nếu có) để báo cho người gửi. */
+export async function attachAll<T>(
+  attach: (file: File) => Promise<T>,
+  files: readonly File[],
+): Promise<{ request: T | null; error: string | null }> {
+  let request: T | null = null
+  for (const file of files) {
+    try {
+      request = await attach(file)
+    } catch (err) {
+      return { request, error: `Không gửi được ảnh ${file.name}: ${apiErrorMessage(err)}` }
+    }
+  }
+  return { request, error: null }
 }

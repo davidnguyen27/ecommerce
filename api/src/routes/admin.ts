@@ -67,6 +67,6 @@ export function adminRoutes(
       .use('/refunds', adminRefundRoutes(prisma, storage, payments, mail))
       .use('/preorder-campaigns', adminPreorderCampaignRoutes(prisma, mail))
       .use('/vouchers', adminVoucherRoutes(prisma))
-      .use('/support-requests', adminSupportRoutes(prisma, mail))
+      .use('/support-requests', adminSupportRoutes(prisma, storage, mail))
   )
 }

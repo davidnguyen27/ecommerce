@@ -6,6 +6,7 @@ const props = defineProps<{ request: PublicSupportRequest; client: SupportClient
 const emit = defineEmits<{ update: [request: PublicSupportRequest] }>()
 
 const message = ref('')
+const images = ref<File[]>([])
 const sending = ref(false)
 const error = ref<string | null>(null)
 const closed = computed(() => isSupportClosed(props.request.status))
@@ -14,8 +15,15 @@ async function send() {
   sending.value = true
   error.value = null
   try {
-    emit('update', await props.client.say(props.request.code, message.value))
+    const said = await props.client.say(props.request.code, message.value)
+    emit('update', said)
     message.value = ''
+    // Ảnh gắn vào tin vừa gửi: tin cuối cùng là của khách.
+    const own = said.messages.at(-1)!.id
+    const uploaded = await attachAll((file) => props.client.attach(said.code, own, file), images.value)
+    images.value = []
+    if (uploaded.request) emit('update', uploaded.request)
+    if (uploaded.error) error.value = uploaded.error
   } catch (err) {
     error.value = apiErrorMessage(err)
   } finally {
@@ -53,6 +61,7 @@ const authorLabel = (author: string) => (author === 'customer' ? 'Bạn' : autho
           {{ authorLabel(m.author) }} · {{ formatDateTime(m.createdAt) }}
         </div>
         <p class="whitespace-pre-line">{{ m.body }}</p>
+        <SupportAttachments :attachments="m.attachments" />
       </li>
     </ol>
 
@@ -70,6 +79,7 @@ const authorLabel = (author: string) => (author === 'customer' ? 'Bạn' : autho
           data-testid="support-reply"
         />
       </label>
+      <SupportImagePicker v-model="images" input-id="support-reply-images" />
       <p v-if="error" role="alert" class="notice-error">{{ error }}</p>
       <button
         type="submit"
