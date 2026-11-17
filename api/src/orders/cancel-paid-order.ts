@@ -50,8 +50,9 @@ export async function cancelPaidOrder(
   if (locked.status !== 'processing' || !['paid', 'deposit_paid'].includes(locked.paymentStatus)) {
     throw conflict('Chỉ hủy được đơn đang xử lý đã nhận tiền; đơn chưa thanh toán dùng nút hủy thường')
   }
-  if (!['not_prepared', 'preparing'].includes(locked.fulfillmentStatus)) {
-    throw conflict('Đơn đã bàn giao vận chuyển, không hủy được')
+  // `returned`: giao thất bại và kho đã nhận hàng hoàn về, không còn hàng giữ cho đơn. `failed` thì nhận hàng về trước.
+  if (!['not_prepared', 'preparing', 'returned'].includes(locked.fulfillmentStatus)) {
+    throw conflict('Đơn đã bàn giao vận chuyển, không hủy được; giao thất bại thì nhận hàng hoàn về trước')
   }
   const { refundable } = await refundTotals(tx, orderId)
   const refundAmount = BigInt(input.refundAmount)

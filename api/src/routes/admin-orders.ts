@@ -3,6 +3,8 @@ import {
   AdminOrderQuery,
   CancelPaidOrderRequest,
   HandoverRequest,
+  RedeliverRequest,
+  ReturnToStockRequest,
   type AdminOrder,
   type AdminOrderPage,
 } from '@ecommerce/shared'
@@ -21,6 +23,9 @@ import {
   failDelivery,
   handOverOrder,
   prepareOrder,
+  redeliverOrder,
+  restockForRedelivery,
+  returnToStock,
   type FulfillmentAudit,
   type FulfillmentMail,
 } from '../orders/fulfill-order.ts'
@@ -174,5 +179,24 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       '/:code/delivery-failed',
       requirePermission('order.fulfill'),
       transition((tx, orderId, staffId) => failDelivery(tx, mail.emails, orderId, staffId)),
+    )
+    .post(
+      '/:code/redeliver',
+      requirePermission('order.fulfill'),
+      transition((tx, orderId, staffId, req) =>
+        redeliverOrder(tx, orderId, staffId, parse(RedeliverRequest, req.body)),
+      ),
+    )
+    .post(
+      '/:code/return-to-stock',
+      requirePermission('order.fulfill'),
+      transition((tx, orderId, staffId, req) =>
+        returnToStock(tx, orderId, staffId, parse(ReturnToStockRequest, req.body)),
+      ),
+    )
+    .post(
+      '/:code/restock-redeliver',
+      requirePermission('order.fulfill'),
+      transition((tx, orderId, staffId) => restockForRedelivery(tx, orderId, staffId)),
     )
 }

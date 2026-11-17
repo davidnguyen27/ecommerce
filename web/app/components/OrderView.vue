@@ -201,6 +201,14 @@ const remainingText = computed(() => {
     >
       Đơn vị vận chuyển chưa giao được đơn này. Shop sẽ liên hệ với bạn để sắp xếp lại việc giao hàng.
     </p>
+    <p
+      v-else-if="order.fulfillmentStatus === 'returned' && order.status === 'processing'"
+      class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+      role="status"
+      data-testid="delivery-returned"
+    >
+      Hàng chưa giao được đã được trả về shop. Shop sẽ liên hệ với bạn để giao lại hoặc xử lý đơn.
+    </p>
 
     <div v-if="cancellable && order.status === 'pending_payment'">
       <button
