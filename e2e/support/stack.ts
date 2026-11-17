@@ -14,6 +14,9 @@ export const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8081'
 export const OWNER = { email: 'smoke@example.com', password: 'mat-khau-smoke-test' }
 /** Nhân viên kho do global-setup tạo nếu chưa có. */
 export const WAREHOUSE = { email: 'kho-e2e@example.com', password: 'mat-khau-kho-e2e-test', name: 'Kho E2E' }
+/** Nhân viên bán hàng và kế toán do global-setup tạo nếu chưa có (hủy đơn đã trả và hoàn tiền, M6a). */
+export const SALES = { email: 'ban-hang-e2e@example.com', password: 'mat-khau-ban-hang-e2e', name: 'Bán hàng E2E' }
+export const ACCOUNTANT = { email: 'ke-toan-e2e@example.com', password: 'mat-khau-ke-toan-e2e', name: 'Kế toán E2E' }
 
 /** Biến thể còn hàng của sản phẩm seed (smoke đặt tồn 3). */
 export const PRODUCT_PATH = '/san-pham/air-max-90?sku=AM90-DEN-40'
