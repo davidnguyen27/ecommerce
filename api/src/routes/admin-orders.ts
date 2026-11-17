@@ -65,7 +65,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
         const entry = await run(tx, order.id, currentStaff(req).id, req)
         await audit({ ...entry, entityType: 'order', entityId: order.id })
       })
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, code)
       res.json(body)
     }
 
@@ -119,7 +119,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       res.json(body)
     })
     .get('/:code', requirePermission('order.view'), async (req, res) => {
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, String(req.params.code))
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, String(req.params.code))
       res.json(body)
     })
     .post('/:code/cancel', requirePermission('order.fulfill'), async (req, res) => {
@@ -143,7 +143,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       assertCancellable(outcome)
       if (outcome === 'cancelled') await cancelPaymentLinks({ payments, logger: req.log }, order)
       // Đơn đã hủy từ trước cũng trả đơn hiện tại, không ghi gì.
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, code)
       res.json(body)
     })
     .post('/:code/cancel-paid', requirePermission('order.cancel_paid'), async (req, res) => {
@@ -155,7 +155,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       // Đơn đặt trước có thể còn link trả phần còn lại: hủy sau khi commit như hủy đơn chưa trả; tiền về sau đó thành
       // cần đối soát. Link đã trả xong của đơn hàng sẵn hủy cũng không sao: lỗi chỉ được log.
       await cancelPaymentLinks({ payments, logger: req.log }, order)
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, code)
       res.json(body)
     })
     .post(

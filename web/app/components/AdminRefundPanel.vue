@@ -20,7 +20,7 @@ const drafts = reactive<Record<string, Draft>>({})
 const draft = (refund: AdminRefund) =>
   (drafts[refund.id] ??= { bankReference: '', transferredOn: today(), note: '', amount: refund.amount })
 
-async function act(refundId: string, action: 'manual' | 'settle' | 'retry', body: Record<string, unknown>) {
+async function act(refundId: string, action: 'manual' | 'vnpay' | 'settle' | 'retry', body?: Record<string, unknown>) {
   busy.value = true
   error.value = null
   try {
@@ -31,6 +31,13 @@ async function act(refundId: string, action: 'manual' | 'settle' | 'retry', body
   } finally {
     busy.value = false
   }
+}
+
+/** Gửi lệnh hoàn tới cổng (VNPAY; local là cổng giả lập). Kết quả hiện ngay ở trạng thái và ghi chú của khoản. */
+function viaGateway(refund: AdminRefund) {
+  if (!confirm(`Gửi lệnh hoàn ${formatVnd(refund.amount)} qua VNPAY? Tiền sẽ trả về thẻ hay tài khoản khách đã dùng.`))
+    return
+  return act(refund.id, 'vnpay')
 }
 
 function recordManual(refund: AdminRefund) {
@@ -107,6 +114,21 @@ function retry(refund: AdminRefund) {
       </div>
 
       <template v-if="canRefund">
+        <div
+          v-if="refund.status === 'pending' && order.gatewayRefundable >= refund.amount"
+          style="margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap"
+        >
+          <button
+            type="button"
+            class="btn btn-primary btn-sm"
+            data-testid="refund-gateway"
+            :disabled="busy"
+            @click="viaGateway(refund)"
+          >
+            Hoàn qua VNPAY
+          </button>
+          <span style="font-size: 12px; color: var(--adm-muted)">hoặc chuyển khoản rồi ghi lại bên dưới</span>
+        </div>
         <form
           v-if="refund.status === 'pending'"
           style="margin-top: 10px"

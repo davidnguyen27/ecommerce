@@ -15,3 +15,10 @@ Tổng quan dự án đòi quyền hoàn tiền được cấp rõ ràng. Tách 
 
 - Khi đơn có hoàn tiền chưa xong, danh sách đơn và trang đơn phải tự tính số đã nhận, đã hoàn và đang hoàn. Báo cáo M7 cũng đọc từ bản ghi hoàn tiền, không đọc từ trạng thái thanh toán.
 - Khi đã chạy tiền thật và `querydr` dùng được, có thể thêm job theo dõi kết quả hoàn mà không đổi mô hình.
+- Lệnh `refund` trên VNPAY sandbox **chưa chạy được** (thử ngày 2026-11-17). Sandbox trả `99 Unexpected error` cho cả hoàn đủ lẫn hoàn một phần, kể cả khi ký bằng khóa sai, giống `querydr` ở ADR 0010. Vì vậy:
+  - adapter chỉ được kiểm bằng unit test, chưa chạy với cổng thật;
+  - trên sandbox, bấm "Hoàn qua VNPAY" sẽ ra kết quả "thất bại", và kế toán chuyển sang hoàn thủ công.
+- Những gì đã biết về lệnh `refund`:
+  - chữ ký dùng HMAC-SHA512 như mọi lệnh của phiên bản 2.1.0. Tài liệu của `querydr`/`refund` chỉ ghi `hashWithSecureType`, không nêu tên thuật toán, nên đây là suy luận, chưa xác minh;
+  - tài liệu không nêu hạn được hoàn, cũng không giới hạn số lần hoàn một phần trên một giao dịch.
+- Trước khi chạy tiền thật cần hỏi VNPAY: endpoint production, thuật toán ký của API giao dịch, hạn hoàn. Sau đó thử một lần hoàn thật với số tiền nhỏ.

@@ -255,6 +255,8 @@ export const AdminPaymentTransaction = z.object({
   paidAt: z.string(),
   source: PaymentSource,
   reconciliation: ReconciliationDetail.nullable(),
+  /** VND còn hoàn qua cổng được: 0 khi cổng đang dùng không hoàn được giao dịch này (ví dụ giao dịch giả lập trên VNPAY). */
+  gatewayRefundable: z.number(),
 })
 export type AdminPaymentTransaction = z.infer<typeof AdminPaymentTransaction>
 
@@ -303,6 +305,11 @@ export const AdminOrder = PublicOrder.extend({
   refunding: z.number(),
   /** Còn hoàn được: đã nhận trừ mọi khoản hoàn chưa thất bại. */
   refundable: z.number(),
+  /**
+   * Tổng phần các giao dịch còn hoàn qua cổng được (chưa trừ khoản chờ hoàn, vì chính khoản đó sẽ đi qua cổng). Khoản chờ
+   * hoàn có số tiền lớn hơn số này thì chỉ hoàn bằng chuyển khoản.
+   */
+  gatewayRefundable: z.number(),
   /** Mọi khoản hoàn kể cả thất bại, đủ thông tin nội bộ; thay cho `refunds` của khách. */
   refunds: z.array(AdminRefund),
   history: z.array(OrderHistoryEntry),
