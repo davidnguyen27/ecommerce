@@ -125,8 +125,12 @@ describe('hủy các đơn chờ hàng khi đợt không nhập được hàng',
     expect(actions).toContain('preorder.campaign.cancel_unsupplied')
   })
 
-  it('gọi lần hai không hủy thêm gì', async () => {
-    const { deposited, run, preview } = await unsupplied()
+  it('gọi lần hai không hủy thêm gì và không ghi audit', async () => {
+    const { deposited, run, preview, request, token } = await unsupplied()
+    const bulkAudits = async () => {
+      const res = await request.get('/api/admin/audit').set(bearer(token))
+      return (res.body.items as { action: string }[]).filter((a) => a.action === 'preorder.campaign.cancel_unsupplied')
+    }
     await deposited(1)
     expect((await run()).body.cancelledOrderCodes).toHaveLength(1)
 
@@ -134,6 +138,7 @@ describe('hủy các đơn chờ hàng khi đợt không nhập được hàng',
 
     expect(again.status).toBe(200)
     expect(again.body.cancelledOrderCodes).toEqual([])
+    expect(await bulkAudits()).toHaveLength(1)
     expect((await preview()).body).toEqual({ orders: [], refundTotal: 0 })
   })
 

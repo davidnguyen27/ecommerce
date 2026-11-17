@@ -1,24 +1,22 @@
-import { ErrorCode, type CancelPaidOrderRequest, type OrderCancelCause } from '@ecommerce/shared'
+import {
+  ErrorCode,
+  ORDER_CANCEL_CAUSE_CUSTOMER_TEXT,
+  type CancelPaidOrderRequest,
+  type FulfillmentStatus,
+  type OrderCancelCause,
+  type OrderKind,
+  type OrderStatus,
+  type PaymentStatus,
+} from '@ecommerce/shared'
 import type { Audit } from '../audit/audited.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, invalidField } from '../http/errors.ts'
-import type { EmailQueue } from '../jobs/jobs.ts'
+import type { CustomerMail } from '../jobs/jobs.ts'
 import { createRefund, refundTotals } from '../payments/refunds.ts'
 import { applyArrivals, planArrivals } from '../preorders/arrivals.ts'
 import { releaseOrderReservations } from './cancel-order.ts'
 import { vnd } from './format.ts'
 import { issueOrderLookupUrl, recordOrderEvent } from './orders.ts'
-
-export type CancelPaidMail = { emails: EmailQueue; siteUrl: string }
-
-/** Lý do hủy theo cách nói với khách, dùng trong email (trang đơn có bản riêng ở web). */
-const CAUSE_FOR_CUSTOMER: Record<OrderCancelCause, string> = {
-  changed_mind: 'theo yêu cầu của bạn',
-  remainder_overdue: 'đã quá hạn trả phần còn lại',
-  supply_failed: 'cửa hàng không nhập được hàng',
-  delivery_failed: 'đơn vị vận chuyển không giao được hàng',
-  other: 'cửa hàng không thực hiện được đơn',
-}
 
 const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, message)
 
@@ -33,7 +31,7 @@ const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, mess
  */
 export async function cancelPaidOrder(
   tx: Prisma.TransactionClient,
-  mail: CancelPaidMail,
+  mail: CustomerMail,
   audit: Audit,
   orderId: string,
   staffId: string,
@@ -41,17 +39,17 @@ export async function cancelPaidOrder(
   { reallocate = true }: { reallocate?: boolean } = {},
 ) {
   const [locked] = await tx.$queryRaw<
-    { status: string; paymentStatus: string; fulfillmentStatus: string; kind: string }[]
+    { status: OrderStatus; paymentStatus: PaymentStatus; fulfillmentStatus: FulfillmentStatus; kind: OrderKind }[]
   >`
     SELECT "status"::text AS status, "payment_status"::text AS "paymentStatus",
       "fulfillment_status"::text AS "fulfillmentStatus", "kind"::text AS kind
     FROM "order" WHERE "id" = ${orderId}::uuid FOR UPDATE`
   if (!locked) throw new Error(`Không có đơn ${orderId}`)
-  if (locked.status !== 'processing' || !['paid', 'deposit_paid'].includes(locked.paymentStatus)) {
+  if (locked.status !== 'processing' || !(['paid', 'deposit_paid'] as PaymentStatus[]).includes(locked.paymentStatus)) {
     throw conflict('Chỉ hủy được đơn đang xử lý đã nhận tiền; đơn chưa thanh toán dùng nút hủy thường')
   }
   // `returned`: giao thất bại và kho đã nhận hàng hoàn về, không còn hàng giữ cho đơn. `failed` thì nhận hàng về trước.
-  if (!['not_prepared', 'preparing', 'returned'].includes(locked.fulfillmentStatus)) {
+  if (!(['not_prepared', 'preparing', 'returned'] as FulfillmentStatus[]).includes(locked.fulfillmentStatus)) {
     throw conflict('Đơn đã bàn giao vận chuyển, không hủy được; giao thất bại thì nhận hàng hoàn về trước')
   }
   const { refundable } = await refundTotals(tx, orderId)
@@ -145,7 +143,7 @@ export async function cancelPaidOrder(
  */
 async function queueCancelledEmail(
   tx: Prisma.TransactionClient,
-  { emails, siteUrl }: CancelPaidMail,
+  { emails, siteUrl }: CustomerMail,
   order: { id: string; code: number; kind: string; email: string; recipientName: string },
   cause: OrderCancelCause,
   refundAmount: bigint,
@@ -167,7 +165,7 @@ async function queueCancelledEmail(
     text: [
       `Chào ${order.recipientName},`,
       '',
-      `Đơn hàng #${order.code} đã bị hủy vì ${CAUSE_FOR_CUSTOMER[cause]}.`,
+      `Đơn hàng #${order.code} đã bị hủy vì ${ORDER_CANCEL_CAUSE_CUSTOMER_TEXT[cause]}.`,
       ...refundText,
       '',
       `Xem đơn hàng: ${link}`,

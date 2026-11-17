@@ -3,6 +3,7 @@ import type { Storage } from '../adapters/storage.ts'
 import { ACTOR_SELECT } from '../audit/audited.ts'
 import type { DbClient } from '../db.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
+import { refundedViaGateway, summarizeRefunds } from '../payments/refunds.ts'
 import { ORDER_VIEW_INCLUDE, orderNotFound, parseOrderCode, toPublicOrder } from './orders.ts'
 
 /**
@@ -41,21 +42,14 @@ export async function loadAdminOrder(
   if (!order) throw orderNotFound()
 
   // ADR 0014: đã nhận tính từ giao dịch, đã hoàn và đang hoàn tính từ các khoản hoàn; trạng thái thanh toán không đổi.
-  const received = order.paymentTransactions.reduce((sum, t) => sum + Number(t.amount), 0)
-  const sumRefunds = (...statuses: string[]) =>
-    order.refunds.filter((r) => statuses.includes(r.status)).reduce((sum, r) => sum + Number(r.amount), 0)
-  const refunded = sumRefunds('succeeded')
-  const refunding = sumRefunds('pending', 'processing')
-  // Phần đã hoàn (hay đang hoàn) qua cổng của từng giao dịch gốc; hoàn thủ công không gắn giao dịch nào.
-  const viaGateway = new Map<string, number>()
-  for (const r of order.refunds) {
-    if (r.paymentTransactionId && r.status !== 'failed') {
-      viaGateway.set(r.paymentTransactionId, (viaGateway.get(r.paymentTransactionId) ?? 0) + Number(r.amount))
-    }
-  }
+  const totals = summarizeRefunds(
+    order.paymentTransactions.reduce((sum, t) => sum + t.amount, 0n),
+    order.refunds,
+  )
+  const viaGateway = refundedViaGateway(order.refunds)
   const gatewayRefundableOf = (t: (typeof order.paymentTransactions)[number]) =>
     payments.canRefund({ reference: t.reference, amount: Number(t.amount), source: t.source, payload: t.payload })
-      ? Math.max(0, Number(t.amount) - (viaGateway.get(t.id) ?? 0))
+      ? Math.max(0, Number(t.amount - (viaGateway.get(t.id) ?? 0n)))
       : 0
 
   const eventActor = (event: (typeof order.events)[number]): OrderHistoryActor => {
@@ -72,8 +66,14 @@ export async function loadAdminOrder(
     at: event.createdAt.toISOString(),
   }))
 
+  const view = toPublicOrder(storage, order)
   return {
-    ...toPublicOrder(storage, order),
+    ...view,
+    lines: view.lines.map((line, i) => ({
+      ...line,
+      returnedQuantity: order.lines[i]!.returnedQuantity,
+      writtenOffQuantity: order.lines[i]!.writtenOffQuantity,
+    })),
     customerId: order.customerId,
     cancelNote: order.cancelNote,
     voucher:
@@ -106,9 +106,9 @@ export async function loadAdminOrder(
       },
       gatewayRefundable: gatewayRefundableOf(t),
     })),
-    refunded,
-    refunding,
-    refundable: received - refunded - refunding,
+    refunded: Number(totals.refunded),
+    refunding: Number(totals.refunding),
+    refundable: Number(totals.refundable),
     gatewayRefundable: order.paymentTransactions.reduce((sum, t) => sum + gatewayRefundableOf(t), 0),
     refunds: order.refunds.map((r) => ({
       id: r.id,

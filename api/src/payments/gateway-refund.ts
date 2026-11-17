@@ -1,25 +1,23 @@
-import { ErrorCode } from '@ecommerce/shared'
 import type { Request } from 'express'
 import { audited } from '../audit/audited.ts'
 import type { Db } from '../db.ts'
-import { AppError } from '../http/errors.ts'
+import type { CustomerMail } from '../jobs/jobs.ts'
 import { vnd } from '../orders/format.ts'
 import { recordOrderEvent } from '../orders/orders.ts'
 import { PaymentGatewayError, type PaymentGateway, type RefundResult, type StoredTransaction } from './gateway.ts'
-import { lockOrderForRefund, queueRefundSucceededEmail, type RefundMail } from './refunds.ts'
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, message)
-const joinNotes = (...notes: (string | null | undefined)[]) =>
-  notes
-    .map((n) => n?.trim())
-    .filter(Boolean)
-    .join('\n') || null
+import {
+  conflict,
+  joinNotes,
+  lockOrderForRefund,
+  lockRefund,
+  queueRefundSucceededEmail,
+  refundedViaGateway,
+} from './refunds.ts'
 
 /** Một phần của khoản hoàn gửi tới cổng: một giao dịch gốc, một lệnh hoàn. */
 type Piece = { refundId: string; amount: number; full: boolean; transaction: StoredTransaction }
 
-export type GatewayRefundDeps = { prisma: Db; payments: PaymentGateway; mail: RefundMail }
+export type GatewayRefundDeps = { prisma: Db; payments: PaymentGateway; mail: CustomerMail }
 
 /**
  * Hoàn một khoản `pending` qua cổng (ADR 0014), ba bước:
@@ -33,28 +31,21 @@ export type GatewayRefundDeps = { prisma: Db; payments: PaymentGateway; mail: Re
  */
 export async function executeGatewayRefund(deps: GatewayRefundDeps, req: Request, refundId: string, staffId: string) {
   const { prisma, payments, mail } = deps
-  if (!UUID.test(refundId)) throw new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy khoản hoàn')
 
   const { orderCode, orderId, pieces } = await audited(prisma, req, async (tx, audit) => {
-    const found = await tx.refund.findUnique({ where: { id: refundId }, select: { orderId: true } })
-    if (!found) throw new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy khoản hoàn')
-    await lockOrderForRefund(tx, found.orderId)
-    const refund = await tx.refund.findUniqueOrThrow({
-      where: { id: refundId },
-      include: { order: { select: { code: true } } },
-    })
+    const refund = await lockRefund(tx, refundId)
     if (refund.status !== 'pending') throw conflict('Khoản hoàn này đã được thực hiện')
 
     const transactions = await tx.paymentTransaction.findMany({
       where: { orderId: refund.orderId },
       orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
     })
-    const used = await tx.refund.groupBy({
-      by: ['paymentTransactionId'],
-      where: { orderId: refund.orderId, paymentTransactionId: { not: null }, status: { not: 'failed' } },
-      _sum: { amount: true },
-    })
-    const usedOf = new Map(used.map((u) => [u.paymentTransactionId!, Number(u._sum.amount ?? 0n)]))
+    const usedOf = refundedViaGateway(
+      await tx.refund.findMany({
+        where: { orderId: refund.orderId },
+        select: { amount: true, status: true, paymentTransactionId: true },
+      }),
+    )
 
     let left = Number(refund.amount)
     const plan: { transactionId: string; amount: number; full: boolean; stored: StoredTransaction }[] = []
@@ -62,7 +53,7 @@ export async function executeGatewayRefund(deps: GatewayRefundDeps, req: Request
       if (left === 0) break
       const stored = { reference: t.reference, amount: Number(t.amount), source: t.source, payload: t.payload }
       if (!payments.canRefund(stored)) continue
-      const already = usedOf.get(t.id) ?? 0
+      const already = Number(usedOf.get(t.id) ?? 0n)
       const take = Math.min(left, stored.amount - already)
       if (take <= 0) continue
       plan.push({ transactionId: t.id, amount: take, full: already === 0 && take === stored.amount, stored })
@@ -136,8 +127,13 @@ export async function executeGatewayRefund(deps: GatewayRefundDeps, req: Request
 
   await audited(prisma, req, async (tx, audit) => {
     await lockOrderForRefund(tx, orderId)
+    const applied: typeof results = []
     for (const { piece, result } of results) {
       const before = await tx.refund.findUniqueOrThrow({ where: { id: piece.refundId } })
+      // Trong lúc chờ cổng, kế toán có thể đã chốt tay (rồi tạo lại) khoản này: kết quả đến muộn không ghi đè, để tổng
+      // các khoản không thất bại không vượt số đã nhận. Kết quả bị bỏ qua vẫn nằm trong audit.
+      if (before.status !== 'processing') continue
+      applied.push({ piece, result })
       const done = result.status !== 'processing'
       const updated = await tx.refund.update({
         where: { id: piece.refundId },
@@ -175,6 +171,7 @@ export async function executeGatewayRefund(deps: GatewayRefundDeps, req: Request
           amount: piece.amount,
           status: result.status,
           message: result.message,
+          ...(!applied.some((a) => a.piece === piece) && { ignored: 'Khoản đã được chốt trước khi cổng trả lời' }),
         })),
       },
     })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PublicOrder } from '@ecommerce/shared'
+import { ORDER_CANCEL_CAUSE_CUSTOMER_TEXT, type PublicOrder } from '@ecommerce/shared'
 
 /**
  * Một đơn như khách thấy: trạng thái đơn, thanh toán và giao hàng tách riêng, thời gian giữ hàng còn lại,
@@ -133,7 +133,7 @@ const remainingText = computed(() => {
     >
       <p>
         Đơn đã được cửa hàng hủy{{ order.cancelledAt ? ` lúc ${formatDateTime(order.cancelledAt)}` : '' }} vì
-        {{ CANCEL_CAUSE_CUSTOMER_TEXT[order.cancelCause] }}.
+        {{ ORDER_CANCEL_CAUSE_CUSTOMER_TEXT[order.cancelCause] }}.
       </p>
       <p v-if="order.refunds.length === 0">Đơn này không được hoàn tiền theo chính sách đã áp dụng cho đơn.</p>
     </div>

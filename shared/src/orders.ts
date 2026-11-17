@@ -73,6 +73,15 @@ export const OrderCancelCause = z.enum([
 ])
 export type OrderCancelCause = z.infer<typeof OrderCancelCause>
 
+/** Lý do hủy đơn đã nhận tiền theo cách nói với khách, nối sau "vì": dùng chung cho email và trang đơn. */
+export const ORDER_CANCEL_CAUSE_CUSTOMER_TEXT: Record<OrderCancelCause, string> = {
+  changed_mind: 'theo yêu cầu của bạn',
+  remainder_overdue: 'đã quá hạn trả phần còn lại',
+  supply_failed: 'cửa hàng không nhập được hàng',
+  delivery_failed: 'đơn vị vận chuyển không giao được hàng',
+  other: 'cửa hàng không thực hiện được đơn',
+}
+
 /** Một khoản hoàn như khách thấy: số tiền, đang hoàn hay đã hoàn, ngày tạo và ngày xong. Không có ghi chú nội bộ. */
 export const PublicRefund = z.object({
   amount: z.number(),
@@ -94,9 +103,6 @@ export const OrderLineView = z.object({
   lineTotal: z.number(),
   /** Phần tiền giảm của mã chia cho dòng này; 0 khi đơn không dùng mã hoặc dòng ngoài phạm vi mã. */
   discount: z.number(),
-  /** Lần nhận hàng hoàn về gần nhất (M6a): số nhập lại tồn và số hỏng/mất; 0 khi chưa có. */
-  returnedQuantity: z.number(),
-  writtenOffQuantity: z.number(),
 })
 export type OrderLineView = z.infer<typeof OrderLineView>
 
@@ -281,7 +287,15 @@ export const OrderHistoryEntry = z.object({
 export type OrderHistoryEntry = z.infer<typeof OrderHistoryEntry>
 
 /** Chi tiết đơn ở trang quản trị: mọi thứ khách thấy, thêm giao dịch thanh toán và lịch sử thao tác. */
+/** Dòng đơn ở trang quản trị: thêm kết quả lần nhận hàng hoàn về gần nhất (M6a). Số liệu kho nội bộ, khách không thấy. */
+export const AdminOrderLine = OrderLineView.extend({
+  returnedQuantity: z.number(),
+  writtenOffQuantity: z.number(),
+})
+export type AdminOrderLine = z.infer<typeof AdminOrderLine>
+
 export const AdminOrder = PublicOrder.extend({
+  lines: z.array(AdminOrderLine),
   /** Tài khoản khách đặt hoặc được gắn đơn; `null` với đơn vãng lai. */
   customerId: z.string().nullable(),
   /** Mã giảm giá như lúc đặt (loại, mức giảm), kèm id để mở trang mã; `null` khi đơn không dùng mã. */

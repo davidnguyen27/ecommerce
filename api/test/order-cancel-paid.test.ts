@@ -209,6 +209,28 @@ describe('hủy đơn hàng sẵn đã trả', () => {
   })
 })
 
+describe('đối soát sau khi hủy đơn đã nhận tiền', () => {
+  it('tiền về sau khi nhân viên hủy đơn đã trả thì không khôi phục đơn được, chỉ hoàn hoặc xử lý ngoài', async () => {
+    const { paidOrder, cancel, pay, request, accountant, token } = await cancelPaid()
+    const { code } = await paidOrder()
+    expect((await cancel(code, { cause: 'other', refundAmount: 0, note: 'Khách đồng ý không hoàn' })).status).toBe(200)
+    await pay(code, TOTAL)
+    const detail = await request.get(`/api/admin/orders/${code}`).set(bearer(token))
+    const item = (detail.body.payments as { reconciliation: { id: string } | null }[]).find((p) => p.reconciliation)!
+
+    const restore = await request
+      .post(`/api/admin/reconciliation/${item.reconciliation!.id}/restore`)
+      .set(bearer(accountant.accessToken))
+
+    expect(restore.status).toBe(409)
+    expect(restore.body.error.message).toContain('đã nhận tiền')
+    const refund = await request
+      .post(`/api/admin/reconciliation/${item.reconciliation!.id}/refund`)
+      .set(bearer(accountant.accessToken))
+    expect(refund.status).toBe(200)
+  })
+})
+
 describe('khách xem đơn đã hủy', () => {
   it('thấy lý do hủy, đã nhận và các khoản hoàn; không thấy ghi chú nội bộ hay mã ngân hàng', async () => {
     const { paidOrder, cancel, request, accountant } = await cancelPaid()
