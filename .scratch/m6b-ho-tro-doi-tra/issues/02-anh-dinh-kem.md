@@ -55,3 +55,4 @@ Spec: mục "Ảnh đính kèm".
   - dùng ở form tạo yêu cầu, ô trả lời của khách và trang chi tiết ở admin.
 - Test `api/test/support-attachments.test.ts` (9 test). Chưa chạy thử giao diện trên trình duyệt; E2E ở ticket 07.
 - Kết quả: cả bộ test API lần đầu có 10 test lỗi rải ở 9 file (đa số không liên quan, như SEO, dọn token); chạy lại riêng 9 file đó thì qua 47/47, tức là Docker Desktop chập chờn.
+- Chưa có test riêng cho giới hạn 20 ảnh/giờ/IP (429): cùng cơ chế `enforceRateLimits` đã có test ở `support-requests.test.ts` (giới hạn tạo yêu cầu) và `rate-limit.test.ts`; muốn test riêng phải tải 21 ảnh.
