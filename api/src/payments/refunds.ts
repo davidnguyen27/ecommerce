@@ -3,7 +3,7 @@ import type { Audit } from '../audit/audited.ts'
 import type { DbClient } from '../db.ts'
 import type { Refund } from '../generated/prisma/client.ts'
 import { AppError, conflictField } from '../http/errors.ts'
-import type { EmailQueue } from '../jobs/jobs.ts'
+import type { CustomerMail } from '../jobs/jobs.ts'
 import { dateVN, vnd } from '../orders/format.ts'
 import { issueOrderLookupUrl, recordOrderEvent } from '../orders/orders.ts'
 
@@ -13,11 +13,9 @@ import { issueOrderLookupUrl, recordOrderEvent } from '../orders/orders.ts'
  * thất bại không bao giờ vượt tổng đã nhận, kể cả khi hai yêu cầu đến cùng lúc.
  */
 
-export type RefundMail = { emails: EmailQueue; siteUrl: string }
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy khoản hoàn')
-const conflict = (message: string, details?: Record<string, unknown>) =>
+export const conflict = (message: string, details?: Record<string, unknown>) =>
   new AppError(409, ErrorCode.CONFLICT, message, undefined, details)
 
 /** Khóa đơn `FOR UPDATE`. Gọi trước mọi đọc số tiền dùng để quyết định ghi hoàn tiền. */
@@ -25,17 +23,41 @@ export async function lockOrderForRefund(tx: DbClient, orderId: string) {
   await tx.$queryRaw`SELECT "id" FROM "order" WHERE "id" = ${orderId}::uuid FOR UPDATE`
 }
 
-/** Đã nhận, đã hoàn xong, đang hoàn (chờ hoặc cổng đang xử lý) và còn hoàn được của một đơn, VND. */
+/** Đủ của một khoản hoàn để tính tổng. */
+type RefundAmount = Pick<Refund, 'amount' | 'status' | 'paymentTransactionId'>
+
+/**
+ * Đã hoàn xong, đang hoàn (chờ hoặc cổng đang xử lý) và còn hoàn được, từ tổng đã nhận và các khoản hoàn của một đơn
+ * (ADR 0014). Hàm thuần: chi tiết đơn ở trang quản trị và các thao tác ghi dùng chung một cách tính.
+ */
+export function summarizeRefunds(received: bigint, refunds: readonly RefundAmount[]) {
+  const sum = (...statuses: Refund['status'][]) =>
+    refunds.filter((r) => statuses.includes(r.status)).reduce((total, r) => total + r.amount, 0n)
+  const refunded = sum('succeeded')
+  const refunding = sum('pending', 'processing')
+  return { received, refunded, refunding, refundable: received - refunded - refunding }
+}
+
+/** Phần đã hoàn (hay đang hoàn) qua cổng của từng giao dịch gốc; hoàn thủ công không gắn giao dịch nào. */
+export function refundedViaGateway(refunds: readonly RefundAmount[]) {
+  const used = new Map<string, bigint>()
+  for (const r of refunds) {
+    if (r.paymentTransactionId && r.status !== 'failed') {
+      used.set(r.paymentTransactionId, (used.get(r.paymentTransactionId) ?? 0n) + r.amount)
+    }
+  }
+  return used
+}
+
+/** Đã nhận, đã hoàn xong, đang hoàn và còn hoàn được của một đơn, VND. Gọi dưới khóa đơn khi dùng để quyết định ghi. */
 export async function refundTotals(tx: DbClient, orderId: string) {
   // Tuần tự: trong transaction chỉ có một kết nối, không chạy hai truy vấn cùng lúc.
   const received = await tx.paymentTransaction.aggregate({ where: { orderId }, _sum: { amount: true } })
-  const byStatus = await tx.refund.groupBy({ by: ['status'], where: { orderId }, _sum: { amount: true } })
-  const sum = (...statuses: Refund['status'][]) =>
-    byStatus.filter((row) => statuses.includes(row.status)).reduce((total, row) => total + (row._sum.amount ?? 0n), 0n)
-  const receivedAmount = received._sum.amount ?? 0n
-  const refunded = sum('succeeded')
-  const refunding = sum('pending', 'processing')
-  return { received: receivedAmount, refunded, refunding, refundable: receivedAmount - refunded - refunding }
+  const refunds = await tx.refund.findMany({
+    where: { orderId },
+    select: { amount: true, status: true, paymentTransactionId: true },
+  })
+  return summarizeRefunds(received._sum.amount ?? 0n, refunds)
 }
 
 export type NewRefund = {
@@ -82,7 +104,7 @@ export async function createRefund(tx: DbClient, input: NewRefund) {
 }
 
 /** Khóa đơn của khoản hoàn rồi đọc lại khoản dưới khóa; id lạ thì 404. */
-async function lockRefund(tx: DbClient, refundId: string) {
+export async function lockRefund(tx: DbClient, refundId: string) {
   if (!UUID.test(refundId)) throw notFound()
   const found = await tx.refund.findUnique({ where: { id: refundId }, select: { orderId: true } })
   if (!found) throw notFound()
@@ -93,7 +115,8 @@ async function lockRefund(tx: DbClient, refundId: string) {
   })
 }
 
-const joinNotes = (...notes: (string | null | undefined)[]) =>
+/** Nối các ghi chú khác rỗng, mỗi ghi chú một dòng; không còn gì thì `null`. */
+export const joinNotes = (...notes: (string | null | undefined)[]) =>
   notes
     .map((n) => n?.trim())
     .filter(Boolean)
@@ -112,7 +135,7 @@ const auditView = (refund: Refund) => ({
  */
 export async function executeManualRefund(
   tx: DbClient,
-  mail: RefundMail,
+  mail: CustomerMail,
   audit: Audit,
   refundId: string,
   staffId: string,
@@ -158,7 +181,7 @@ export async function executeManualRefund(
  */
 export async function settleRefund(
   tx: DbClient,
-  mail: RefundMail,
+  mail: CustomerMail,
   audit: Audit,
   refundId: string,
   staffId: string,
@@ -233,7 +256,7 @@ export async function retryRefund(
 /** Xếp email "Đã hoàn tiền" (số tiền, ngày, link tra cứu có token mới) trong transaction của thay đổi trạng thái. */
 export async function queueRefundSucceededEmail(
   tx: DbClient,
-  { emails, siteUrl }: RefundMail,
+  { emails, siteUrl }: CustomerMail,
   order: { id: string; code: number; email: string; recipientName: string },
   refund: Refund,
 ) {

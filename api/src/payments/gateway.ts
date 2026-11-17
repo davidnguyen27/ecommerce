@@ -115,6 +115,8 @@ export class InMemoryPaymentGateway implements PaymentGateway {
   failCancel = false
   /** Đặt `false` để mọi giao dịch đều không hoàn qua cổng được (chỉ hoàn thủ công). */
   allowRefund = true
+  /** Chạy sau khi nhận lệnh hoàn, trước khi trả kết quả: test chen thao tác vào lúc cổng đang xử lý. */
+  beforeRefundResult?: (request: RefundRequest) => Promise<void>
   /** Các lệnh hoàn đã nhận. */
   readonly refunds: RefundRequest[] = []
   /** Kết quả cho các lệnh hoàn sau đó, lấy lần lượt; hết thì là `succeeded`. Phần tử `'error'` giả lập cổng không trả lời. */
@@ -146,6 +148,7 @@ export class InMemoryPaymentGateway implements PaymentGateway {
 
   async refund(request: RefundRequest): Promise<RefundResult> {
     this.refunds.push(request)
+    await this.beforeRefundResult?.(request)
     const status = this.refundResults.shift() ?? 'succeeded'
     if (status === 'error') throw new PaymentGatewayError('Cổng thanh toán giả lập không trả lời')
     return { status, message: `Giả lập: ${status}`, payload: { status, amount: request.amount } }

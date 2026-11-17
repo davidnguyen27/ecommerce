@@ -252,8 +252,6 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
       quantity: line.quantity,
       lineTotal: Number(line.price) * line.quantity,
       discount: Number(line.discount),
-      returnedQuantity: line.returnedQuantity,
-      writtenOffQuantity: line.writtenOffQuantity,
     })),
     subtotal: Number(order.subtotal),
     voucherCode: order.voucherCode,

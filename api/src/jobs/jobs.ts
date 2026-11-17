@@ -14,6 +14,9 @@ const EXPIRE_OVERDUE_ORDERS = 'expire-overdue-orders'
 const REMAINDER_DEADLINES = 'remainder-deadlines'
 
 /** Xếp thư vào hàng đợi; route chỉ cần phần này của `Jobs`. */
+/** Gửi email cho khách: hàng đợi thư và địa chỉ website để dựng link tra cứu đơn. */
+export type CustomerMail = { emails: EmailQueue; siteUrl: string }
+
 export interface EmailQueue {
   /** Ghi job bằng `db`; gọi trong transaction thì thư chỉ được gửi khi transaction commit. */
   sendEmail(db: DbClient, mail: Mail): Promise<void>

@@ -190,3 +190,29 @@ describe('cổng giả lập (local, bản demo)', () => {
     expect(await statusFor(1_000_002)).toBe('failed')
   })
 })
+
+describe('kết quả cổng đến muộn', () => {
+  it('khoản đã được chốt tay trong lúc chờ cổng thì kết quả cổng không ghi đè, tổng hoàn không vượt đã nhận', async () => {
+    const { cancelled, viaGateway, payments, request, accountant, token } = await gatewayRefunds()
+    const { code, refundId } = await cancelled()
+    const asAccountant = (path: string, body: Record<string, unknown>) =>
+      request.post(`/api/admin/refunds/${refundId}/${path}`).set(bearer(accountant.accessToken)).send(body)
+    // Trong lúc cổng chưa trả lời: kế toán chốt thất bại rồi tạo lại khoản mới.
+    payments.beforeRefundResult = async () => {
+      expect((await asAccountant('settle', { outcome: 'failed', note: 'Cổng báo lỗi trên merchant' })).status).toBe(200)
+      expect((await asAccountant('retry', { amount: TOTAL })).status).toBe(200)
+    }
+
+    const res = await viaGateway(refundId)
+
+    expect(res.status).toBe(200)
+    expect((res.body.refunds as Refund[]).map((r) => r.status)).toEqual(['failed', 'pending'])
+    expect(res.body).toMatchObject({ refunded: 0, refunding: TOTAL, refundable: 0 })
+    const audits = await request.get('/api/admin/audit').query({ entityType: 'order' }).set(bearer(token))
+    const result = (audits.body.items as { action: string; after: { results: { ignored?: string }[] } }[]).find(
+      (a) => a.action === 'refund.gateway_result',
+    )!
+    expect(result.after.results[0]!.ignored).toBeDefined()
+    expect(code).toBeGreaterThan(0)
+  })
+})

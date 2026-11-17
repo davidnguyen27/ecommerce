@@ -3,7 +3,8 @@ import type { Audit } from '../audit/audited.ts'
 import type { DbClient } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
-import { cancelPaidOrder, type CancelPaidMail } from '../orders/cancel-paid-order.ts'
+import type { CustomerMail } from '../jobs/jobs.ts'
+import { cancelPaidOrder } from '../orders/cancel-paid-order.ts'
 import { DEPOSITED_PREORDER } from '../orders/orders.ts'
 import { lockOrderForRefund, refundTotals } from '../payments/refunds.ts'
 import { isCampaignOpen } from './campaigns.ts'
@@ -42,7 +43,7 @@ export async function previewUnsupplied(db: DbClient, campaignId: string): Promi
  */
 export async function cancelUnsupplied(
   tx: Prisma.TransactionClient,
-  mail: CancelPaidMail,
+  mail: CustomerMail,
   audit: Audit,
   campaignId: string,
   staffId: string,
@@ -77,6 +78,8 @@ export async function cancelUnsupplied(
     )
     cancelled.push(code)
   }
+  // Không đổi gì (đợt đã đóng, không còn đơn chờ hàng) thì không ghi audit (CODING_STANDARDS "Ghi dữ liệu ở API quản trị").
+  if (!closing && cancelled.length === 0) return cancelled
   await audit({
     action: 'preorder.campaign.cancel_unsupplied',
     entityType: 'preorder_campaign',

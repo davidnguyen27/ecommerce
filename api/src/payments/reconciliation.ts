@@ -51,6 +51,9 @@ export async function restoreOrder(
     include: { lines: { orderBy: { position: 'asc' } } },
   })
   if (order.status !== 'cancelled') throw conflict('Chỉ khôi phục được đơn đã hủy')
+  // Nhân viên đã hủy đơn lúc đã nhận tiền (M6a): quyết định hủy, mất cọc hay hoàn là có chủ đích, không đảo ngược bằng
+  // một khoản tiền về muộn. Khoản đó giải quyết bằng hoàn tiền hoặc ngoài hệ thống.
+  if (order.cancelCause) throw conflict('Đơn bị nhân viên hủy sau khi đã nhận tiền, không khôi phục được')
   const handledExternally = await tx.reconciliationItem.count({
     where: { orderId: order.id, resolution: 'handled_externally' },
   })

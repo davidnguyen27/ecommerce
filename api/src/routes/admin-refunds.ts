@@ -8,13 +8,14 @@ import { parse } from '../http/validation.ts'
 import { loadAdminOrder } from '../orders/admin-order.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 import { executeGatewayRefund } from '../payments/gateway-refund.ts'
-import { executeManualRefund, retryRefund, settleRefund, type RefundMail } from '../payments/refunds.ts'
+import { executeManualRefund, retryRefund, settleRefund } from '../payments/refunds.ts'
+import type { CustomerMail } from '../jobs/jobs.ts'
 
 /**
  * Thực hiện hoàn tiền (ADR 0014), mount tại `/refunds`; mọi thao tác cần `payment.refund`. Mỗi thao tác trả lại chi tiết
  * đơn để trang quản trị thay đơn đang hiện bằng response. Xem khoản hoàn nằm trong chi tiết đơn (`order.view`).
  */
-export function adminRefundRoutes(prisma: Db, storage: Storage, payments: PaymentGateway, mail: RefundMail) {
+export function adminRefundRoutes(prisma: Db, storage: Storage, payments: PaymentGateway, mail: CustomerMail) {
   const respond = async (res: Response, code: number) => {
     const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, String(code))
     res.json(body)
