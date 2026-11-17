@@ -210,6 +210,26 @@ _Avoid_: tiền thiếu, công nợ
 Đơn đặt trước đã cọc mà mọi cái đã được giữ hàng từ hàng nhập về; hàng về được chia cho các đơn theo thứ tự cọc. Đơn mới được mời trả phần còn lại từ lúc này.
 _Avoid_: đã nhập, sẵn hàng
 
+## Hậu mãi
+
+**Yêu cầu hỗ trợ** (Support request):
+Một việc khách nhờ cửa hàng xử lý, gồm một chuỗi tin nhắn giữa khách và nhân viên, một người phụ trách và trạng thái xử lý. Mỗi yêu cầu thuộc một loại: hủy đơn, trả hàng, đổi hàng, bảo hành hoặc khác; mọi loại trừ khác luôn gắn với một đơn. Khách, nhân viên tạo hộ hay chatbot đều tạo ra cùng một loại yêu cầu.
+_Avoid_: ticket, khiếu nại, phiếu hỗ trợ
+
+**Ghi chú nội bộ** (Internal note):
+Tin trong yêu cầu hỗ trợ chỉ nhân viên thấy.
+
+**Trả hàng** (Return):
+Khách gửi lại một phần hay toàn bộ hàng của đơn đã giao để được hoàn tiền. Hàng về kho được nhập lại tồn hoặc ghi hỏng theo kết quả kiểm tra; tiền đi qua hoàn tiền. Không phải hủy đơn.
+_Avoid_: hoàn hàng, đổi trả (khi chỉ nói về trả)
+
+**Đổi hàng** (Exchange):
+Khách gửi lại hàng đã giao để nhận một biến thể khác của cùng sản phẩm, cùng giá bán, không thu thêm tiền. Muốn đổi sang sản phẩm khác hay giá khác thì trả hàng rồi đặt mua mới.
+_Avoid_: đổi size (khi nói về khái niệm chung)
+
+**Hạn đổi trả** (Return window):
+Số ngày tính từ lúc giao mà khách được trả hay đổi hàng theo chính sách, khác nhau theo nhóm hàng. Quá hạn thì nhân viên được báo, không tự từ chối.
+
 ## Nguồn gốc và cam kết
 
 **Thông tin nguồn gốc công bố** (Origin statement):
