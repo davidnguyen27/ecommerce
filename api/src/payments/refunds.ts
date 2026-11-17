@@ -231,7 +231,7 @@ export async function retryRefund(
 }
 
 /** Xếp email "Đã hoàn tiền" (số tiền, ngày, link tra cứu có token mới) trong transaction của thay đổi trạng thái. */
-async function queueRefundSucceededEmail(
+export async function queueRefundSucceededEmail(
   tx: DbClient,
   { emails, siteUrl }: RefundMail,
   order: { id: string; code: number; email: string; recipientName: string },

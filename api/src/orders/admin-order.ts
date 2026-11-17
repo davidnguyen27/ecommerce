@@ -2,13 +2,19 @@ import { type AdminOrder, type OrderHistoryActor, type OrderHistoryEntry } from 
 import type { Storage } from '../adapters/storage.ts'
 import { ACTOR_SELECT } from '../audit/audited.ts'
 import type { DbClient } from '../db.ts'
+import type { PaymentGateway } from '../payments/gateway.ts'
 import { ORDER_VIEW_INCLUDE, orderNotFound, parseOrderCode, toPublicOrder } from './orders.ts'
 
 /**
  * Chi tiết đơn cho trang quản trị theo mã (chuỗi từ URL). Route xử lý đơn (chuẩn bị, bàn giao, đã giao…) trả lại đúng
  * dạng này sau khi đổi trạng thái, để trang chi tiết thay đơn đang hiện bằng response.
  */
-export async function loadAdminOrder(db: DbClient, storage: Storage, code: string): Promise<AdminOrder> {
+export async function loadAdminOrder(
+  db: DbClient,
+  storage: Storage,
+  payments: PaymentGateway,
+  code: string,
+): Promise<AdminOrder> {
   const order = await db.order.findUnique({
     where: { code: parseOrderCode(code) },
     include: {
@@ -40,6 +46,17 @@ export async function loadAdminOrder(db: DbClient, storage: Storage, code: strin
     order.refunds.filter((r) => statuses.includes(r.status)).reduce((sum, r) => sum + Number(r.amount), 0)
   const refunded = sumRefunds('succeeded')
   const refunding = sumRefunds('pending', 'processing')
+  // Phần đã hoàn (hay đang hoàn) qua cổng của từng giao dịch gốc; hoàn thủ công không gắn giao dịch nào.
+  const viaGateway = new Map<string, number>()
+  for (const r of order.refunds) {
+    if (r.paymentTransactionId && r.status !== 'failed') {
+      viaGateway.set(r.paymentTransactionId, (viaGateway.get(r.paymentTransactionId) ?? 0) + Number(r.amount))
+    }
+  }
+  const gatewayRefundableOf = (t: (typeof order.paymentTransactions)[number]) =>
+    payments.canRefund({ reference: t.reference, amount: Number(t.amount), source: t.source, payload: t.payload })
+      ? Math.max(0, Number(t.amount) - (viaGateway.get(t.id) ?? 0))
+      : 0
 
   const eventActor = (event: (typeof order.events)[number]): OrderHistoryActor => {
     if (event.actor === 'staff') return { type: 'staff', ...event.staff! }
@@ -87,10 +104,12 @@ export async function loadAdminOrder(db: DbClient, storage: Storage, code: strin
         resolvedBy: t.reconciliationItem.resolvedBy,
         resolvedAt: t.reconciliationItem.resolvedAt?.toISOString() ?? null,
       },
+      gatewayRefundable: gatewayRefundableOf(t),
     })),
     refunded,
     refunding,
     refundable: received - refunded - refunding,
+    gatewayRefundable: order.paymentTransactions.reduce((sum, t) => sum + gatewayRefundableOf(t), 0),
     refunds: order.refunds.map((r) => ({
       id: r.id,
       amount: Number(r.amount),
