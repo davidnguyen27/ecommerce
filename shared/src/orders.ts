@@ -3,6 +3,7 @@ import { AttributeValues } from './attributes.ts'
 import { PageQuery, pageOf } from './pagination.ts'
 import { PublicImage } from './products.ts'
 import { AdminRefund } from './refunds.ts'
+import { SupportRequestKind, SupportRequestStatus } from './support.ts'
 
 /** Trạng thái đơn hàng (GLOSSARY "Trạng thái đơn hàng"). */
 export const OrderStatus = z.enum(['pending_payment', 'processing', 'completed', 'cancelled'])
@@ -326,6 +327,16 @@ export const AdminOrder = PublicOrder.extend({
   gatewayRefundable: z.number(),
   /** Mọi khoản hoàn kể cả thất bại, đủ thông tin nội bộ; thay cho `refunds` của khách. */
   refunds: z.array(AdminRefund),
+  /** Yêu cầu hỗ trợ của đơn, mới trước (M6b). */
+  supportRequests: z.array(
+    z.object({
+      code: z.number(),
+      kind: SupportRequestKind,
+      status: SupportRequestStatus,
+      subject: z.string(),
+      createdAt: z.string(),
+    }),
+  ),
   history: z.array(OrderHistoryEntry),
 })
 export type AdminOrder = z.infer<typeof AdminOrder>

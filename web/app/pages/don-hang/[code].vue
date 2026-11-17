@@ -12,6 +12,12 @@ const error = ref<string | null>(null)
 const missingToken = ref(false)
 const checking = ref(false)
 
+// Yêu cầu hỗ trợ của đơn đi cùng token tra cứu (spec M6b).
+const supportClient = computed(() => {
+  const token = lookupToken()
+  return token ? guestSupportClient(Number(code.value), token) : null
+})
+
 function lookupToken() {
   return typeof route.query.token === 'string' ? route.query.token : recallOrderToken(code.value)
 }
@@ -140,6 +146,7 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
         @cancel="cancel"
         @pay-remainder="payRemainder"
       />
+      <SupportRequests v-if="supportClient" :client="supportClient" class="mt-8" />
     </template>
   </main>
 </template>

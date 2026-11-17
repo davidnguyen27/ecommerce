@@ -5,6 +5,7 @@ import { PayRemainderResult, PublicOrder } from '@ecommerce/shared'
 const route = useRoute()
 const code = computed(() => String(route.params.code))
 const session = useCustomerSession()
+const supportClient = accountSupportClient(session.accountFetch)
 const order = ref<PublicOrder | null>(null)
 const error = ref<string | null>(null)
 
@@ -75,6 +76,7 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
         @cancel="cancel"
         @pay-remainder="payRemainder"
       />
+      <SupportRequests :client="supportClient" :order-code="Number(code)" class="mt-8" />
     </template>
   </main>
 </template>

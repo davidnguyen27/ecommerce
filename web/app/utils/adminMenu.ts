@@ -10,6 +10,7 @@ import {
   History,
   Images,
   LayoutDashboard,
+  LifeBuoy,
   ListChecks,
   Package,
   PackagePlus,
@@ -77,6 +78,12 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
         permission: ['order.view', 'voucher.manage'],
       },
       { to: '/admin/shipping-fees', label: 'Phí giao', icon: Truck, permission: 'price.edit' },
+      {
+        to: '/admin/support',
+        label: 'Yêu cầu hỗ trợ',
+        icon: LifeBuoy,
+        permission: ['support.handle', 'order.view'],
+      },
     ],
   },
   {

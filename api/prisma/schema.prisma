@@ -52,6 +52,9 @@ model Staff {
   createdRefunds           Refund[]             @relation("RefundCreatedBy")
   executedRefunds          Refund[]             @relation("RefundExecutedBy")
   settledRefunds           Refund[]             @relation("RefundSettledBy")
+  assignedSupportRequests  SupportRequest[]     @relation("SupportAssignee")
+  createdSupportRequests   SupportRequest[]     @relation("SupportCreatedBy")
+  supportMessages          SupportMessage[]
   preorderCampaigns        PreorderCampaign[]
   vouchers                 Voucher[]
 
@@ -123,10 +126,11 @@ model Customer {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  consents    CustomerConsent[]
-  tokens      CustomerToken[]
-  orders      Order[]
-  orderEvents OrderEvent[]
+  consents        CustomerConsent[]
+  tokens          CustomerToken[]
+  orders          Order[]
+  orderEvents     OrderEvent[]
+  supportRequests SupportRequest[]
 
   @@map("customer")
 }
@@ -799,6 +803,7 @@ model Order {
   paymentTransactions PaymentTransaction[]
   reconciliationItems ReconciliationItem[]
   refunds             Refund[]
+  supportRequests     SupportRequest[]
 
   @@index([customerId])
   @@index([status, reservedUntil])
@@ -1203,4 +1208,91 @@ model VoucherCategory {
   @@id([voucherId, categoryId])
   @@index([categoryId])
   @@map("voucher_category")
+}
+
+/// Loại yêu cầu hỗ trợ (GLOSSARY "Yêu cầu hỗ trợ"); mọi loại trừ `other` gắn với một đơn.
+enum SupportRequestKind {
+  cancel
+  return
+  exchange
+  warranty
+  other
+
+  @@map("support_request_kind")
+}
+
+/// `new` → `in_progress` ⇄ `waiting_customer` → `resolved` hoặc `rejected` (kết thúc, không mở lại).
+enum SupportRequestStatus {
+  new
+  in_progress
+  waiting_customer
+  resolved
+  rejected
+
+  @@map("support_request_status")
+}
+
+/// Ai viết tin hay tạo yêu cầu: khách, nhân viên, hay hệ thống (ví dụ khi đơn đã được hủy).
+enum SupportAuthor {
+  customer
+  staff
+  system
+
+  @@map("support_author")
+}
+
+/// Yêu cầu hỗ trợ (spec M6b). Phần riêng của trả hàng, đổi hàng, bảo hành ở các cột do ticket sau thêm.
+model SupportRequest {
+  id                String               @id @default(uuid()) @db.Uuid
+  /// Mã khách thấy (`#YC1001`); sequence riêng.
+  code              Int                  @unique @default(dbgenerated("nextval('support_request_code_seq'::regclass)"))
+  kind              SupportRequestKind
+  status            SupportRequestStatus @default(new)
+  subject           String
+  /// Bắt buộc với mọi loại trừ `other`. Check `support_request_order_check`.
+  orderId           String?              @map("order_id") @db.Uuid
+  order             Order?               @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Tài khoản khách theo dõi được yêu cầu; với đơn thì là tài khoản của đơn (nếu có).
+  customerId        String?              @map("customer_id") @db.Uuid
+  customer          Customer?            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  /// Nơi gửi email cho khách: email của đơn, hay email tài khoản.
+  contactEmail      String               @map("contact_email")
+  contactName       String?              @map("contact_name")
+  assigneeId        String?              @map("assignee_id") @db.Uuid
+  assignee          Staff?               @relation("SupportAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  createdBy         SupportAuthor        @map("created_by")
+  createdByStaffId  String?              @map("created_by_staff_id") @db.Uuid
+  createdByStaff    Staff?               @relation("SupportCreatedBy", fields: [createdByStaffId], references: [id], onDelete: Restrict)
+  /// Yêu cầu trước đó khách muốn nối tiếp (yêu cầu đã kết thúc không mở lại).
+  previousRequestId String?              @map("previous_request_id") @db.Uuid
+  previousRequest   SupportRequest?      @relation("SupportFollowUp", fields: [previousRequestId], references: [id], onDelete: Restrict)
+  followUps         SupportRequest[]     @relation("SupportFollowUp")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  /// Có khi và chỉ khi `resolved` hoặc `rejected`.
+  resolvedAt        DateTime?            @map("resolved_at")
+
+  messages SupportMessage[]
+
+  @@index([orderId])
+  @@index([customerId])
+  @@index([status, createdAt])
+  @@index([assigneeId])
+  @@map("support_request")
+}
+
+/// Tin trong yêu cầu hỗ trợ; chỉ ghi thêm. `internal`: ghi chú nội bộ, khách không thấy.
+model SupportMessage {
+  id        String         @id @default(uuid()) @db.Uuid
+  requestId String         @map("request_id") @db.Uuid
+  request   SupportRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  author    SupportAuthor
+  staffId   String?        @map("staff_id") @db.Uuid
+  staff     Staff?         @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  internal  Boolean        @default(false)
+  body      String
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  @@index([requestId, createdAt])
+  @@map("support_message")
 }
