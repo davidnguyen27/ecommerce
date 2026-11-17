@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PayRemainderResult, PublicOrder } from '@ecommerce/shared'
+import { PayRemainderResult, PublicOrder, canRequestCancel } from '@ecommerce/shared'
 
 // Đơn là dữ liệu cá nhân, mở bằng token: chỉ nạp ở trình duyệt, HTML từ server không có gì của đơn.
 // Hai cách vào: link trong email (`?token=…`), hoặc trang kết quả khi cổng thanh toán đưa khách quay về
@@ -146,7 +146,12 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
         @cancel="cancel"
         @pay-remainder="payRemainder"
       />
-      <SupportRequests v-if="supportClient" :client="supportClient" class="mt-8" />
+      <SupportRequests
+        v-if="supportClient"
+        :client="supportClient"
+        :can-cancel="canRequestCancel(order)"
+        class="mt-8"
+      />
     </template>
   </main>
 </template>

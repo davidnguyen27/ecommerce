@@ -24,11 +24,16 @@ const Body = z
 const Subject = z.string({ error: 'Nhập tiêu đề' }).trim().min(1, 'Nhập tiêu đề').max(200, 'Tiêu đề tối đa 200 ký tự')
 
 /**
- * Body khách gửi để tạo yêu cầu. Ticket 01 chỉ có loại `other`; các loại khác được thêm cùng phần xử lý riêng của chúng.
+ * Body khách gửi để tạo yêu cầu: loại `other` hay `cancel` (hủy đơn đã nhận tiền, cần đơn). Trả, đổi, bảo hành được thêm
+ * cùng phần xử lý riêng của chúng.
  * `previousRequestCode`: nối tiếp một yêu cầu đã kết thúc của chính khách.
  */
+/** Loại khách và nhân viên đang tạo được (spec M6b ticket 01, 03). */
+export const CreatableSupportKind = z.enum(['other', 'cancel'])
+export type CreatableSupportKind = z.infer<typeof CreatableSupportKind>
+
 export const CreateSupportRequest = z.object({
-  kind: z.literal('other'),
+  kind: CreatableSupportKind,
   subject: Subject,
   message: Body,
   previousRequestCode: z.number().int().positive().optional(),
@@ -139,7 +144,7 @@ export type AdminSupportRequest = z.infer<typeof AdminSupportRequest>
  */
 export const AdminCreateSupportRequest = z
   .object({
-    kind: z.literal('other'),
+    kind: CreatableSupportKind,
     orderCode: z.number().int().positive().optional(),
     customerEmail: z.email('Email không hợp lệ').trim().toLowerCase().optional(),
     subject: Subject,
@@ -147,6 +152,10 @@ export const AdminCreateSupportRequest = z
   })
   .refine((v) => v.orderCode !== undefined || v.customerEmail !== undefined, {
     message: 'Cần mã đơn hoặc email tài khoản khách',
+    path: ['orderCode'],
+  })
+  .refine((v) => v.kind === 'other' || v.orderCode !== undefined, {
+    message: 'Yêu cầu hủy đơn cần mã đơn',
     path: ['orderCode'],
   })
 export type AdminCreateSupportRequest = z.input<typeof AdminCreateSupportRequest>

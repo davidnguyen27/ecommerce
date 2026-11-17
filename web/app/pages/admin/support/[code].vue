@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { AdminSupportRequest, StaffList, type AdminSupportReply, type StaffSummary } from '@ecommerce/shared'
+import {
+  AdminOrder,
+  AdminSupportRequest,
+  StaffList,
+  canRequestCancel,
+  type AdminSupportReply,
+  type StaffSummary,
+} from '@ecommerce/shared'
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: ['support.handle', 'order.view'] })
 
@@ -85,6 +92,25 @@ const assignable = computed(() =>
 const authorOf = (m: AdminSupportRequest['messages'][number]) =>
   m.author === 'staff' ? (m.staff?.name ?? 'Nhân viên') : m.author === 'customer' ? 'Khách' : 'Hệ thống'
 
+// Yêu cầu hủy (ticket 03): mở form hủy đơn của M6a ngay tại đây; hủy xong thì yêu cầu tự đóng nên nạp lại.
+const canCancelPaid = computed(() => session.can('order.cancel_paid'))
+const cancelOrder = ref<AdminOrder | null>(null)
+const cancelBlocked = ref<string | null>(null)
+async function openCancel() {
+  cancelBlocked.value = null
+  try {
+    const order = AdminOrder.parse(await session.adminFetch(`/api/admin/orders/${request.value!.orderCode}`))
+    if (canRequestCancel(order) || order.fulfillmentStatus === 'returned') cancelOrder.value = order
+    else cancelBlocked.value = 'Đơn không còn hủy được (đã bàn giao, đã hủy hay chưa nhận tiền). Hãy trả lời khách.'
+  } catch (err) {
+    error.value = apiErrorMessage(err)
+  }
+}
+async function cancelled() {
+  cancelOrder.value = null
+  await load()
+}
+
 await load()
 if (canAssign.value) {
   try {
@@ -134,6 +160,31 @@ if (canAssign.value) {
             <div style="white-space: pre-line; font-size: 13px">{{ m.body }}</div>
             <SupportAttachments :attachments="m.attachments" />
           </div>
+        </div>
+
+        <div
+          v-if="request.kind === 'cancel' && request.orderCode && canCancelPaid && !closed"
+          class="admin-panel"
+          style="margin-bottom: 24px"
+          data-testid="admin-support-cancel"
+        >
+          <h2 class="admin-section-title">Khách xin hủy đơn #{{ request.orderCode }}</h2>
+          <p v-if="cancelBlocked" class="field-error-msg">{{ cancelBlocked }}</p>
+          <AdminCancelPaidForm
+            v-if="cancelOrder"
+            :order="cancelOrder"
+            @update="cancelled"
+            @close="cancelOrder = null"
+          />
+          <button
+            v-else
+            type="button"
+            class="btn btn-danger btn-sm"
+            data-testid="admin-support-open-cancel"
+            @click="openCancel"
+          >
+            Hủy đơn
+          </button>
         </div>
 
         <form v-if="canHandle && !closed" class="admin-panel" data-testid="admin-support-reply" @submit.prevent="send">

@@ -1,5 +1,9 @@
 import {
   ErrorCode,
+  canRequestCancel,
+  type FulfillmentStatus,
+  type OrderStatus,
+  type PaymentStatus,
   SUPPORT_CLOSED_STATUSES,
   SUPPORT_IMAGES_PER_MESSAGE,
   SUPPORT_IMAGES_PER_REQUEST,
@@ -162,8 +166,19 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
   const owner: Prisma.SupportRequestWhereInput = order
     ? { orderId: order.id }
     : { customerId: customer!.id, orderId: null }
-  if (order) await tx.$queryRaw`SELECT "id" FROM "order" WHERE "id" = ${order.id}::uuid FOR UPDATE`
-  else await tx.$queryRaw`SELECT "id" FROM "customer" WHERE "id" = ${customer!.id}::uuid FOR UPDATE`
+  if (input.kind !== 'other' && !order) throw invalidField('orderCode', 'Yêu cầu này cần gắn với một đơn')
+  if (order) {
+    const [locked] = await tx.$queryRaw<
+      { status: OrderStatus; paymentStatus: PaymentStatus; fulfillmentStatus: FulfillmentStatus }[]
+    >`SELECT "status"::text AS status, "payment_status"::text AS "paymentStatus",
+        "fulfillment_status"::text AS "fulfillmentStatus"
+      FROM "order" WHERE "id" = ${order.id}::uuid FOR UPDATE`
+    if (input.kind === 'cancel' && !canRequestCancel(locked!)) {
+      throw conflict(
+        'Chỉ gửi yêu cầu hủy được khi đơn đã thanh toán (hoặc đã cọc) và chưa giao cho đơn vị vận chuyển. Đơn chưa thanh toán thì bạn tự hủy được ở trang đơn; đơn đã giao đi thì gửi yêu cầu trả hàng sau khi nhận.',
+      )
+    }
+  } else await tx.$queryRaw`SELECT "id" FROM "customer" WHERE "id" = ${customer!.id}::uuid FOR UPDATE`
 
   const open = await tx.supportRequest.count({
     where: { ...owner, status: { notIn: [...SUPPORT_CLOSED_STATUSES] } },
@@ -422,4 +437,24 @@ export async function recordAttachment(
   if (total >= SUPPORT_IMAGES_PER_REQUEST) throw conflict(`Mỗi yêu cầu tối đa ${SUPPORT_IMAGES_PER_REQUEST} ảnh`)
   await tx.supportAttachment.create({ data: { requestId: request.id, messageId, ...image } })
   return request.id
+}
+
+/**
+ * Đơn vừa được hủy (`cancelPaidOrder`): mọi yêu cầu hủy đang mở của đơn thành `resolved` kèm một tin hệ thống, trong
+ * cùng transaction. Không gửi email: khách đã nhận email "Đơn đã hủy" (spec M6b ticket 03). Trả mã các yêu cầu đã đóng.
+ */
+export async function resolveCancelRequests(tx: DbClient, orderId: string) {
+  const open = await tx.supportRequest.findMany({
+    where: { orderId, kind: 'cancel', status: { notIn: [...SUPPORT_CLOSED_STATUSES] } },
+    select: { id: true, code: true },
+  })
+  const now = new Date()
+  for (const request of open) {
+    await tx.$queryRaw`SELECT "id" FROM "support_request" WHERE "id" = ${request.id}::uuid FOR UPDATE`
+    await tx.supportMessage.create({
+      data: { requestId: request.id, author: 'system', body: 'Đơn đã được hủy. Xem số tiền hoàn ở trang đơn hàng.' },
+    })
+    await tx.supportRequest.update({ where: { id: request.id }, data: { status: 'resolved', resolvedAt: now } })
+  }
+  return open.map((r) => r.code)
 }

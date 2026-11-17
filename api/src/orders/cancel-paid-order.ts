@@ -14,6 +14,7 @@ import { AppError, invalidField } from '../http/errors.ts'
 import type { CustomerMail } from '../jobs/jobs.ts'
 import { createRefund, refundTotals } from '../payments/refunds.ts'
 import { applyArrivals, planArrivals } from '../preorders/arrivals.ts'
+import { resolveCancelRequests } from '../support/support.ts'
 import { releaseOrderReservations } from './cancel-order.ts'
 import { vnd } from './format.ts'
 import { issueOrderLookupUrl, recordOrderEvent } from './orders.ts'
@@ -133,6 +134,17 @@ export async function cancelPaidOrder(
       ...(reallocated.length && { reallocated, arrivedOrderCodes }),
     },
   })
+  // Yêu cầu hủy của khách (M6b) xong cùng lúc với việc hủy.
+  const resolvedRequestCodes = await resolveCancelRequests(tx, orderId)
+  if (resolvedRequestCodes.length) {
+    await recordOrderEvent(
+      tx,
+      orderId,
+      'support_resolved',
+      { type: 'staff', staffId },
+      { requestCodes: resolvedRequestCodes },
+    )
+  }
   await queueCancelledEmail(tx, mail, order, input.cause, refundAmount, refundable)
   return order.code
 }

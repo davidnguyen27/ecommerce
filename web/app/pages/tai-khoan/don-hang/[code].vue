@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PayRemainderResult, PublicOrder } from '@ecommerce/shared'
+import { PayRemainderResult, PublicOrder, canRequestCancel } from '@ecommerce/shared'
 
 // Đơn trong tài khoản: phiên khách chỉ có ở trình duyệt nên đơn nạp sau khi mount, HTML từ server không có gì của đơn.
 const route = useRoute()
@@ -76,7 +76,12 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
         @cancel="cancel"
         @pay-remainder="payRemainder"
       />
-      <SupportRequests :client="supportClient" :order-code="Number(code)" class="mt-8" />
+      <SupportRequests
+        :client="supportClient"
+        :order-code="Number(code)"
+        :can-cancel="canRequestCancel(order)"
+        class="mt-8"
+      />
     </template>
   </main>
 </template>

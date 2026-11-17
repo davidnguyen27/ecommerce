@@ -1,17 +1,23 @@
 <script setup lang="ts">
-import type { PublicSupportSummary } from '@ecommerce/shared'
+import type { CreatableSupportKind, PublicSupportSummary } from '@ecommerce/shared'
 
 /**
  * Danh sách yêu cầu hỗ trợ của khách và form gửi yêu cầu mới (spec M6b). Dùng ở trang đơn (yêu cầu của đơn) và trang
  * tài khoản (mọi yêu cầu của khách). `orderCode` có ở trang đơn trong tài khoản để gắn yêu cầu vào đơn.
  */
-const props = defineProps<{ client: SupportClient; orderCode?: number; title?: string }>()
+const props = defineProps<{
+  client: SupportClient
+  orderCode?: number
+  title?: string
+  /** Đơn đang xem gửi được yêu cầu hủy (`canRequestCancel`): hiện loại "Hủy đơn" (spec M6b ticket 03). */
+  canCancel?: boolean
+}>()
 
 const items = ref<PublicSupportSummary[] | null>(null)
 const error = ref<string | null>(null)
 const open = ref(false)
 const sending = ref(false)
-const form = reactive({ subject: '', message: '' })
+const form = reactive({ kind: 'other' as CreatableSupportKind, subject: '', message: '' })
 const images = ref<File[]>([])
 // Yêu cầu đã tạo mà có ảnh gửi không được: vẫn mở được yêu cầu, báo ảnh nào lỗi.
 const createdLink = ref<string | null>(null)
@@ -31,7 +37,7 @@ async function submit() {
   error.value = null
   try {
     const created = await props.client.create({
-      kind: 'other',
+      kind: form.kind,
       subject: form.subject,
       message: form.message,
       ...(props.orderCode !== undefined && { orderCode: props.orderCode }),
@@ -68,6 +74,16 @@ async function submit() {
     </p>
 
     <form v-if="open" class="mt-4 space-y-4" data-testid="support-form" @submit.prevent="submit">
+      <label v-if="canCancel" class="field">
+        Bạn cần gì
+        <select v-model="form.kind" class="field-input" data-testid="support-kind">
+          <option value="other">Hỏi hoặc nhờ việc khác</option>
+          <option value="cancel">Hủy đơn đã thanh toán</option>
+        </select>
+      </label>
+      <p v-if="form.kind === 'cancel'" class="text-muted-foreground">
+        Cửa hàng sẽ hủy đơn và báo số tiền hoàn theo chính sách đã áp dụng cho đơn.
+      </p>
       <label class="field">
         Tiêu đề
         <input v-model="form.subject" class="field-input" maxlength="200" required data-testid="support-subject" />
