@@ -222,7 +222,9 @@ describe('tắt mã giảm giá', () => {
     expect(res.body).toMatchObject({ status: 'disabled', disabledAt: expect.any(String) })
 
     expect((await app.disable(voucher.id)).status).toBe(200)
-    expect((await app.audits()).map((a) => a.action)).toEqual(['voucher.disable', 'voucher.create'])
+    const audits = await app.audits()
+    expect(audits.map((a) => a.action)).toEqual(['voucher.disable', 'voucher.create'])
+    expect(audits[0]).toMatchObject({ before: { disabledAt: null }, after: { disabledAt: expect.any(String) } })
     expect((await app.update(voucher.id, { endsAt: at(90) })).status).toBe(409)
   })
 

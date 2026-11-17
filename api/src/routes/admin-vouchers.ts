@@ -20,11 +20,17 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, conflictField, isUniqueViolation } from '../http/errors.ts'
 import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
-import { loadVoucher, toVoucher, usedRedemptions, VOUCHER_INCLUDE, voucherStatusWhere } from '../vouchers/vouchers.ts'
+import {
+  loadVoucher,
+  toVoucher,
+  usedRedemptions,
+  VOUCHER_INCLUDE,
+  voucherNotFound as notFound,
+  voucherStatusWhere,
+} from '../vouchers/vouchers.ts'
 
 const VoucherParams = z.object({ id: z.uuid() })
 
-const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy mã giảm giá')
 const codeTaken = () => conflictField('code', 'Mã này đã tồn tại')
 
 /** Thương hiệu và danh mục của phạm vi phải tồn tại; lỗi theo từng phần tử để form chỉ đúng chỗ. */
@@ -50,21 +56,23 @@ const sorted = (ids: readonly string[]) => [...new Set(ids)].sort()
 /** Các trường sửa được của mã, ở dạng so sánh được: thời điểm ISO, danh sách đã sắp xếp. */
 type Draft = z.infer<typeof VoucherDraft>
 
+/** Bản sửa được của mã, lấy từ chính dạng response (`toVoucher`) để hai bên không chuyển đổi lệch nhau. */
 function draftOf(row: Prisma.VoucherGetPayload<{ include: typeof VOUCHER_INCLUDE }>): Draft {
+  const { brands, categories, ...v } = toVoucher(row, 0)
   return {
-    description: row.description,
-    kind: row.kind,
-    amount: row.amount === null ? null : Number(row.amount),
-    percent: row.percent,
-    maxDiscount: row.maxDiscount === null ? null : Number(row.maxDiscount),
-    minSubtotal: Number(row.minSubtotal),
-    startsAt: row.startsAt.toISOString(),
-    endsAt: row.endsAt.toISOString(),
-    saleTypes: [...row.saleTypes].sort(),
-    totalLimit: row.totalLimit,
-    perCustomerLimit: row.perCustomerLimit,
-    brandIds: sorted(row.brands.map((b) => b.brandId)),
-    categoryIds: sorted(row.categories.map((c) => c.categoryId)),
+    description: v.description,
+    kind: v.kind,
+    amount: v.amount,
+    percent: v.percent,
+    maxDiscount: v.maxDiscount,
+    minSubtotal: v.minSubtotal,
+    startsAt: v.startsAt,
+    endsAt: v.endsAt,
+    saleTypes: v.saleTypes,
+    totalLimit: v.totalLimit,
+    perCustomerLimit: v.perCustomerLimit,
+    brandIds: sorted(brands.map((b) => b.id)),
+    categoryIds: sorted(categories.map((c) => c.id)),
   }
 }
 
@@ -272,6 +280,7 @@ export function adminVoucherRoutes(prisma: Db) {
             action: 'voucher.disable',
             entityType: 'voucher',
             entityId: id,
+            before: { disabledAt: null },
             after: { disabledAt: disabledAt.toISOString() },
           })
         })

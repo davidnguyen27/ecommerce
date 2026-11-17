@@ -28,7 +28,7 @@ import { isoDay } from '../orders/format.ts'
 import { recordOrderEvent } from '../orders/orders.ts'
 import { checkPreorder } from '../preorders/check.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
-import { checkVoucher, requireVoucherAsSeen, toVoucherQuote, voucherSnapshot } from '../vouchers/apply.ts'
+import { applyVoucherToOrder, quoteVoucher, voucherSnapshot } from '../vouchers/apply.ts'
 
 const conflict = (change: PreorderChange) => {
   const messages: Record<PreorderChange['kind'], string> = {
@@ -69,13 +69,7 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
 
       let voucher: VoucherQuote | null = null
       if (input.voucherCode !== undefined) {
-        await enforceRateLimits(
-          prisma,
-          res,
-          [{ limit: RATE_LIMITS.voucherCheckPerIp, subject: String(req.ip) }],
-          'Bạn đã thử mã giảm giá quá nhiều lần, vui lòng thử lại sau',
-        )
-        const check = await checkVoucher(prisma, input.voucherCode, {
+        voucher = await quoteVoucher(prisma, req, res, input.voucherCode, {
           saleType: 'preorder',
           lines:
             variant && snapshot
@@ -91,13 +85,12 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
               : [],
           customer: { email: input.email, phone: input.phone },
         })
-        voucher = toVoucherQuote(check)
       }
       const discount = voucher?.applied ? voucher.discount : 0
-      /** Phí giao, tổng và tiền cọc khi tiền hàng được giảm `off` (spec M5: ngưỡng và cọc tính sau giảm). */
-      const amounts = (off: number) => {
+      /** Phí giao, tổng và tiền cọc khi tiền hàng được giảm `discount` (spec M5: ngưỡng và cọc tính sau giảm). */
+      const amounts = (discount: number) => {
         if (subtotal === null) return { shippingFee: null, total: null, depositAmount: null }
-        const goods = subtotal - off
+        const goods = subtotal - discount
         const shippingFee = input.provinceCode === undefined ? null : shippingFeeFor(config, input.provinceCode, goods)
         return {
           shippingFee,
@@ -194,25 +187,25 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
           const applied =
             input.voucherCode === undefined
               ? null
-              : requireVoucherAsSeen(
-                  await checkVoucher(tx, input.voucherCode, {
-                    saleType: 'preorder',
-                    lines: [
-                      {
-                        variantId: variant.id,
-                        brandId: found.snapshot!.brandId,
-                        categoryId: found.snapshot!.categoryId,
-                        price: variant.price,
-                        quantity: input.quantity,
-                      },
-                    ],
-                    customer: { email: address.email, phone: address.phone },
-                    lock: true,
-                  }),
-                  input.discount,
-                  subtotal + shippingFeeFor(config, address.provinceCode, subtotal),
-                  (voucher): PreorderConflictDetails => ({ voucher }),
-                )
+              : await applyVoucherToOrder(tx, input.voucherCode, {
+                  saleType: 'preorder',
+                  lines: [
+                    {
+                      variantId: variant.id,
+                      brandId: found.snapshot!.brandId,
+                      categoryId: found.snapshot!.categoryId,
+                      price: variant.price,
+                      quantity: input.quantity,
+                    },
+                  ],
+                  customer: { email: address.email, phone: address.phone },
+                  seenDiscount: input.discount,
+                  withoutVoucher: {
+                    totalWithoutVoucher: subtotal + shippingFeeFor(config, address.provinceCode, subtotal),
+                    depositAmountWithoutVoucher: depositFor(subtotal, campaign.depositPercent),
+                  },
+                  detailsOf: (voucher): PreorderConflictDetails => ({ voucher }),
+                })
           const discount = applied ? Number(applied.discount) : 0
           const shippingFee = shippingFeeFor(config, address.provinceCode, subtotal - discount)
           const total = subtotal - discount + shippingFee

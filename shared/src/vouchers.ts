@@ -1,11 +1,7 @@
 import { z } from 'zod'
 import { AuditActor } from './audit.ts'
-import { OrderKind, OrderStatus, PaymentStatus } from './orders.ts'
+import { OrderKind, OrderStatus, PaymentStatus, VoucherKind } from './orders.ts'
 import { PageQuery, pageOf } from './pagination.ts'
-
-/** Giảm số tiền cố định, hoặc giảm theo tỷ lệ có mức giảm tối đa (GLOSSARY "Mã giảm giá"). */
-export const VoucherKind = z.enum(['fixed', 'percent'])
-export type VoucherKind = z.infer<typeof VoucherKind>
 
 /** Sắp tới, đang chạy, hết hạn, đã tắt; tính từ thời hạn và thời điểm tắt, không lưu. */
 export const VoucherStatus = z.enum(['upcoming', 'active', 'expired', 'disabled'])
@@ -200,5 +196,7 @@ export const VoucherConflict = z.object({
   discount: z.number().nullable(),
   shortfall: z.number().optional(),
   totalWithoutVoucher: z.number(),
+  /** Chỉ khi đặt trước: tiền cọc khi không dùng mã, là số khách sẽ trả ngay nếu đặt tiếp không mã. */
+  depositAmountWithoutVoucher: z.number().optional(),
 })
 export type VoucherConflict = z.infer<typeof VoucherConflict>

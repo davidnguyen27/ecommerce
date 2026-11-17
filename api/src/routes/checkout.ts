@@ -27,15 +27,7 @@ import { imageRenditions } from '../media/images.ts'
 import { recordOrderEvent } from '../orders/orders.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
 import { enoughStockIds, reserveStock } from '../stock/stock.ts'
-import {
-  checkVoucher,
-  requireVoucherAsSeen,
-  toVoucherQuote,
-  voucherSnapshot,
-  type VoucherLine,
-} from '../vouchers/apply.ts'
-
-const VOUCHER_RATE_MESSAGE = 'Bạn đã thử mã giảm giá quá nhiều lần, vui lòng thử lại sau'
+import { applyVoucherToOrder, quoteVoucher, voucherSnapshot, type VoucherLine } from '../vouchers/apply.ts'
 
 /** Đặt mua của khách, không cần đăng nhập; kèm access token khách thì đơn gắn với tài khoản. */
 export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, orderExpiry }: AppDeps) {
@@ -71,12 +63,6 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
 
       let voucher: VoucherQuote | null = null
       if (input.voucherCode !== undefined) {
-        await enforceRateLimits(
-          prisma,
-          res,
-          [{ limit: RATE_LIMITS.voucherCheckPerIp, subject: String(req.ip) }],
-          VOUCHER_RATE_MESSAGE,
-        )
         // Chỉ các dòng mua được (còn bán, còn hàng) tính vào tiền hàng, như `subtotal`.
         const buyable = lines.flatMap(({ variantId, quantity, lineTotal, price }): VoucherLine[] => {
           const snapshot = variants.get(variantId)?.snapshot
@@ -84,12 +70,11 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
             ? []
             : [{ variantId, brandId: snapshot.brandId, categoryId: snapshot.categoryId, price, quantity }]
         })
-        const check = await checkVoucher(prisma, input.voucherCode, {
+        voucher = await quoteVoucher(prisma, req, res, input.voucherCode, {
           saleType: 'standard',
           lines: buyable,
           customer: { email: input.email, phone: input.phone },
         })
-        voucher = toVoucherQuote(check)
       }
       const discount = voucher?.applied ? voucher.discount : 0
       // Ngưỡng miễn phí giao so với tiền hàng sau giảm (spec M5).
@@ -205,23 +190,19 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
           const applied =
             input.voucherCode === undefined
               ? null
-              : await (async () => {
-                  const check = await checkVoucher(tx, input.voucherCode!, {
-                    saleType: 'standard',
-                    lines: lines.map(({ variantId, price, quantity }) => {
-                      const snapshot = variants.get(variantId)!.snapshot!
-                      return { variantId, brandId: snapshot.brandId, categoryId: snapshot.categoryId, price, quantity }
-                    }),
-                    customer: { email: address.email, phone: address.phone },
-                    lock: true,
-                  })
-                  return requireVoucherAsSeen(
-                    check,
-                    input.discount,
-                    subtotal + shippingFeeFor(config, address.provinceCode, subtotal),
-                    (voucher): CheckoutConflictDetails => ({ lines: [], voucher }),
-                  )
-                })()
+              : await applyVoucherToOrder(tx, input.voucherCode, {
+                  saleType: 'standard',
+                  lines: lines.map(({ variantId, price, quantity }) => {
+                    const snapshot = variants.get(variantId)!.snapshot!
+                    return { variantId, brandId: snapshot.brandId, categoryId: snapshot.categoryId, price, quantity }
+                  }),
+                  customer: { email: address.email, phone: address.phone },
+                  seenDiscount: input.discount,
+                  withoutVoucher: {
+                    totalWithoutVoucher: subtotal + shippingFeeFor(config, address.provinceCode, subtotal),
+                  },
+                  detailsOf: (voucher): CheckoutConflictDetails => ({ lines: [], voucher }),
+                })
           const discount = applied ? Number(applied.discount) : 0
           const lineDiscounts = new Map(applied?.lines.map((l) => [l.variantId, l.discount]))
           const shippingFee = shippingFeeFor(config, address.provinceCode, subtotal - discount)

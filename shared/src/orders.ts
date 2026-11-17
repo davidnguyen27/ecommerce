@@ -20,6 +20,13 @@ export const OrderKind = z.enum(['standard', 'preorder'])
 export type OrderKind = z.infer<typeof OrderKind>
 
 /**
+ * Giảm số tiền cố định, hoặc giảm theo tỷ lệ có mức giảm tối đa (GLOSSARY "Mã giảm giá"). Khai ở đây vì đơn chụp loại mã;
+ * `vouchers.ts` import file này.
+ */
+export const VoucherKind = z.enum(['fixed', 'percent'])
+export type VoucherKind = z.infer<typeof VoucherKind>
+
+/**
  * Phần đặt trước của đơn, chụp lúc đặt: mức cọc, tiền cọc, phần còn lại (gồm phí giao), thời gian giao dự kiến và số
  * ngày được trả phần còn lại sau khi hàng về.
  */
@@ -245,7 +252,7 @@ export const AdminOrder = PublicOrder.extend({
     .object({
       id: z.string(),
       code: z.string(),
-      kind: z.enum(['fixed', 'percent']),
+      kind: VoucherKind,
       amount: z.number().nullable(),
       percent: z.number().nullable(),
       maxDiscount: z.number().nullable(),

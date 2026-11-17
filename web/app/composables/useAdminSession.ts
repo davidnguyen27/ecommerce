@@ -37,6 +37,15 @@ function can(permission: Permission | readonly Permission[]): boolean {
   return anyOf.some((p) => profile.value?.permissions.includes(p) ?? false)
 }
 
+/**
+ * Mở được trang `to` của menu quản trị không: link, nút hay số liệu thuộc trang khác chỉ hiện khi mở được trang đó.
+ * Quyền lấy từ `ADMIN_MENU_ITEMS`, không khai lại tại chỗ (CODING_STANDARDS "Web").
+ */
+function canOpen(to: string): boolean {
+  const permission = ADMIN_MENU_ITEMS.find((item) => item.to === to)?.permission
+  return !permission || can(permission)
+}
+
 export function useAdminSession() {
   return {
     isLoggedIn: computed(() => tokens.accessToken.value !== null),
@@ -47,5 +56,6 @@ export function useAdminSession() {
     adminFetch,
     loadProfile,
     can,
+    canOpen,
   }
 }

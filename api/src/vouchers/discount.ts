@@ -55,6 +55,8 @@ export function computeDiscount(lines: readonly DiscountLine[], rule: DiscountRu
       ? rule.amount
       : min(floorToStep((scopeSubtotal * BigInt(rule.percent)) / 100n), rule.maxDiscount)
   const discount = min(raw, floorToStep((scopeSubtotal * CAP_PERCENT) / 100n))
+  // Làm tròn xuống 1.000 có thể ra 0 (tỷ lệ nhỏ trên tiền hàng nhỏ): đơn không được giảm gì thì không chiếm lượt.
+  if (discount === 0n) return { ok: false, reason: 'not_applicable' }
 
   // Chia theo tỷ lệ tiền hàng, làm tròn xuống tới đồng; phần lẻ vào dòng lớn nhất (bằng nhau thì dòng đầu).
   const shares = new Map(scoped.map(({ line, subtotal }) => [line.variantId, (discount * subtotal) / scopeSubtotal]))
