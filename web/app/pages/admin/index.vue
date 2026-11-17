@@ -17,10 +17,7 @@ const canAudit = session.can('audit.view')
 const canSeeProducts = canCatalog || canPrice
 
 // Lối tắt và số đếm lấy quyền từ menu nên chỉ hiện trang người dùng mở được.
-const canOpen = (to: string) => {
-  const permission = ADMIN_MENU_ITEMS.find((item) => item.to === to)?.permission
-  return !permission || session.can(permission)
-}
+const canOpen = session.canOpen
 
 const SHORTCUTS = [
   { to: '/admin/products', label: 'Sản phẩm & Biến thể' },

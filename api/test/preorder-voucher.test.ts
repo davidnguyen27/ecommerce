@@ -110,7 +110,14 @@ describe('đặt trước kèm mã', () => {
         })
       ).status,
     ).toBe(201)
-    const before = await app.prisma.order.count()
+    const orderCount = async () =>
+      (
+        await app.request
+          .get('/api/admin/orders')
+          .query({ status: 'all', paymentStatus: 'all', fulfillmentStatus: 'all' })
+          .set(bearer(app.token))
+      ).body.total as number
+    const before = await orderCount()
 
     const changed = await app.withVoucher({
       discount: 100_000,
@@ -118,7 +125,13 @@ describe('đặt trước kèm mã', () => {
     })
     expect(changed.status).toBe(409)
     expect(changed.body.error.details).toEqual({
-      voucher: { code: 'TET2027', reason: 'changed', discount: DISCOUNT, totalWithoutVoucher: 2_130_000 },
+      voucher: {
+        code: 'TET2027',
+        reason: 'changed',
+        discount: DISCOUNT,
+        totalWithoutVoucher: 2_130_000,
+        depositAmountWithoutVoucher: 630_000,
+      },
     })
     expect((await app.withVoucher()).body.error.details.voucher.reason).toBe('customer_limit')
     expect(
@@ -129,7 +142,7 @@ describe('đặt trước kèm mã', () => {
         })
       ).body.error.details.voucher.reason,
     ).toBe('exhausted')
-    expect(await app.prisma.order.count()).toBe(before)
+    expect(await orderCount()).toBe(before)
   })
 
   it('đổi giá thì 409 theo thay đổi của biến thể, chưa xét tới mã', async () => {

@@ -8,7 +8,6 @@ import {
   type CheckoutLineChange,
   type CheckoutQuoteRequest,
   type CheckoutRequest,
-  type VoucherConflict,
 } from '@ecommerce/shared'
 import { Truck } from 'lucide-vue-next'
 
@@ -20,10 +19,10 @@ const quoteError = ref<string | null>(null)
 const { form, invoice, invoiceOpen, acceptPrivacyPolicy, session, signedIn, wards, contactPayload, revealErrors } =
   useShippingForm()
 
-/** Mã khách đang áp; gửi kèm mọi lần báo giá để tiền giảm theo đúng giỏ và tỉnh/thành. */
-const voucherCode = ref<string | null>(null)
-/** 409 về mã lúc đặt: hiện hộp chọn đặt tiếp không mã hay quay lại. */
-const voucherConflict = ref<VoucherConflict | null>(null)
+const { voucherCode, voucherConflict, applyVoucher, removeVoucher } = useVoucherCode(
+  () => refreshQuote(),
+  () => [form.value.email, form.value.phone] as const,
+)
 
 let latest = 0
 async function refreshQuote() {
@@ -67,18 +66,6 @@ watch(
   },
   { deep: true },
 )
-
-function applyVoucher(code: string) {
-  voucherCode.value = code
-  voucherConflict.value = null
-  return refreshQuote()
-}
-
-function removeVoucher() {
-  voucherCode.value = null
-  voucherConflict.value = null
-  return refreshQuote()
-}
 
 /** Đặt tiếp không dùng mã sau khi mã không còn dùng được lúc đặt. */
 async function submitWithoutVoucher() {
@@ -295,35 +282,13 @@ useSeo({ title: 'Đặt mua', description: 'Thông tin nhận hàng và xác nh�
             </span>
           </label>
 
-          <div
+          <VoucherConflictBox
             v-if="voucherConflict"
-            class="mt-4 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm"
-            role="alertdialog"
-            aria-labelledby="voucher-conflict-title"
-            data-testid="voucher-conflict"
-          >
-            <p id="voucher-conflict-title" class="font-medium">
-              {{ voucherReasonText(voucherConflict.reason, voucherConflict.shortfall) }}
-              <template v-if="voucherConflict.discount !== null">
-                : giảm {{ formatVnd(voucherConflict.discount) }}</template
-              >
-            </p>
-            <p class="mt-1 text-muted-foreground">
-              Tổng phải trả khi không dùng mã: {{ formatVnd(voucherConflict.totalWithoutVoucher) }}.
-            </p>
-            <div class="mt-3 flex flex-wrap gap-2">
-              <button
-                v-if="voucherConflict.reason !== 'changed'"
-                type="button"
-                class="btn-primary h-9 px-4"
-                :disabled="submitting"
-                @click="submitWithoutVoucher"
-              >
-                Đặt không dùng mã
-              </button>
-              <button type="button" class="btn-outline h-9 px-4" @click="voucherConflict = null">Quay lại</button>
-            </div>
-          </div>
+            :conflict="voucherConflict"
+            :submitting="submitting"
+            @proceed="submitWithoutVoucher"
+            @back="voucherConflict = null"
+          />
           <p v-else-if="error" class="notice-error mt-4" role="alert">{{ error }}</p>
           <button type="submit" class="btn-primary mt-6 w-full" :disabled="!canSubmit">Đặt mua và thanh toán</button>
           <p class="mt-3 text-xs text-muted-foreground">

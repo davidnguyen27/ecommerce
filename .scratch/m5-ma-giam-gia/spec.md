@@ -87,8 +87,8 @@ Hàm này được test riêng như một module sâu: vào là các dòng, mã 
 
 ### Đặt mua và đặt trước
 
-- `POST /api/checkout/quote` và `POST /api/preorders/quote` nhận thêm `voucherCode` (tùy chọn), và email, số điện thoại (tùy chọn, để kiểm lượt mỗi khách). Trả thêm `voucher`: hoặc `{ code, discount, lines }` khi áp được, hoặc `{ code, reason, details }` khi không. Báo giá luôn trả tổng **khi không có mã** lẫn tổng **khi có mã** (nếu áp được), để trang hiện được cả hai. Lượt mỗi khách chỉ kiểm khi có email hoặc số điện thoại. Không ghi gì.
-- Lý do: `not_found`, `not_started`, `expired`, `disabled` (hiện cho khách như hết hạn), `exhausted`, `customer_limit`, `below_minimum`, `not_applicable`, `sale_type`.
+- `POST /api/checkout/quote` và `POST /api/preorders/quote` nhận thêm `voucherCode` (tùy chọn), và email, số điện thoại (tùy chọn, để kiểm lượt mỗi khách). Trả thêm `voucher`: hoặc `{ applied: true, code, discount, lines }` khi áp được, hoặc `{ applied: false, code, reason, shortfall? }` khi không (`shortfall` là tiền hàng còn thiếu khi chưa đạt đơn tối thiểu). Tiền giảm làm tròn ra 0 thì coi như mã không áp dụng (`not_applicable`), để đơn không chiếm lượt mà không được giảm. Báo giá luôn trả tổng **khi không có mã** lẫn tổng **khi có mã** (nếu áp được), để trang hiện được cả hai. Lượt mỗi khách chỉ kiểm khi có email hoặc số điện thoại. Không ghi gì.
+- Lý do: `not_found`, `not_started`, `expired`, `disabled` (hiện cho khách như hết hạn), `exhausted`, `customer_limit`, `below_minimum`, `not_applicable`, `sale_type`; lúc đặt có thêm `changed` (tiền giảm khác số khách đã thấy). 409 khi đặt trước kèm thêm tiền cọc khi không dùng mã (`depositAmountWithoutVoucher`).
 - `POST /api/checkout` và `POST /api/preorders` nhận thêm `voucherCode` và `discount` khách đã thấy. Trong transaction tạo đơn, **sau khi** khóa biến thể (và dòng đợt) như M3/M4:
   1. khóa dòng mã giảm giá `FOR UPDATE` (hai khách không cùng lấy được lượt cuối);
   2. kiểm toàn bộ điều kiện, tính lại tiền giảm;

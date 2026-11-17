@@ -14,11 +14,7 @@ const notice = ref<string | null>(null)
 const errors = ref<FieldError[]>([])
 const url = `/api/admin/vouchers/${String(route.params.id)}`
 
-// Link sang trang Đơn hàng chỉ khi mở được trang đó; quyền lấy từ menu, không khai lại tại chỗ.
-const canOpen = (to: string) => {
-  const permission = ADMIN_MENU_ITEMS.find((item) => item.to === to)?.permission
-  return !permission || session.can(permission)
-}
+const canOpen = session.canOpen
 
 const ORDERS_PAGE_SIZE = 20
 const orders = ref<VoucherOrderPage | null>(null)

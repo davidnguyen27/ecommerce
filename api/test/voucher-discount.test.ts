@@ -134,6 +134,15 @@ describe('phạm vi', () => {
   })
 })
 
+describe('tiền giảm bằng 0', () => {
+  it('làm tròn xuống 1.000 ra 0 thì mã không áp dụng, để đơn không chiếm lượt mà không được giảm', () => {
+    // 10% của 5.000 = 500 → 0.
+    expect(computeDiscount([line('a', 5_000)], percent(10, 500_000))).toEqual({ ok: false, reason: 'not_applicable' })
+    // Trần 50% của 1.500 = 750 → 0.
+    expect(computeDiscount([line('a', 1_500)], fixed(1_000))).toEqual({ ok: false, reason: 'not_applicable' })
+  })
+})
+
 describe('chia xuống dòng đơn', () => {
   it('chia theo tỷ lệ tiền hàng, phần lẻ vào dòng có tiền hàng lớn nhất', () => {
     // 100.000 chia 1:1:1 → 33.333 mỗi dòng, lẻ 1 đồng vào dòng lớn nhất (dòng b).

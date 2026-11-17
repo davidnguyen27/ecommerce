@@ -96,8 +96,10 @@ export function toVoucher(row: VoucherRow, used: number, now = new Date()): Vouc
   }
 }
 
+export const voucherNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy mã giảm giá')
+
 export async function loadVoucher(db: DbClient, id: string): Promise<Voucher> {
   const row = await db.voucher.findUnique({ where: { id }, include: VOUCHER_INCLUDE })
-  if (!row) throw new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy mã giảm giá')
+  if (!row) throw voucherNotFound()
   return toVoucher(row, (await usedRedemptions(db, [id])).get(id) ?? 0)
 }

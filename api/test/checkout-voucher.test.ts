@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { expireOverdueOrders } from '../src/orders/cancel-order.ts'
 import { ADDRESS, HA_NOI, shop } from './support/shop.ts'
 import { bearer } from './support/staff.ts'
 import { ipnParams, signedIpn } from './support/vnpay.ts'
@@ -42,7 +43,15 @@ async function voucherShop() {
     app.checkout({ voucherCode: 'tet2027', discount: 200_000, ...body })
   const view = (res: { body: { code: number; token: string } }) =>
     request.get(`/api/orders/${res.body.code}`).query({ token: res.body.token })
-  const orderCount = async () => (await app.prisma.order.count()) as number
+  /** Số đơn ở danh sách đơn của trang quản trị, mọi trạng thái; `voucherCode` lọc theo mã. */
+  const orderCount = async (voucherCode?: string) => {
+    const res = await request
+      .get('/api/admin/orders')
+      .query({ status: 'all', paymentStatus: 'all', fulfillmentStatus: 'all', ...(voucherCode && { voucherCode }) })
+      .set(bearer(token))
+    expect(res.status).toBe(200)
+    return res.body.total as number
+  }
   return { ...app, voucher, quote, order, view, orderCount }
 }
 
@@ -177,18 +186,11 @@ describe('đặt mua kèm mã giảm giá', () => {
       shippingFee: 30_000,
       total: 1_830_000,
     })
-    const stored = await app.prisma.order.findUniqueOrThrow({
-      where: { code: res.body.code },
-      include: { lines: true },
+    const stored = await app.request.get(`/api/admin/orders/${res.body.code}`).set(bearer(app.token))
+    expect(stored.body).toMatchObject({
+      voucher: { id, code: 'TET2027', kind: 'percent', percent: 10, maxDiscount: 500_000, amount: null },
+      lines: [{ discount: 200_000 }],
     })
-    expect(stored).toMatchObject({
-      voucherId: id,
-      voucherKind: 'percent',
-      voucherPercent: 10,
-      voucherMaxDiscount: 500_000n,
-      voucherAmount: null,
-    })
-    expect(stored.lines.map((l) => l.discount)).toEqual([200_000n])
     expect((await app.request.get(`/api/admin/vouchers/${id}`).set(bearer(app.token))).body.used).toBe(1)
   })
 
@@ -235,6 +237,9 @@ describe('đặt mua kèm mã giảm giá', () => {
 
     const same = await app.order({ address: { ...ADDRESS, email: 'moi@example.com', phone: '0910000002' } })
     expect(same.body.error.details.voucher.reason).toBe('customer_limit')
+    // Cùng email viết hoa khác, số điện thoại khác: vẫn là cùng một khách.
+    const sameEmail = await app.order({ address: { ...ADDRESS, email: 'KHACH2@Example.com', phone: '0919999999' } })
+    expect(sameEmail.body.error.details.voucher.reason).toBe('customer_limit')
     await app.request.post(`/api/admin/vouchers/${tet.id}/disable`).set(bearer(app.token))
     expect((await app.order()).body.error.details.voucher.reason).toBe('disabled')
     expect(await app.orderCount()).toBe(1)
@@ -258,7 +263,7 @@ describe('đặt mua kèm mã giảm giá', () => {
     const results = await Promise.all([app.order(otherCustomer(1)), app.order(otherCustomer(2))])
 
     expect(results.map((r) => r.status).sort()).toEqual([201, 409])
-    expect(await app.prisma.order.count({ where: { voucherCode: 'TET2027' } })).toBe(1)
+    expect(await app.orderCount('TET2027')).toBe(1)
   })
 
   it('hủy đơn chưa thanh toán thì trả lại lượt', async () => {
@@ -269,6 +274,18 @@ describe('đặt mua kèm mã giảm giá', () => {
 
     const cancel = await app.request.post(`/api/orders/${first.body.code}/cancel`).query({ token: first.body.token })
     expect(cancel.status).toBe(200)
+
+    expect((await app.order()).status).toBe(201)
+  })
+
+  it('đơn chưa trả hết hạn giữ hàng thì trả lại lượt', async () => {
+    const app = await voucherShop()
+    await app.voucher()
+    expect((await app.order()).status).toBe(201)
+    expect((await app.order()).body.error.details.voucher.reason).toBe('customer_limit')
+
+    // Job hết hạn không có endpoint: gọi thẳng hàm job với `now` sau hạn giữ hàng, rồi kiểm qua HTTP.
+    await expireOverdueOrders(app.expireDeps, new Date(Date.now() + 60 * 60_000))
 
     expect((await app.order()).status).toBe(201)
   })
@@ -293,5 +310,25 @@ describe('đặt mua kèm mã giảm giá', () => {
     )
     expect(mail.text).toContain('Mã giảm giá TET2027: -200.000 ₫')
     expect(mail.text).toContain('Tổng cộng: 1.830.000 ₫')
+  })
+})
+
+describe('ràng buộc trong DB', () => {
+  // Không có đường HTTP nào ghi được đơn sai: thử ghi thẳng bằng prisma để chắc check constraint chặn (CODING_STANDARDS,
+  // ngoại lệ "bất biến mà API hiện tại chưa chạm tới").
+  it('đơn không dùng mã (như đơn có từ trước M5) có tiền giảm 0; không ghi được tiền giảm thiếu mã hay tổng lệch', async () => {
+    const app = await voucherShop()
+    const res = await app.checkout()
+    expect(res.status).toBe(201)
+    expect((await app.view(res)).body).toMatchObject({ voucherCode: null, discount: 0, total: 2_030_000 })
+    const where = { code: res.body.code }
+
+    await expect(app.prisma.order.update({ where, data: { discount: 100_000n, total: 1_930_000n } })).rejects.toThrow(
+      /order_voucher_check/,
+    )
+    await expect(app.prisma.order.update({ where, data: { total: 1_000_000n } })).rejects.toThrow(/order_money_check/)
+    await expect(app.prisma.order.update({ where, data: { voucherCode: 'TET2027' } })).rejects.toThrow(
+      /order_voucher_check/,
+    )
   })
 })

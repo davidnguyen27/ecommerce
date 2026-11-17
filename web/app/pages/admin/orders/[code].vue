@@ -18,11 +18,7 @@ const notice = ref<string | null>(null)
 const busy = ref(false)
 
 const canFulfill = computed(() => session.can('order.fulfill'))
-// Link sang trang khác chỉ khi mở được trang đó; quyền lấy từ menu, không khai lại tại chỗ.
-const canOpen = (to: string) => {
-  const permission = ADMIN_MENU_ITEMS.find((item) => item.to === to)?.permission
-  return !permission || session.can(permission)
-}
+const canOpen = session.canOpen
 
 function setOrder(value: unknown) {
   order.value = AdminOrder.parse(value)

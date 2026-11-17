@@ -5,9 +5,11 @@ import {
   type VoucherQuote,
   type VoucherReason,
 } from '@ecommerce/shared'
+import type { Request, Response } from 'express'
 import type { DbClient } from '../db.ts'
 import type { Voucher } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
+import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { computeDiscount, type DiscountLine, type DiscountRule } from './discount.ts'
 import { customerRedemptions, usedRedemptions, voucherStatus } from './vouchers.ts'
 
@@ -102,8 +104,68 @@ export async function checkVoucher(
   return { ok: true, voucher: row, discount: result.discount, lines: result.lines }
 }
 
+type VoucherInput = {
+  saleType: OrderKind
+  lines: readonly VoucherLine[]
+  customer: { email?: string | null; phone?: string | null }
+}
+
+/**
+ * Báo giá kèm mã (đặt mua và đặt trước): tính một lần vào giới hạn chống dò mã theo IP (429 khi vượt), rồi kiểm mã và trả
+ * kết quả như khách thấy. Không ghi gì ngoài bộ đếm tần suất.
+ */
+export async function quoteVoucher(
+  db: DbClient,
+  req: Request,
+  res: Response,
+  code: string,
+  input: VoucherInput,
+): Promise<VoucherQuote> {
+  await enforceRateLimits(
+    db,
+    res,
+    [{ limit: RATE_LIMITS.voucherCheckPerIp, subject: String(req.ip) }],
+    'Bạn đã thử mã giảm giá quá nhiều lần, vui lòng thử lại sau',
+  )
+  return toVoucherQuote(await checkVoucher(db, code, input))
+}
+
+/**
+ * Lúc tạo đơn: khóa dòng mã, kiểm lại toàn bộ và trả kết quả khi mã áp được với đúng tiền giảm khách đã thấy. Ngược lại
+ * ném 409 kèm `details` do `detailsOf` dựng từ `VoucherConflict` (lý do, tiền giảm mới, các khoản khi không dùng mã).
+ * Không có gì được ghi. Gọi sau khi đã khóa biến thể (và dòng suất của đợt), theo cùng thứ tự khóa ở mọi nơi.
+ */
+export async function applyVoucherToOrder(
+  tx: DbClient,
+  code: string,
+  input: VoucherInput & {
+    seenDiscount: number
+    withoutVoucher: Pick<VoucherConflict, 'totalWithoutVoucher' | 'depositAmountWithoutVoucher'>
+    detailsOf: (voucher: VoucherConflict) => Record<string, unknown>
+  },
+): Promise<Extract<VoucherCheck, { ok: true }>> {
+  const check = await checkVoucher(tx, code, { ...input, lock: true })
+  if (check.ok && Number(check.discount) === input.seenDiscount) return check
+  const voucher: VoucherConflict = {
+    code: check.ok ? check.voucher.code : check.code,
+    reason: check.ok ? 'changed' : check.reason,
+    discount: check.ok ? Number(check.discount) : null,
+    ...(!check.ok && check.shortfall !== undefined && { shortfall: Number(check.shortfall) }),
+    ...input.withoutVoucher,
+  }
+  throw new AppError(
+    409,
+    ErrorCode.CONFLICT,
+    check.ok
+      ? 'Tiền giảm của mã đã thay đổi, hãy xem lại trước khi đặt'
+      : 'Mã giảm giá không còn dùng được cho đơn này',
+    undefined,
+    input.detailsOf(voucher),
+  )
+}
+
 /** Kết quả kiểm mã như báo giá trả cho khách. */
-export function toVoucherQuote(check: VoucherCheck): VoucherQuote {
+function toVoucherQuote(check: VoucherCheck): VoucherQuote {
   return check.ok
     ? {
         applied: true,
@@ -117,35 +179,6 @@ export function toVoucherQuote(check: VoucherCheck): VoucherQuote {
         reason: check.reason,
         ...(check.shortfall !== undefined && { shortfall: Number(check.shortfall) }),
       }
-}
-
-/**
- * Lúc tạo đơn: trả kết quả khi mã áp được với đúng tiền giảm khách đã thấy; ngược lại ném 409 kèm `details` do
- * `detailsOf` dựng từ `VoucherConflict` (lý do, tiền giảm mới, tổng khi không dùng mã). Không có gì được ghi.
- */
-export function requireVoucherAsSeen(
-  check: VoucherCheck,
-  seenDiscount: number,
-  totalWithoutVoucher: number,
-  detailsOf: (voucher: VoucherConflict) => Record<string, unknown>,
-): Extract<VoucherCheck, { ok: true }> {
-  if (check.ok && Number(check.discount) === seenDiscount) return check
-  const voucher: VoucherConflict = {
-    code: check.ok ? check.voucher.code : check.code,
-    reason: check.ok ? 'changed' : check.reason,
-    discount: check.ok ? Number(check.discount) : null,
-    ...(!check.ok && check.shortfall !== undefined && { shortfall: Number(check.shortfall) }),
-    totalWithoutVoucher,
-  }
-  throw new AppError(
-    409,
-    ErrorCode.CONFLICT,
-    check.ok
-      ? 'Tiền giảm của mã đã thay đổi, hãy xem lại trước khi đặt'
-      : 'Mã giảm giá không còn dùng được cho đơn này',
-    undefined,
-    detailsOf(voucher),
-  )
 }
 
 /** Các cột chụp mã vào đơn (check `order_voucher_check`). */
