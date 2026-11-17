@@ -18,13 +18,12 @@ const notice = ref<string | null>(null)
 const busy = ref(false)
 
 const canFulfill = computed(() => session.can('order.fulfill'))
-// Hủy đơn đã nhận tiền (M6a): đơn đang xử lý, đã trả đủ hoặc đã cọc, chưa bàn giao. Đơn đặt trước làm ở ticket 03.
+// Hủy đơn đã nhận tiền (M6a): đơn đang xử lý, đã trả đủ hoặc đã cọc, chưa bàn giao.
 const canCancelPaid = computed(() => {
   const o = order.value
   return (
     session.can('order.cancel_paid') &&
     o !== null &&
-    o.kind === 'standard' &&
     o.status === 'processing' &&
     (o.paymentStatus === 'paid' || o.paymentStatus === 'deposit_paid') &&
     (o.fulfillmentStatus === 'not_prepared' || o.fulfillmentStatus === 'preparing')

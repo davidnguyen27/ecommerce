@@ -4,6 +4,7 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
 import { createRefund, refundTotals } from '../payments/refunds.ts'
+import { applyArrivals, planArrivals } from '../preorders/arrivals.ts'
 import { releaseOrderReservations } from './cancel-order.ts'
 import { vnd } from './format.ts'
 import { issueOrderLookupUrl, recordOrderEvent } from './orders.ts'
@@ -51,11 +52,6 @@ export async function cancelPaidOrder(
   if (!['not_prepared', 'preparing'].includes(locked.fulfillmentStatus)) {
     throw conflict('Đơn đã bàn giao vận chuyển, không hủy được')
   }
-  if (locked.kind === 'preorder') {
-    // Hàng đặt trước đã về phải chia lại cho đơn chờ kế tiếp (ADR 0013): ticket 03.
-    throw conflict('Chưa hủy được đơn đặt trước')
-  }
-
   const { refundable } = await refundTotals(tx, orderId)
   const refundAmount = BigInt(input.refundAmount)
   const note = input.note?.trim() || null
@@ -69,6 +65,15 @@ export async function cancelPaidOrder(
     throw invalidField('note', 'Hoàn ít hơn số còn hoàn được thì cần ghi lý do')
   }
 
+  // Hàng đặt trước đang giữ cho đơn (đã về đủ hay mới về một phần) đi tiếp cho đơn chờ kế tiếp theo thứ tự cọc (ADR 0013),
+  // nên nhớ số đã nhả trước khi nhả.
+  const released =
+    locked.kind === 'preorder'
+      ? await tx.orderLine.findMany({
+          where: { orderId, reservedQuantity: { gt: 0 } },
+          select: { variantId: true, reservedQuantity: true },
+        })
+      : []
   await releaseOrderReservations(tx, orderId)
   const order = await tx.order.update({
     where: { id: orderId },
@@ -87,6 +92,18 @@ export async function cancelPaidOrder(
     'cancelled',
     { type: 'staff', staffId },
     { reason: 'staff', cause: input.cause, refundAmount: Number(refundAmount) },
+  )
+  // Sau khi đơn đã `cancelled`: `planArrivals` chỉ chọn đơn đặt trước đang chờ, nên không chia lại cho chính đơn này.
+  const plans = released.length
+    ? await planArrivals(
+        tx,
+        released.map((l) => ({ variantId: l.variantId, quantity: l.reservedQuantity })),
+        { lock: true },
+      )
+    : []
+  const arrivedOrderCodes = plans.length ? await applyArrivals(tx, mail, plans, { fromOrderCode: order.code }) : []
+  const reallocated = plans.flatMap((p) =>
+    p.allocations.map((a) => ({ orderCode: a.orderCode, variantId: p.variantId, quantity: a.take })),
   )
   const refund =
     refundAmount > 0n
@@ -110,25 +127,34 @@ export async function cancelPaidOrder(
       cancelNote: note,
       refundAmount: Number(refundAmount),
       refundId: refund?.id ?? null,
+      ...(reallocated.length && { reallocated, arrivedOrderCodes }),
     },
   })
-  await queueCancelledEmail(tx, mail, order, input.cause, refundAmount)
+  await queueCancelledEmail(tx, mail, order, input.cause, refundAmount, refundable)
   return order.code
 }
 
-/** Email "Đơn đã hủy": lý do theo cách nói với khách, số tiền sẽ hoàn (hoặc không hoàn), link tra cứu có token mới. */
+/**
+ * Email "Đơn đã hủy": lý do theo cách nói với khách, số tiền sẽ hoàn, phần không hoàn (mất cọc, khấu trừ) kèm nhắc chính
+ * sách đã áp dụng cho đơn, và link tra cứu có token mới. `refundable` là số còn hoàn được lúc hủy.
+ */
 async function queueCancelledEmail(
   tx: Prisma.TransactionClient,
   { emails, siteUrl }: CancelPaidMail,
-  order: { id: string; code: number; email: string; recipientName: string },
+  order: { id: string; code: number; kind: string; email: string; recipientName: string },
   cause: OrderCancelCause,
   refundAmount: bigint,
+  refundable: bigint,
 ) {
   const link = await issueOrderLookupUrl(tx, siteUrl, order)
-  const refundText =
+  const policy = order.kind === 'preorder' ? 'chính sách đặt trước' : 'chính sách'
+  const kept = refundable - refundAmount
+  const refundText = [
     refundAmount > 0n
       ? `Chúng tôi sẽ hoàn ${vnd(refundAmount)} cho bạn và gửi email khi tiền đã được chuyển.`
-      : 'Đơn này không được hoàn tiền theo chính sách đã áp dụng cho đơn.'
+      : `Đơn này không được hoàn tiền theo ${policy} đã áp dụng cho đơn.`,
+    ...(refundAmount > 0n && kept > 0n ? [`Phần không hoàn: ${vnd(kept)}, theo ${policy} đã áp dụng cho đơn.`] : []),
+  ]
   // Bản nháp, chờ chủ doanh nghiệp duyệt nội dung.
   await emails.sendEmail(tx, {
     to: order.email,
@@ -137,7 +163,7 @@ async function queueCancelledEmail(
       `Chào ${order.recipientName},`,
       '',
       `Đơn hàng #${order.code} đã bị hủy vì ${CAUSE_FOR_CUSTOMER[cause]}.`,
-      refundText,
+      ...refundText,
       '',
       `Xem đơn hàng: ${link}`,
       '',

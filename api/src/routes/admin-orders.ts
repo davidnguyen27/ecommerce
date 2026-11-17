@@ -147,6 +147,9 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       const order = await findOrder(code)
       const staffId = currentStaff(req).id
       await audited(prisma, req, (tx, audit) => cancelPaidOrder(tx, mail, audit, order.id, staffId, input))
+      // Đơn đặt trước có thể còn link trả phần còn lại: hủy sau khi commit như hủy đơn chưa trả; tiền về sau đó thành
+      // cần đối soát. Link đã trả xong của đơn hàng sẵn hủy cũng không sao: lỗi chỉ được log.
+      await cancelPaymentLinks({ payments, logger: req.log }, order)
       const body: AdminOrder = await loadAdminOrder(prisma, storage, code)
       res.json(body)
     })
