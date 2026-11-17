@@ -12,8 +12,10 @@ type Filters = Pick<AdminOrderQuery, 'status' | 'paymentStatus' | 'fulfillmentSt
   remainderOverdue: boolean
   /** Đơn đã dùng mã giảm giá này; `''` là không lọc. */
   voucherCode: string
+  /** Chỉ đơn có hoàn tiền chưa xong (chờ hoàn hoặc cổng đang xử lý). */
+  refundOpen: boolean
 }
-const ANY_ORDER = { kind: 'all', campaignId: '', remainderOverdue: false, voucherCode: '' } as const
+const ANY_ORDER = { kind: 'all', campaignId: '', remainderOverdue: false, voucherCode: '', refundOpen: false } as const
 // Mặc định giống API: hàng chờ soạn, đơn cũ trước để soạn theo thứ tự đặt.
 const TO_PREPARE: Filters = {
   status: 'processing',
@@ -38,17 +40,20 @@ const result = ref<AdminOrderPage | null>(null)
 const error = ref<string | null>(null)
 // Trang chi tiết đợt và "Đặt trước cần xử lý" mở danh sách này với `?campaignId=` hay `?remainderOverdue=true`.
 const fromLink = typeof route.query.campaignId === 'string' || route.query.remainderOverdue === 'true'
+// `?refund=open` mở thẳng danh sách đơn có hoàn tiền chưa xong, cũ trước.
 const filters = reactive<Filters>(
-  typeof route.query.voucherCode === 'string'
-    ? { ...ALL, voucherCode: route.query.voucherCode }
-    : fromLink
-      ? {
-          ...ALL,
-          kind: 'preorder',
-          campaignId: typeof route.query.campaignId === 'string' ? route.query.campaignId : '',
-          remainderOverdue: route.query.remainderOverdue === 'true',
-        }
-      : { ...TO_PREPARE },
+  route.query.refund === 'open'
+    ? { ...ALL, sort: 'oldest', refundOpen: true }
+    : typeof route.query.voucherCode === 'string'
+      ? { ...ALL, voucherCode: route.query.voucherCode }
+      : fromLink
+        ? {
+            ...ALL,
+            kind: 'preorder',
+            campaignId: typeof route.query.campaignId === 'string' ? route.query.campaignId : '',
+            remainderOverdue: route.query.remainderOverdue === 'true',
+          }
+        : { ...TO_PREPARE },
 )
 const page = ref(1)
 
@@ -59,6 +64,8 @@ async function load() {
       await session.adminFetch('/api/admin/orders', {
         query: {
           ...filters,
+          refundOpen: undefined,
+          refund: filters.refundOpen ? 'open' : undefined,
           q: filters.q.trim() || undefined,
           campaignId: filters.campaignId || undefined,
           voucherCode: filters.voucherCode.trim() || undefined,
@@ -182,6 +189,10 @@ await load()
           <label style="display: flex; gap: 6px; align-items: center">
             <input v-model="filters.remainderOverdue" type="checkbox" />
             Quá hạn trả phần còn lại
+          </label>
+          <label style="display: flex; gap: 6px; align-items: center">
+            <input v-model="filters.refundOpen" type="checkbox" data-testid="orders-refund-open" />
+            Hoàn tiền chưa xong
           </label>
           <span v-if="filters.campaignId" data-testid="orders-campaign-filter">
             Đơn của một đợt đặt trước ·

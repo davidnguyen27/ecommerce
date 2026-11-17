@@ -19,8 +19,12 @@ export const Permission = z.enum([
   'order.view',
   /** Xử lý đơn: chuẩn bị, bàn giao, đã giao, giao thất bại, hủy đơn chưa thanh toán. */
   'order.fulfill',
-  /** Đối soát tiền: khôi phục đơn, đóng mục đã xử lý ngoài hệ thống. */
+  /** Đối soát tiền: khôi phục đơn, đóng mục đã xử lý ngoài hệ thống, giải quyết bằng hoàn tiền. */
   'payment.reconcile',
+  /** Hủy đơn đã nhận tiền (đã trả đủ hoặc đã cọc) và đề xuất số tiền hoàn (M6a). */
+  'order.cancel_paid',
+  /** Thực hiện hoàn tiền: ghi chuyển khoản, hoàn qua cổng, chốt kết quả, tạo lại khoản thất bại (ADR 0014). */
+  'payment.refund',
   /** Mở, sửa, đóng đợt đặt trước; cập nhật tiến độ nhập hàng và thời gian giao dự kiến. */
   'preorder.manage',
   /** Tạo, sửa, tắt mã giảm giá. */
