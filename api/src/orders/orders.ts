@@ -39,8 +39,14 @@ export type OrderEventKind =
   | 'handed_over'
   /** Kế toán khôi phục đơn đã hủy khi tiền về đủ (đối soát). */
   | 'restored'
-  /** Kế toán đóng mục cần đối soát vì đã xử lý ngoài hệ thống. */
+  /** Kế toán đóng mục cần đối soát: đã xử lý ngoài hệ thống, hoặc bằng hoàn tiền (`data.resolution = refunded`). */
   | 'reconciliation_resolved'
+  /** Một khoản hoàn được tạo, chờ kế toán thực hiện (`data`: `refundId`, `amount`, `origin`; ADR 0014). */
+  | 'refund_created'
+  /** Khoản hoàn đã xong: thủ công, cổng báo thành công, hoặc kế toán chốt. */
+  | 'refund_succeeded'
+  /** Khoản hoàn thất bại; tạo lại được. */
+  | 'refund_failed'
   | 'delivered'
   | 'delivery_failed'
 

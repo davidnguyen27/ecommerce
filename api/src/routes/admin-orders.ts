@@ -72,6 +72,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
         }),
         ...(query.q && searchWhere(query.q)),
         ...(query.voucherCode && { voucherCode: query.voucherCode.toUpperCase() }),
+        ...(query.refund === 'open' && { refunds: { some: { status: { in: ['pending', 'processing'] } } } }),
       }
       const direction = query.sort === 'oldest' ? 'asc' : 'desc'
       const [orders, total] = await Promise.all([

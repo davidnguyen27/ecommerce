@@ -7,6 +7,8 @@ import type {
   PaymentStatus,
   ReconciliationReason,
   ReconciliationResolution,
+  RefundOrigin,
+  RefundStatus,
 } from '@ecommerce/shared'
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
@@ -58,7 +60,10 @@ const ORDER_EVENT_LABELS: Record<string, string> = {
   payment_flagged: 'Khoản tiền cần đối soát',
   cancelled: 'Hủy đơn',
   restored: 'Khôi phục đơn sau đối soát',
-  reconciliation_resolved: 'Đối soát: đã xử lý ngoài hệ thống',
+  reconciliation_resolved: 'Đóng mục cần đối soát',
+  refund_created: 'Tạo khoản hoàn tiền',
+  refund_succeeded: 'Đã hoàn tiền',
+  refund_failed: 'Hoàn tiền thất bại',
   preparing: 'Bắt đầu chuẩn bị',
   handed_over: 'Bàn giao vận chuyển',
   delivered: 'Đã giao',
@@ -83,10 +88,25 @@ export const RECONCILIATION_RESOLUTION_LABELS: Record<ReconciliationResolution, 
   restored: 'Đã khôi phục đơn',
   handled_externally: 'Đã xử lý ngoài hệ thống',
   settled_by_payment: 'Đã đủ tiền nhờ khoản sau',
+  refunded: 'Đã tạo khoản hoàn tiền',
 }
 
 export const RECONCILIATION_REASON_LABELS: Record<ReconciliationReason, string> = {
   amount_mismatch: 'Lệch số tiền',
   paid_after_cancel: 'Tiền về sau khi hủy',
   extra_payment: 'Trả thừa',
+}
+
+/** Trạng thái một khoản hoàn (ADR 0014). */
+export const REFUND_STATUS_LABELS: Record<RefundStatus, string> = {
+  pending: 'Chờ hoàn',
+  processing: 'Cổng đang xử lý',
+  succeeded: 'Đã hoàn',
+  failed: 'Thất bại',
+}
+
+export const REFUND_ORIGIN_LABELS: Record<RefundOrigin, string> = {
+  cancellation: 'Hủy đơn',
+  reconciliation: 'Đối soát',
+  retry: 'Tạo lại',
 }

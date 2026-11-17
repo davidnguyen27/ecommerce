@@ -21,9 +21,25 @@ export async function loadAdminOrder(db: DbClient, storage: Storage, code: strin
         include: { staff: { select: ACTOR_SELECT }, customer: { select: { id: true, email: true } } },
         orderBy: { seq: 'asc' },
       },
+      refunds: {
+        include: {
+          createdBy: { select: ACTOR_SELECT },
+          executedBy: { select: ACTOR_SELECT },
+          settledBy: { select: ACTOR_SELECT },
+          retriedBy: { select: { id: true } },
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      },
     },
   })
   if (!order) throw orderNotFound()
+
+  // ADR 0014: đã nhận tính từ giao dịch, đã hoàn và đang hoàn tính từ các khoản hoàn; trạng thái thanh toán không đổi.
+  const received = order.paymentTransactions.reduce((sum, t) => sum + Number(t.amount), 0)
+  const sumRefunds = (...statuses: string[]) =>
+    order.refunds.filter((r) => statuses.includes(r.status)).reduce((sum, r) => sum + Number(r.amount), 0)
+  const refunded = sumRefunds('succeeded')
+  const refunding = sumRefunds('pending', 'processing')
 
   const eventActor = (event: (typeof order.events)[number]): OrderHistoryActor => {
     if (event.actor === 'staff') return { type: 'staff', ...event.staff! }
@@ -70,6 +86,30 @@ export async function loadAdminOrder(db: DbClient, storage: Storage, code: strin
         resolvedBy: t.reconciliationItem.resolvedBy,
         resolvedAt: t.reconciliationItem.resolvedAt?.toISOString() ?? null,
       },
+    })),
+    received,
+    refunded,
+    refunding,
+    refundable: received - refunded - refunding,
+    refunds: order.refunds.map((r) => ({
+      id: r.id,
+      amount: Number(r.amount),
+      origin: r.origin,
+      status: r.status,
+      method: r.method,
+      reconciliationItemId: r.reconciliationItemId,
+      retryOfId: r.retryOfId,
+      retriedById: r.retriedBy?.id ?? null,
+      paymentTransactionId: r.paymentTransactionId,
+      bankReference: r.bankReference,
+      transferredOn: r.transferredOn?.toISOString().slice(0, 10) ?? null,
+      note: r.note,
+      createdBy: r.createdBy,
+      createdAt: r.createdAt.toISOString(),
+      executedBy: r.executedBy,
+      executedAt: r.executedAt?.toISOString() ?? null,
+      settledBy: r.settledBy,
+      completedAt: r.completedAt?.toISOString() ?? null,
     })),
     history,
   }

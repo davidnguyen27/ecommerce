@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { AttributeValues } from './attributes.ts'
 import { PageQuery, pageOf } from './pagination.ts'
 import { PublicImage } from './products.ts'
+import { AdminRefund } from './refunds.ts'
 
 /** Trạng thái đơn hàng (GLOSSARY "Trạng thái đơn hàng"). */
 export const OrderStatus = z.enum(['pending_payment', 'processing', 'completed', 'cancelled'])
@@ -161,6 +162,8 @@ export const AdminOrderQuery = PageQuery.extend({
   remainderOverdue: z.stringbool().optional(),
   /** Đơn đã dùng mã giảm giá này (không phân biệt hoa thường). */
   voucherCode: z.string().trim().max(40).optional(),
+  /** `open`: chỉ đơn có hoàn tiền chưa xong (chờ hoàn hoặc cổng đang xử lý). */
+  refund: z.literal('open').optional(),
   q: z.string().trim().max(200).optional(),
   sort: z.enum(['oldest', 'newest']).default('oldest'),
 })
@@ -193,10 +196,11 @@ export const ReconciliationStatus = z.enum(['open', 'resolved'])
 export type ReconciliationStatus = z.infer<typeof ReconciliationStatus>
 
 /**
- * Cách đóng mục cần đối soát: khôi phục đơn, đã xử lý ngoài hệ thống (hoàn tiền tay…), hoặc hệ thống tự đóng mục lệch
- * tiền khi khoản sau làm đơn đủ tiền (`settled_by_payment`, không có người đóng).
+ * Cách đóng mục cần đối soát: khôi phục đơn, đã xử lý ngoài hệ thống, tạo một hoàn tiền bằng số tiền của mục
+ * (`refunded`), hoặc hệ thống tự đóng mục lệch tiền khi khoản sau làm đơn đủ tiền (`settled_by_payment`, không có
+ * người đóng).
  */
-export const ReconciliationResolution = z.enum(['restored', 'handled_externally', 'settled_by_payment'])
+export const ReconciliationResolution = z.enum(['restored', 'handled_externally', 'settled_by_payment', 'refunded'])
 export type ReconciliationResolution = z.infer<typeof ReconciliationResolution>
 
 /** Mục cần đối soát của một khoản tiền; `resolution`, `resolvedBy`, `resolvedAt` có khi đã đóng. */
@@ -261,6 +265,13 @@ export const AdminOrder = PublicOrder.extend({
   /** Tiền hàng sau giảm, là số tiền ngưỡng miễn phí giao và tiền cọc tính trên đó. */
   subtotalAfterDiscount: z.number(),
   payments: z.array(AdminPaymentTransaction),
+  /** VND: tổng mọi khoản đã về, tổng đã hoàn xong, tổng đang hoàn (chờ hoàn hoặc cổng đang xử lý); ADR 0014. */
+  received: z.number(),
+  refunded: z.number(),
+  refunding: z.number(),
+  /** Còn hoàn được: đã nhận trừ mọi khoản hoàn chưa thất bại. */
+  refundable: z.number(),
+  refunds: z.array(AdminRefund),
   history: z.array(OrderHistoryEntry),
 })
 export type AdminOrder = z.infer<typeof AdminOrder>

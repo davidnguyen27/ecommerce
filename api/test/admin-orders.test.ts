@@ -141,7 +141,7 @@ describe('chi tiết đơn ở trang quản trị', () => {
 })
 
 describe('quyền xem đơn', () => {
-  it('mọi vai trò có order.view; chỉ owner và thủ kho có order.fulfill', async () => {
+  it('mọi vai trò có order.view; chỉ owner và thủ kho có order.fulfill; bán hàng hủy được đơn đã nhận tiền', async () => {
     const { request, token } = await orders()
     const perms = async (role: 'sales' | 'warehouse' | 'accountant') => {
       const staff = await createStaff(request, token, [role], `${role}@example.com`)
@@ -149,7 +149,7 @@ describe('quyền xem đơn', () => {
       return (me.body.permissions as string[]).filter((p) => p.startsWith('order.'))
     }
 
-    expect(await perms('sales')).toEqual(['order.view'])
+    expect(await perms('sales')).toEqual(['order.view', 'order.cancel_paid'])
     expect(await perms('accountant')).toEqual(['order.view'])
     expect(await perms('warehouse')).toEqual(['order.view', 'order.fulfill'])
   })
