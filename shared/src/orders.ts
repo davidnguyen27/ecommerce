@@ -380,3 +380,19 @@ export const CancelPaidOrderRequest = z.object({
   note: z.string().trim().max(2000).optional(),
 })
 export type CancelPaidOrderRequest = z.input<typeof CancelPaidOrderRequest>
+
+/**
+ * Khách gửi được yêu cầu hủy đơn (spec M6b ticket 03): đơn đang xử lý, đã trả đủ hoặc đã cọc, chưa bàn giao vận chuyển.
+ * Đơn chưa trả thì khách tự hủy bằng nút sẵn có; đã bàn giao thì chỉ còn trả hàng sau khi nhận.
+ */
+export function canRequestCancel(order: {
+  status: OrderStatus
+  paymentStatus: PaymentStatus
+  fulfillmentStatus: FulfillmentStatus
+}) {
+  return (
+    order.status === 'processing' &&
+    (order.paymentStatus === 'paid' || order.paymentStatus === 'deposit_paid') &&
+    (order.fulfillmentStatus === 'not_prepared' || order.fulfillmentStatus === 'preparing')
+  )
+}

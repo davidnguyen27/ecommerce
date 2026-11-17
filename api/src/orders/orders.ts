@@ -55,6 +55,8 @@ export type OrderEventKind =
   | 'returned_to_stock'
   /** Giao lại từ kho: giữ hàng lại cho đơn, quay về chưa chuẩn bị. */
   | 'restocked_for_redelivery'
+  /** Hủy đơn đóng các yêu cầu hủy của khách (`data.requestCodes`; M6b). */
+  | 'support_resolved'
 
 /** Ai làm: nhân viên, khách (có id khi đã đăng nhập) hoặc hệ thống. */
 export type OrderEventActor =
