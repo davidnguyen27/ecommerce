@@ -32,6 +32,7 @@ export const FULFILLMENT_STATUS_LABELS: Record<FulfillmentStatus, string> = {
   handed_over: 'Đã bàn giao vận chuyển',
   delivered: 'Đã giao',
   failed: 'Giao thất bại',
+  returned: 'Hàng đã hoàn về kho',
 }
 
 /** Giá trị thuộc tính biến thể nối bằng " · ", không kèm đơn vị (dòng giỏ, dòng đơn không có schema thuộc tính). */
@@ -87,6 +88,9 @@ const ORDER_EVENT_LABELS: Record<string, string> = {
   handed_over: 'Bàn giao vận chuyển',
   delivered: 'Đã giao',
   delivery_failed: 'Giao thất bại',
+  redelivered: 'Giao lại',
+  returned_to_stock: 'Nhận hàng hoàn về',
+  restocked_for_redelivery: 'Giao lại từ kho',
 }
 export const orderEventLabel = (kind: string) => ORDER_EVENT_LABELS[kind] ?? kind
 

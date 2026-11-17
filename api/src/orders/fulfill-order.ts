@@ -1,9 +1,9 @@
-import { ErrorCode, type FulfillmentStatus, type HandoverRequest } from '@ecommerce/shared'
+import { ErrorCode, type FulfillmentStatus, type HandoverRequest, type ReturnToStockRequest } from '@ecommerce/shared'
 import type { AuditEntry } from '../audit/audited.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError, invalidField } from '../http/errors.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
-import { changeStock } from '../stock/stock.ts'
+import { changeStock, reserveStock } from '../stock/stock.ts'
 import { issueOrderLookupUrl, recordOrderEvent } from './orders.ts'
 
 /** Bản audit của một lần chuyển trạng thái giao hàng; hàm chuyển trạng thái biết nguồn và đích nên tự khai. */
@@ -125,7 +125,7 @@ export async function deliverOrder(
 }
 
 /**
- * `handed_over` → `failed`: giao không thành công. Đơn vẫn `processing` (nhập lại kho, hoàn tiền là việc của M6);
+ * `handed_over` → `failed`: giao không thành công. Đơn vẫn `processing`: sau đó giao lại, hoặc nhận hàng hoàn về rồi hủy (M6a);
  * khách nhận email báo shop sẽ liên hệ, xếp trong cùng transaction. Gọi trong transaction của `audited()`.
  */
 export async function failDelivery(
@@ -153,5 +153,144 @@ export async function failDelivery(
     action: 'order.delivery_failed',
     before: { fulfillmentStatus: 'handed_over' },
     after: { fulfillmentStatus: 'failed' },
+  }
+}
+
+/**
+ * Giao lại (GLOSSARY): `failed` → `handed_over` với đơn vị vận chuyển, mã vận đơn và lúc bàn giao mới. Hàng chưa về kho
+ * nên không đổi tồn; mã cũ còn trong sự kiện đơn và audit. Không thu thêm tiền, không gửi email (spec M6a).
+ */
+export async function redeliverOrder(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  staffId: string,
+  shipment: HandoverRequest,
+): Promise<FulfillmentAudit> {
+  await lockForTransition(tx, orderId, 'failed')
+  const before = await tx.order.findUniqueOrThrow({
+    where: { id: orderId },
+    select: { carrier: true, trackingNumber: true },
+  })
+  await tx.order.update({
+    where: { id: orderId },
+    data: { fulfillmentStatus: 'handed_over', ...shipment, handedOverAt: new Date() },
+  })
+  await recordOrderEvent(tx, orderId, 'redelivered', { type: 'staff', staffId }, { ...shipment, previous: before })
+  return {
+    action: 'order.redeliver',
+    before: { fulfillmentStatus: 'failed', ...before },
+    after: { fulfillmentStatus: 'handed_over', ...shipment },
+  }
+}
+
+/**
+ * Nhận hàng hoàn về (GLOSSARY): `failed` → `returned`. Mỗi dòng đơn: số nhập lại tồn + số hỏng/mất = số lượng, sai thì
+ * 400. Phần nhập lại tồn qua `changeStock` loại `return` trỏ về đơn; phần hỏng/mất không ghi sổ vì hàng đã rời tồn lúc
+ * bàn giao. Xóa đơn vị vận chuyển, mã vận đơn, lúc bàn giao (còn trong sự kiện đơn). Không hủy đơn, không hoàn tiền.
+ */
+export async function returnToStock(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  staffId: string,
+  input: ReturnToStockRequest,
+): Promise<FulfillmentAudit> {
+  await lockForTransition(tx, orderId, 'failed')
+  const lines = await tx.orderLine.findMany({
+    where: { orderId },
+    select: { id: true, variantId: true, sku: true, quantity: true },
+    orderBy: { position: 'asc' },
+  })
+  const byVariant = new Map(input.lines.map((l, i) => [l.variantId, { ...l, index: i }]))
+  if (byVariant.size !== input.lines.length || byVariant.size !== lines.length) {
+    throw invalidField('lines', 'Cần đúng một dòng cho mỗi dòng của đơn')
+  }
+  const plan = lines.map((line) => {
+    const entry = byVariant.get(line.variantId)
+    if (!entry) throw invalidField('lines', `Thiếu dòng ${line.sku}`)
+    if (entry.restocked + entry.writtenOff !== line.quantity) {
+      throw invalidField(
+        `lines.${entry.index}`,
+        `${line.sku}: số nhập lại tồn cộng số hỏng/mất phải bằng ${line.quantity}`,
+      )
+    }
+    return { ...line, restocked: entry.restocked, writtenOff: entry.writtenOff, index: entry.index }
+  })
+  const restocking = plan.filter((p) => p.restocked > 0)
+  if (restocking.length > 0) {
+    await changeStock(
+      tx,
+      staffId,
+      restocking.map((p) => p.variantId),
+      () =>
+        restocking.map((p) => ({
+          variantId: p.variantId,
+          quantity: p.restocked,
+          kind: 'return' as const,
+          orderId,
+          path: `lines.${p.index}`,
+        })),
+    )
+  }
+  for (const p of plan) {
+    await tx.orderLine.update({
+      where: { id: p.id },
+      data: { returnedQuantity: p.restocked, writtenOffQuantity: p.writtenOff },
+    })
+  }
+  const before = await tx.order.findUniqueOrThrow({
+    where: { id: orderId },
+    select: { carrier: true, trackingNumber: true },
+  })
+  await tx.order.update({
+    where: { id: orderId },
+    data: { fulfillmentStatus: 'returned', carrier: null, trackingNumber: null, handedOverAt: null },
+  })
+  const result = plan.map((p) => ({ sku: p.sku, restocked: p.restocked, writtenOff: p.writtenOff }))
+  await recordOrderEvent(tx, orderId, 'returned_to_stock', { type: 'staff', staffId }, { lines: result, ...before })
+  return {
+    action: 'order.return_to_stock',
+    before: { fulfillmentStatus: 'failed', ...before },
+    after: { fulfillmentStatus: 'returned', lines: result },
+  }
+}
+
+/**
+ * Giao lại từ kho: `returned` → `not_prepared`. Giữ hàng lại cho mọi dòng như lúc đặt mua (đơn đặt trước cũng vậy: hàng
+ * đã thành hàng sẵn khi nhập lại tồn), thiếu thì 409 kèm các SKU thiếu. Đưa số nhập lại/hỏng của dòng về 0; đơn đi lại
+ * luồng chuẩn bị → bàn giao.
+ */
+export async function restockForRedelivery(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  staffId: string,
+): Promise<FulfillmentAudit> {
+  await lockForTransition(tx, orderId, 'returned')
+  const lines = await tx.orderLine.findMany({
+    where: { orderId },
+    select: { id: true, variantId: true, sku: true, quantity: true },
+    orderBy: { position: 'asc' },
+  })
+  const reservation = await reserveStock(
+    tx,
+    lines.map((l) => ({ variantId: l.variantId, quantity: l.quantity })),
+  )
+  if (!reservation.ok) {
+    const short = new Set(reservation.shortVariantIds)
+    throw new AppError(409, ErrorCode.CONFLICT, 'Không còn đủ hàng để giao lại', undefined, {
+      skus: lines.filter((l) => short.has(l.variantId)).map((l) => l.sku),
+    })
+  }
+  for (const line of lines) {
+    await tx.orderLine.update({
+      where: { id: line.id },
+      data: { reservedQuantity: line.quantity, returnedQuantity: 0, writtenOffQuantity: 0 },
+    })
+  }
+  await tx.order.update({ where: { id: orderId }, data: { fulfillmentStatus: 'not_prepared' } })
+  await recordOrderEvent(tx, orderId, 'restocked_for_redelivery', { type: 'staff', staffId })
+  return {
+    action: 'order.restock_redeliver',
+    before: { fulfillmentStatus: 'returned' },
+    after: { fulfillmentStatus: 'not_prepared', reserved: lines.map((l) => ({ sku: l.sku, quantity: l.quantity })) },
   }
 }

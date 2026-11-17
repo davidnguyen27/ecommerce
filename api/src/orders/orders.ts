@@ -49,6 +49,12 @@ export type OrderEventKind =
   | 'refund_failed'
   | 'delivered'
   | 'delivery_failed'
+  /** Giao lại đơn giao thất bại với mã vận đơn mới (`data.previous`: mã cũ; M6a). */
+  | 'redelivered'
+  /** Kho nhận hàng hoàn về: từng dòng nhập lại tồn hay hỏng/mất (`data.lines`). */
+  | 'returned_to_stock'
+  /** Giao lại từ kho: giữ hàng lại cho đơn, quay về chưa chuẩn bị. */
+  | 'restocked_for_redelivery'
 
 /** Ai làm: nhân viên, khách (có id khi đã đăng nhập) hoặc hệ thống. */
 export type OrderEventActor =
@@ -246,6 +252,8 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
       quantity: line.quantity,
       lineTotal: Number(line.price) * line.quantity,
       discount: Number(line.discount),
+      returnedQuantity: line.returnedQuantity,
+      writtenOffQuantity: line.writtenOffQuantity,
     })),
     subtotal: Number(order.subtotal),
     voucherCode: order.voucherCode,

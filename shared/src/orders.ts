@@ -12,8 +12,8 @@ export type OrderStatus = z.infer<typeof OrderStatus>
 export const PaymentStatus = z.enum(['unpaid', 'deposit_paid', 'paid'])
 export type PaymentStatus = z.infer<typeof PaymentStatus>
 
-/** Trạng thái giao hàng. */
-export const FulfillmentStatus = z.enum(['not_prepared', 'preparing', 'handed_over', 'delivered', 'failed'])
+/** Trạng thái giao hàng; `returned`: kho đã nhận hàng hoàn về sau giao thất bại (M6a). */
+export const FulfillmentStatus = z.enum(['not_prepared', 'preparing', 'handed_over', 'delivered', 'failed', 'returned'])
 export type FulfillmentStatus = z.infer<typeof FulfillmentStatus>
 
 /** Đơn hàng sẵn (qua giỏ hàng) hay đơn đặt trước (GLOSSARY "Đơn đặt trước"). */
@@ -94,6 +94,9 @@ export const OrderLineView = z.object({
   lineTotal: z.number(),
   /** Phần tiền giảm của mã chia cho dòng này; 0 khi đơn không dùng mã hoặc dòng ngoài phạm vi mã. */
   discount: z.number(),
+  /** Lần nhận hàng hoàn về gần nhất (M6a): số nhập lại tồn và số hỏng/mất; 0 khi chưa có. */
+  returnedQuantity: z.number(),
+  writtenOffQuantity: z.number(),
 })
 export type OrderLineView = z.infer<typeof OrderLineView>
 
@@ -312,6 +315,28 @@ export const HandoverRequest = z.object({
   trackingNumber: z.string().trim().min(1, 'Cần mã vận đơn').max(100),
 })
 export type HandoverRequest = z.infer<typeof HandoverRequest>
+
+/** Body của `POST /api/admin/orders/:code/redeliver`: giao lại đơn giao thất bại với đơn vị vận chuyển và mã vận đơn mới. */
+export const RedeliverRequest = HandoverRequest
+export type RedeliverRequest = HandoverRequest
+
+/**
+ * Body của `POST /api/admin/orders/:code/return-to-stock`: với mỗi dòng đơn (theo biến thể), số nhập lại tồn và số
+ * hỏng/mất; tổng hai số bằng số lượng của dòng, kiểm ở API. Mọi dòng của đơn phải có mặt đúng một lần.
+ */
+export const ReturnToStockRequest = z.object({
+  lines: z
+    .array(
+      z.object({
+        variantId: z.string(),
+        restocked: z.number().int().min(0),
+        writtenOff: z.number().int().min(0),
+      }),
+    )
+    .min(1)
+    .max(100),
+})
+export type ReturnToStockRequest = z.infer<typeof ReturnToStockRequest>
 
 /**
  * Body của `POST /api/admin/orders/:code/cancel-paid`: lý do và số tiền đề xuất hoàn (0 tới số còn hoàn được). Số hoàn
