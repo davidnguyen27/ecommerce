@@ -169,7 +169,7 @@ export function adminStockReceiptRoutes(prisma: Db, mail: { emails: EmailQueue; 
           input.lines.map((line) => ({ variantId: idOf.get(line.sku)!, quantity: line.quantity })),
           { lock: true },
         )
-        const arrivedOrderCodes = await applyArrivals(tx, mail, plans, receipt.id)
+        const arrivedOrderCodes = await applyArrivals(tx, mail, plans, { receiptId: receipt.id })
         const preorderAllocations = plans.flatMap((plan) =>
           plan.allocations.map((a) => ({
             sku: locked.get(plan.variantId)!.sku,

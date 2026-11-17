@@ -2,8 +2,9 @@
 import { AdminOrder } from '@ecommerce/shared'
 
 /**
- * Khối đối soát ở trang chi tiết đơn: các khoản tiền bị gắn cờ cần đối soát, và hai thao tác (cần `payment.reconcile`):
- * khôi phục đơn đã hủy khi tiền về đủ, hoặc đóng mục vì đã xử lý ngoài hệ thống. Thao tác xong emit đơn mới do API trả.
+ * Khối đối soát ở trang chi tiết đơn: các khoản tiền bị gắn cờ cần đối soát, và ba thao tác (cần `payment.reconcile`):
+ * khôi phục đơn đã hủy khi tiền về đủ, hoàn số tiền của mục (tạo khoản chờ hoàn ở khối Hoàn tiền), hoặc đóng mục vì đã
+ * xử lý ngoài hệ thống. Thao tác xong emit đơn mới do API trả.
  */
 const props = defineProps<{ order: AdminOrder }>()
 const emit = defineEmits<{ update: [order: AdminOrder] }>()
@@ -19,7 +20,7 @@ const flagged = computed(() =>
 )
 const received = computed(() => props.order.payments.reduce((sum, p) => sum + p.amount, 0))
 
-async function act(itemId: string, action: 'restore' | 'resolve', body?: { note: string }) {
+async function act(itemId: string, action: 'restore' | 'resolve' | 'refund', body?: { note: string }) {
   busy.value = true
   error.value = null
   try {
@@ -36,6 +37,11 @@ function restore(itemId: string) {
   if (!confirm(`Khôi phục đơn #${props.order.code}? Hàng sẽ được giữ lại và khách nhận email đã nhận thanh toán.`))
     return
   return act(itemId, 'restore')
+}
+
+function refund(itemId: string, amount: number) {
+  if (!confirm(`Hoàn ${formatVnd(amount)} cho khách? Một khoản chờ hoàn được tạo để kế toán thực hiện.`)) return
+  return act(itemId, 'refund')
 }
 
 function resolve(itemId: string) {
@@ -92,6 +98,16 @@ function resolve(itemId: string) {
           @click="restore(item.id)"
         >
           Khôi phục đơn
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary btn-sm"
+          data-testid="reconciliation-refund"
+          :disabled="busy"
+          style="margin: 0 0 10px 8px"
+          @click="refund(item.id, payment.amount)"
+        >
+          Hoàn tiền
         </button>
         <form @submit.prevent="resolve(item.id)">
           <div class="form-group" style="margin-bottom: 8px">

@@ -283,3 +283,30 @@ export const PreorderConflictDetails = z.union([
   z.object({ voucher: VoucherConflict }),
 ])
 export type PreorderConflictDetails = z.infer<typeof PreorderConflictDetails>
+
+/**
+ * Đợt không nhập được hàng (M6a): các đơn đã cọc chưa có hàng về sẽ bị hủy, mỗi đơn hoàn đủ số còn hoàn được. Trả về
+ * bởi `GET /api/admin/preorder-campaigns/:id/cancel-unsupplied` để hộp xác nhận hiện số đơn và tổng tiền sẽ hoàn.
+ */
+export const UnsuppliedPreview = z.object({
+  orders: z.array(z.object({ code: z.number(), recipientName: z.string(), refundAmount: z.number() })),
+  refundTotal: z.number(),
+})
+export type UnsuppliedPreview = z.infer<typeof UnsuppliedPreview>
+
+/** Body của `POST /api/admin/preorder-campaigns/:id/cancel-unsupplied`: ghi chú bắt buộc (nhà cung cấp báo gì). */
+export const CancelUnsuppliedRequest = z.object({
+  note: z
+    .string({ error: 'Nhập ghi chú: nhà cung cấp báo gì' })
+    .trim()
+    .min(1, 'Nhập ghi chú: nhà cung cấp báo gì')
+    .max(2000),
+})
+export type CancelUnsuppliedRequest = z.input<typeof CancelUnsuppliedRequest>
+
+/** Kết quả hủy hàng loạt: mã các đơn vừa hủy và đợt sau khi đóng. */
+export const CancelUnsuppliedResult = z.object({
+  cancelledOrderCodes: z.array(z.number()),
+  campaign: PreorderCampaign,
+})
+export type CancelUnsuppliedResult = z.infer<typeof CancelUnsuppliedResult>

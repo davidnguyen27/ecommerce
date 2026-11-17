@@ -49,6 +49,9 @@ model Staff {
   stockReceipts            StockReceipt[]
   orderEvents              OrderEvent[]
   resolvedReconciliations  ReconciliationItem[]
+  createdRefunds           Refund[]             @relation("RefundCreatedBy")
+  executedRefunds          Refund[]             @relation("RefundExecutedBy")
+  settledRefunds           Refund[]             @relation("RefundSettledBy")
   preorderCampaigns        PreorderCampaign[]
   vouchers                 Voucher[]
 
@@ -371,6 +374,8 @@ enum StockMovementKind {
   opening
   /// Xuất bán: hàng của một đơn rời kho lúc bàn giao vận chuyển (ADR 0007).
   sale
+  /// Hàng của đơn giao thất bại được nhận hoàn về và nhập lại tồn (M6a); trỏ về đơn như xuất bán.
+  return
 
   @@map("stock_movement_kind")
 }
@@ -653,6 +658,8 @@ enum FulfillmentStatus {
   handed_over
   delivered
   failed
+  /// Kho đã nhận hàng hoàn về sau giao thất bại (M6a); đơn hủy được, hoặc giao lại từ kho.
+  returned
 
   @@map("fulfillment_status")
 }
@@ -664,6 +671,17 @@ enum OrderCancelReason {
   staff
 
   @@map("order_cancel_reason")
+}
+
+/// Lý do nhân viên hủy đơn đã nhận tiền (M6a); đơn chưa thanh toán không có.
+enum OrderCancelCause {
+  changed_mind
+  remainder_overdue
+  supply_failed
+  delivery_failed
+  other
+
+  @@map("order_cancel_cause")
 }
 
 /// Đơn hàng sẵn (qua giỏ hàng) hay đơn đặt trước (GLOSSARY "Đơn đặt trước", ADR 0012).
@@ -716,6 +734,10 @@ model Order {
   /// Có khi và chỉ khi đơn `cancelled` (check constraint `order_cancellation_check`).
   cancelReason      OrderCancelReason? @map("cancel_reason")
   cancelledAt       DateTime?          @map("cancelled_at")
+  /// Có khi và chỉ khi đơn bị hủy lúc đã nhận tiền. Check `order_cancel_cause_check`.
+  cancelCause       OrderCancelCause?  @map("cancel_cause")
+  /// Ghi chú nội bộ lúc hủy; bắt buộc khi số hoàn thấp hơn số còn hoàn được. Khách không thấy.
+  cancelNote        String?            @map("cancel_note")
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
 
@@ -776,6 +798,7 @@ model Order {
   paymentLinks        PaymentLink[]
   paymentTransactions PaymentTransaction[]
   reconciliationItems ReconciliationItem[]
+  refunds             Refund[]
 
   @@index([customerId])
   @@index([status, reservedUntil])
@@ -791,27 +814,30 @@ model Order {
 
 /// Dòng đơn: snapshot biến thể lúc đặt mua.
 model OrderLine {
-  id               String         @id @default(uuid()) @db.Uuid
-  orderId          String         @map("order_id") @db.Uuid
-  order            Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  id                 String         @id @default(uuid()) @db.Uuid
+  orderId            String         @map("order_id") @db.Uuid
+  order              Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
   /// Thứ tự trong giỏ, từ 0.
-  position         Int
-  variantId        String         @map("variant_id") @db.Uuid
-  variant          ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
-  sku              String
-  productName      String         @map("product_name")
-  attributes       Json
+  position           Int
+  variantId          String         @map("variant_id") @db.Uuid
+  variant            ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  sku                String
+  productName        String         @map("product_name")
+  attributes         Json
   /// Ảnh đại diện: `StoredImage` (api/src/media/images.ts) kèm `alt`; `null` khi không có.
-  image            Json?
+  image              Json?
   /// VND, giá bán lúc đặt.
-  price            BigInt
+  price              BigInt
   /// 1–5 (check constraint).
-  quantity         Int
+  quantity           Int
   /// Số đang giữ trong kho cho dòng này, 0–`quantity` (check constraint). Đơn hàng sẵn: bằng `quantity` từ lúc giữ tới
   /// lúc hủy hay bàn giao; đơn đặt trước: tăng dần theo phiếu nhập (ADR 0013). Hủy và bàn giao đưa về 0.
-  reservedQuantity Int            @default(0) @map("reserved_quantity")
+  reservedQuantity   Int            @default(0) @map("reserved_quantity")
+  /// Lần nhận hàng hoàn về gần nhất: số nhập lại tồn và số hỏng/mất (M6a). Giao lại từ kho đưa về 0.
+  returnedQuantity   Int            @default(0) @map("returned_quantity")
+  writtenOffQuantity Int            @default(0) @map("written_off_quantity")
   /// Phần tiền giảm của đơn chia cho dòng này, VND; 0–tiền hàng của dòng (check constraint).
-  discount         BigInt         @default(0)
+  discount           BigInt         @default(0)
 
   @@unique([orderId, position])
   @@index([variantId])
@@ -922,6 +948,7 @@ model PaymentTransaction {
   createdAt DateTime       @default(now()) @map("created_at")
 
   reconciliationItem ReconciliationItem?
+  refunds            Refund[]
 
   @@index([orderId])
   @@map("payment_transaction")
@@ -948,8 +975,84 @@ enum ReconciliationResolution {
   handled_externally
   /// Hệ thống đóng mục lệch tiền khi khoản sau làm đơn đủ tiền; không có `resolvedBy`.
   settled_by_payment
+  /// Kế toán tạo một hoàn tiền bằng số tiền của mục (M6a).
+  refunded
 
   @@map("reconciliation_resolution")
+}
+
+/// Hoàn tiền sinh ra từ đâu: hủy đơn đã nhận tiền, giải quyết mục cần đối soát, hay tạo lại từ một khoản thất bại.
+enum RefundOrigin {
+  cancellation
+  reconciliation
+  retry
+
+  @@map("refund_origin")
+}
+
+/// `pending` chờ kế toán thực hiện → `processing` (cổng đang xử lý) → `succeeded` hoặc `failed`. Thủ công đi thẳng
+/// từ `pending` tới `succeeded`.
+enum RefundStatus {
+  pending
+  processing
+  succeeded
+  failed
+
+  @@map("refund_status")
+}
+
+enum RefundMethod {
+  vnpay
+  manual
+
+  @@map("refund_method")
+}
+
+/// Hoàn tiền (GLOSSARY, ADR 0014): khoản trả lại cho khách gắn với một đơn, theo dõi tới khi có kết quả. Tổng các khoản
+/// không `failed` của một đơn không vượt tổng đã nhận (kiểm dưới khóa đơn ở `payments/refunds.ts`).
+model Refund {
+  id                   String              @id @default(uuid()) @db.Uuid
+  orderId              String              @map("order_id") @db.Uuid
+  order                Order               @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// VND, > 0.
+  amount               BigInt
+  origin               RefundOrigin
+  /// Có khi và chỉ khi `origin = reconciliation`.
+  reconciliationItemId String?             @unique @map("reconciliation_item_id") @db.Uuid
+  reconciliationItem   ReconciliationItem? @relation(fields: [reconciliationItemId], references: [id], onDelete: Restrict)
+  /// Có khi và chỉ khi `origin = retry`: khoản thất bại được tạo lại; mỗi khoản thất bại tạo lại được một lần.
+  retryOfId            String?             @unique @map("retry_of_id") @db.Uuid
+  retryOf              Refund?             @relation("RefundRetry", fields: [retryOfId], references: [id], onDelete: Restrict)
+  retriedBy            Refund?             @relation("RefundRetry")
+  status               RefundStatus        @default(pending)
+  /// Trống khi và chỉ khi `pending`.
+  method               RefundMethod?
+  /// Giao dịch gốc; có khi và chỉ khi `method = vnpay`.
+  paymentTransactionId String?             @map("payment_transaction_id") @db.Uuid
+  paymentTransaction   PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id], onDelete: Restrict)
+  /// Mã giao dịch ngân hàng và ngày chuyển của hoàn thủ công; không lưu số tài khoản của khách.
+  bankReference        String?             @map("bank_reference")
+  transferredOn        DateTime?           @map("transferred_on") @db.Date
+  /// Ghi chú nội bộ: lý do lúc tạo, ghi chú lúc thực hiện hay chốt. Khách không thấy.
+  note                 String?
+  /// Dữ liệu cổng trả về khi hoàn qua cổng.
+  gatewayPayload       Json?               @map("gateway_payload")
+  createdById          String              @map("created_by_id") @db.Uuid
+  createdBy            Staff               @relation("RefundCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  executedById         String?             @map("executed_by_id") @db.Uuid
+  executedBy           Staff?              @relation("RefundExecutedBy", fields: [executedById], references: [id], onDelete: Restrict)
+  executedAt           DateTime?           @map("executed_at")
+  /// Người chốt khoản `processing` bằng tay sau khi kiểm trên cổng.
+  settledById          String?             @map("settled_by_id") @db.Uuid
+  settledBy            Staff?              @relation("RefundSettledBy", fields: [settledById], references: [id], onDelete: Restrict)
+  completedAt          DateTime?           @map("completed_at")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@index([status])
+  @@index([paymentTransactionId])
+  @@map("refund")
 }
 
 /// Cần đối soát (GLOSSARY): một khoản tiền không khớp với đơn, chờ kế toán quyết định.
@@ -973,6 +1076,8 @@ model ReconciliationItem {
   resolvedAt    DateTime?                 @map("resolved_at")
   createdAt     DateTime                  @default(now()) @map("created_at")
   updatedAt     DateTime                  @updatedAt @map("updated_at")
+  /// Hoàn tiền tạo ra khi mục được giải quyết bằng `refunded`.
+  refund        Refund?
 
   @@index([orderId])
   @@index([status, createdAt])

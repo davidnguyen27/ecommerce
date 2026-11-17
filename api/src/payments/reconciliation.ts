@@ -8,6 +8,7 @@ import { recordOrderEvent } from '../orders/orders.ts'
 import { usedAllocations } from '../preorders/campaigns.ts'
 import { reserveStock } from '../stock/stock.ts'
 import { queueDepositReceivedEmail, queuePaymentReceivedEmail, type RecordPaymentDeps } from './record-payment.ts'
+import { createRefund } from './refunds.ts'
 import { usedRedemptions } from '../vouchers/vouchers.ts'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -50,12 +51,18 @@ export async function restoreOrder(
     include: { lines: { orderBy: { position: 'asc' } } },
   })
   if (order.status !== 'cancelled') throw conflict('Chỉ khôi phục được đơn đã hủy')
+  // Nhân viên đã hủy đơn lúc đã nhận tiền (M6a): quyết định hủy, mất cọc hay hoàn là có chủ đích, không đảo ngược bằng
+  // một khoản tiền về muộn. Khoản đó giải quyết bằng hoàn tiền hoặc ngoài hệ thống.
+  if (order.cancelCause) throw conflict('Đơn bị nhân viên hủy sau khi đã nhận tiền, không khôi phục được')
   const handledExternally = await tx.reconciliationItem.count({
     where: { orderId: order.id, resolution: 'handled_externally' },
   })
   if (handledExternally > 0) {
     throw conflict('Đơn có khoản tiền đã xử lý ngoài hệ thống, không khôi phục được')
   }
+  // Tiền đã (hoặc đang) trả lại cho khách thì đơn không còn đủ tiền để chạy tiếp.
+  const refunds = await tx.refund.count({ where: { orderId: order.id, status: { not: 'failed' } } })
+  if (refunds > 0) throw conflict('Đơn có khoản hoàn tiền, không khôi phục được')
   // Đơn đặt trước khôi phục về đã cọc bằng các khoản cọc; đơn hàng sẵn về đã trả đủ bằng các khoản trả đủ.
   const preorder = order.kind === 'preorder'
   const due = preorder ? order.depositAmount! : order.total
@@ -166,6 +173,41 @@ async function retakeAllocation(tx: DbClient, order: { preorderCampaignId: strin
   if (!row || used + line.quantity > row.allocation) {
     throw conflict('Đợt đặt trước không còn đủ suất để khôi phục đơn', { sku: line.sku })
   }
+}
+
+/**
+ * Giải quyết bằng hoàn tiền: tạo một khoản hoàn `pending` (`origin = reconciliation`) bằng số tiền của mục rồi đóng mục
+ * `refunded`. Không đổi trạng thái đơn. Số tiền vượt số còn hoàn được thì 409 (`createRefund`). Trả mã đơn.
+ */
+export async function refundReconciliationItem(tx: DbClient, audit: Audit, itemId: string, staffId: string) {
+  const item = await lockOpenItem(tx, itemId)
+  const refund = await createRefund(tx, {
+    orderId: item.orderId,
+    amount: item.amount,
+    origin: 'reconciliation',
+    reconciliationItemId: item.id,
+    staffId,
+  })
+  await tx.reconciliationItem.update({
+    where: { id: item.id },
+    data: { status: 'resolved', resolution: 'refunded', resolvedById: staffId, resolvedAt: new Date() },
+  })
+  await recordOrderEvent(
+    tx,
+    item.orderId,
+    'reconciliation_resolved',
+    { type: 'staff', staffId },
+    { reconciliationItemId: item.id, amount: Number(item.amount), resolution: 'refunded', refundId: refund.id },
+  )
+  await audit({
+    action: 'reconciliation.refund',
+    entityType: 'order',
+    entityId: item.orderId,
+    before: { reconciliationItemId: item.id, status: 'open' },
+    after: { reconciliationItemId: item.id, status: 'resolved', resolution: 'refunded', refundId: refund.id },
+  })
+  const order = await tx.order.findUniqueOrThrow({ where: { id: item.orderId }, select: { code: true } })
+  return order.code
 }
 
 /** "Đã xử lý ngoài hệ thống" (hoàn tiền tay…): đóng mục với ghi chú, không đổi trạng thái đơn. */

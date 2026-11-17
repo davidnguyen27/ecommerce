@@ -61,25 +61,28 @@ export async function cancelInTransaction(
     return 'not_due'
   }
 
-  // Nhả đúng số đang giữ của từng dòng. Đơn đặt trước chờ cọc chỉ chiếm suất, không giữ hàng nên không có gì để nhả;
-  // suất tự trống ra (ADR 0013).
-  const lines = await tx.orderLine.findMany({
-    where: { orderId, reservedQuantity: { gt: 0 } },
-    select: { variantId: true, reservedQuantity: true },
-  })
-  if (lines.length > 0) {
-    await releaseStock(
-      tx,
-      lines.map((l) => ({ variantId: l.variantId, quantity: l.reservedQuantity })),
-    )
-    await tx.orderLine.updateMany({ where: { orderId }, data: { reservedQuantity: 0 } })
-  }
+  // Đơn đặt trước chờ cọc chỉ chiếm suất, không giữ hàng nên không có gì để nhả; suất tự trống ra (ADR 0013).
+  await releaseOrderReservations(tx, orderId)
   await tx.order.update({
     where: { id: orderId },
     data: { status: 'cancelled', cancelReason: cancellation.reason, cancelledAt: new Date(), reservedUntil: null },
   })
   await recordOrderEvent(tx, orderId, 'cancelled', actorOf(cancellation), { reason: cancellation.reason })
   return 'cancelled'
+}
+
+/** Nhả đúng số đang giữ của từng dòng đơn và đưa số giữ của dòng về 0. Gọi dưới khóa đơn. */
+export async function releaseOrderReservations(tx: Prisma.TransactionClient, orderId: string) {
+  const lines = await tx.orderLine.findMany({
+    where: { orderId, reservedQuantity: { gt: 0 } },
+    select: { variantId: true, reservedQuantity: true },
+  })
+  if (lines.length === 0) return
+  await releaseStock(
+    tx,
+    lines.map((l) => ({ variantId: l.variantId, quantity: l.reservedQuantity })),
+  )
+  await tx.orderLine.updateMany({ where: { orderId }, data: { reservedQuantity: 0 } })
 }
 
 /**
@@ -140,7 +143,7 @@ export async function expireOrder(deps: ExpireDeps, orderId: string, overdueAt?:
 /** Nơi gọi qua HTTP: đơn đã trả thì 409. */
 export function assertCancellable(outcome: CancelOutcome) {
   if (outcome === 'not_pending') {
-    // Đã trả đủ hay đã cọc thì hủy kéo theo hoàn tiền, thuộc M6.
+    // Đã trả đủ hay đã cọc thì hủy kéo theo hoàn tiền: dùng `cancel-paid` (M6a), cần `order.cancel_paid`.
     throw new AppError(409, ErrorCode.CONFLICT, 'Đơn đã thanh toán hoặc đã cọc, không hủy được')
   }
 }

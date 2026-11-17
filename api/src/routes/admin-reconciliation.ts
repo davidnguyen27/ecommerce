@@ -13,13 +13,22 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
 import type { EmailQueue } from '../jobs/jobs.ts'
+import type { PaymentGateway } from '../payments/gateway.ts'
 import { loadAdminOrder } from '../orders/admin-order.ts'
-import { resolveExternally, restoreOrder } from '../payments/reconciliation.ts'
+import { refundReconciliationItem, resolveExternally, restoreOrder } from '../payments/reconciliation.ts'
 
 export type ReconciliationDeps = { emails: EmailQueue; siteUrl: string }
 
-/** Cần đối soát: xem danh sách cần `order.view`, khôi phục đơn hay đóng mục cần `payment.reconcile`. */
-export function adminReconciliationRoutes(prisma: Db, storage: Storage, deps: ReconciliationDeps) {
+/**
+ * Cần đối soát: xem danh sách cần `order.view`; khôi phục đơn, giải quyết bằng hoàn tiền hay đóng mục cần
+ * `payment.reconcile`.
+ */
+export function adminReconciliationRoutes(
+  prisma: Db,
+  storage: Storage,
+  payments: PaymentGateway,
+  deps: ReconciliationDeps,
+) {
   return Router()
     .get('/', requirePermission('order.view'), async (req, res) => {
       const query = parse(ReconciliationQuery, req.query)
@@ -80,7 +89,15 @@ export function adminReconciliationRoutes(prisma: Db, storage: Storage, deps: Re
       const code = await audited(prisma, req, (tx, audit) =>
         restoreOrder(tx, deps, audit, String(req.params.id), staffId),
       )
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, String(code))
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, String(code))
+      res.json(body)
+    })
+    .post('/:id/refund', requirePermission('payment.reconcile'), async (req, res) => {
+      const staffId = currentStaff(req).id
+      const code = await audited(prisma, req, (tx, audit) =>
+        refundReconciliationItem(tx, audit, String(req.params.id), staffId),
+      )
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, String(code))
       res.json(body)
     })
     .post('/:id/resolve', requirePermission('payment.reconcile'), async (req, res) => {
@@ -89,7 +106,7 @@ export function adminReconciliationRoutes(prisma: Db, storage: Storage, deps: Re
       const code = await audited(prisma, req, (tx, audit) =>
         resolveExternally(tx, audit, String(req.params.id), staffId, note),
       )
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, String(code))
+      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, String(code))
       res.json(body)
     })
 }

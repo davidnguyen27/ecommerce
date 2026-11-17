@@ -18,6 +18,20 @@ const notice = ref<string | null>(null)
 const busy = ref(false)
 
 const canFulfill = computed(() => session.can('order.fulfill'))
+// Hủy đơn đã nhận tiền (M6a): đơn đang xử lý, đã trả đủ hoặc đã cọc, chưa bàn giao hoặc hàng giao thất bại đã hoàn về.
+const canCancelPaid = computed(() => {
+  const o = order.value
+  return (
+    session.can('order.cancel_paid') &&
+    o !== null &&
+    o.status === 'processing' &&
+    (o.paymentStatus === 'paid' || o.paymentStatus === 'deposit_paid') &&
+    (o.fulfillmentStatus === 'not_prepared' ||
+      o.fulfillmentStatus === 'preparing' ||
+      o.fulfillmentStatus === 'returned')
+  )
+})
+const cancellingPaid = ref(false)
 const canOpen = session.canOpen
 
 function setOrder(value: unknown) {
@@ -60,6 +74,8 @@ function actorText(entry: OrderHistoryEntry) {
 function historyDetail(entry: OrderHistoryEntry) {
   const data = (entry.data ?? {}) as {
     reason?: string
+    cause?: string
+    refundAmount?: number
     amount?: number
     total?: number
     carrier?: string
@@ -72,6 +88,10 @@ function historyDetail(entry: OrderHistoryEntry) {
     return `Mã ${code} vượt tổng lượt: đã dùng ${used}/${totalLimit}`
   }
   if (entry.action === 'handed_over' && data.carrier) return `${data.carrier} · ${data.trackingNumber}`
+  if (entry.action === 'cancelled' && data.cause) {
+    const cause = CANCEL_CAUSE_LABELS[data.cause as keyof typeof CANCEL_CAUSE_LABELS] ?? data.cause
+    return `${cause} · hoàn ${formatVnd(data.refundAmount ?? 0)}`
+  }
   if (entry.action === 'cancelled' && data.reason) {
     return CANCEL_REASON_LABELS[data.reason as keyof typeof CANCEL_REASON_LABELS] ?? data.reason
   }
@@ -115,6 +135,15 @@ await load()
             data-testid="admin-order-cancel"
             :disabled="busy"
             @click="cancelOrder"
+          >
+            Hủy đơn
+          </button>
+          <button
+            v-if="canCancelPaid && !cancellingPaid"
+            type="button"
+            class="btn btn-danger btn-sm"
+            data-testid="admin-order-cancel-paid"
+            @click="cancellingPaid = true"
           >
             Hủy đơn
           </button>
@@ -291,6 +320,8 @@ await load()
 
           <AdminReconciliationPanel :order="order" style="margin-bottom: 24px" @update="setOrder" />
 
+          <AdminRefundPanel :order="order" style="margin-bottom: 24px" @update="setOrder" />
+
           <h2 class="admin-section-title">Lịch sử thao tác</h2>
           <div class="admin-table-card">
             <table class="admin-table">
@@ -318,6 +349,13 @@ await load()
         </div>
 
         <div>
+          <AdminCancelPaidForm
+            v-if="cancellingPaid && canCancelPaid"
+            :order="order"
+            style="margin-bottom: 24px"
+            @update="setOrder"
+            @close="cancellingPaid = false"
+          />
           <AdminFulfillmentPanel :order="order" :can-fulfill="canFulfill" @update="setOrder" @reload="load" />
 
           <div class="admin-panel">
@@ -336,7 +374,12 @@ await load()
               <template v-if="order.cancelReason && order.cancelledAt">
                 <dt style="color: var(--adm-muted)">Hủy</dt>
                 <dd style="margin: 0">
-                  {{ CANCEL_REASON_LABELS[order.cancelReason] }}, {{ formatDateTime(order.cancelledAt) }}
+                  {{ CANCEL_REASON_LABELS[order.cancelReason]
+                  }}<template v-if="order.cancelCause"> ({{ CANCEL_CAUSE_LABELS[order.cancelCause] }})</template>,
+                  {{ formatDateTime(order.cancelledAt) }}
+                  <div v-if="order.cancelNote" style="color: var(--adm-muted); white-space: pre-line">
+                    {{ order.cancelNote }}
+                  </div>
                 </dd>
               </template>
             </dl>

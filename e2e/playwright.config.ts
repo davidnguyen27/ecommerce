@@ -2,8 +2,9 @@
 // Chạy: pnpm smoke --keep && pnpm e2e; xong thì `docker compose -p ecommerce-smoke down -v`.
 // Trình duyệt: Chromium của Playwright (`pnpm --filter @ecommerce/e2e exec playwright install chromium`).
 // Máy đã có Edge thì chạy được không cần tải: E2E_CHANNEL=msedge pnpm e2e.
-// Một lượt đặt đúng 5 lần (mua hàng 1, đặt trước 1, mã giảm giá 3), bằng giới hạn 5 lần đặt mỗi IP mỗi giờ: chạy lại
-// trên cùng stack phải chờ một giờ, hoặc dựng lại stack. Đăng nhập cũng giới hạn 10 lần mỗi email trong 15 phút.
+// Một lượt đặt 7 lần (mua hàng 1, đặt trước 1, mã giảm giá 3, hoàn tiền 2), quá giới hạn 5 lần đặt mỗi IP mỗi giờ:
+// global-setup và spec hoàn tiền xóa bộ đếm của stack smoke (support/rate-limit.ts, cần Docker CLI), nên chạy lại trên
+// cùng stack được. Đăng nhập giới hạn 10 lần mỗi email trong 15 phút.
 import { defineConfig, devices } from '@playwright/test'
 import { BASE_URL } from './support/stack.ts'
 

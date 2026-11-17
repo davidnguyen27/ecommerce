@@ -2,13 +2,20 @@ import { type AdminOrder, type OrderHistoryActor, type OrderHistoryEntry } from 
 import type { Storage } from '../adapters/storage.ts'
 import { ACTOR_SELECT } from '../audit/audited.ts'
 import type { DbClient } from '../db.ts'
+import type { PaymentGateway } from '../payments/gateway.ts'
+import { refundedViaGateway, summarizeRefunds } from '../payments/refunds.ts'
 import { ORDER_VIEW_INCLUDE, orderNotFound, parseOrderCode, toPublicOrder } from './orders.ts'
 
 /**
  * Chi tiết đơn cho trang quản trị theo mã (chuỗi từ URL). Route xử lý đơn (chuẩn bị, bàn giao, đã giao…) trả lại đúng
  * dạng này sau khi đổi trạng thái, để trang chi tiết thay đơn đang hiện bằng response.
  */
-export async function loadAdminOrder(db: DbClient, storage: Storage, code: string): Promise<AdminOrder> {
+export async function loadAdminOrder(
+  db: DbClient,
+  storage: Storage,
+  payments: PaymentGateway,
+  code: string,
+): Promise<AdminOrder> {
   const order = await db.order.findUnique({
     where: { code: parseOrderCode(code) },
     include: {
@@ -21,9 +28,29 @@ export async function loadAdminOrder(db: DbClient, storage: Storage, code: strin
         include: { staff: { select: ACTOR_SELECT }, customer: { select: { id: true, email: true } } },
         orderBy: { seq: 'asc' },
       },
+      refunds: {
+        include: {
+          createdBy: { select: ACTOR_SELECT },
+          executedBy: { select: ACTOR_SELECT },
+          settledBy: { select: ACTOR_SELECT },
+          retriedBy: { select: { id: true } },
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      },
     },
   })
   if (!order) throw orderNotFound()
+
+  // ADR 0014: đã nhận tính từ giao dịch, đã hoàn và đang hoàn tính từ các khoản hoàn; trạng thái thanh toán không đổi.
+  const totals = summarizeRefunds(
+    order.paymentTransactions.reduce((sum, t) => sum + t.amount, 0n),
+    order.refunds,
+  )
+  const viaGateway = refundedViaGateway(order.refunds)
+  const gatewayRefundableOf = (t: (typeof order.paymentTransactions)[number]) =>
+    payments.canRefund({ reference: t.reference, amount: Number(t.amount), source: t.source, payload: t.payload })
+      ? Math.max(0, Number(t.amount - (viaGateway.get(t.id) ?? 0n)))
+      : 0
 
   const eventActor = (event: (typeof order.events)[number]): OrderHistoryActor => {
     if (event.actor === 'staff') return { type: 'staff', ...event.staff! }
@@ -39,9 +66,16 @@ export async function loadAdminOrder(db: DbClient, storage: Storage, code: strin
     at: event.createdAt.toISOString(),
   }))
 
+  const view = toPublicOrder(storage, order)
   return {
-    ...toPublicOrder(storage, order),
+    ...view,
+    lines: view.lines.map((line, i) => ({
+      ...line,
+      returnedQuantity: order.lines[i]!.returnedQuantity,
+      writtenOffQuantity: order.lines[i]!.writtenOffQuantity,
+    })),
     customerId: order.customerId,
+    cancelNote: order.cancelNote,
     voucher:
       order.voucherId === null
         ? null
@@ -70,6 +104,31 @@ export async function loadAdminOrder(db: DbClient, storage: Storage, code: strin
         resolvedBy: t.reconciliationItem.resolvedBy,
         resolvedAt: t.reconciliationItem.resolvedAt?.toISOString() ?? null,
       },
+      gatewayRefundable: gatewayRefundableOf(t),
+    })),
+    refunded: Number(totals.refunded),
+    refunding: Number(totals.refunding),
+    refundable: Number(totals.refundable),
+    gatewayRefundable: order.paymentTransactions.reduce((sum, t) => sum + gatewayRefundableOf(t), 0),
+    refunds: order.refunds.map((r) => ({
+      id: r.id,
+      amount: Number(r.amount),
+      origin: r.origin,
+      status: r.status,
+      method: r.method,
+      reconciliationItemId: r.reconciliationItemId,
+      retryOfId: r.retryOfId,
+      retriedById: r.retriedBy?.id ?? null,
+      paymentTransactionId: r.paymentTransactionId,
+      bankReference: r.bankReference,
+      transferredOn: r.transferredOn?.toISOString().slice(0, 10) ?? null,
+      note: r.note,
+      createdBy: r.createdBy,
+      createdAt: r.createdAt.toISOString(),
+      executedBy: r.executedBy,
+      executedAt: r.executedAt?.toISOString() ?? null,
+      settledBy: r.settledBy,
+      completedAt: r.completedAt?.toISOString() ?? null,
     })),
     history,
   }

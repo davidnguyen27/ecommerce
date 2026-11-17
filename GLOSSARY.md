@@ -138,15 +138,34 @@ _Avoid_: ví, ngân hàng (khi nói về cổng)
 _Avoid_: lỗi thanh toán, đơn treo
 
 **Hủy đơn** (Order cancellation):
-Kết thúc một đơn chưa thanh toán, do khách tự hủy, nhân viên hủy hoặc đơn hết thời hạn giữ hàng; hàng đang giữ được nhả. Không phải hoàn tiền.
+Quyết định kết thúc cả một đơn trước khi bàn giao vận chuyển, hoặc sau khi giao thất bại; hàng đang giữ được nhả. Đơn chưa thanh toán thì khách tự hủy, nhân viên hủy hoặc đơn hết thời hạn giữ hàng; đơn đã nhận tiền thì chỉ nhân viên hủy. Không hủy một phần đơn. Không phải hoàn tiền: đơn đã hủy không có nghĩa là khách đã nhận lại tiền.
 _Avoid_: hoàn đơn, xóa đơn
+
+**Hoàn tiền** (Refund):
+Một khoản tiền trả lại cho khách, gắn với một đơn, có số tiền, lý do, phương thức và trạng thái riêng cho tới khi có kết quả. Một đơn có thể có nhiều lần hoàn, mỗi lần có thể chỉ một phần; tổng đã hoàn không vượt số khách đã trả.
+_Avoid_: hoàn đơn, trả tiền (khi nói về hoàn)
+
+**Mất cọc** (Forfeited deposit):
+Phần tiền cọc không được hoàn khi hủy một đơn đặt trước đã cọc; nhân viên quyết định số tiền hoàn theo chính sách đặt trước, hệ thống không tự áp quy tắc.
+_Avoid_: phạt cọc, giữ cọc
+
+**Giao thất bại** (Failed delivery):
+Kiện hàng đã bàn giao nhưng không tới được tay khách. Sau đó đơn được giao lại, hoặc hàng được nhận hoàn về kho rồi đơn bị hủy.
+_Avoid_: hoàn hàng, bom hàng
+
+**Giao lại** (Redelivery):
+Một lần bàn giao vận chuyển mới, có mã vận đơn mới, cho đơn đã giao thất bại.
+
+**Nhận hàng hoàn về** (Return to stock):
+Lúc kho ghi nhận hàng thực nhận lại từ đơn vị vận chuyển, mỗi dòng được nhập lại tồn hoặc ghi hỏng/mất theo kết quả kiểm tra. Không tự hủy đơn hay hoàn tiền.
+_Avoid_: nhập kho (khi nói về hàng hoàn), hoàn hàng
 
 **Mã giảm giá** (Voucher):
 Mã khách tự gõ khi đặt mua hoặc đặt trước để được giảm vào tiền hàng, theo số tiền cố định hoặc theo tỷ lệ có mức giảm tối đa. Mỗi đơn dùng tối đa một mã; nhiều khách dùng chung một mã trong giới hạn lượt. Không giảm phí giao.
 _Avoid_: coupon, khuyến mại (khi nói về mã khách gõ)
 
 **Lượt dùng** (Redemption):
-Một đơn chưa hủy đã dùng một mã giảm giá. Lượt bị chiếm từ lúc tạo đơn và được trả lại khi đơn bị hủy trước khi thanh toán. Khách được nhận diện theo email hoặc số điện thoại.
+Một đơn chưa hủy đã dùng một mã giảm giá. Lượt bị chiếm từ lúc tạo đơn và được trả lại khi đơn bị hủy, trước hay sau khi thanh toán; hoàn tiền một phần không trả lượt. Khách được nhận diện theo email hoặc số điện thoại.
 _Avoid_: lần sử dụng, lượt áp
 
 **Phiếu soạn hàng** (Packing slip):

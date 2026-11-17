@@ -1,11 +1,14 @@
 // Bổ sung dữ liệu mà seed của smoke không có nhưng luồng mua hàng cần. Chạy lại trên cùng stack vẫn được:
 // bước nào đã có thì bỏ qua.
 import { PREORDER_POLICY_SLUG, PRIVACY_POLICY_SLUG } from '@ecommerce/shared'
-import { AdminApi, BASE_URL, PROVINCE_CODE, SHIPPING_FEE, SKU, WAREHOUSE } from './stack.ts'
+import { resetRateLimits } from './rate-limit.ts'
+import { ACCOUNTANT, AdminApi, BASE_URL, PROVINCE_CODE, SALES, SHIPPING_FEE, SKU, WAREHOUSE } from './stack.ts'
 
 export default async function globalSetup() {
   const health = await fetch(`${BASE_URL}/healthz`).catch(() => null)
   if (!health?.ok) throw new Error(`Không thấy stack ở ${BASE_URL}; dựng bằng: pnpm smoke --keep`)
+  // Chạy lại trên cùng stack không vướng giới hạn đặt mua của lượt trước.
+  resetRateLimits()
   const api = await AdminApi.owner()
 
   // Chưa cấu hình phí giao thì cửa hàng chưa nhận đơn. Tỉnh khác dùng mức mặc định cao hơn để thấy phí theo tỉnh.
@@ -27,8 +30,14 @@ export default async function globalSetup() {
   }
 
   const staff = (await api.staff()).items
-  if (!staff.some((member) => member.email === WAREHOUSE.email)) {
-    await api.send('POST', '/api/admin/staff', { ...WAREHOUSE, roles: ['warehouse'] })
+  for (const [member, role] of [
+    [WAREHOUSE, 'warehouse'],
+    [SALES, 'sales'],
+    [ACCOUNTANT, 'accountant'],
+  ] as const) {
+    if (!staff.some((s) => s.email === member.email)) {
+      await api.send('POST', '/api/admin/staff', { ...member, roles: [role] })
+    }
   }
 
   // Mỗi lượt bán một cái; còn ít hơn một cái có thể bán (chạy lại nhiều lần) thì kiểm kê lên lại.
