@@ -54,6 +54,14 @@ async function submit() {
       Đã nhận <strong>{{ formatVnd(order.received) }}</strong> · còn hoàn được
       <strong>{{ formatVnd(order.refundable) }}</strong>
     </p>
+    <p
+      v-if="order.preorder"
+      style="margin: 0 0 12px; font-size: 12px; color: var(--adm-muted)"
+      data-testid="cancel-paid-preorder"
+    >
+      Đơn đặt trước: tiền cọc {{ formatVnd(order.preorder.depositAmount) }}. Số tiền hoàn theo chính sách đặt trước đã
+      áp dụng cho đơn (mất cọc ghi rõ ở ghi chú). Hàng đã giữ cho đơn chuyển cho đơn chờ kế tiếp theo thứ tự cọc.
+    </p>
 
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <span>{{ error }}</span>

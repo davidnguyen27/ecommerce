@@ -23,8 +23,12 @@ const deliveryChanged = computed(() => {
   return p !== null && (p.currentDeliveryFrom !== p.deliveryFrom || p.currentDeliveryTo !== p.deliveryTo)
 })
 
+// Đơn đã hủy giữ trạng thái thanh toán "đã cọc" (ADR 0014) nhưng không còn phần nào phải trả.
 const awaitingRemainder = computed(
-  () => props.order.paymentStatus === 'deposit_paid' && props.order.preorder?.remainderDueAt != null,
+  () =>
+    props.order.status === 'processing' &&
+    props.order.paymentStatus === 'deposit_paid' &&
+    props.order.preorder?.remainderDueAt != null,
 )
 
 // Đơn đặt trước chờ cọc chỉ giữ suất, không giữ hàng (ADR 0013).
