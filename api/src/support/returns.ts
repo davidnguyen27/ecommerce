@@ -14,6 +14,7 @@ import type { CustomerMail } from '../jobs/jobs.ts'
 import { vnd } from '../orders/format.ts'
 import { createRefund, lockOrderForRefund, refundTotals } from '../payments/refunds.ts'
 import { changeStock } from '../stock/stock.ts'
+import { ORDER_LINE_FOR_EXCHANGE, assertExchangeable, heldVariants, reserveExchange } from './exchanges.ts'
 import {
   SUPPORT_INCLUDE,
   conflict,
@@ -37,7 +38,8 @@ const RETURNING_KINDS = ['return', 'exchange'] as const
 
 /**
  * Số còn trả (hay đổi) được của từng dòng đơn: số lượng dòng trừ số đã nằm trong các yêu cầu trả/đổi chưa bị từ chối.
- * Yêu cầu bị đóng mà chưa nhận hàng thì không tính (nhân viên đóng tay, hàng chưa về). Gọi dưới khóa đơn.
+ * Không tính: yêu cầu bị đóng mà chưa nhận hàng (nhân viên đóng tay, hàng chưa về), và yêu cầu đổi đã giao hàng mới (khách
+ * lại đang giữ hàng, trả hay đổi tiếp được; ADR 0015). Gọi dưới khóa đơn.
  */
 export async function returnableQuantities(tx: DbClient, orderId: string) {
   const lines = await tx.orderLine.findMany({ where: { orderId }, select: { id: true, quantity: true } })
@@ -47,7 +49,10 @@ export async function returnableQuantities(tx: DbClient, orderId: string) {
       request: {
         kind: { in: [...RETURNING_KINDS] },
         status: { not: 'rejected' },
-        NOT: { status: 'resolved', receivedAt: null },
+        NOT: [
+          { status: 'resolved', receivedAt: null },
+          { kind: 'exchange', exchangeHandedOverAt: { not: null } },
+        ],
       },
     },
     select: { orderLineId: true, quantity: true },
@@ -57,31 +62,59 @@ export async function returnableQuantities(tx: DbClient, orderId: string) {
   return new Map(lines.map((l) => [l.id, l.quantity - (used.get(l.id) ?? 0)]))
 }
 
-export type PlannedReturnLine = { orderLineId: string; quantity: number; reason: SupportReturnReason }
+export type PlannedReturnLine = {
+  orderLineId: string
+  quantity: number
+  reason: SupportReturnReason | null
+  /** Biến thể khách đang giữ (kho nhận về biến thể này). */
+  heldVariantId: string
+  /** Đổi hàng: biến thể khách nhận. */
+  exchangeVariantId: string | null
+}
 
-/** Đối chiếu các dòng khách chọn (theo biến thể) với dòng đơn, kiểm số còn trả được; sai thì 400 hay 409. */
+/**
+ * Đối chiếu các dòng khách chọn (theo biến thể gốc của dòng đơn) với đơn, kiểm số còn trả/đổi được; với đổi hàng kiểm
+ * thêm biến thể đổi sang (ADR 0015). Sai thì 400 hay 409.
+ */
 export async function planReturnLines(
   tx: DbClient,
   orderId: string,
-  lines: readonly { variantId: string; quantity: number; reason: SupportReturnReason }[],
+  kind: 'return' | 'exchange',
+  lines: readonly { variantId: string; quantity: number; reason?: SupportReturnReason; toVariantId?: string }[],
 ): Promise<PlannedReturnLine[]> {
-  if (lines.length === 0) throw invalidField('lines', 'Chọn ít nhất một sản phẩm muốn trả')
-  const orderLines = await tx.orderLine.findMany({
-    where: { orderId },
-    select: { id: true, variantId: true, sku: true },
-  })
+  if (lines.length === 0) throw invalidField('lines', 'Chọn ít nhất một sản phẩm')
+  const orderLines = await tx.orderLine.findMany({ where: { orderId }, ...ORDER_LINE_FOR_EXCHANGE })
   const available = await returnableQuantities(tx, orderId)
-  return lines.map((line, i) => {
+  const held = await heldVariants(tx, orderLines)
+  const planned: PlannedReturnLine[] = []
+  for (const [i, line] of lines.entries()) {
     const orderLine = orderLines.find((l) => l.variantId === line.variantId)
     if (!orderLine) throw invalidField(`lines.${i}`, 'Sản phẩm này không có trong đơn')
     const left = available.get(orderLine.id) ?? 0
     if (line.quantity > left) {
       throw conflict(
-        `${orderLine.sku}: chỉ còn trả được ${left} cái (các yêu cầu trả hay đổi khác đã chiếm phần còn lại)`,
+        `${orderLine.sku}: chỉ còn trả hay đổi được ${left} cái (các yêu cầu trả hay đổi khác đã chiếm phần còn lại)`,
       )
     }
-    return { orderLineId: orderLine.id, quantity: line.quantity, reason: line.reason }
-  })
+    const heldVariantId = held.get(orderLine.id)!
+    if (kind === 'exchange') {
+      if (!line.toVariantId) throw invalidField(`lines.${i}`, 'Chọn biến thể muốn đổi sang')
+      await assertExchangeable(
+        tx,
+        { orderLine, productId: orderLine.variant.productId, heldVariantId },
+        line.toVariantId,
+        line.quantity,
+      )
+    } else if (!line.reason) throw invalidField(`lines.${i}`, 'Chọn lý do trả')
+    planned.push({
+      orderLineId: orderLine.id,
+      quantity: line.quantity,
+      reason: kind === 'return' ? line.reason! : null,
+      heldVariantId,
+      exchangeVariantId: kind === 'exchange' ? line.toVariantId! : null,
+    })
+  }
+  return planned
 }
 
 /**
@@ -157,6 +190,8 @@ export async function decideSupportRequest(
   if (request.decision) throw conflict('Yêu cầu đã được quyết định')
   const now = new Date()
   const accepted = input.decision === 'accepted'
+  // Đổi hàng: chấp nhận thì kiểm lại và giữ hàng biến thể mới ngay, để không bị bán mất (ADR 0015).
+  if (accepted && request.kind === 'exchange') await reserveExchange(tx, request)
   await tx.supportMessage.create({ data: { requestId: request.id, author: 'staff', staffId, body: input.message } })
   await tx.supportRequest.update({
     where: { id: request.id },
@@ -212,8 +247,8 @@ export async function receiveSupportReturn(
         `${line.orderLine.sku}: số nhập lại tồn cộng số ghi hỏng phải bằng ${line.quantity}`,
       )
     }
-    // Ticket 04: khách giữ biến thể gốc của dòng. Đổi hàng (ticket 05) thay bằng biến thể khách đang giữ.
-    return { line, entry, variantId: line.orderLine.variantId, index }
+    // Biến thể khách đang giữ lúc gửi: biến thể gốc, hay biến thể nhận được ở lần đổi trước.
+    return { line, entry, variantId: line.heldVariantId, index }
   })
 
   const restocking = plan.filter((p) => p.entry.restocked > 0)

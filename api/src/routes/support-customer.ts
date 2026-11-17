@@ -3,13 +3,14 @@ import {
   CreateSupportRequest,
   ErrorCode,
   SupportMessageRequest,
+  type ExchangeOptions,
   type PublicSupportList,
   type PublicSupportRequest,
 } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
 import { authSubject } from '../auth/require-auth.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError, invalidField } from '../http/errors.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { parse } from '../http/validation.ts'
 import { deleteSupportImageQuietly, receiveSupportImage, storeSupportImage } from '../media/support-images.ts'
@@ -23,6 +24,7 @@ import {
   toPublicSupportSummary,
   type NewSupportRequest,
 } from '../support/support.ts'
+import { exchangeOptions } from '../support/exchanges.ts'
 
 type Deps = Pick<AppDeps, 'prisma' | 'emails' | 'siteUrl' | 'storage'>
 
@@ -75,13 +77,25 @@ function customerSupportRoutes({ prisma, emails, siteUrl, storage }: Deps, scope
             subject: input.subject,
             message: input.message,
             previousRequestCode: input.previousRequestCode,
-            lines: input.kind === 'return' ? input.lines : undefined,
+            lines: 'lines' in input ? input.lines : undefined,
             creator: { type: 'customer' },
             ...owner,
           }),
         )
         const body: PublicSupportRequest = await toPublicSupport(storage, request)
         res.status(201).set('Cache-Control', 'no-store').json(body)
+      })
+      // Biến thể đổi được của từng dòng đơn, cho form đổi hàng. Tài khoản khách chọn đơn bằng `?orderCode=`.
+      .get('/exchange-options', async (req, res) => {
+        const scope = await scopeOf(req)
+        const orderCode =
+          typeof req.query.orderCode === 'string' && /^\d{1,9}$/.test(req.query.orderCode)
+            ? Number(req.query.orderCode)
+            : undefined
+        const { order } = await scope.owner({ orderCode })
+        if (!order) throw invalidField('orderCode', 'Cần mã đơn')
+        const body: ExchangeOptions = await exchangeOptions(prisma, order.id)
+        res.set('Cache-Control', 'no-store').json(body)
       })
       .get('/:requestCode', async (req, res) => {
         const { where } = await scopeOf(req)

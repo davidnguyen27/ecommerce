@@ -27,6 +27,7 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import type { CustomerMail } from '../jobs/jobs.ts'
 import { DOCUMENT_URL_TTL_SECONDS } from '../media/documents.ts'
+import { releaseExchange } from './exchanges.ts'
 import { planReturnLines, returnWindowSnapshot } from './returns.ts'
 
 /**
@@ -57,8 +58,20 @@ export const SUPPORT_INCLUDE = {
   },
   lines: {
     include: {
-      orderLine: { select: { id: true, sku: true, productName: true, variantId: true, quantity: true } },
+      orderLine: {
+        select: {
+          id: true,
+          sku: true,
+          productName: true,
+          variantId: true,
+          quantity: true,
+          price: true,
+          variant: { select: { productId: true } },
+        },
+      },
       receivedVariant: { select: { id: true, sku: true } },
+      heldVariant: { select: { id: true, sku: true } },
+      exchangeVariant: { select: { id: true, sku: true } },
     },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   },
@@ -111,9 +124,11 @@ export async function toPublicSupport(storage: Storage, request: SupportForView)
       productName: l.orderLine.productName,
       quantity: l.quantity,
       reason: l.reason,
+      toSku: l.exchangeVariant?.sku ?? null,
     })),
     decision: request.decision,
     receivedAt: request.receivedAt?.toISOString() ?? null,
+    exchangeShipment: exchangeShipmentOf(request),
     messages: await Promise.all(
       publicMessages(request).map(async (m) => ({
         id: m.id,
@@ -127,6 +142,18 @@ export async function toPublicSupport(storage: Storage, request: SupportForView)
 }
 
 export const toPublicSupportSummary = summary
+
+/** Lần giao hàng đổi (ADR 0015), khi đã bàn giao. */
+function exchangeShipmentOf(request: SupportForView) {
+  const { exchangeCarrier, exchangeTrackingNumber, exchangeHandedOverAt } = request
+  return exchangeCarrier && exchangeTrackingNumber && exchangeHandedOverAt
+    ? {
+        carrier: exchangeCarrier,
+        trackingNumber: exchangeTrackingNumber,
+        handedOverAt: exchangeHandedOverAt.toISOString(),
+      }
+    : null
+}
 
 export function toAdminSupportSummary(request: SupportForView): AdminSupportSummary {
   return {
@@ -154,17 +181,22 @@ export async function toAdminSupport(storage: Storage, request: SupportForView):
       productName: l.orderLine.productName,
       quantity: l.quantity,
       reason: l.reason,
-      // Ticket 04: khách luôn giữ biến thể gốc; đổi hàng (ticket 05) đổi biến thể này. Kho nhận về đúng biến thể đã ghi.
-      heldVariantId: l.receivedVariant?.id ?? l.orderLine.variantId,
-      heldSku: l.receivedVariant?.sku ?? l.orderLine.sku,
+      toSku: l.exchangeVariant?.sku ?? null,
+      // Biến thể khách đang giữ lúc gửi (lần đổi gần nhất đã giao, hay biến thể gốc): kho nhận về đúng biến thể này.
+      heldVariantId: l.heldVariantId,
+      heldSku: l.heldVariant.sku,
       restockedQuantity: l.restockedQuantity,
       writtenOffQuantity: l.writtenOffQuantity,
+      exchangeVariantId: l.exchangeVariantId,
+      reservedQuantity: l.reservedQuantity,
     })),
     decision: request.decision,
     decidedBy: request.decidedBy,
     decidedAt: request.decidedAt?.toISOString() ?? null,
     receivedAt: request.receivedAt?.toISOString() ?? null,
     receivedBy: request.receivedBy,
+    exchangeShipment: exchangeShipmentOf(request),
+    exchangeOverdueAt: request.exchangeOverdueAt?.toISOString() ?? null,
     returnWindow:
       request.kind === 'return' || request.kind === 'exchange'
         ? {
@@ -203,7 +235,7 @@ export type NewSupportRequest = {
   customer?: { id: string; email: string }
   previousRequestCode?: number
   /** Trả hàng: các dòng theo biến thể, số lượng, lý do (ticket 04). */
-  lines?: readonly { variantId: string; quantity: number; reason: SupportReturnReason }[]
+  lines?: readonly { variantId: string; quantity: number; reason?: SupportReturnReason; toVariantId?: string }[]
   creator: SupportCreator
 }
 
@@ -230,8 +262,9 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
         'Chỉ gửi yêu cầu hủy được khi đơn đã thanh toán (hoặc đã cọc) và chưa giao cho đơn vị vận chuyển. Đơn chưa thanh toán thì bạn tự hủy được ở trang đơn; đơn đã giao đi thì gửi yêu cầu trả hàng sau khi nhận.',
       )
     }
-    if (input.kind === 'return' && !(locked!.status === 'completed' && locked!.fulfillmentStatus === 'delivered')) {
-      throw conflict('Chỉ trả được hàng của đơn đã giao xong')
+    const sendsGoods = input.kind === 'return' || input.kind === 'exchange'
+    if (sendsGoods && !(locked!.status === 'completed' && locked!.fulfillmentStatus === 'delivered')) {
+      throw conflict('Chỉ trả hay đổi được hàng của đơn đã giao xong')
     }
   } else await tx.$queryRaw`SELECT "id" FROM "customer" WHERE "id" = ${customer!.id}::uuid FOR UPDATE`
 
@@ -254,8 +287,9 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
   }
 
   // Trả hàng: dòng hợp lệ, số lượng còn trả được (dưới khóa đơn), hạn đổi trả chụp lúc gửi.
-  const returnLines = input.kind === 'return' ? await planReturnLines(tx, order!.id, input.lines ?? []) : []
-  const window = input.kind === 'return' ? await returnWindowSnapshot(tx, order!.id, returnLines) : null
+  const goodsKind = input.kind === 'return' || input.kind === 'exchange' ? input.kind : null
+  const returnLines = goodsKind ? await planReturnLines(tx, order!.id, goodsKind, input.lines ?? []) : []
+  const window = goodsKind ? await returnWindowSnapshot(tx, order!.id, returnLines) : null
 
   const staffId = input.creator.type === 'staff' ? input.creator.staffId : null
   const created = await tx.supportRequest.create({
@@ -276,7 +310,13 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
         overdueDays: window.overdueDays,
       }),
       lines: {
-        create: returnLines.map((l) => ({ orderLineId: l.orderLineId, quantity: l.quantity, reason: l.reason })),
+        create: returnLines.map((l) => ({
+          orderLineId: l.orderLineId,
+          quantity: l.quantity,
+          reason: l.reason,
+          heldVariantId: l.heldVariantId,
+          exchangeVariantId: l.exchangeVariantId,
+        })),
       },
     },
     select: { id: true },
@@ -336,6 +376,8 @@ export async function staffReply(
   }
   const status = input.status ?? request.status
   const closing = isClosed(status)
+  // Đổi hàng đóng trước khi giao: nhả hàng đang giữ cho biến thể mới (ADR 0015).
+  if (closing && request.kind === 'exchange' && !request.exchangeHandedOverAt) await releaseExchange(tx, request.id)
   await tx.supportRequest.update({
     where: { id: request.id },
     data: { status, resolvedAt: closing ? new Date() : null, updatedAt: new Date() },

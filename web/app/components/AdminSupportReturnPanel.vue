@@ -2,9 +2,9 @@
 import { AdminSupportRequest, type FieldError } from '@ecommerce/shared'
 
 /**
- * Khối trả hàng ở trang yêu cầu (spec M6b ticket 04): hạn đổi trả chụp lúc gửi, chấp nhận hay từ chối kèm lời nhắn cho
+ * Khối trả hàng hay đổi hàng ở trang yêu cầu (spec M6b ticket 04, 05): hạn đổi trả chụp lúc gửi, chấp nhận hay từ chối kèm lời nhắn cho
  * khách (`support.handle`), kho nhận hàng về theo từng dòng (`order.fulfill`), đề xuất hoàn (`support.handle`). Thao tác
- * xong emit yêu cầu mới do API trả.
+ * xong emit yêu cầu mới do API trả. Đổi hàng: sau khi nhận hàng cũ, kho bàn giao biến thể mới kèm mã vận đơn.
  */
 const props = defineProps<{ request: AdminSupportRequest }>()
 const emit = defineEmits<{ update: [request: AdminSupportRequest] }>()
@@ -33,6 +33,14 @@ watch(
     if (suggested !== undefined) refund.amount = suggested
   },
 )
+const isExchange = computed(() => props.request.kind === 'exchange')
+const shipment = reactive({ carrier: '', trackingNumber: '' })
+const ship = () =>
+  act(
+    'exchange-ship',
+    { ...shipment },
+    'Bàn giao hàng đổi cho đơn vị vận chuyển? Tồn biến thể mới bị trừ và yêu cầu sẽ xong.',
+  )
 const reduced = computed(() => refund.amount < (props.request.returnRefund?.suggested ?? 0))
 
 async function act(path: string, body: Record<string, unknown>, confirmText: string) {
@@ -60,7 +68,9 @@ const decide = (decision: 'accepted' | 'rejected') =>
     'decide',
     { decision, message: decisionMessage.value },
     decision === 'accepted'
-      ? 'Chấp nhận trả hàng? Khách nhận email kèm lời nhắn của bạn.'
+      ? isExchange.value
+        ? 'Chấp nhận đổi hàng? Hàng biến thể mới được giữ ngay; khách nhận email kèm lời nhắn của bạn.'
+        : 'Chấp nhận trả hàng? Khách nhận email kèm lời nhắn của bạn.'
       : 'Từ chối yêu cầu? Yêu cầu sẽ kết thúc và khách nhận email kèm lý do.',
   )
 const receive = () =>
@@ -81,7 +91,21 @@ const proposeRefund = () =>
 
 <template>
   <div class="admin-panel" style="margin-bottom: 24px" data-testid="admin-support-return">
-    <h2 class="admin-section-title">Trả hàng</h2>
+    <h2 class="admin-section-title">{{ isExchange ? 'Đổi hàng' : 'Trả hàng' }}</h2>
+
+    <div
+      v-if="request.exchangeOverdueAt && !request.receivedAt && !closed"
+      class="admin-alert admin-alert-danger"
+      role="alert"
+      style="font-size: 12px"
+      data-testid="admin-exchange-overdue"
+    >
+      <span>
+        Đã chấp nhận quá 14 ngày mà chưa nhận được hàng khách gửi (gắn cờ
+        {{ formatDateTime(request.exchangeOverdueAt) }}). Hàng mới vẫn đang giữ; liên hệ khách hoặc đóng yêu cầu để nhả
+        hàng.
+      </span>
+    </div>
 
     <p v-if="request.returnWindow" style="margin: 0 0 12px; font-size: 13px" data-testid="admin-support-window">
       <template v-if="request.returnWindow.days === null">Nhóm hàng chưa cấu hình hạn đổi trả.</template>
@@ -99,8 +123,8 @@ const proposeRefund = () =>
       <thead>
         <tr>
           <th>Sản phẩm</th>
-          <th class="admin-table-num">Số trả</th>
-          <th>Lý do</th>
+          <th class="admin-table-num">{{ isExchange ? 'Số đổi' : 'Số trả' }}</th>
+          <th>{{ isExchange ? 'Đổi sang' : 'Lý do' }}</th>
           <th v-if="request.receivedAt" class="admin-table-num">Nhập lại / hỏng</th>
         </tr>
       </thead>
@@ -111,7 +135,13 @@ const proposeRefund = () =>
             <div style="font-family: var(--adm-mono); font-size: 12px">{{ line.heldSku }}</div>
           </td>
           <td class="admin-table-num">{{ line.quantity }}</td>
-          <td>{{ line.reason ? RETURN_REASON_LABELS[line.reason] : '—' }}</td>
+          <td v-if="isExchange">
+            <span style="font-family: var(--adm-mono); font-size: 12px">{{ line.toSku }}</span>
+            <div v-if="line.reservedQuantity" style="font-size: 11px; color: var(--adm-muted)">
+              đang giữ {{ line.reservedQuantity }}
+            </div>
+          </td>
+          <td v-else>{{ line.reason ? RETURN_REASON_LABELS[line.reason] : '—' }}</td>
           <td v-if="request.receivedAt" class="admin-table-num">
             {{ line.restockedQuantity }} / {{ line.writtenOffQuantity }}
           </td>
@@ -221,7 +251,40 @@ const proposeRefund = () =>
       Chờ kho nhận hàng khách gửi về.
     </p>
 
-    <!-- Bước 3: đề xuất hoàn. -->
+    <!-- Đổi hàng, bước 3: kho bàn giao biến thể mới. -->
+    <p v-if="request.exchangeShipment" style="margin: 0; font-size: 13px" data-testid="admin-exchange-shipment">
+      Đã gửi hàng đổi qua {{ request.exchangeShipment.carrier }}, mã vận đơn
+      <strong>{{ request.exchangeShipment.trackingNumber }}</strong> ·
+      {{ formatDateTime(request.exchangeShipment.handedOverAt) }}
+    </p>
+    <form
+      v-else-if="isExchange && request.receivedAt && !closed && canReceive"
+      data-testid="exchange-ship"
+      @submit.prevent="ship"
+    >
+      <div class="form-label" style="margin-bottom: 6px">Gửi hàng đổi cho khách</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px">
+        <div class="form-group">
+          <label class="form-label" for="exchange-carrier">Đơn vị vận chuyển</label>
+          <input id="exchange-carrier" v-model="shipment.carrier" class="form-input" maxlength="100" />
+          <small class="field-error-msg">{{ errorAt('carrier') }}</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="exchange-tracking">Mã vận đơn</label>
+          <input id="exchange-tracking" v-model="shipment.trackingNumber" class="form-input" maxlength="100" />
+          <small class="field-error-msg">{{ errorAt('trackingNumber') }}</small>
+        </div>
+      </div>
+      <button
+        type="submit"
+        class="btn btn-primary btn-sm"
+        :disabled="busy || !shipment.carrier.trim() || !shipment.trackingNumber.trim()"
+      >
+        Bàn giao hàng đổi
+      </button>
+    </form>
+
+    <!-- Trả hàng, bước 3: đề xuất hoàn. -->
     <form v-if="request.returnRefund && canHandle" data-testid="return-refund" @submit.prevent="proposeRefund">
       <p style="margin: 0 0 8px; font-size: 13px">
         Gợi ý hoàn <strong>{{ formatVnd(request.returnRefund.suggested) }}</strong> (đã trừ phần giảm của mã, không gồm
