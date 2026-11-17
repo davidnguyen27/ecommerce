@@ -8,8 +8,8 @@
 **Status:** resolved
 
 - [x] E2E hàng sẵn: nhân viên tạo mã ở admin → khách thêm hàng vào giỏ, áp mã ở trang đặt mua, thấy tiền giảm và tổng mới → giả lập thanh toán → trang đơn hàng hiện tiền giảm → admin thấy đơn trong chi tiết mã và lọc được theo mã
-- [x] E2E đặt trước: khách áp mã ở trang đặt trước, kiểm tiền cọc và phần còn lại sau giảm → giả lập trả cọc → trang đơn hiện tiền giảm
-- [x] E2E mã hết hiệu lực lúc xác nhận: nhân viên tắt mã sau khi khách đã áp → khách xác nhận thấy hộp thoại → "Đặt không dùng mã" tạo đơn không có giảm
+- [ ] E2E đặt trước: khách áp mã ở trang đặt trước, kiểm tiền cọc và phần còn lại sau giảm → giả lập trả cọc → trang đơn hiện tiền giảm (làm một phần: tới cổng giả lập với đúng tiền cọc, không trả cọc; xem Quyết định)
+- [ ] E2E mã hết hiệu lực lúc xác nhận: nhân viên tắt mã sau khi khách đã áp → khách xác nhận thấy hộp thoại → "Đặt không dùng mã" tạo đơn không có giảm (làm một phần: kiểm hộp thoại, không bấm nút; xem Quyết định)
 - [x] `scripts/demo-seed.ts`: khi chạy local thì tạo mã `DEMO10` (giảm 10%, tối đa 500.000, cả hai hình thức bán, hết hạn sau một năm). Không tạo khi seed vào bản deploy
 - [x] Ghi vào `docs/agents/local-walkthrough.md` cách dùng mã mẫu
 
