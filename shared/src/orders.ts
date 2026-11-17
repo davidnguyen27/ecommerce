@@ -20,6 +20,13 @@ export const OrderKind = z.enum(['standard', 'preorder'])
 export type OrderKind = z.infer<typeof OrderKind>
 
 /**
+ * Giảm số tiền cố định, hoặc giảm theo tỷ lệ có mức giảm tối đa (GLOSSARY "Mã giảm giá"). Khai ở đây vì đơn chụp loại mã;
+ * `vouchers.ts` import file này.
+ */
+export const VoucherKind = z.enum(['fixed', 'percent'])
+export type VoucherKind = z.infer<typeof VoucherKind>
+
+/**
  * Phần đặt trước của đơn, chụp lúc đặt: mức cọc, tiền cọc, phần còn lại (gồm phí giao), thời gian giao dự kiến và số
  * ngày được trả phần còn lại sau khi hàng về.
  */
@@ -62,6 +69,8 @@ export const OrderLineView = z.object({
   price: z.number(),
   quantity: z.number(),
   lineTotal: z.number(),
+  /** Phần tiền giảm của mã chia cho dòng này; 0 khi đơn không dùng mã hoặc dòng ngoài phạm vi mã. */
+  discount: z.number(),
 })
 export type OrderLineView = z.infer<typeof OrderLineView>
 
@@ -96,6 +105,10 @@ export const PublicOrder = z.object({
   note: z.string(),
   lines: z.array(OrderLineView),
   subtotal: z.number(),
+  /** Mã giảm giá đã dùng lúc đặt; `null` khi không dùng mã. */
+  voucherCode: z.string().nullable(),
+  /** Tiền giảm của mã, trừ vào tiền hàng; 0 khi không dùng mã. */
+  discount: z.number(),
   shippingFee: z.number(),
   total: z.number(),
   /** Phiên bản chính sách đổi trả, bảo hành gắn với sản phẩm trong đơn lúc đặt mua. */
@@ -146,6 +159,8 @@ export const AdminOrderQuery = PageQuery.extend({
   campaignId: z.uuid().optional(),
   /** `true`: chỉ đơn đặt trước quá hạn trả phần còn lại (đã cọc, chưa trả đủ). */
   remainderOverdue: z.stringbool().optional(),
+  /** Đơn đã dùng mã giảm giá này (không phân biệt hoa thường). */
+  voucherCode: z.string().trim().max(40).optional(),
   q: z.string().trim().max(200).optional(),
   sort: z.enum(['oldest', 'newest']).default('oldest'),
 })
@@ -232,6 +247,19 @@ export type OrderHistoryEntry = z.infer<typeof OrderHistoryEntry>
 export const AdminOrder = PublicOrder.extend({
   /** Tài khoản khách đặt hoặc được gắn đơn; `null` với đơn vãng lai. */
   customerId: z.string().nullable(),
+  /** Mã giảm giá như lúc đặt (loại, mức giảm), kèm id để mở trang mã; `null` khi đơn không dùng mã. */
+  voucher: z
+    .object({
+      id: z.string(),
+      code: z.string(),
+      kind: VoucherKind,
+      amount: z.number().nullable(),
+      percent: z.number().nullable(),
+      maxDiscount: z.number().nullable(),
+    })
+    .nullable(),
+  /** Tiền hàng sau giảm, là số tiền ngưỡng miễn phí giao và tiền cọc tính trên đó. */
+  subtotalAfterDiscount: z.number(),
   payments: z.array(AdminPaymentTransaction),
   history: z.array(OrderHistoryEntry),
 })

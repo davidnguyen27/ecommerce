@@ -19,6 +19,11 @@ const quoteError = ref<string | null>(null)
 const { form, invoice, invoiceOpen, acceptPrivacyPolicy, session, signedIn, wards, contactPayload, revealErrors } =
   useShippingForm()
 
+const { voucherCode, voucherConflict, applyVoucher, removeVoucher } = useVoucherCode(
+  () => refreshQuote(),
+  () => [form.value.email, form.value.phone] as const,
+)
+
 let latest = 0
 async function refreshQuote() {
   const lines = cart.lines.value.map(({ variantId, quantity }) => ({ variantId, quantity }))
@@ -29,8 +34,13 @@ async function refreshQuote() {
   // Đổi tỉnh/thành liên tiếp: chỉ nhận báo giá của lần gọi cuối.
   const call = ++latest
   try {
-    const provinceCode = form.value.provinceCode
-    const body: CheckoutQuoteRequest = { lines, ...(provinceCode && { provinceCode }) }
+    const { provinceCode, email, phone } = form.value
+    const body: CheckoutQuoteRequest = {
+      lines,
+      ...(provinceCode && { provinceCode }),
+      // Email, số điện thoại để kiểm lượt mỗi khách; chưa nhập xong thì server bỏ qua.
+      ...(voucherCode.value && { voucherCode: voucherCode.value, email, phone }),
+    }
     const result = CheckoutQuote.parse(await $fetch('/api/checkout/quote', { method: 'POST', body }))
     if (call !== latest) return
     quote.value = result
@@ -56,6 +66,12 @@ watch(
   },
   { deep: true },
 )
+
+/** Đặt tiếp không dùng mã sau khi mã không còn dùng được lúc đặt. */
+async function submitWithoutVoucher() {
+  await removeVoucher()
+  if (canSubmit.value) await submit()
+}
 
 const quoted = computed(() => new Map(quote.value?.lines.map((line) => [line.variantId, line])))
 const changes = computed(() => {
@@ -87,8 +103,11 @@ async function submit() {
   error.value = null
   fieldErrors.value = new Map()
   try {
+    const voucher = quote.value?.voucher
     const body: CheckoutRequest = {
       lines: cart.lines.value.map(({ variantId, quantity, price }) => ({ variantId, quantity, price })),
+      // Chỉ gửi mã đang áp được, kèm tiền giảm khách đã thấy.
+      ...(voucher?.applied && { voucherCode: voucher.code, discount: voucher.discount }),
       ...contactPayload(),
       ...(!signedIn.value && { acceptPrivacyPolicy: acceptPrivacyPolicy.value }),
     }
@@ -104,6 +123,8 @@ async function submit() {
       // Giá, ngừng bán hay hết hàng đã đổi: hiện thay đổi từng dòng, khách phải xác nhận lại.
       await refreshQuote()
       conflicts.value = new Map(details.data.lines.map((line) => [line.variantId, line.change]))
+      // Mã không còn như khách đã thấy: không tự bỏ mã, khách tự chọn.
+      voucherConflict.value = details.data.voucher ?? null
     }
     error.value = apiErrorMessage(err)
     fieldErrors.value = new Map(apiFieldErrors(err).map((f) => [f.path, f.message]))
@@ -192,10 +213,18 @@ useSeo({ title: 'Đặt mua', description: 'Thông tin nhận hàng và xác nh�
               <NuxtLink to="/gio-hang" class="link block text-center">Sửa giỏ hàng</NuxtLink>
             </div>
 
+            <VoucherField :code="voucherCode" :result="quote.voucher" @apply="applyVoucher" @remove="removeVoucher" />
+
             <dl class="mt-4 space-y-2 text-sm">
               <div class="flex justify-between gap-4">
                 <dt class="text-muted-foreground">Tổng tiền hàng</dt>
                 <dd class="tabular-nums">{{ formatVnd(quote.subtotal) }}</dd>
+              </div>
+              <div v-if="quote.discount > 0" class="flex justify-between gap-4" data-testid="discount">
+                <dt class="text-muted-foreground">
+                  Mã giảm giá <span class="font-mono">{{ quote.voucher?.code }}</span>
+                </dt>
+                <dd class="tabular-nums">−{{ formatVnd(quote.discount) }}</dd>
               </div>
               <div class="flex justify-between gap-4">
                 <dt class="text-muted-foreground">Phí giao</dt>
@@ -213,10 +242,13 @@ useSeo({ title: 'Đặt mua', description: 'Thông tin nhận hàng và xác nh�
               </div>
             </dl>
             <p
-              v-if="quote.freeShippingThreshold !== null && quote.subtotal < quote.freeShippingThreshold"
+              v-if="
+                quote.freeShippingThreshold !== null && quote.subtotal - quote.discount < quote.freeShippingThreshold
+              "
               class="mt-3 text-sm text-muted-foreground"
             >
-              Mua thêm {{ formatVnd(quote.freeShippingThreshold - quote.subtotal) }} để được miễn phí giao.
+              Mua thêm {{ formatVnd(quote.freeShippingThreshold - quote.subtotal + quote.discount) }} để được miễn phí
+              giao<template v-if="quote.discount > 0"> (tính trên tiền hàng sau giảm)</template>.
             </p>
             <p v-if="quote.groundShippingOnly" class="mt-3 flex gap-2 text-sm text-muted-foreground">
               <Truck class="h-5 w-5 shrink-0" aria-hidden="true" />
@@ -250,7 +282,14 @@ useSeo({ title: 'Đặt mua', description: 'Thông tin nhận hàng và xác nh�
             </span>
           </label>
 
-          <p v-if="error" class="notice-error mt-4" role="alert">{{ error }}</p>
+          <VoucherConflictBox
+            v-if="voucherConflict"
+            :conflict="voucherConflict"
+            :submitting="submitting"
+            @proceed="submitWithoutVoucher"
+            @back="voucherConflict = null"
+          />
+          <p v-else-if="error" class="notice-error mt-4" role="alert">{{ error }}</p>
           <button type="submit" class="btn-primary mt-6 w-full" :disabled="!canSubmit">Đặt mua và thanh toán</button>
           <p class="mt-3 text-xs text-muted-foreground">
             Hàng được giữ cho bạn {{ RESERVATION_MINUTES }} phút sau khi đặt. Thanh toán qua VNPAY: thẻ ATM, thẻ quốc tế

@@ -26,14 +26,24 @@ const { form, invoice, invoiceOpen, acceptPrivacyPolicy, session, signedIn, ward
 
 /** Thay đổi server báo khi đặt (409); báo giá đã được tải lại theo giá trị mới. */
 const change = ref<PreorderChange | null>(null)
+const { voucherCode, voucherConflict, applyVoucher, removeVoucher } = useVoucherCode(
+  () => refreshQuote(),
+  () => [form.value.email, form.value.phone] as const,
+)
 
 let latest = 0
 async function refreshQuote() {
   // Đổi số lượng hay tỉnh/thành liên tiếp: chỉ nhận báo giá của lần gọi cuối.
   const call = ++latest
   try {
-    const provinceCode = form.value.provinceCode
-    const body: PreorderQuoteRequest = { variantId, quantity: quantity.value, ...(provinceCode && { provinceCode }) }
+    const { provinceCode, email, phone } = form.value
+    const body: PreorderQuoteRequest = {
+      variantId,
+      quantity: quantity.value,
+      ...(provinceCode && { provinceCode }),
+      // Email, số điện thoại để kiểm lượt mỗi khách; chưa nhập xong thì server bỏ qua.
+      ...(voucherCode.value && { voucherCode: voucherCode.value, email, phone }),
+    }
     const result = PreorderQuote.parse(await $fetch('/api/preorders/quote', { method: 'POST', body }))
     if (call !== latest) return
     quote.value = result
@@ -50,6 +60,12 @@ watch(
     void refreshQuote()
   },
 )
+
+/** Đặt tiếp không dùng mã sau khi mã không còn dùng được lúc đặt. */
+async function submitWithoutVoucher() {
+  await removeVoucher()
+  if (canSubmit.value) await submit()
+}
 
 const CHANGE_TEXT: Record<PreorderChange['kind'], string> = {
   in_stock: 'Sản phẩm đã có hàng sẵn. Bạn có thể mua ngay ở trang sản phẩm.',
@@ -90,6 +106,8 @@ async function submit() {
       campaignId: current.offer.campaignId,
       price: current.price,
       depositPercent: current.offer.depositPercent,
+      // Chỉ gửi mã đang áp được, kèm tiền giảm khách đã thấy.
+      ...(current.voucher?.applied && { voucherCode: current.voucher.code, discount: current.voucher.discount }),
       ...contactPayload(),
       ...(!signedIn.value && { acceptPrivacyPolicy: acceptPrivacyPolicy.value }),
       acceptPreorderPolicy: acceptPreorderPolicy.value,
@@ -103,7 +121,9 @@ async function submit() {
     const details = PreorderConflictDetails.safeParse(apiErrorDetails(err))
     if (details.success) {
       await refreshQuote()
-      change.value = details.data.change
+      // Mã không còn như khách đã thấy: không tự bỏ mã, khách tự chọn.
+      if ('voucher' in details.data) voucherConflict.value = details.data.voucher
+      else change.value = details.data.change
     }
     error.value = apiErrorMessage(err)
     fieldErrors.value = new Map(apiFieldErrors(err).map((f) => [f.path, f.message]))
@@ -191,10 +211,18 @@ useSeo({ title: 'Đặt trước', description: 'Đặt trước sản phẩm ch
             >. Khi hàng về, bạn có {{ quote.offer.remainderDays }} ngày để trả phần còn lại.
           </p>
 
+          <VoucherField :code="voucherCode" :result="quote.voucher" @apply="applyVoucher" @remove="removeVoucher" />
+
           <dl class="mt-4 space-y-2 text-sm">
             <div class="flex justify-between gap-4">
               <dt class="text-muted-foreground">Tổng tiền hàng</dt>
               <dd class="tabular-nums">{{ quote.subtotal === null ? '—' : formatVnd(quote.subtotal) }}</dd>
+            </div>
+            <div v-if="quote.discount > 0" class="flex justify-between gap-4" data-testid="discount">
+              <dt class="text-muted-foreground">
+                Mã giảm giá <span class="font-mono">{{ quote.voucher?.code }}</span>
+              </dt>
+              <dd class="tabular-nums">−{{ formatVnd(quote.discount) }}</dd>
             </div>
             <div class="flex justify-between gap-4">
               <dt class="text-muted-foreground">Phí giao</dt>
@@ -223,6 +251,9 @@ useSeo({ title: 'Đặt trước', description: 'Đặt trước sản phẩm ch
               </dd>
             </div>
           </dl>
+          <p v-if="quote.discount > 0" class="mt-3 text-sm text-muted-foreground">
+            Tiền cọc tính trên tiền hàng sau giảm, nên phần giảm được chia giữa tiền cọc và phần còn lại.
+          </p>
           <p v-if="quote.groundShippingOnly" class="mt-3 flex gap-2 text-sm text-muted-foreground">
             <Truck class="h-5 w-5 shrink-0" aria-hidden="true" />
             Sản phẩm chỉ giao bằng đường bộ, thời gian giao lâu hơn.
@@ -281,7 +312,14 @@ useSeo({ title: 'Đặt trước', description: 'Đặt trước sản phẩm ch
             </span>
           </label>
 
-          <p v-if="error && !problem" class="notice-error mt-4" role="alert">{{ error }}</p>
+          <VoucherConflictBox
+            v-if="voucherConflict"
+            :conflict="voucherConflict"
+            :submitting="submitting"
+            @proceed="submitWithoutVoucher"
+            @back="voucherConflict = null"
+          />
+          <p v-else-if="error && !problem" class="notice-error mt-4" role="alert">{{ error }}</p>
           <button type="submit" class="btn-primary mt-6 w-full" :disabled="!canSubmit">Đặt trước và trả cọc</button>
           <p class="mt-3 text-xs text-muted-foreground">
             Suất đặt trước được giữ cho bạn {{ RESERVATION_MINUTES }} phút để trả cọc qua VNPAY: thẻ ATM, thẻ quốc tế

@@ -4,11 +4,7 @@ import { AdminProduct, PreorderCampaign, type FieldError, type PreorderCampaignU
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: ['order.view', 'preorder.manage'] })
 
 const session = useAdminSession()
-// Link sang trang khác (Đơn hàng, Sản phẩm) chỉ khi mở được trang đó; quyền lấy từ menu, không khai lại tại chỗ.
-const canOpen = (to: string) => {
-  const permission = ADMIN_MENU_ITEMS.find((item) => item.to === to)?.permission
-  return !permission || session.can(permission)
-}
+const canOpen = session.canOpen
 const route = useRoute()
 const canManage = computed(() => session.can('preorder.manage'))
 const campaign = ref<PreorderCampaign | null>(null)

@@ -13,3 +13,7 @@ export const dateVN = (date: Date) => date.toLocaleDateString('vi-VN', { timeZon
 
 /** Tiền VND trong email và thông báo lỗi: `1.500.000 ₫`. */
 export const vnd = (amount: bigint | number) => `${VND.format(amount)} ₫`
+
+/** Dòng mã giảm giá trong email tóm tắt đơn; không có gì khi đơn không dùng mã. */
+export const voucherLines = (order: { voucherCode: string | null; discount: bigint }) =>
+  order.voucherCode ? [`Mã giảm giá ${order.voucherCode}: -${vnd(order.discount)}`] : []
