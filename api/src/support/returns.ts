@@ -16,15 +16,8 @@ import { vnd } from '../orders/format.ts'
 import { createRefund, lockOrderForRefund, refundTotals } from '../payments/refunds.ts'
 import { changeStock } from '../stock/stock.ts'
 import { ORDER_LINE_FOR_EXCHANGE, assertExchangeable, heldVariants, reserveExchange } from './exchanges.ts'
-import {
-  SUPPORT_INCLUDE,
-  conflict,
-  isClosed,
-  lockSupportRequest,
-  notFound,
-  queueSupportEmail,
-  type SupportForView,
-} from './support.ts'
+import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest, notFound, type SupportForView } from './support.ts'
+import { queueSupportEmail } from './emails.ts'
 
 /**
  * Trả hàng (GLOSSARY "Trả hàng", spec M6b ticket 04): khách gửi các dòng muốn trả của đơn đã giao; nhân viên chấp nhận

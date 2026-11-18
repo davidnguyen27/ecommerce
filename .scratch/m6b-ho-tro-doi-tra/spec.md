@@ -47,7 +47,7 @@ Nhân viên được cảnh báo khi yêu cầu trả hay đổi đã quá **h�
 15. Là nhân viên, tôi muốn thấy yêu cầu đã quá hạn đổi trả bao nhiêu ngày, và sản phẩm có cam kết bảo hành hay không.
 16. Là nhân viên, sau khi kho nhận hàng trả về, tôi muốn đề xuất số tiền hoàn (mặc định đã trừ phần giảm của mã, không gồm phí giao).
 17. Là nhân viên, tôi muốn hủy đơn từ yêu cầu hủy, và yêu cầu tự đóng khi đơn đã hủy.
-18. Là nhân viên, tôi muốn thấy cờ yêu cầu đổi đã chấp nhận mà quá 14 ngày chưa nhận được hàng cũ.
+18. Là nhân viên, tôi muốn thấy cờ yêu cầu đổi đã chấp nhận mà quá 7 ngày chưa nhận được hàng cũ.
 
 ### Nhân viên kho, kế toán, chủ doanh nghiệp
 
@@ -112,7 +112,7 @@ Nhân viên được cảnh báo khi yêu cầu trả hay đổi đã quá **h�
   - chấp nhận thì `reserveStock` biến thể mới, thiếu thì 409;
   - nhận hàng cũ (như trả hàng), rồi mới bàn giao biến thể mới (`order.fulfill`): `changeStock` loại `sale` trừ tồn và nhả số giữ, kèm mã vận đơn, rồi yêu cầu `resolved`;
   - từ chối hay kết thúc trước khi giao thì nhả giữ hàng;
-  - job hằng ngày gắn cờ yêu cầu đổi đã chấp nhận quá 14 ngày chưa nhận hàng; không tự hủy;
+  - job hằng ngày gắn cờ yêu cầu đổi đã chấp nhận quá 7 ngày chưa nhận hàng; không tự hủy;
   - **biến thể khách đang giữ** của một dòng là biến thể đổi sang của lần đổi gần nhất đã giao, nếu không có thì là biến thể gốc. Nhận hàng về ghi tồn cho biến thể thực nhận.
 - **Bảo hành:**
   - hiện cảnh báo nếu sản phẩm của dòng không có cam kết loại `warranty` (ADR 0005);
@@ -168,7 +168,7 @@ Gửi khi tạo yêu cầu, khi nhân viên trả lời (không gửi với ghi 
   - **Ảnh:** đúng loại thì nhận; file giả đuôi ảnh thì 400; quá cỡ, quá số lượng thì 400; URL ký chỉ trả cho người xem được.
   - **Hủy đơn:** chỉ gửi được khi đủ điều kiện; hủy đơn tự đóng yêu cầu.
   - **Trả hàng:** số lượng vượt thì 400/409; nhận về ghi `return` đúng biến thể và yêu cầu; hoàn mặc định trừ phần giảm, không gồm phí giao; khoản hoàn `origin = return`; đơn vẫn `completed`; lượt mã không đổi.
-  - **Đổi hàng:** biến thể khác giá, khác sản phẩm hay hết hàng thì không gửi được; chấp nhận giữ hàng; giao trước khi nhận hàng cũ thì 409; giao trừ tồn và ghi `sale`; từ chối nhả hàng; cờ quá 14 ngày; trả hay đổi tiếp theo biến thể khách đang giữ.
+  - **Đổi hàng:** biến thể khác giá, khác sản phẩm hay hết hàng thì không gửi được; chấp nhận giữ hàng; giao trước khi nhận hàng cũ thì 409; giao trừ tồn và ghi `sale`; từ chối nhả hàng; cờ quá 7 ngày; trả hay đổi tiếp theo biến thể khách đang giữ.
   - **Bảo hành:** cảnh báo không có cam kết; mốc sai thứ tự thì 409; không đổi tồn; kết quả đổi mới hay hoàn tiền tạo yêu cầu nối tiếp.
   - **Hạn đổi trả:** chụp đúng số ngày quá hạn; nhóm hàng không cấu hình thì không cảnh báo.
 
@@ -194,7 +194,7 @@ Gửi khi tạo yêu cầu, khi nhân viên trả lời (không gửi với ghi 
   - trạng thái không mở lại; một người phụ trách, tự nhận hoặc owner giao;
   - quyền `support.handle`;
   - luồng trả hàng không hoàn phí giao, không trả lượt mã;
-  - đổi hàng giữ hàng từ lúc chấp nhận, giao sau khi nhận hàng cũ, cờ sau 14 ngày;
+  - đổi hàng giữ hàng từ lúc chấp nhận, giao sau khi nhận hàng cũ, cờ sau 7 ngày;
   - nhiều yêu cầu mỗi đơn có giới hạn số lượng;
   - hàng đã đổi vẫn trả hay đổi tiếp theo dòng gốc;
   - bảo hành ghi mốc, không vào tồn;
@@ -202,8 +202,10 @@ Gửi khi tạo yêu cầu, khi nhân viên trả lời (không gửi với ghi 
   - email cho khách ở bốn lúc;
   - giới hạn tần suất;
   - đơn đặt trước như đơn hàng sẵn.
-- **Cần chủ doanh nghiệp xác nhận trước khi mở bán:**
-  1. Số ngày đổi trả cho từng nhóm hàng.
-  2. Ai chịu phí gửi hàng trả, đổi và bảo hành.
-  3. Nội dung các email.
-  4. Các con số tạm: 14 ngày gắn cờ đổi hàng, giới hạn tần suất, giới hạn ảnh.
+- **Chủ doanh nghiệp đã chốt (2026-11-18):**
+  1. Hạn đổi trả 14 ngày từ lúc giao cho mọi nhóm hàng. Migration `20261118000100_return_window_default` đặt sẵn cho cả năm nhóm (nhóm đã cấu hình thì giữ nguyên); sửa ở trang "Hạn đổi trả".
+  2. Cửa hàng chịu toàn bộ phí gửi hàng khi trả, đổi và bảo hành. Form của khách và email ghi rõ điều này. Phí giao của đơn gốc vẫn không hoàn khi trả hàng.
+  3. Nội dung email: chủ doanh nghiệp giao cho cửa hàng soạn. Email theo từng lúc (nhận yêu cầu, trả lời, chấp nhận, xong, từ chối) và từng loại yêu cầu, ở `api/src/support/emails.ts`.
+  4. Các con số chốt theo đề xuất:
+     - đổi hàng: khách gửi hàng cũ trong 7 ngày sau khi được chấp nhận, quá hạn thì gắn cờ (trước là 14 ngày tạm). Cửa hàng chịu phí gửi nên 7 ngày là đủ, và không giữ hàng mới quá lâu;
+     - giữ nguyên: tối đa 3 yêu cầu đang mở mỗi đơn (hay mỗi tài khoản); giới hạn tần suất tạo 5 lần/giờ/IP, tin 20 lần/giờ/yêu cầu, ảnh 20 lần/giờ/IP; ảnh ≤ 5 MB, 5 ảnh mỗi tin, 20 ảnh mỗi yêu cầu; số lượng mỗi dòng tối đa 5 (bằng giới hạn mua mỗi biến thể).

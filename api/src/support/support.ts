@@ -21,7 +21,6 @@ import {
 import type { Storage } from '../adapters/storage.ts'
 import type { Audit } from '../audit/audited.ts'
 import { ACTOR_SELECT } from '../audit/audited.ts'
-import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
 import { permissionsOf } from '../auth/permissions.ts'
 import type { DbClient } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
@@ -29,6 +28,7 @@ import { AppError, invalidField } from '../http/errors.ts'
 import type { CustomerMail } from '../jobs/jobs.ts'
 import { DOCUMENT_URL_TTL_SECONDS } from '../media/documents.ts'
 import { toPublicRefunds } from '../orders/orders.ts'
+import { queueSupportEmail } from './emails.ts'
 import { releaseExchange } from './exchanges.ts'
 import { planReturnLines, returnWindowSnapshot } from './returns.ts'
 import { planWarrantyLine, warrantyOf } from './warranty.ts'
@@ -501,66 +501,6 @@ export async function assignSupportRequest(tx: DbClient, audit: Audit, code: num
     after: { assigneeId, status },
   })
   return tx.supportRequest.findUniqueOrThrow({ where: { id: request.id }, include: SUPPORT_INCLUDE })
-}
-
-/**
- * Link trang yêu cầu gửi trong email. Yêu cầu của tài khoản: trang tài khoản. Yêu cầu của đơn vãng lai: trang yêu cầu
- * kèm mã đơn và token tra cứu đơn mới (chỉ lưu hash) như email đơn hàng.
- */
-async function requestUrl(tx: DbClient, siteUrl: string, request: SupportForView) {
-  if (request.customerId) return new URL(`/tai-khoan/yeu-cau/${request.code}`, siteUrl).toString()
-  const token = newOpaqueToken()
-  await tx.orderLookupToken.create({ data: { orderId: request.orderId!, tokenHash: hashOpaqueToken(token) } })
-  const url = new URL(`/yeu-cau/${request.code}`, siteUrl)
-  url.searchParams.set('don', String(request.order!.code))
-  url.searchParams.set('token', token)
-  return url.toString()
-}
-
-export type SupportEmail = 'created' | 'reply' | 'accepted' | 'resolved' | 'rejected'
-
-/**
- * Xếp email cho khách trong transaction của thay đổi; `message` là lời của nhân viên kèm theo (trả lời, hướng dẫn gửi
- * hàng, lý do từ chối, số tiền hoàn). Nội dung là bản nháp, chờ chủ doanh nghiệp duyệt.
- */
-export async function queueSupportEmail(
-  tx: DbClient,
-  { emails, siteUrl }: CustomerMail,
-  request: SupportForView,
-  kind: SupportEmail,
-  message?: string,
-) {
-  const link = await requestUrl(tx, siteUrl, request)
-  const title = `#YC${request.code} ${request.subject}`
-  const subjects: Record<SupportEmail, string> = {
-    created: `Đã nhận yêu cầu ${title}`,
-    reply: `Cửa hàng đã trả lời yêu cầu ${title}`,
-    accepted: `Yêu cầu ${title} đã được chấp nhận`,
-    resolved: `Yêu cầu ${title} đã được xử lý xong`,
-    rejected: `Yêu cầu ${title} không được chấp nhận`,
-  }
-  const closingLine =
-    request.status === 'resolved'
-      ? 'Yêu cầu đã được xử lý xong.'
-      : request.status === 'rejected'
-        ? 'Yêu cầu đã được đóng.'
-        : null
-  const body: Record<SupportEmail, string[]> = {
-    created: ['Chúng tôi đã nhận yêu cầu của bạn và sẽ phản hồi sớm.'],
-    reply: ['Cửa hàng đã trả lời:', '', message ?? '', ...(closingLine ? ['', closingLine] : [])],
-    accepted: ['Cửa hàng đã chấp nhận yêu cầu của bạn:', '', message ?? ''],
-    resolved: ['Yêu cầu của bạn đã được xử lý xong.', ...(message ? ['', message] : [])],
-    rejected: message
-      ? ['Yêu cầu của bạn không được chấp nhận:', '', message]
-      : ['Yêu cầu của bạn không được chấp nhận. Xem trao đổi trong yêu cầu để biết lý do.'],
-  }
-  await emails.sendEmail(tx, {
-    to: request.contactEmail,
-    subject: subjects[kind],
-    text: [`Chào ${request.contactName ?? 'bạn'},`, '', ...body[kind], '', `Xem và trả lời yêu cầu: ${link}`].join(
-      '\n',
-    ),
-  })
 }
 
 /** Ảnh chỉ gắn được vào tin của chính mình, trong khoảng này sau khi gửi tin (spec M6b ticket 02). */
