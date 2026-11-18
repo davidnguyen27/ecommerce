@@ -4,6 +4,7 @@ import {
   AdminOrderPage,
   AdminProductList,
   AuditPage,
+  AdminSupportPage,
   PreorderAttention,
   ReconciliationPage,
 } from '@ecommerce/shared'
@@ -53,7 +54,30 @@ const ORDER_COUNTS = [
     load: async () =>
       PreorderAttention.parse(await session.adminFetch('/api/admin/preorder-campaigns/attention')).total,
   },
-].filter((item) => canOpen(item.to))
+  // Hai số của yêu cầu hỗ trợ (spec M6b): link mang bộ lọc, quyền kiểm theo trang gốc (`gate`).
+  {
+    to: '/admin/support?unassigned=true',
+    gate: '/admin/support',
+    label: 'Yêu cầu chưa ai nhận',
+    sub: 'Yêu cầu hỗ trợ chưa có người phụ trách',
+    testid: 'dashboard-support-unassigned',
+    load: async () =>
+      AdminSupportPage.parse(
+        await session.adminFetch('/api/admin/support-requests', { query: { unassigned: 'true', pageSize: 1 } }),
+      ).total,
+  },
+  {
+    to: '/admin/support?status=awaiting_staff',
+    gate: '/admin/support',
+    label: 'Yêu cầu chờ nhân viên',
+    sub: 'Mới hoặc khách vừa trả lời',
+    testid: 'dashboard-support-awaiting',
+    load: async () =>
+      AdminSupportPage.parse(
+        await session.adminFetch('/api/admin/support-requests', { query: { status: 'awaiting_staff', pageSize: 1 } }),
+      ).total,
+  },
+].filter((item) => canOpen(('gate' in item && item.gate) || item.to))
 const orderCounts = ref<Record<string, number>>({})
 
 const stats = reactive({

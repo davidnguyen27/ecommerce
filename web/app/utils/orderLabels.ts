@@ -82,6 +82,7 @@ const ORDER_EVENT_LABELS: Record<string, string> = {
   redelivered: 'Giao lại',
   returned_to_stock: 'Nhận hàng hoàn về',
   restocked_for_redelivery: 'Giao lại từ kho',
+  support_resolved: 'Đóng yêu cầu hủy của khách',
 }
 export const orderEventLabel = (kind: string) => ORDER_EVENT_LABELS[kind] ?? kind
 
@@ -123,4 +124,5 @@ export const REFUND_ORIGIN_LABELS: Record<RefundOrigin, string> = {
   cancellation: 'Hủy đơn',
   reconciliation: 'Đối soát',
   retry: 'Tạo lại',
+  return: 'Trả hàng',
 }

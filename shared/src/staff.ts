@@ -25,6 +25,8 @@ export const Permission = z.enum([
   'order.cancel_paid',
   /** Thực hiện hoàn tiền: ghi chuyển khoản, hoàn qua cổng, chốt kết quả, tạo lại khoản thất bại (ADR 0014). */
   'payment.refund',
+  /** Xử lý yêu cầu hỗ trợ: nhận, trả lời, ghi chú nội bộ, đổi trạng thái, tạo hộ khách (M6b). */
+  'support.handle',
   /** Mở, sửa, đóng đợt đặt trước; cập nhật tiến độ nhập hàng và thời gian giao dự kiến. */
   'preorder.manage',
   /** Tạo, sửa, tắt mã giảm giá. */

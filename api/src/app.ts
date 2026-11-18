@@ -11,6 +11,7 @@ import type { PaymentGateway } from './payments/gateway.ts'
 import { errorHandler, notFound } from './http/errors.ts'
 import { accountOrderRoutes } from './routes/account-orders.ts'
 import { accountRoutes } from './routes/account.ts'
+import { accountSupportRoutes, orderSupportRoutes } from './routes/support-customer.ts'
 import { adminRoutes } from './routes/admin.ts'
 import { adminAuthRoutes } from './routes/admin-auth.ts'
 import { customerAuthRoutes, customerSessions } from './routes/customer-auth.ts'
@@ -97,6 +98,7 @@ export function createApp(deps: AppDeps) {
   api.use('/sitemap', publicSitemapRoutes(deps.prisma))
   api.use('/checkout', checkoutRoutes(deps))
   api.use('/preorders', preorderRoutes(deps))
+  api.use('/orders/:code/support-requests', orderSupportRoutes(deps))
   api.use('/orders', publicOrderRoutes(deps))
   api.use('/payments', paymentRoutes(deps))
   const customerDeps = {
@@ -107,6 +109,7 @@ export function createApp(deps: AppDeps) {
   }
   api.use('/auth', customerAuthRoutes(customerDeps))
   api.use('/account/orders', requireAuth(secret, 'customer'), accountOrderRoutes(deps))
+  api.use('/account/support-requests', requireAuth(secret, 'customer'), accountSupportRoutes(deps))
   api.use('/account', requireAuth(secret, 'customer'), accountRoutes(customerDeps))
   api.use('/admin/auth', adminAuthRoutes(deps.prisma, secret, '/api/admin/auth'))
   api.use(

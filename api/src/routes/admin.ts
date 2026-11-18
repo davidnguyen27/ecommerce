@@ -21,6 +21,8 @@ import { adminBulkImageRoutes, adminProductImageRoutes } from './admin-product-i
 import { adminProductPublishingRoutes } from './admin-product-publishing.ts'
 import { adminPreorderCampaignRoutes } from './admin-preorder-campaigns.ts'
 import { adminVoucherRoutes } from './admin-vouchers.ts'
+import { adminSupportRoutes } from './admin-support.ts'
+import { adminReturnWindowRoutes } from './admin-return-windows.ts'
 import { adminProductRoutes } from './admin-products.ts'
 import { adminLegalInfoRoutes } from './legal-info.ts'
 import { adminStaffRoutes } from './admin-staff.ts'
@@ -66,5 +68,7 @@ export function adminRoutes(
       .use('/refunds', adminRefundRoutes(prisma, storage, payments, mail))
       .use('/preorder-campaigns', adminPreorderCampaignRoutes(prisma, mail))
       .use('/vouchers', adminVoucherRoutes(prisma))
+      .use('/support-requests', adminSupportRoutes(prisma, storage, mail))
+      .use('/return-windows', adminReturnWindowRoutes(prisma))
   )
 }

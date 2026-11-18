@@ -10,6 +10,7 @@ import {
   History,
   Images,
   LayoutDashboard,
+  LifeBuoy,
   ListChecks,
   Package,
   PackagePlus,
@@ -77,6 +78,12 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
         permission: ['order.view', 'voucher.manage'],
       },
       { to: '/admin/shipping-fees', label: 'Phí giao', icon: Truck, permission: 'price.edit' },
+      {
+        to: '/admin/support',
+        label: 'Yêu cầu hỗ trợ',
+        icon: LifeBuoy,
+        permission: ['support.handle', 'order.view'],
+      },
     ],
   },
   {
@@ -91,8 +98,19 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
     items: [
       { to: '/admin/pages', label: 'Trang bài viết', icon: FileText, permission: 'content.edit' },
       { to: '/admin/legal-info', label: 'Thông tin pháp lý', icon: Scale, permission: 'content.edit' },
+      { to: '/admin/return-windows', label: 'Hạn đổi trả', icon: CalendarClock, permission: 'content.edit' },
     ],
   },
 ]
 
+/** Trang không có trong menu nhưng có link từ trang khác; quyền khai ở đây như mục menu. */
+const ADMIN_SUBPAGES: Pick<AdminMenuItem, 'to' | 'permission'>[] = [
+  { to: '/admin/support/new', permission: 'support.handle' },
+]
+
 export const ADMIN_MENU_ITEMS = ADMIN_MENU_GROUPS.flatMap((group) => group.items)
+/** Quyền của mọi trang quản trị có link (menu và trang con), cho `canOpen`. */
+export const ADMIN_PAGE_PERMISSIONS: Pick<AdminMenuItem, 'to' | 'permission'>[] = [
+  ...ADMIN_MENU_ITEMS,
+  ...ADMIN_SUBPAGES,
+]

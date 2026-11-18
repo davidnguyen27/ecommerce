@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PayRemainderResult, PublicOrder } from '@ecommerce/shared'
+import { PayRemainderResult, PublicOrder, canRequestCancel } from '@ecommerce/shared'
 
 // Đơn là dữ liệu cá nhân, mở bằng token: chỉ nạp ở trình duyệt, HTML từ server không có gì của đơn.
 // Hai cách vào: link trong email (`?token=…`), hoặc trang kết quả khi cổng thanh toán đưa khách quay về
@@ -11,6 +11,12 @@ const order = ref<PublicOrder | null>(null)
 const error = ref<string | null>(null)
 const missingToken = ref(false)
 const checking = ref(false)
+
+// Yêu cầu hỗ trợ của đơn đi cùng token tra cứu (spec M6b).
+const supportClient = computed(() => {
+  const token = lookupToken()
+  return token ? guestSupportClient(Number(code.value), token) : null
+})
 
 function lookupToken() {
   return typeof route.query.token === 'string' ? route.query.token : recallOrderToken(code.value)
@@ -139,6 +145,15 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
         :paying-remainder="payingRemainder"
         @cancel="cancel"
         @pay-remainder="payRemainder"
+      />
+      <SupportRequests
+        v-if="supportClient"
+        :client="supportClient"
+        :can-cancel="canRequestCancel(order)"
+        :return-lines="
+          order.status === 'completed' && order.fulfillmentStatus === 'delivered' ? order.lines : undefined
+        "
+        class="mt-8"
       />
     </template>
   </main>
