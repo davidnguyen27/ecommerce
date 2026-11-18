@@ -109,7 +109,7 @@ export class Jobs implements EmailQueue, OrderExpiryQueue {
       const result = await processRemainderDeadlines(expireDeps)
       if (result.reminded > 0 || result.flagged > 0) this.#logger.info(result, 'Đã xử lý hạn trả phần còn lại')
     })
-    // Đổi hàng đã chấp nhận quá 14 ngày chưa nhận hàng cũ: gắn cờ cho nhân viên, mỗi sáng (spec M6b).
+    // Đổi hàng đã chấp nhận quá 7 ngày chưa nhận hàng cũ: gắn cờ cho nhân viên, mỗi sáng (spec M6b).
     await this.#boss.createQueue(OVERDUE_EXCHANGES)
     await this.#boss.schedule(OVERDUE_EXCHANGES, '0 7 * * *', null, { tz: 'Asia/Ho_Chi_Minh' })
     await this.#boss.work(OVERDUE_EXCHANGES, async () => {

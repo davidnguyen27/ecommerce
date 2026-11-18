@@ -6,15 +6,8 @@ import type { CustomerMail } from '../jobs/jobs.ts'
 import { reserveStock } from '../stock/stock.ts'
 import { heldVariants } from './exchanges.ts'
 import { returnWindowSnapshot, returnableQuantities } from './returns.ts'
-import {
-  SUPPORT_INCLUDE,
-  conflict,
-  isClosed,
-  lockSupportRequest,
-  notFound,
-  queueSupportEmail,
-  type SupportForView,
-} from './support.ts'
+import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest, notFound, type SupportForView } from './support.ts'
+import { queueSupportEmail } from './emails.ts'
 
 /**
  * Bảo hành (spec M6b ticket 06): khách báo lỗi một dòng của đơn đã giao. Nhân viên ghi các mốc nhận hàng của khách →
