@@ -167,6 +167,7 @@ if (canAssign.value) {
           :request="request"
           @update="request = $event"
         />
+        <AdminSupportWarrantyPanel v-if="request.kind === 'warranty'" :request="request" @update="request = $event" />
 
         <div
           v-if="request.kind === 'cancel' && request.orderCode && canCancelPaid && !closed"

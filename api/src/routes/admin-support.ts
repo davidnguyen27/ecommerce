@@ -8,6 +8,8 @@ import {
   ProposeReturnRefund,
   ReceiveSupportReturn,
   ShipExchangeRequest,
+  RecordWarrantyMilestone,
+  RecordWarrantyOutcome,
   ErrorCode,
   SUPPORT_CLOSED_STATUSES,
   type AdminSupportPage,
@@ -40,6 +42,7 @@ import {
   returnRefundHint,
 } from '../support/returns.ts'
 import { shipExchange } from '../support/exchanges.ts'
+import { hasWarrantyCommitment, recordWarrantyMilestone, recordWarrantyOutcome } from '../support/warranty.ts'
 
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy yêu cầu')
 const requestCode = (code: string) => {
@@ -59,6 +62,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
     const body: AdminSupportRequest = {
       ...(await toAdminSupport(storage, request)),
       returnRefund: await returnRefundHint(prisma, request),
+      hasWarrantyCommitment: await hasWarrantyCommitment(prisma, request),
     }
     return body
   }
@@ -211,6 +215,21 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
         await audited(prisma, req, (tx, audit) => shipExchange(tx, mail, audit, code, staffId, input))
+        res.json(await load(code))
+      })
+      // Bảo hành: mốc và kết quả (spec M6b ticket 06). Không mốc nào đụng tới tồn.
+      .post('/:code/warranty-milestone', requirePermission('support.handle'), async (req, res) => {
+        const input = parse(RecordWarrantyMilestone, req.body)
+        const code = requestCode(String(req.params.code))
+        const staffId = currentStaff(req).id
+        await audited(prisma, req, (tx, audit) => recordWarrantyMilestone(tx, mail, audit, code, staffId, input))
+        res.json(await load(code))
+      })
+      .post('/:code/warranty-outcome', requirePermission('support.handle'), async (req, res) => {
+        const input = parse(RecordWarrantyOutcome, req.body)
+        const code = requestCode(String(req.params.code))
+        const staffId = currentStaff(req).id
+        await audited(prisma, req, (tx, audit) => recordWarrantyOutcome(tx, mail, audit, code, staffId, input))
         res.json(await load(code))
       })
       .post('/:code/refund', requirePermission('support.handle'), async (req, res) => {

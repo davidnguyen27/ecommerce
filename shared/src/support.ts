@@ -24,8 +24,8 @@ const Body = z
   .max(5000, 'Nội dung tối đa 5.000 ký tự')
 const Subject = z.string({ error: 'Nhập tiêu đề' }).trim().min(1, 'Nhập tiêu đề').max(200, 'Tiêu đề tối đa 200 ký tự')
 
-/** Loại khách và nhân viên đang tạo được (spec M6b ticket 01, 03, 04, 05). */
-export const CreatableSupportKind = z.enum(['other', 'cancel', 'return', 'exchange'])
+/** Loại khách và nhân viên tạo được (spec M6b). */
+export const CreatableSupportKind = z.enum(['other', 'cancel', 'return', 'exchange', 'warranty'])
 export type CreatableSupportKind = z.infer<typeof CreatableSupportKind>
 
 /** Lý do trả hàng: lỗi, không vừa, không đúng mô tả, khác. */
@@ -59,6 +59,14 @@ const ExchangeLines = z
     message: 'Mỗi sản phẩm chỉ chọn một lần',
   })
 
+/** Bảo hành: đúng một dòng của đơn (theo biến thể gốc) và số lượng; mô tả lỗi là tin đầu tiên. */
+export const WarrantyLineInput = z.object({
+  variantId: z.string(),
+  quantity: z.number().int().min(1, 'Số lượng ít nhất là 1').max(5),
+})
+export type WarrantyLineInput = z.infer<typeof WarrantyLineInput>
+const WarrantyLines = z.array(WarrantyLineInput).length(1, 'Chọn một sản phẩm cần bảo hành')
+
 const CreateBase = z.object({
   subject: Subject,
   message: Body,
@@ -77,14 +85,15 @@ const ReturnLines = z
   })
 
 /**
- * Body khách gửi để tạo yêu cầu, theo loại: `other`; `cancel` (hủy đơn đã nhận tiền, cần đơn); `return` (trả hàng
- * đã giao, cần đơn và các dòng muốn trả). Đổi hàng và bảo hành được thêm cùng phần xử lý riêng.
+ * Body khách gửi để tạo yêu cầu, theo loại: `other`; `cancel` (hủy đơn đã nhận tiền, cần đơn); `return`, `exchange`
+ * (hàng đã giao, cần đơn và các dòng); `warranty` (một dòng của đơn đã giao).
  */
 export const CreateSupportRequest = z.discriminatedUnion('kind', [
   CreateBase.extend({ kind: z.literal('other') }),
   CreateBase.extend({ kind: z.literal('cancel') }),
   CreateBase.extend({ kind: z.literal('return'), lines: ReturnLines }),
   CreateBase.extend({ kind: z.literal('exchange'), lines: ExchangeLines }),
+  CreateBase.extend({ kind: z.literal('warranty'), lines: WarrantyLines }),
 ])
 export type CreateSupportRequest = z.input<typeof CreateSupportRequest>
 
@@ -150,6 +159,20 @@ export type SupportLineView = z.infer<typeof SupportLineView>
 export const SupportDecision = z.enum(['accepted', 'rejected'])
 export type SupportDecision = z.infer<typeof SupportDecision>
 
+export const WarrantyOutcome = z.enum(['repaired', 'replaced', 'rejected', 'refunded'])
+export type WarrantyOutcome = z.infer<typeof WarrantyOutcome>
+
+/** Các mốc và kết quả bảo hành (spec M6b ticket 06). */
+export const WarrantyView = z.object({
+  receivedAt: z.string().nullable(),
+  sentAt: z.string().nullable(),
+  returnedAt: z.string().nullable(),
+  returnShipment: z.object({ carrier: z.string(), trackingNumber: z.string() }).nullable(),
+  outcome: WarrantyOutcome.nullable(),
+  outcomeNote: z.string().nullable(),
+})
+export type WarrantyView = z.infer<typeof WarrantyView>
+
 export const PublicSupportRequest = PublicSupportSummary.extend({
   lines: z.array(SupportLineView),
   decision: SupportDecision.nullable(),
@@ -157,7 +180,10 @@ export const PublicSupportRequest = PublicSupportSummary.extend({
   receivedAt: z.string().nullable(),
   /** Đổi hàng: lần giao biến thể mới (đơn vị vận chuyển, mã vận đơn, lúc bàn giao). */
   exchangeShipment: z.object({ carrier: z.string(), trackingNumber: z.string(), handedOverAt: z.string() }).nullable(),
+  warranty: WarrantyView.nullable(),
   previousRequestCode: z.number().nullable(),
+  /** Yêu cầu nối tiếp yêu cầu này (ví dụ yêu cầu đổi hay trả tạo từ kết quả bảo hành). */
+  followUps: z.array(z.object({ code: z.number(), kind: SupportRequestKind })),
   resolvedAt: z.string().nullable(),
   messages: z.array(PublicSupportMessage),
 })
@@ -221,6 +247,10 @@ export const AdminSupportRequest = AdminSupportSummary.extend({
   exchangeShipment: z.object({ carrier: z.string(), trackingNumber: z.string(), handedOverAt: z.string() }).nullable(),
   /** Đổi hàng đã chấp nhận quá 14 ngày chưa nhận hàng cũ: lúc job gắn cờ. */
   exchangeOverdueAt: z.string().nullable(),
+  warranty: WarrantyView.nullable(),
+  /** Bảo hành: sản phẩm của dòng có cam kết loại `warranty` (ADR 0005); route điền. `null` với loại khác. */
+  hasWarrantyCommitment: z.boolean().nullable(),
+  followUps: z.array(z.object({ code: z.number(), kind: SupportRequestKind })),
   /** Hạn đổi trả chụp lúc gửi: số ngày (null là nhóm hàng không cấu hình), lúc giao, số ngày đã quá. */
   returnWindow: z
     .object({ days: z.number().nullable(), deliveredAt: z.string().nullable(), overdueDays: z.number().nullable() })
@@ -255,6 +285,7 @@ export const AdminCreateSupportRequest = z
     AdminCreateBase.extend({ kind: z.literal('cancel') }),
     AdminCreateBase.extend({ kind: z.literal('return'), lines: ReturnLines }),
     AdminCreateBase.extend({ kind: z.literal('exchange'), lines: ExchangeLines }),
+    AdminCreateBase.extend({ kind: z.literal('warranty'), lines: WarrantyLines }),
   ])
   .refine((v) => v.orderCode !== undefined || v.customerEmail !== undefined, {
     message: 'Cần mã đơn hoặc email tài khoản khách',
@@ -344,3 +375,27 @@ export const ExchangeOptions = z.object({
   ),
 })
 export type ExchangeOptions = z.infer<typeof ExchangeOptions>
+
+/** Mốc bảo hành, theo thứ tự: nhận hàng của khách → gửi hãng hay sửa → trả lại khách (kèm vận chuyển). */
+export const WarrantyMilestone = z.enum(['received', 'sent', 'returned'])
+export type WarrantyMilestone = z.infer<typeof WarrantyMilestone>
+
+/** Body ghi một mốc bảo hành; `returned` cần đơn vị vận chuyển và mã vận đơn. */
+export const RecordWarrantyMilestone = z.discriminatedUnion('milestone', [
+  z.object({ milestone: z.literal('received') }),
+  z.object({ milestone: z.literal('sent') }),
+  ShipExchangeRequest.extend({ milestone: z.literal('returned') }),
+])
+export type RecordWarrantyMilestone = z.input<typeof RecordWarrantyMilestone>
+
+/**
+ * Body ghi kết quả bảo hành. `note` là lời nhắn cho khách (gửi email), bắt buộc khi từ chối. `replaced`/`refunded` tạo
+ * yêu cầu đổi/trả nối tiếp đã chấp nhận.
+ */
+export const RecordWarrantyOutcome = z
+  .object({ outcome: WarrantyOutcome, note: Body.optional() })
+  .refine((v) => v.outcome !== 'rejected' || v.note !== undefined, {
+    message: 'Nhập lý do từ chối bảo hành',
+    path: ['note'],
+  })
+export type RecordWarrantyOutcome = z.input<typeof RecordWarrantyOutcome>
