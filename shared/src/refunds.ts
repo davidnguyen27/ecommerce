@@ -75,3 +75,12 @@ export const RetryRefundRequest = z.object({
   note: Note.optional(),
 })
 export type RetryRefundRequest = z.input<typeof RetryRefundRequest>
+
+/** Một khoản hoàn như khách thấy: số tiền, đang hoàn hay đã hoàn, ngày tạo và ngày xong. Không có ghi chú nội bộ. */
+export const PublicRefund = z.object({
+  amount: z.number(),
+  status: z.enum(['refunding', 'refunded']),
+  createdAt: z.string(),
+  completedAt: z.string().nullable(),
+})
+export type PublicRefund = z.infer<typeof PublicRefund>

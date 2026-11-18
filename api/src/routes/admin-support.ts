@@ -13,6 +13,7 @@ import {
   ErrorCode,
   SUPPORT_CLOSED_STATUSES,
   type AdminSupportPage,
+  type ExchangeOptions,
   type AdminSupportRequest,
 } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
@@ -30,6 +31,7 @@ import {
   assignSupportRequest,
   claimSupportRequest,
   createSupportRequest,
+  findSupportCustomer,
   recordAttachment,
   staffReply,
   toAdminSupport,
@@ -41,7 +43,7 @@ import {
   receiveSupportReturn,
   returnRefundHint,
 } from '../support/returns.ts'
-import { shipExchange } from '../support/exchanges.ts'
+import { exchangeOptions, shipExchange } from '../support/exchanges.ts'
 import { hasWarrantyCommitment, recordWarrantyMilestone, recordWarrantyOutcome } from '../support/warranty.ts'
 
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy yêu cầu')
@@ -88,6 +90,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
           ...(query.assignee && { assigneeId: query.assignee === 'me' ? staffId : query.assignee }),
           ...(query.orderCode !== undefined && { order: { code: query.orderCode } }),
           ...(query.exchangeOverdue && { exchangeOverdueAt: { not: null }, receivedAt: null }),
+          ...(query.returnOverdue && { overdueDays: { gt: 0 } }),
         }
         const [requests, total] = await Promise.all([
           prisma.supportRequest.findMany({
@@ -107,6 +110,16 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         }
         res.json(body)
       })
+      // Biến thể đổi được của từng dòng một đơn, cho trang tạo hộ yêu cầu đổi.
+      .get('/exchange-options', requirePermission('support.handle'), async (req, res) => {
+        const orderCode = typeof req.query.orderCode === 'string' ? Number(req.query.orderCode) : NaN
+        const order = Number.isInteger(orderCode)
+          ? await prisma.order.findUnique({ where: { code: orderCode }, select: { id: true } })
+          : null
+        if (!order) throw invalidField('orderCode', 'Không có đơn này')
+        const body: ExchangeOptions = await exchangeOptions(prisma, order.id)
+        res.json(body)
+      })
       .get('/:code', async (req, res) => {
         res.json(await load(requestCode(String(req.params.code))))
       })
@@ -122,12 +135,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
                   select: { id: true, code: true, email: true, recipientName: true, customerId: true },
                 })
           if (input.orderCode !== undefined && !order) throw invalidField('orderCode', 'Không có đơn này')
-          const customer = order
-            ? undefined
-            : await tx.customer.findUnique({
-                where: { email: input.customerEmail! },
-                select: { id: true, email: true },
-              })
+          const customer = order ? undefined : await findSupportCustomer(tx, { email: input.customerEmail! })
           if (!order && !customer) throw invalidField('customerEmail', 'Không có tài khoản khách với email này')
           const request = await createSupportRequest(tx, mail, {
             kind: input.kind,

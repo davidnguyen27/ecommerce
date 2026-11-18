@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { AttributeValues } from './attributes.ts'
 import { PageQuery, pageOf } from './pagination.ts'
 import { PublicImage } from './products.ts'
-import { AdminRefund } from './refunds.ts'
+import { AdminRefund, PublicRefund } from './refunds.ts'
 import { SupportRequestKind, SupportRequestStatus } from './support.ts'
 
 /** Trạng thái đơn hàng (GLOSSARY "Trạng thái đơn hàng"). */
@@ -82,15 +82,6 @@ export const ORDER_CANCEL_CAUSE_CUSTOMER_TEXT: Record<OrderCancelCause, string> 
   delivery_failed: 'đơn vị vận chuyển không giao được hàng',
   other: 'cửa hàng không thực hiện được đơn',
 }
-
-/** Một khoản hoàn như khách thấy: số tiền, đang hoàn hay đã hoàn, ngày tạo và ngày xong. Không có ghi chú nội bộ. */
-export const PublicRefund = z.object({
-  amount: z.number(),
-  status: z.enum(['refunding', 'refunded']),
-  createdAt: z.string(),
-  completedAt: z.string().nullable(),
-})
-export type PublicRefund = z.infer<typeof PublicRefund>
 
 /** Dòng đơn như lúc đặt mua. */
 export const OrderLineView = z.object({

@@ -18,6 +18,7 @@ const filters = reactive({
   mine: false,
   unassigned: route.query.unassigned === 'true',
   exchangeOverdue: route.query.exchangeOverdue === 'true',
+  returnOverdue: route.query.returnOverdue === 'true',
 })
 const page = ref(1)
 
@@ -32,6 +33,7 @@ async function load() {
           assignee: filters.mine ? 'me' : undefined,
           unassigned: filters.unassigned ? 'true' : undefined,
           exchangeOverdue: filters.exchangeOverdue ? 'true' : undefined,
+          returnOverdue: filters.returnOverdue ? 'true' : undefined,
           page: page.value,
           pageSize: PAGE_SIZE,
         },
@@ -107,6 +109,10 @@ await load()
             @change="filter"
           />
           Đổi hàng quá hạn gửi
+        </label>
+        <label style="display: flex; gap: 6px; align-items: center; font-size: 13px">
+          <input v-model="filters.returnOverdue" type="checkbox" @change="filter" />
+          Gửi khi đã quá hạn đổi trả
         </label>
       </div>
     </div>

@@ -107,3 +107,7 @@ Spec: mục "Mô hình", "Quy tắc" (chuyển trạng thái), "Truy cập của
   - admin: `/admin/support` (danh sách, chi tiết, tạo hộ), mục menu, khối ở chi tiết đơn.
 - Test `api/test/support-requests.test.ts` (12 test).
 - Kết quả: 12 test mới qua; cả bộ test API 656/656. Chưa chạy thử giao diện trên trình duyệt; E2E ở ticket 07.
+
+**Bổ sung sau review (2026-11-18):**
+- Trang tạo hộ `/admin/support/new` tạo được mọi loại như khách tự gửi. Nhập mã đơn thì trang tải đơn và chỉ hiện các loại đơn đó cho phép: hủy khi `canRequestCancel`; trả, đổi, bảo hành khi đơn đã giao xong. Phần chọn dòng dùng chung component `SupportLinesPicker` với form của khách. Gợi ý đổi cho nhân viên lấy từ `GET /api/admin/support-requests/exchange-options?orderCode=` (`support.handle`).
+- Yêu cầu không gắn đơn lấy tên liên hệ từ địa chỉ nhận hàng gần nhất của tài khoản (`findSupportCustomer`), vì tài khoản không có tên. Chưa từng đặt mua thì để trống.

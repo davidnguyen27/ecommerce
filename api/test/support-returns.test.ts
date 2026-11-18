@@ -300,3 +300,37 @@ describe('hạn đổi trả', () => {
     expect(cleared.body.items).toContainEqual({ productType: 'fragrance', days: null })
   })
 })
+
+describe('khách thấy khoản hoàn; lọc quá hạn đổi trả', () => {
+  it('trang yêu cầu của khách có khoản hoàn của yêu cầu trả, đang hoàn', async () => {
+    const { delivered, ask, admin, view, warehouse, request } = await returnShop()
+    const placed = await delivered()
+    const code = (await ask(placed)).body.code as number
+    expect((await admin(code, 'decide', { decision: 'accepted', message: 'Gửi về giúp shop' })).status).toBe(200)
+    const lineId = (await view(code)).lines[0]!.id
+    const lines = [{ lineId, restocked: 1, writtenOff: 0 }]
+    expect((await admin(code, 'receive', { lines }, warehouse.accessToken)).status).toBe(200)
+    expect((await admin(code, 'refund', { refundAmount: 2_000_000 })).status).toBe(200)
+
+    const customer = await request
+      .get(`/api/orders/${placed.code}/support-requests/${code}`)
+      .query({ token: placed.token })
+    expect(customer.body.refunds).toEqual([
+      { amount: 2_000_000, status: 'refunding', createdAt: expect.any(String), completedAt: null },
+    ])
+  })
+
+  it('danh sách admin lọc được yêu cầu gửi khi đã quá hạn đổi trả', async () => {
+    const { delivered, ask, request, token, prisma } = await returnShop()
+    const late = (await ask(await delivered(1))).body.code as number
+    await ask(await delivered(1))
+    // Dựng trạng thái: lúc gửi đã quá hạn 3 ngày (bảng sự kiện đơn chỉ ghi thêm nên không lùi được lúc giao).
+    await prisma.supportRequest.update({ where: { code: late }, data: { returnWindowDays: 7, overdueDays: 3 } })
+
+    const list = await request
+      .get('/api/admin/support-requests')
+      .query({ status: 'all', returnOverdue: 'true' })
+      .set(bearer(token))
+    expect(list.body.items.map((i: { code: number }) => i.code)).toEqual([late])
+  })
+})

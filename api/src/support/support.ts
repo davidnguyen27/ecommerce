@@ -7,6 +7,7 @@ import {
   SUPPORT_CLOSED_STATUSES,
   SUPPORT_IMAGES_PER_MESSAGE,
   SUPPORT_IMAGES_PER_REQUEST,
+  ShippingAddress,
   type SupportAttachmentView,
   type AdminSupportReply,
   type AdminSupportRequest,
@@ -27,6 +28,7 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import type { CustomerMail } from '../jobs/jobs.ts'
 import { DOCUMENT_URL_TTL_SECONDS } from '../media/documents.ts'
+import { toPublicRefunds } from '../orders/orders.ts'
 import { releaseExchange } from './exchanges.ts'
 import { planReturnLines, returnWindowSnapshot } from './returns.ts'
 import { planWarrantyLine, warrantyOf } from './warranty.ts'
@@ -79,7 +81,10 @@ export const SUPPORT_INCLUDE = {
   },
   decidedBy: { select: ACTOR_SELECT },
   receivedBy: { select: ACTOR_SELECT },
-  refunds: { select: { id: true, amount: true, status: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+  refunds: {
+    select: { id: true, amount: true, status: true, createdAt: true, completedAt: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  },
 } as const satisfies Prisma.SupportRequestInclude
 
 export type SupportForView = Prisma.SupportRequestGetPayload<{ include: typeof SUPPORT_INCLUDE }>
@@ -133,6 +138,7 @@ export async function toPublicSupport(storage: Storage, request: SupportForView)
     exchangeShipment: exchangeShipmentOf(request),
     warranty: warrantyOf(request),
     followUps: request.followUps,
+    refunds: toPublicRefunds(request.refunds),
     messages: await Promise.all(
       publicMessages(request).map(async (m) => ({
         id: m.id,
@@ -230,6 +236,20 @@ export async function toAdminSupport(storage: Storage, request: SupportForView):
   }
 }
 
+/** Tài khoản khách của yêu cầu không gắn đơn; tên liên hệ lấy từ địa chỉ nhận hàng gần nhất (tài khoản không có tên). */
+export type SupportCustomer = { id: string; email: string; name: string | null }
+
+export async function findSupportCustomer(db: DbClient, where: Prisma.CustomerWhereUniqueInput) {
+  const customer = await db.customer.findUnique({
+    where,
+    select: { id: true, email: true, lastShippingAddress: true },
+  })
+  if (!customer) return null
+  const address = ShippingAddress.safeParse(customer.lastShippingAddress)
+  const name: string | null = address.success ? address.data.recipientName : null
+  return { id: customer.id, email: customer.email, name } satisfies SupportCustomer
+}
+
 /** Ai tạo yêu cầu: khách (đăng nhập hay cầm link đơn), nhân viên tạo hộ, hay hệ thống. */
 export type SupportCreator = { type: 'customer' } | { type: 'staff'; staffId: string } | { type: 'system' }
 
@@ -240,7 +260,7 @@ export type NewSupportRequest = {
   /** Đơn của yêu cầu; khách và email liên hệ lấy từ đơn. */
   order?: { id: string; code: number; email: string; recipientName: string; customerId: string | null }
   /** Tài khoản khách, khi yêu cầu không gắn đơn. */
-  customer?: { id: string; email: string }
+  customer?: SupportCustomer
   previousRequestCode?: number
   /** Trả hàng: các dòng theo biến thể, số lượng, lý do (ticket 04). */
   lines?: readonly { variantId: string; quantity: number; reason?: SupportReturnReason; toVariantId?: string }[]
@@ -313,7 +333,7 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
       orderId: order?.id ?? null,
       customerId: order ? order.customerId : customer!.id,
       contactEmail: order?.email ?? customer!.email,
-      contactName: order?.recipientName ?? null,
+      contactName: order?.recipientName ?? customer?.name ?? null,
       createdBy: input.creator.type,
       createdByStaffId: staffId,
       previousRequestId,
