@@ -29,6 +29,7 @@ import type { CustomerMail } from '../jobs/jobs.ts'
 import { DOCUMENT_URL_TTL_SECONDS } from '../media/documents.ts'
 import { releaseExchange } from './exchanges.ts'
 import { planReturnLines, returnWindowSnapshot } from './returns.ts'
+import { planWarrantyLine, warrantyOf } from './warranty.ts'
 
 /**
  * Yêu cầu hỗ trợ (GLOSSARY, spec M6b): việc khách nhờ cửa hàng xử lý, gồm chuỗi tin, người phụ trách và trạng thái
@@ -49,6 +50,7 @@ export const SUPPORT_INCLUDE = {
   assignee: { select: ACTOR_SELECT },
   createdByStaff: { select: ACTOR_SELECT },
   previousRequest: { select: { code: true } },
+  followUps: { select: { code: true, kind: true }, orderBy: { code: 'asc' } },
   messages: {
     include: {
       staff: { select: ACTOR_SELECT },
@@ -129,6 +131,8 @@ export async function toPublicSupport(storage: Storage, request: SupportForView)
     decision: request.decision,
     receivedAt: request.receivedAt?.toISOString() ?? null,
     exchangeShipment: exchangeShipmentOf(request),
+    warranty: warrantyOf(request),
+    followUps: request.followUps,
     messages: await Promise.all(
       publicMessages(request).map(async (m) => ({
         id: m.id,
@@ -197,6 +201,10 @@ export async function toAdminSupport(storage: Storage, request: SupportForView):
     receivedBy: request.receivedBy,
     exchangeShipment: exchangeShipmentOf(request),
     exchangeOverdueAt: request.exchangeOverdueAt?.toISOString() ?? null,
+    warranty: warrantyOf(request),
+    // Route điền (cần đọc cam kết của sản phẩm).
+    hasWarrantyCommitment: null,
+    followUps: request.followUps,
     returnWindow:
       request.kind === 'return' || request.kind === 'exchange'
         ? {
@@ -262,9 +270,13 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
         'Chỉ gửi yêu cầu hủy được khi đơn đã thanh toán (hoặc đã cọc) và chưa giao cho đơn vị vận chuyển. Đơn chưa thanh toán thì bạn tự hủy được ở trang đơn; đơn đã giao đi thì gửi yêu cầu trả hàng sau khi nhận.',
       )
     }
-    const sendsGoods = input.kind === 'return' || input.kind === 'exchange'
-    if (sendsGoods && !(locked!.status === 'completed' && locked!.fulfillmentStatus === 'delivered')) {
-      throw conflict('Chỉ trả hay đổi được hàng của đơn đã giao xong')
+    const aboutGoods = input.kind === 'return' || input.kind === 'exchange' || input.kind === 'warranty'
+    if (aboutGoods && !(locked!.status === 'completed' && locked!.fulfillmentStatus === 'delivered')) {
+      throw conflict(
+        input.kind === 'warranty'
+          ? 'Chỉ báo bảo hành được với đơn đã giao xong'
+          : 'Chỉ trả hay đổi được hàng của đơn đã giao xong',
+      )
     }
   } else await tx.$queryRaw`SELECT "id" FROM "customer" WHERE "id" = ${customer!.id}::uuid FOR UPDATE`
 
@@ -290,6 +302,8 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
   const goodsKind = input.kind === 'return' || input.kind === 'exchange' ? input.kind : null
   const returnLines = goodsKind ? await planReturnLines(tx, order!.id, goodsKind, input.lines ?? []) : []
   const window = goodsKind ? await returnWindowSnapshot(tx, order!.id, returnLines) : null
+  // Bảo hành: đúng một dòng, không chiếm số còn trả/đổi được của dòng.
+  const warrantyLine = input.kind === 'warranty' ? await planWarrantyLine(tx, order!.id, input.lines ?? []) : null
 
   const staffId = input.creator.type === 'staff' ? input.creator.staffId : null
   const created = await tx.supportRequest.create({
@@ -310,13 +324,15 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
         overdueDays: window.overdueDays,
       }),
       lines: {
-        create: returnLines.map((l) => ({
-          orderLineId: l.orderLineId,
-          quantity: l.quantity,
-          reason: l.reason,
-          heldVariantId: l.heldVariantId,
-          exchangeVariantId: l.exchangeVariantId,
-        })),
+        create: warrantyLine
+          ? [warrantyLine]
+          : returnLines.map((l) => ({
+              orderLineId: l.orderLineId,
+              quantity: l.quantity,
+              reason: l.reason,
+              heldVariantId: l.heldVariantId,
+              exchangeVariantId: l.exchangeVariantId,
+            })),
       },
     },
     select: { id: true },

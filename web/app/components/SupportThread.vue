@@ -68,6 +68,27 @@ const authorLabel = (author: string) => (author === 'customer' ? 'Bạn' : autho
           Đã nhận hàng bạn gửi về lúc {{ formatDateTime(request.receivedAt) }}.</template
         >
       </p>
+      <ul v-if="request.warranty" class="mt-2 space-y-1" data-testid="support-warranty">
+        <li v-if="request.warranty.receivedAt">
+          Cửa hàng đã nhận sản phẩm lúc {{ formatDateTime(request.warranty.receivedAt) }}.
+        </li>
+        <li v-if="request.warranty.sentAt">Đã gửi đi bảo hành lúc {{ formatDateTime(request.warranty.sentAt) }}.</li>
+        <li v-if="request.warranty.returnShipment">
+          Đã gửi trả cho bạn qua {{ request.warranty.returnShipment.carrier }}, mã vận đơn
+          <strong>{{ request.warranty.returnShipment.trackingNumber }}</strong
+          >.
+        </li>
+        <li v-if="request.warranty.outcome">
+          Kết quả: <strong>{{ WARRANTY_OUTCOME_LABELS[request.warranty.outcome] }}</strong>
+          <template v-if="request.warranty.outcomeNote"> · {{ request.warranty.outcomeNote }}</template>
+        </li>
+      </ul>
+      <p v-if="request.followUps.length" class="mt-2" data-testid="support-follow-ups">
+        Yêu cầu tiếp theo:
+        <template v-for="(f, i) in request.followUps" :key="f.code"
+          >{{ i ? ', ' : '' }}#YC{{ f.code }} ({{ SUPPORT_KIND_LABELS[f.kind] }})</template
+        >
+      </p>
       <p v-if="request.exchangeShipment" class="mt-2" data-testid="support-exchange-shipment">
         Đã gửi hàng đổi qua {{ request.exchangeShipment.carrier }}, mã vận đơn
         <strong>{{ request.exchangeShipment.trackingNumber }}</strong

@@ -32,6 +32,10 @@ watch(
   },
   { immediate: true },
 )
+// Bảo hành (ticket 06): một dòng, số lượng; mô tả lỗi là nội dung yêu cầu.
+const warranty = reactive({ variantId: '', quantity: 1 })
+const warrantyLine = computed(() => props.returnLines?.find((l) => l.variantId === warranty.variantId))
+
 const chosenLines = computed(() =>
   Object.entries(picks)
     .filter(([, p]) => p.chosen)
@@ -95,7 +99,9 @@ async function submit() {
         ? { ...base, kind: 'return', lines: chosenLines.value }
         : form.kind === 'exchange'
           ? { ...base, kind: 'exchange', lines: chosenSwaps.value }
-          : { ...base, kind: form.kind }
+          : form.kind === 'warranty'
+            ? { ...base, kind: 'warranty', lines: [{ variantId: warranty.variantId, quantity: warranty.quantity }] }
+            : { ...base, kind: form.kind }
     const created = await props.client.create(body)
     // Ảnh gắn vào tin đầu tiên của yêu cầu vừa tạo.
     const firstMessage = created.messages[0]!.id
@@ -136,6 +142,7 @@ async function submit() {
           <option v-if="canCancel" value="cancel">Hủy đơn đã thanh toán</option>
           <option v-if="canReturn" value="return">Trả hàng</option>
           <option v-if="canReturn" value="exchange">Đổi size hoặc màu</option>
+          <option v-if="canReturn" value="warranty">Báo lỗi, bảo hành</option>
         </select>
       </label>
       <fieldset v-if="form.kind === 'return'" class="space-y-3" data-testid="support-return-lines">
@@ -201,6 +208,32 @@ async function submit() {
           </p>
         </div>
       </fieldset>
+      <fieldset v-if="form.kind === 'warranty'" class="space-y-3" data-testid="support-warranty-line">
+        <legend class="font-medium">Sản phẩm bị lỗi</legend>
+        <div class="flex flex-wrap items-center gap-3">
+          <select
+            v-model="warranty.variantId"
+            class="field-input w-72"
+            aria-label="Sản phẩm bị lỗi"
+            data-testid="support-warranty-variant"
+            @change="warranty.quantity = 1"
+          >
+            <option value="" disabled>Chọn sản phẩm</option>
+            <option v-for="line in returnLines" :key="line.variantId" :value="line.variantId">
+              {{ line.productName }} ({{ line.sku }})
+            </option>
+          </select>
+          <select
+            v-if="warrantyLine"
+            v-model.number="warranty.quantity"
+            class="field-input w-20"
+            aria-label="Số lượng lỗi"
+          >
+            <option v-for="q in warrantyLine.quantity" :key="q" :value="q">{{ q }}</option>
+          </select>
+        </div>
+        <p class="text-muted-foreground">Mô tả lỗi ở phần nội dung và gửi kèm ảnh để cửa hàng kiểm tra nhanh hơn.</p>
+      </fieldset>
       <p v-if="form.kind === 'cancel'" class="text-muted-foreground">
         Cửa hàng sẽ hủy đơn và báo số tiền hoàn theo chính sách đã áp dụng cho đơn.
       </p>
@@ -226,7 +259,8 @@ async function submit() {
           :disabled="
             sending ||
             (form.kind === 'return' && chosenLines.length === 0) ||
-            (form.kind === 'exchange' && chosenSwaps.length === 0)
+            (form.kind === 'exchange' && chosenSwaps.length === 0) ||
+            (form.kind === 'warranty' && !warranty.variantId)
           "
           data-testid="support-submit"
         >

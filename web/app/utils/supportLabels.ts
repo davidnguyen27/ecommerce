@@ -1,4 +1,4 @@
-import type { SupportRequestKind, SupportRequestStatus, SupportReturnReason } from '@ecommerce/shared'
+import type { SupportRequestKind, SupportRequestStatus, SupportReturnReason, WarrantyOutcome } from '@ecommerce/shared'
 
 export const SUPPORT_KIND_LABELS: Record<SupportRequestKind, string> = {
   cancel: 'Hủy đơn',
@@ -27,6 +27,14 @@ export const SUPPORT_STATUS_CUSTOMER_LABELS: Record<SupportRequestStatus, string
 }
 
 export const isSupportClosed = (status: SupportRequestStatus) => status === 'resolved' || status === 'rejected'
+
+/** Kết quả bảo hành (spec M6b ticket 06). */
+export const WARRANTY_OUTCOME_LABELS: Record<WarrantyOutcome, string> = {
+  repaired: 'Đã sửa xong',
+  replaced: 'Đổi sản phẩm mới',
+  rejected: 'Không bảo hành',
+  refunded: 'Hoàn tiền',
+}
 
 export const RETURN_REASON_LABELS: Record<SupportReturnReason, string> = {
   defective: 'Hàng lỗi',
