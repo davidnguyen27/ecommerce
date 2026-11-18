@@ -89,6 +89,16 @@ const authorLabel = (author: string) => (author === 'customer' ? 'Bạn' : autho
           >{{ i ? ', ' : '' }}#YC{{ f.code }} ({{ SUPPORT_KIND_LABELS[f.kind] }})</template
         >
       </p>
+      <ul v-if="request.refunds.length" class="mt-2 space-y-1" data-testid="support-refunds">
+        <li v-for="(refund, i) in request.refunds" :key="i">
+          Hoàn <strong class="tabular-nums">{{ formatVnd(refund.amount) }}</strong
+          >:
+          <template v-if="refund.status === 'refunded'">
+            đã hoàn{{ refund.completedAt ? ` ngày ${formatDate(refund.completedAt)}` : '' }}
+          </template>
+          <span v-else class="text-muted-foreground">đang hoàn</span>
+        </li>
+      </ul>
       <p v-if="request.exchangeShipment" class="mt-2" data-testid="support-exchange-shipment">
         Đã gửi hàng đổi qua {{ request.exchangeShipment.carrier }}, mã vận đơn
         <strong>{{ request.exchangeShipment.trackingNumber }}</strong

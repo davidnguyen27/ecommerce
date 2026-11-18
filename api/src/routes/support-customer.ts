@@ -19,6 +19,7 @@ import {
   SUPPORT_INCLUDE,
   addCustomerMessage,
   createSupportRequest,
+  findSupportCustomer,
   recordAttachment,
   toPublicSupport,
   toPublicSupportSummary,
@@ -154,10 +155,8 @@ export function accountSupportRoutes(deps: Deps) {
             },
           }
         }
-        const customer = await deps.prisma.customer.findUniqueOrThrow({
-          where: { id: customerId },
-          select: { id: true, email: true },
-        })
+        const customer = await findSupportCustomer(deps.prisma, { id: customerId })
+        if (!customer) throw notFound()
         return { customer }
       },
     }

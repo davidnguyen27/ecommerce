@@ -1,4 +1,11 @@
-import { ErrorCode, PublicImage, type AttributeValues, type OrderPreorder, type PublicOrder } from '@ecommerce/shared'
+import {
+  ErrorCode,
+  PublicImage,
+  type AttributeValues,
+  type OrderPreorder,
+  type PublicOrder,
+  type PublicRefund,
+} from '@ecommerce/shared'
 import { z } from 'zod'
 import type { Storage } from '../adapters/storage.ts'
 import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
@@ -7,6 +14,23 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import { StoredImage, imageRenditions } from '../media/images.ts'
 import { isoDay } from './format.ts'
+
+/**
+ * Khoản hoàn như khách thấy. Khoản thất bại không hiện: khách chỉ cần biết tiền đang về hay đã về; kế toán tạo lại
+ * khoản mới nếu cần.
+ */
+export function toPublicRefunds(
+  refunds: readonly { amount: bigint; status: string; createdAt: Date; completedAt: Date | null }[],
+): PublicRefund[] {
+  return refunds
+    .filter((r) => r.status !== 'failed')
+    .map((r) => ({
+      amount: Number(r.amount),
+      status: r.status === 'succeeded' ? 'refunded' : 'refunding',
+      createdAt: r.createdAt.toISOString(),
+      completedAt: r.completedAt?.toISOString() ?? null,
+    }))
+}
 
 /** Ảnh đại diện lưu trên dòng đơn: file trên bucket public kèm `alt`. */
 export const OrderLineImage = StoredImage.extend({ alt: z.string() })
@@ -285,13 +309,6 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
           },
     received: order.paymentTransactions.reduce((sum, t) => sum + Number(t.amount), 0),
     // Khoản thất bại không hiện: khách chỉ cần biết tiền đang về hay đã về; kế toán tạo lại khoản mới nếu cần.
-    refunds: order.refunds
-      .filter((r) => r.status !== 'failed')
-      .map((r) => ({
-        amount: Number(r.amount),
-        status: r.status === 'succeeded' ? 'refunded' : 'refunding',
-        createdAt: r.createdAt.toISOString(),
-        completedAt: r.completedAt?.toISOString() ?? null,
-      })),
+    refunds: toPublicRefunds(order.refunds),
   }
 }

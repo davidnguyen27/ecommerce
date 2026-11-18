@@ -295,3 +295,20 @@ describe('nhân viên xử lý', () => {
     expect(next.body.previousRequestCode).toBe(first)
   })
 })
+
+describe('tên liên hệ', () => {
+  it('yêu cầu không gắn đơn lấy tên từ địa chỉ nhận hàng gần nhất của tài khoản; chưa có thì để trống', async () => {
+    const { admin, request, prisma } = await supportShop()
+    await register(request)
+    const without = await admin().create({ customerEmail: 'khach@example.com', subject: 'Zalo', message: 'Hỏi size' })
+    expect(without.body.contactName).toBeNull()
+
+    await prisma.customer.update({
+      where: { email: 'khach@example.com' },
+      data: { lastShippingAddress: { ...ADDRESS, email: 'khach@example.com' } },
+    })
+    const named = await admin().create({ customerEmail: 'khach@example.com', subject: 'Zalo', message: 'Hỏi màu' })
+    expect(named.status).toBe(201)
+    expect(named.body.contactName).toBe(ADDRESS.recipientName)
+  })
+})

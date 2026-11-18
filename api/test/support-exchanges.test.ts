@@ -307,3 +307,38 @@ describe('trả hay đổi tiếp sau khi đã đổi', () => {
     expect((await view(back.body.code)).lines[0]).toMatchObject({ heldSku: 'AM-41', toSku: 'AM-40' })
   })
 })
+
+describe('nhân viên tạo hộ yêu cầu đổi', () => {
+  it('xem biến thể đổi được của đơn và tạo hộ yêu cầu đổi; mã đơn lạ thì 400', async () => {
+    const { delivered, sameprice, request, sales, v40, v41 } = await exchangeShop()
+    await sameprice(2)
+    const placed = await delivered()
+
+    const options = await request
+      .get('/api/admin/support-requests/exchange-options')
+      .query({ orderCode: placed.code })
+      .set(bearer(sales.accessToken))
+    expect(options.status).toBe(200)
+    expect(options.body.lines).toEqual([
+      expect.objectContaining({ heldSku: 'AM-40', options: [expect.objectContaining({ sku: 'AM-41' })] }),
+    ])
+    const unknown = await request
+      .get('/api/admin/support-requests/exchange-options')
+      .query({ orderCode: 999_999 })
+      .set(bearer(sales.accessToken))
+    expect(unknown.status).toBe(400)
+
+    const created = await request
+      .post('/api/admin/support-requests')
+      .set(bearer(sales.accessToken))
+      .send({
+        kind: 'exchange',
+        orderCode: placed.code,
+        subject: 'Khách gọi đổi size',
+        message: 'Đổi sang 41',
+        lines: [{ variantId: v40.id, quantity: 1, toVariantId: v41.id }],
+      })
+    expect(created.status).toBe(201)
+    expect(created.body).toMatchObject({ kind: 'exchange', createdBy: 'staff', lines: [{ toSku: 'AM-41' }] })
+  })
+})

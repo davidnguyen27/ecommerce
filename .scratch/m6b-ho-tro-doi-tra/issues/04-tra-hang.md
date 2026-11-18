@@ -96,3 +96,7 @@ Spec: mục "Mô hình", "Quy tắc" (trả hàng, hạn đổi trả).
 - Test `api/test/support-returns.test.ts`.
 - Test "quá hạn đổi trả" gọi thẳng `returnWindowSnapshot` với "bây giờ" dời về sau, vì bảng sự kiện đơn chỉ ghi thêm nên không lùi được lúc giao.
 - Kết quả: 11 test mới qua; cả bộ test API 681/681. Chưa chạy thử giao diện trên trình duyệt; E2E ở ticket 07.
+
+**Bổ sung sau review (2026-11-18):**
+- `PublicSupportRequest.refunds`: khách thấy khoản hoàn của yêu cầu ngay ở trang yêu cầu (đang hoàn hay đã hoàn), cùng cách hiển thị với trang đơn (`toPublicRefunds` dùng chung). `PublicRefund` chuyển sang `shared/src/refunds.ts` để `support.ts` và `orders.ts` không import vòng.
+- Danh sách admin có bộ lọc `returnOverdue=true` (yêu cầu gửi khi đã quá hạn đổi trả, `overdueDays > 0`).

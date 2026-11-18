@@ -1,3 +1,4 @@
+import { PublicRefund } from './refunds.ts'
 import { z } from 'zod'
 import { ProductType } from './catalog.ts'
 import { PageQuery, pageOf } from './pagination.ts'
@@ -184,6 +185,8 @@ export const PublicSupportRequest = PublicSupportSummary.extend({
   previousRequestCode: z.number().nullable(),
   /** Yêu cầu nối tiếp yêu cầu này (ví dụ yêu cầu đổi hay trả tạo từ kết quả bảo hành). */
   followUps: z.array(z.object({ code: z.number(), kind: SupportRequestKind })),
+  /** Khoản hoàn sinh từ yêu cầu (trả hàng), như ở trang đơn: đang hoàn hay đã hoàn. */
+  refunds: z.array(PublicRefund),
   resolvedAt: z.string().nullable(),
   messages: z.array(PublicSupportMessage),
 })
@@ -203,6 +206,8 @@ export const AdminSupportQuery = PageQuery.extend({
   orderCode: z.coerce.number().int().positive().optional(),
   /** `true`: chỉ yêu cầu đổi bị gắn cờ quá hạn gửi hàng cũ. */
   exchangeOverdue: z.stringbool().optional(),
+  /** `true`: chỉ yêu cầu trả, đổi gửi lúc đã quá hạn đổi trả của nhóm hàng. */
+  returnOverdue: z.stringbool().optional(),
 })
 export type AdminSupportQuery = z.input<typeof AdminSupportQuery>
 
