@@ -250,7 +250,7 @@ export const AdminSupportRequest = AdminSupportSummary.extend({
   receivedAt: z.string().nullable(),
   receivedBy: Actor.nullable(),
   exchangeShipment: z.object({ carrier: z.string(), trackingNumber: z.string(), handedOverAt: z.string() }).nullable(),
-  /** Đổi hàng đã chấp nhận quá 14 ngày chưa nhận hàng cũ: lúc job gắn cờ. */
+  /** Đổi hàng đã chấp nhận quá 7 ngày chưa nhận hàng cũ: lúc job gắn cờ. */
   exchangeOverdueAt: z.string().nullable(),
   warranty: WarrantyView.nullable(),
   /** Bảo hành: sản phẩm của dòng có cam kết loại `warranty` (ADR 0005); route điền. `null` với loại khác. */

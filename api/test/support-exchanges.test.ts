@@ -251,9 +251,9 @@ describe('xử lý yêu cầu đổi', () => {
     const { code } = (await ask(placed)).body as { code: number }
     expect((await admin(code, 'decide', { decision: 'accepted', message: 'Gửi về giúp shop' })).status).toBe(200)
 
-    expect(await flagOverdueExchanges(prisma, new Date(Date.now() + 13 * DAY))).toBe(0)
-    expect(await flagOverdueExchanges(prisma, new Date(Date.now() + 15 * DAY))).toBe(1)
-    expect(await flagOverdueExchanges(prisma, new Date(Date.now() + 16 * DAY))).toBe(0)
+    expect(await flagOverdueExchanges(prisma, new Date(Date.now() + 6 * DAY))).toBe(0)
+    expect(await flagOverdueExchanges(prisma, new Date(Date.now() + 8 * DAY))).toBe(1)
+    expect(await flagOverdueExchanges(prisma, new Date(Date.now() + 9 * DAY))).toBe(0)
 
     const list = await request
       .get('/api/admin/support-requests')
@@ -369,5 +369,32 @@ describe('đổi cả dòng; kết thúc sau khi nhận hàng cũ', () => {
     expect((await admin(code, 'reply', { message: 'Đóng', status: 'resolved' })).status).toBe(409)
     expect((await admin(code, 'reply', { message: 'Đóng', status: 'rejected' })).status).toBe(409)
     expect(await stock('AM-41')).toEqual({ onHand: 2, reserved: 1 })
+  })
+})
+
+describe('email đổi hàng', () => {
+  it('nhận yêu cầu: liệt kê dòng đổi và báo cửa hàng chịu phí gửi; chấp nhận: hướng dẫn, mã yêu cầu, hạn 7 ngày', async () => {
+    const { delivered, ask, sameprice, admin, mailer } = await exchangeShop()
+    await sameprice(2)
+    const placed = await delivered()
+    const code = (await ask(placed)).body.code as number
+    expect((await admin(code, 'decide', { decision: 'accepted', message: 'Gọi GHN tới lấy hàng' })).status).toBe(200)
+
+    const mailOf = (subject: RegExp) =>
+      vi.waitFor(
+        () => {
+          const found = mailer.sent.find((m) => subject.test(m.subject))
+          if (!found) throw new Error('Chưa có thư')
+          return found
+        },
+        { timeout: 10_000, interval: 100 },
+      )
+    const created = await mailOf(/Đã nhận yêu cầu/)
+    expect(created.text).toContain('AM-40) × 1 → đổi sang AM-41')
+    expect(created.text).toContain('Cửa hàng chịu toàn bộ phí gửi hàng')
+    const accepted = await mailOf(/đã được chấp nhận/)
+    expect(accepted.text).toContain('Gọi GHN tới lấy hàng')
+    expect(accepted.text).toContain(`#YC${code}`)
+    expect(accepted.text).toContain('trong vòng 7 ngày')
   })
 })
