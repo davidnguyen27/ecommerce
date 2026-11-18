@@ -412,7 +412,15 @@ export async function staffReply(
   }
   const status = input.status ?? request.status
   const closing = isClosed(status)
-  // Đổi hàng đóng trước khi giao: nhả hàng đang giữ cho biến thể mới (ADR 0015).
+  if (closing && request.receivedAt) {
+    if (status === 'rejected') {
+      throw conflict('Đã nhận hàng khách gửi về, không từ chối được nữa; kết thúc yêu cầu bằng "Đã xong"')
+    }
+    if (request.kind === 'exchange' && !request.exchangeHandedOverAt) {
+      throw conflict('Đã nhận hàng cũ của khách: bàn giao hàng đổi trước khi kết thúc yêu cầu')
+    }
+  }
+  // Đổi hàng đóng trước khi nhận hàng cũ: nhả hàng đang giữ cho biến thể mới (ADR 0015).
   if (closing && request.kind === 'exchange' && !request.exchangeHandedOverAt) await releaseExchange(tx, request.id)
   await tx.supportRequest.update({
     where: { id: request.id },

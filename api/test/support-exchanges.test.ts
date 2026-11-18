@@ -41,7 +41,7 @@ async function exchangeShop() {
     await setStock(v41, 'AM-41', onHand)
   }
   let n = 0
-  const delivered = async (quantity = 2) => {
+  const delivered = async (quantity = 1) => {
     n += 1
     const res = await checkout({
       lines: [{ variantId: v40.id, quantity, price: 2_000_000 }],
@@ -153,20 +153,20 @@ describe('gửi yêu cầu đổi hàng', () => {
     expect(options.body.lines).toEqual([
       expect.objectContaining({
         heldSku: 'AM-40',
-        returnable: 2,
+        returnable: 1,
         options: [expect.objectContaining({ sku: 'AM-41' })],
       }),
     ])
 
-    const res = await ask(placed, [{ variantId: options.body.lines[0].variantId, quantity: 2, toVariantId: v41.id }])
+    const res = await ask(placed, [{ variantId: options.body.lines[0].variantId, quantity: 1, toVariantId: v41.id }])
     expect(res.status).toBe(201)
-    expect(res.body).toMatchObject({ kind: 'exchange', lines: [{ sku: 'AM-40', quantity: 2, toSku: 'AM-41' }] })
+    expect(res.body).toMatchObject({ kind: 'exchange', lines: [{ sku: 'AM-40', quantity: 1, toSku: 'AM-41' }] })
   })
 })
 
 describe('xử lý yêu cầu đổi', () => {
   it('chấp nhận giữ hàng; bàn giao trước khi nhận hàng cũ là 409; bàn giao trừ tồn, ghi sale trỏ về đơn và yêu cầu', async () => {
-    const { delivered, ask, sameprice, admin, view, stock, warehouse, prisma, mailer, request, token } =
+    const { delivered, ask, sameprice, admin, view, stock, warehouse, mailer, request, token, v41 } =
       await exchangeShop()
     await sameprice(2)
     const placed = await delivered()
@@ -196,10 +196,13 @@ describe('xử lý yêu cầu đổi', () => {
     expect(await stock('AM-41')).toEqual({ onHand: 1, reserved: 0 })
     expect((await admin(code, 'exchange-ship', SHIPMENT, warehouse.accessToken)).status).toBe(409)
 
-    const request_ = await prisma.supportRequest.findUniqueOrThrow({ where: { code } })
-    const order = await prisma.order.findUniqueOrThrow({ where: { code: placed.code } })
-    const sale = await prisma.stockMovement.findMany({ where: { supportRequestId: request_.id, kind: 'sale' } })
-    expect(sale).toEqual([expect.objectContaining({ quantity: -1, orderId: order.id })])
+    const sale = await request.get('/api/admin/stock/movements').query({ variantId: v41.id }).set(bearer(token))
+    expect(sale.body.items[0]).toMatchObject({
+      kind: 'sale',
+      quantity: -1,
+      orderCode: placed.code,
+      supportRequestCode: code,
+    })
 
     const customer = await request
       .get(`/api/orders/${placed.code}/support-requests/${code}`)
@@ -340,5 +343,31 @@ describe('nhân viên tạo hộ yêu cầu đổi', () => {
       })
     expect(created.status).toBe(201)
     expect(created.body).toMatchObject({ kind: 'exchange', createdBy: 'staff', lines: [{ toSku: 'AM-41' }] })
+  })
+})
+
+describe('đổi cả dòng; kết thúc sau khi nhận hàng cũ', () => {
+  it('đổi một phần dòng, hay khi dòng đang có yêu cầu trả, thì 409', async () => {
+    const { delivered, ask, sameprice, request, v40, v41 } = await exchangeShop()
+    await sameprice(3)
+    const placed = await delivered(2)
+    expect((await ask(placed, [{ variantId: v40.id, quantity: 1, toVariantId: v41.id }])).status).toBe(409)
+    const returned = await ask(placed, [{ variantId: v40.id, quantity: 1, reason: 'wrong_fit' }], 'return')
+    expect(returned.status).toBe(201)
+    expect((await ask(placed, [{ variantId: v40.id, quantity: 1, toVariantId: v41.id }])).status).toBe(409)
+    const options = await request
+      .get(`/api/orders/${placed.code}/support-requests/exchange-options`)
+      .query({ token: placed.token })
+    expect(options.body.lines[0]).toMatchObject({ returnable: 0 })
+  })
+
+  it('đã nhận hàng cũ mà chưa giao hàng đổi thì không kết thúc được yêu cầu', async () => {
+    const { delivered, ask, sameprice, admin, acceptAndReceive, stock } = await exchangeShop()
+    await sameprice(2)
+    const code = (await ask(await delivered())).body.code as number
+    await acceptAndReceive(code)
+    expect((await admin(code, 'reply', { message: 'Đóng', status: 'resolved' })).status).toBe(409)
+    expect((await admin(code, 'reply', { message: 'Đóng', status: 'rejected' })).status).toBe(409)
+    expect(await stock('AM-41')).toEqual({ onHand: 2, reserved: 1 })
   })
 })

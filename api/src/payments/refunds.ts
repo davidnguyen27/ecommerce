@@ -243,6 +243,8 @@ export async function retryRefund(
     amount,
     origin: 'retry',
     retryOfId: failed.id,
+    // Khoản hoàn trả hàng tạo lại vẫn thuộc yêu cầu trả đó.
+    supportRequestId: failed.supportRequestId ?? undefined,
     note: input.note,
     staffId,
   })

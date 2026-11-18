@@ -47,7 +47,11 @@ watch(
     try {
       exchange.value = await props.loadExchangeOptions()
       for (const line of exchange.value.lines) {
-        swaps[line.variantId] ??= { chosen: false, quantity: 1, toVariantId: line.options[0]?.variantId ?? '' }
+        swaps[line.variantId] ??= {
+          chosen: false,
+          quantity: line.returnable,
+          toVariantId: line.options[0]?.variantId ?? '',
+        }
       }
     } catch (err) {
       loadError.value = apiErrorMessage(err)
@@ -110,14 +114,8 @@ watchEffect(() => {
           {{ productName(line.variantId) }} <span :class="muted">{{ line.heldSku }}</span>
         </label>
         <template v-if="swaps[line.variantId]!.chosen">
-          <select
-            v-model.number="swaps[line.variantId]!.quantity"
-            :class="select"
-            class="w-20"
-            aria-label="Số lượng đổi"
-          >
-            <option v-for="q in line.returnable" :key="q" :value="q">{{ q }}</option>
-          </select>
+          <!-- Đổi hàng đổi cả dòng: số lượng là mọi cái khách đang giữ của dòng. -->
+          <span>× {{ line.returnable }}</span>
           <select
             v-model="swaps[line.variantId]!.toVariantId"
             :class="select"

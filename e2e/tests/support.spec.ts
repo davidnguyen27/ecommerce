@@ -91,16 +91,16 @@ async function deliveredOrder(page: Page, suffix: string) {
 /** Khách mở form gửi yêu cầu ở trang đơn, chọn loại, điền tiêu đề và nội dung (bước chọn dòng do `pick` làm). */
 async function openRequest(page: Page, url: string, kind: string, pick: () => Promise<void>) {
   await page.goto(url)
-  await page.getByTestId('support-open-form').click()
-  await page.getByTestId('support-kind').selectOption(kind)
+  await page.getByRole('button', { name: 'Gửi yêu cầu' }).click()
+  await page.getByLabel('Bạn cần gì').selectOption(kind)
   await pick()
-  await page.getByTestId('support-subject').fill(kind === 'return' ? 'Trả giày' : 'Đổi size')
-  await page.getByTestId('support-message').fill(kind === 'return' ? 'Không vừa chân' : 'Chật, muốn đổi size 41')
+  await page.getByLabel('Tiêu đề').fill(kind === 'return' ? 'Trả giày' : 'Đổi size')
+  await page.getByLabel('Nội dung').fill(kind === 'return' ? 'Không vừa chân' : 'Chật, muốn đổi size 41')
 }
 
 /** Gửi form và chờ sang trang yêu cầu; trả mã yêu cầu và link trang yêu cầu. */
 async function submitRequest(page: Page) {
-  await page.getByTestId('support-submit').click()
+  await page.getByRole('button', { name: 'Gửi yêu cầu' }).click()
   await page.waitForURL(/\/yeu-cau\/\d+/)
   await expect(page.getByTestId('support-status')).toHaveText('Đã gửi')
   return { code: Number(new URL(page.url()).pathname.split('/').at(-1)), url: page.url() }
@@ -126,10 +126,10 @@ async function staffSupport(browser: Browser, credentials: { email: string; pass
 /** Bán hàng nhận việc rồi chấp nhận kèm lời nhắn. */
 async function claimAndAccept(browser: Browser, code: number) {
   const sales = await staffSupport(browser, SALES, code)
-  await sales.page.getByTestId('admin-support-claim').click()
+  await sales.page.getByRole('button', { name: 'Nhận việc' }).click()
   await expect(sales.page.getByTestId('admin-support-assignee')).toContainText(SALES.name)
-  await sales.page.getByTestId('return-decision-message').fill('Bạn gửi hàng về địa chỉ cửa hàng giúp shop.')
-  await sales.page.getByTestId('return-accept').click()
+  await sales.page.getByLabel(/Lời nhắn cho khách/).fill('Bạn gửi hàng về địa chỉ cửa hàng giúp shop.')
+  await sales.page.getByRole('button', { name: 'Chấp nhận' }).click()
   await expect(sales.page.getByTestId('admin-support-status')).toHaveText('Đang xử lý')
   await sales.close()
 }
@@ -152,9 +152,9 @@ test('trả hàng kèm ảnh: chấp nhận, nhận hàng về, đề xuất ho�
   expect((await api.stockOf(SKU)).onHand).toBe(before.onHand - 1)
 
   await openRequest(page, order.url, 'return', async () => {
-    await page.getByTestId(`support-return-${SKU}`).check()
+    await page.getByRole('checkbox', { name: new RegExp(SKU) }).check()
   })
-  await page.getByTestId('support-image-input').setInputFiles({ name: 'loi.png', mimeType: 'image/png', buffer: PIXEL })
+  await page.getByLabel(/Ảnh đính kèm/).setInputFiles({ name: 'loi.png', mimeType: 'image/png', buffer: PIXEL })
   const request = await submitRequest(page)
   await expect(page.getByTestId('support-message-item').first().locator('img')).toHaveCount(1)
 
@@ -168,8 +168,8 @@ test('trả hàng kèm ảnh: chấp nhận, nhận hàng về, đề xuất ho�
 
   // Bán hàng đề xuất hoàn số gợi ý (giá dòng, không gồm phí giao).
   const sales = await staffSupport(browser, SALES, request.code)
-  await expect(sales.page.getByTestId('return-refund-amount')).toHaveValue(String(PRICE))
-  await sales.page.getByTestId('return-refund-submit').click()
+  await expect(sales.page.getByLabel('Số tiền hoàn (VND)')).toHaveValue(String(PRICE))
+  await sales.page.getByRole('button', { name: 'Đề xuất hoàn và đóng yêu cầu' }).click()
   await expect(sales.page.getByTestId('admin-support-status')).toHaveText('Đã xong')
   await sales.close()
   expect(await api.order(order.code)).toMatchObject({ status: 'completed', refunding: PRICE })
@@ -205,8 +205,8 @@ test.describe('đổi hàng', () => {
     const order = await deliveredOrder(page, '2')
 
     await openRequest(page, order.url, 'exchange', async () => {
-      await page.getByTestId(`support-exchange-${SKU}`).check()
-      await expect(page.getByTestId(`support-exchange-to-${SKU}`)).toContainText(OTHER_SKU)
+      await page.getByRole('checkbox', { name: new RegExp(SKU) }).check()
+      await expect(page.getByLabel('Đổi sang')).toContainText(OTHER_SKU)
     })
     const request = await submitRequest(page)
     await expect(page.getByTestId('support-lines')).toContainText(OTHER_SKU)

@@ -4,6 +4,7 @@ import {
   type ProposeReturnRefund,
   type ReceiveSupportReturn,
   type ReturnWindowItem,
+  SUPPORT_CLOSED_STATUSES,
   type SupportReturnReason,
 } from '@ecommerce/shared'
 import { ProductType as ProductTypes } from '@ecommerce/shared'
@@ -37,9 +38,10 @@ const DAY = 24 * 60 * 60_000
 const RETURNING_KINDS = ['return', 'exchange'] as const
 
 /**
- * Số còn trả (hay đổi) được của từng dòng đơn: số lượng dòng trừ số đã nằm trong các yêu cầu trả/đổi chưa bị từ chối.
- * Không tính: yêu cầu bị đóng mà chưa nhận hàng (nhân viên đóng tay, hàng chưa về), và yêu cầu đổi đã giao hàng mới (khách
- * lại đang giữ hàng, trả hay đổi tiếp được; ADR 0015). Gọi dưới khóa đơn.
+ * Số còn trả (hay đổi) được của từng dòng đơn: số lượng dòng trừ số đã nằm trong các yêu cầu trả/đổi. Không tính: yêu
+ * cầu đã kết thúc mà chưa nhận hàng (từ chối, hay nhân viên đóng khi hàng chưa về), và yêu cầu đổi đã giao hàng mới
+ * (khách lại đang giữ hàng, trả hay đổi tiếp được; ADR 0015). Hàng đã nhận về luôn được tính, dù yêu cầu kết thúc thế nào.
+ * Gọi dưới khóa đơn.
  */
 export async function returnableQuantities(tx: DbClient, orderId: string) {
   const lines = await tx.orderLine.findMany({ where: { orderId }, select: { id: true, quantity: true } })
@@ -48,9 +50,8 @@ export async function returnableQuantities(tx: DbClient, orderId: string) {
       orderLine: { orderId },
       request: {
         kind: { in: [...RETURNING_KINDS] },
-        status: { not: 'rejected' },
         NOT: [
-          { status: 'resolved', receivedAt: null },
+          { status: { in: [...SUPPORT_CLOSED_STATUSES] }, receivedAt: null },
           { kind: 'exchange', exchangeHandedOverAt: { not: null } },
         ],
       },
@@ -60,6 +61,18 @@ export async function returnableQuantities(tx: DbClient, orderId: string) {
   const used = new Map<string, number>()
   for (const t of taken) used.set(t.orderLineId, (used.get(t.orderLineId) ?? 0) + t.quantity)
   return new Map(lines.map((l) => [l.id, l.quantity - (used.get(l.id) ?? 0)]))
+}
+
+/** Số khách còn giữ của từng dòng đơn: số lượng dòng trừ số cửa hàng đã nhận về qua yêu cầu trả. */
+export async function keptQuantities(tx: DbClient, orderId: string) {
+  const lines = await tx.orderLine.findMany({ where: { orderId }, select: { id: true, quantity: true } })
+  const returned = await tx.supportRequestLine.findMany({
+    where: { orderLine: { orderId }, request: { kind: 'return', receivedAt: { not: null } } },
+    select: { orderLineId: true, quantity: true },
+  })
+  const back = new Map<string, number>()
+  for (const r of returned) back.set(r.orderLineId, (back.get(r.orderLineId) ?? 0) + r.quantity)
+  return new Map(lines.map((l) => [l.id, l.quantity - (back.get(l.id) ?? 0)]))
 }
 
 export type PlannedReturnLine = {
@@ -86,6 +99,7 @@ export async function planReturnLines(
   const orderLines = await tx.orderLine.findMany({ where: { orderId }, ...ORDER_LINE_FOR_EXCHANGE })
   const available = await returnableQuantities(tx, orderId)
   const held = await heldVariants(tx, orderLines)
+  const keptUnits = await keptQuantities(tx, orderId)
   const planned: PlannedReturnLine[] = []
   for (const [i, line] of lines.entries()) {
     const orderLine = orderLines.find((l) => l.variantId === line.variantId)
@@ -99,6 +113,15 @@ export async function planReturnLines(
     const heldVariantId = held.get(orderLine.id)!
     if (kind === 'exchange') {
       if (!line.toVariantId) throw invalidField(`lines.${i}`, 'Chọn biến thể muốn đổi sang')
+      // Đổi cả dòng: mọi cái khách đang giữ của dòng cùng một biến thể, nên lần trả hay đổi sau nhận về đúng biến thể.
+      const holding = keptUnits.get(orderLine.id) ?? 0
+      if (left !== holding || line.quantity !== holding) {
+        throw conflict(
+          left !== holding
+            ? `${orderLine.sku}: dòng này đang có yêu cầu trả hay đổi khác; đổi hàng cần đổi cả dòng`
+            : `${orderLine.sku}: đổi hàng cần đổi cả dòng (${holding} cái)`,
+        )
+      }
       await assertExchangeable(
         tx,
         { orderLine, productId: orderLine.variant.productId, heldVariantId },

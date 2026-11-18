@@ -1,11 +1,11 @@
-import type { ExchangeOptions, ShipExchangeRequest } from '@ecommerce/shared'
+import { SUPPORT_CLOSED_STATUSES, type ExchangeOptions, type ShipExchangeRequest } from '@ecommerce/shared'
 import type { Audit } from '../audit/audited.ts'
 import { cartVariants } from '../checkout/live-variants.ts'
 import type { DbClient } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import type { CustomerMail } from '../jobs/jobs.ts'
 import { releaseStock, reserveStock, changeStock } from '../stock/stock.ts'
-import { returnableQuantities } from './returns.ts'
+import { keptQuantities, returnableQuantities } from './returns.ts'
 import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest, queueSupportEmail } from './support.ts'
 
 /**
@@ -81,6 +81,7 @@ export async function exchangeOptions(db: DbClient, orderId: string): Promise<Ex
   })
   const held = await heldVariants(db, lines)
   const available = await returnableQuantities(db, orderId)
+  const kept = await keptQuantities(db, orderId)
   const result: ExchangeOptions['lines'] = []
   for (const line of lines) {
     const heldId = held.get(line.id)!
@@ -110,7 +111,10 @@ export async function exchangeOptions(db: DbClient, orderId: string): Promise<Ex
       heldId === line.variantId
         ? line.sku
         : (await db.productVariant.findUniqueOrThrow({ where: { id: heldId }, select: { sku: true } })).sku
-    result.push({ variantId: line.variantId, heldSku, returnable: available.get(line.id) ?? 0, options })
+    // Đổi cả dòng: chỉ đổi được khi không có yêu cầu trả hay đổi nào khác đang chiếm dòng.
+    const holding = kept.get(line.id) ?? 0
+    const exchangeable = available.get(line.id) === holding ? holding : 0
+    result.push({ variantId: line.variantId, heldSku, returnable: exchangeable, options })
   }
   return { lines: result }
 }
@@ -226,7 +230,7 @@ export async function flagOverdueExchanges(db: DbClient, now = new Date()) {
       decision: 'accepted',
       receivedAt: null,
       exchangeOverdueAt: null,
-      status: { notIn: ['resolved', 'rejected'] },
+      status: { notIn: [...SUPPORT_CLOSED_STATUSES] },
       decidedAt: { lte: new Date(now.getTime() - EXCHANGE_OVERDUE_MS) },
     },
     data: { exchangeOverdueAt: now },

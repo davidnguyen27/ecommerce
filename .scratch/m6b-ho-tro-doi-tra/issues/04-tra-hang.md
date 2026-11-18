@@ -100,3 +100,7 @@ Spec: mục "Mô hình", "Quy tắc" (trả hàng, hạn đổi trả).
 **Bổ sung sau review (2026-11-18):**
 - `PublicSupportRequest.refunds`: khách thấy khoản hoàn của yêu cầu ngay ở trang yêu cầu (đang hoàn hay đã hoàn), cùng cách hiển thị với trang đơn (`toPublicRefunds` dùng chung). `PublicRefund` chuyển sang `shared/src/refunds.ts` để `support.ts` và `orders.ts` không import vòng.
 - Danh sách admin có bộ lọc `returnOverdue=true` (yêu cầu gửi khi đã quá hạn đổi trả, `overdueDays > 0`).
+
+**Sửa sau review (2026-11-18):**
+- **Hàng đã nhận về luôn chiếm số lượng của dòng**, dù yêu cầu kết thúc thế nào. `returnableQuantities` chỉ bỏ qua yêu cầu đã kết thúc mà chưa nhận hàng. Yêu cầu đã nhận hàng thì không chuyển sang `rejected` được (409), chỉ kết thúc bằng `resolved`.
+- **Khoản hoàn tạo lại giữ yêu cầu trả.** Migration `20261117001200_refund_retry_support` cho `origin = retry` mang `support_request_id`; `retryRefund` chép từ khoản thất bại. Yêu cầu và khách vẫn thấy khoản mới.

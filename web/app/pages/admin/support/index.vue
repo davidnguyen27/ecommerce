@@ -66,7 +66,7 @@ await load()
         <h1 class="admin-page-title">Yêu cầu hỗ trợ</h1>
         <p class="admin-page-desc">Việc khách nhờ cửa hàng xử lý. Yêu cầu cũ trước: khách chờ lâu nhất ở trên cùng.</p>
       </div>
-      <NuxtLink v-if="session.can('support.handle')" to="/admin/support/new" class="btn btn-primary btn-sm">
+      <NuxtLink v-if="session.canOpen('/admin/support/new')" to="/admin/support/new" class="btn btn-primary btn-sm">
         Tạo hộ khách
       </NuxtLink>
     </div>

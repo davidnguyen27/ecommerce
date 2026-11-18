@@ -326,7 +326,7 @@ await load()
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
               <h2 class="admin-section-title" style="margin: 0">Yêu cầu hỗ trợ</h2>
               <NuxtLink
-                v-if="session.can('support.handle')"
+                v-if="session.canOpen('/admin/support/new')"
                 :to="`/admin/support/new?orderCode=${order.code}`"
                 class="btn btn-secondary btn-sm"
               >
