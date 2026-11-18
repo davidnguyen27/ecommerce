@@ -101,7 +101,7 @@ const proposeRefund = () =>
       data-testid="admin-exchange-overdue"
     >
       <span>
-        Đã chấp nhận quá 14 ngày mà chưa nhận được hàng khách gửi (gắn cờ
+        Đã chấp nhận quá 7 ngày mà chưa nhận được hàng khách gửi (gắn cờ
         {{ formatDateTime(request.exchangeOverdueAt) }}). Hàng mới vẫn đang giữ; liên hệ khách hoặc đóng yêu cầu để nhả
         hàng.
       </span>

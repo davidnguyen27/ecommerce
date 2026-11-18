@@ -6,7 +6,8 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import type { CustomerMail } from '../jobs/jobs.ts'
 import { releaseStock, reserveStock, changeStock } from '../stock/stock.ts'
 import { keptQuantities, returnableQuantities } from './returns.ts'
-import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest, queueSupportEmail } from './support.ts'
+import { queueSupportEmail } from './emails.ts'
+import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest } from './support.ts'
 
 /**
  * Đổi hàng (GLOSSARY "Đổi hàng", ADR 0015): khách đổi sang biến thể khác của cùng sản phẩm, cùng giá, không tạo đơn mới.
@@ -14,8 +15,12 @@ import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest, queueSupportEm
  * xuất bán trỏ về đơn và yêu cầu). Đóng yêu cầu trước khi giao thì nhả hàng đang giữ.
  */
 
-/** Đổi hàng đã chấp nhận mà quá ngần này chưa nhận được hàng cũ thì gắn cờ (spec M6b, số tạm). */
-export const EXCHANGE_OVERDUE_MS = 14 * 24 * 60 * 60_000
+/**
+ * Khách gửi hàng cũ trong ngần này ngày sau khi đổi hàng được chấp nhận; quá hạn thì job gắn cờ cho nhân viên. Cửa hàng
+ * chịu phí gửi nên 7 ngày là đủ, và không giữ hàng mới quá lâu (2026-11-18).
+ */
+export const EXCHANGE_SEND_DAYS = 7
+export const EXCHANGE_OVERDUE_MS = EXCHANGE_SEND_DAYS * 24 * 60 * 60_000
 
 /**
  * Biến thể khách đang giữ của từng dòng đơn: biến thể nhận được ở lần đổi gần nhất đã giao, không có thì biến thể gốc
@@ -220,7 +225,7 @@ export async function shipExchange(
 }
 
 /**
- * Job hằng ngày: gắn cờ yêu cầu đổi đã chấp nhận quá 14 ngày mà chưa nhận được hàng cũ. Không tự hủy, không nhả hàng:
+ * Job hằng ngày: gắn cờ yêu cầu đổi đã chấp nhận quá `EXCHANGE_SEND_DAYS` ngày mà chưa nhận được hàng cũ. Không tự hủy, không nhả hàng:
  * nhân viên quyết (spec M6b). Trả số yêu cầu vừa gắn cờ.
  */
 export async function flagOverdueExchanges(db: DbClient, now = new Date()) {

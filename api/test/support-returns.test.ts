@@ -115,9 +115,15 @@ describe('gửi yêu cầu trả hàng', () => {
     })
   })
 
-  it('nhóm hàng không cấu hình thì không có số ngày, không cảnh báo', async () => {
-    const { delivered, ask, view } = await returnShop()
-    const res = await ask(await delivered())
+  it('mặc định 14 ngày; nhóm hàng bỏ cấu hình thì không có số ngày, không cảnh báo', async () => {
+    const { delivered, ask, view, request, sales } = await returnShop()
+    const first = await ask(await delivered(1))
+    expect((await view(first.body.code)).returnWindow).toMatchObject({ days: 14, overdueDays: 0 })
+    await request
+      .put('/api/admin/return-windows')
+      .set(bearer(sales.accessToken))
+      .send({ items: [{ productType: 'footwear', days: null }] })
+    const res = await ask(await delivered(1))
     expect((await view(res.body.code)).returnWindow).toMatchObject({ days: null, overdueDays: null })
   })
 
@@ -280,7 +286,8 @@ describe('hạn đổi trả', () => {
     const get = () => request.get('/api/admin/return-windows').set(bearer(warehouse.accessToken))
 
     expect((await get()).body.items).toHaveLength(5)
-    expect((await get()).body.items.every((i: { days: number | null }) => i.days === null)).toBe(true)
+    // Chủ doanh nghiệp chốt 14 ngày cho mọi nhóm hàng (migration 20261118000100).
+    expect((await get()).body.items.every((i: { days: number | null }) => i.days === 14)).toBe(true)
     const put = (items: Record<string, unknown>[], as = sales.accessToken) =>
       request.put('/api/admin/return-windows').set(bearer(as)).send({ items })
 
@@ -294,7 +301,7 @@ describe('hạn đổi trả', () => {
       expect.arrayContaining([
         { productType: 'footwear', days: 7 },
         { productType: 'fragrance', days: 0 },
-        { productType: 'watch', days: null },
+        { productType: 'watch', days: 14 },
       ]),
     )
     const count = (await audits()).filter((a) => a === 'return_window.update').length

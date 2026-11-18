@@ -103,6 +103,9 @@ async function submit() {
         :lines="returnLines"
         :load-exchange-options="() => client.exchangeOptions(orderCode)"
       />
+      <p v-if="needsLines" class="text-muted-foreground" data-testid="support-shipping-covered">
+        Cửa hàng chịu toàn bộ phí gửi hàng khi trả, đổi và bảo hành; bạn chờ hướng dẫn của cửa hàng rồi mới gửi hàng.
+      </p>
       <p v-if="form.kind === 'cancel'" class="text-muted-foreground">
         Cửa hàng sẽ hủy đơn và báo số tiền hoàn theo chính sách đã áp dụng cho đơn.
       </p>
