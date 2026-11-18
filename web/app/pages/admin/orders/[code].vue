@@ -322,6 +322,37 @@ await load()
 
           <AdminRefundPanel :order="order" style="margin-bottom: 24px" @update="setOrder" />
 
+          <div class="admin-panel" style="margin-bottom: 24px" data-testid="admin-order-support">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
+              <h2 class="admin-section-title" style="margin: 0">Yêu cầu hỗ trợ</h2>
+              <NuxtLink
+                v-if="session.canOpen('/admin/support/new')"
+                :to="`/admin/support/new?orderCode=${order.code}`"
+                class="btn btn-secondary btn-sm"
+              >
+                Tạo hộ khách
+              </NuxtLink>
+            </div>
+            <p
+              v-if="order.supportRequests.length === 0"
+              style="margin: 12px 0 0; font-size: 13px; color: var(--adm-muted)"
+            >
+              Chưa có yêu cầu nào.
+            </p>
+            <ul v-else style="margin: 12px 0 0; padding: 0; list-style: none; font-size: 13px">
+              <li
+                v-for="r in order.supportRequests"
+                :key="r.code"
+                style="padding: 6px 0; border-top: 1px solid var(--adm-border)"
+              >
+                <NuxtLink :to="`/admin/support/${r.code}`" style="font-family: var(--adm-mono); font-weight: 600"
+                  >#YC{{ r.code }}</NuxtLink
+                >
+                {{ r.subject }} · {{ SUPPORT_KIND_LABELS[r.kind] }} · {{ SUPPORT_STATUS_LABELS[r.status] }}
+              </li>
+            </ul>
+          </div>
+
           <h2 class="admin-section-title">Lịch sử thao tác</h2>
           <div class="admin-table-card">
             <table class="admin-table">

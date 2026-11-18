@@ -66,6 +66,8 @@ export type NewRefund = {
   origin: RefundOrigin
   reconciliationItemId?: string
   retryOfId?: string
+  /** Yêu cầu trả hàng; bắt buộc khi `origin = return` (M6b). */
+  supportRequestId?: string
   note?: string
   staffId: string
 }
@@ -88,6 +90,7 @@ export async function createRefund(tx: DbClient, input: NewRefund) {
       amount: input.amount,
       origin: input.origin,
       reconciliationItemId: input.reconciliationItemId ?? null,
+      supportRequestId: input.supportRequestId ?? null,
       retryOfId: input.retryOfId ?? null,
       note: input.note?.trim() || null,
       createdById: input.staffId,
@@ -240,6 +243,8 @@ export async function retryRefund(
     amount,
     origin: 'retry',
     retryOfId: failed.id,
+    // Khoản hoàn trả hàng tạo lại vẫn thuộc yêu cầu trả đó.
+    supportRequestId: failed.supportRequestId ?? undefined,
     note: input.note,
     staffId,
   })

@@ -16,7 +16,8 @@ const env = {
   ...process.env,
   HTTP_PORT,
   HTTPS_PORT: '8444',
-  POSTGRES_PORT: '55432',
+  // Windows có lúc giữ riêng một dải cổng (Hyper-V), có thể trùm 55432: đặt SMOKE_POSTGRES_PORT để đổi.
+  POSTGRES_PORT: process.env.SMOKE_POSTGRES_PORT ?? '55432',
   JWT_SECRET: randomBytes(32).toString('base64url'),
   // Không theo .env local: bỏ SeaweedFS (sẽ tranh cổng 9000 với stack dev), giữ file trong bộ nhớ.
   COMPOSE_PROFILES: '',

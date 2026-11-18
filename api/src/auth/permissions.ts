@@ -10,6 +10,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
     'preorder.manage',
     'voucher.manage',
     'order.cancel_paid',
+    'support.handle',
   ],
   warehouse: ['catalog.edit', 'media.upload', 'document.view', 'stock.adjust', 'order.view', 'order.fulfill'],
   accountant: ['price.edit', 'document.view', 'audit.view', 'order.view', 'payment.reconcile', 'payment.refund'],

@@ -114,6 +114,8 @@ export const StockMovement = z.object({
   receiptId: z.string().nullable(),
   /** Mã đơn của dòng xuất bán hay hàng hoàn về; loại khác thì `null`. */
   orderCode: z.number().nullable(),
+  /** Mã yêu cầu hỗ trợ của dòng nhập lại (trả hàng) hay xuất bán (giao hàng đổi); loại khác thì `null`. */
+  supportRequestCode: z.number().nullable(),
   variant: z.object({ id: z.string(), sku: z.string() }),
   product: z.object({ id: z.string(), name: z.string() }),
   actor: AuditActor,

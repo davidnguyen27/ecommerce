@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { PayRemainderResult, PublicOrder } from '@ecommerce/shared'
+import { PayRemainderResult, PublicOrder, canRequestCancel } from '@ecommerce/shared'
 
 // Đơn trong tài khoản: phiên khách chỉ có ở trình duyệt nên đơn nạp sau khi mount, HTML từ server không có gì của đơn.
 const route = useRoute()
 const code = computed(() => String(route.params.code))
 const session = useCustomerSession()
+const supportClient = accountSupportClient(session.accountFetch)
 const order = ref<PublicOrder | null>(null)
 const error = ref<string | null>(null)
 
@@ -74,6 +75,15 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
         :paying-remainder="payingRemainder"
         @cancel="cancel"
         @pay-remainder="payRemainder"
+      />
+      <SupportRequests
+        :client="supportClient"
+        :order-code="Number(code)"
+        :can-cancel="canRequestCancel(order)"
+        :return-lines="
+          order.status === 'completed' && order.fulfillmentStatus === 'delivered' ? order.lines : undefined
+        "
+        class="mt-8"
       />
     </template>
   </main>

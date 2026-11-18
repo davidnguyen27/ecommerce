@@ -2,7 +2,8 @@ import { z } from 'zod'
 import { AttributeValues } from './attributes.ts'
 import { PageQuery, pageOf } from './pagination.ts'
 import { PublicImage } from './products.ts'
-import { AdminRefund } from './refunds.ts'
+import { AdminRefund, PublicRefund } from './refunds.ts'
+import { SupportRequestKind, SupportRequestStatus } from './support.ts'
 
 /** Trạng thái đơn hàng (GLOSSARY "Trạng thái đơn hàng"). */
 export const OrderStatus = z.enum(['pending_payment', 'processing', 'completed', 'cancelled'])
@@ -81,15 +82,6 @@ export const ORDER_CANCEL_CAUSE_CUSTOMER_TEXT: Record<OrderCancelCause, string> 
   delivery_failed: 'đơn vị vận chuyển không giao được hàng',
   other: 'cửa hàng không thực hiện được đơn',
 }
-
-/** Một khoản hoàn như khách thấy: số tiền, đang hoàn hay đã hoàn, ngày tạo và ngày xong. Không có ghi chú nội bộ. */
-export const PublicRefund = z.object({
-  amount: z.number(),
-  status: z.enum(['refunding', 'refunded']),
-  createdAt: z.string(),
-  completedAt: z.string().nullable(),
-})
-export type PublicRefund = z.infer<typeof PublicRefund>
 
 /** Dòng đơn như lúc đặt mua. */
 export const OrderLineView = z.object({
@@ -326,6 +318,16 @@ export const AdminOrder = PublicOrder.extend({
   gatewayRefundable: z.number(),
   /** Mọi khoản hoàn kể cả thất bại, đủ thông tin nội bộ; thay cho `refunds` của khách. */
   refunds: z.array(AdminRefund),
+  /** Yêu cầu hỗ trợ của đơn, mới trước (M6b). */
+  supportRequests: z.array(
+    z.object({
+      code: z.number(),
+      kind: SupportRequestKind,
+      status: SupportRequestStatus,
+      subject: z.string(),
+      createdAt: z.string(),
+    }),
+  ),
   history: z.array(OrderHistoryEntry),
 })
 export type AdminOrder = z.infer<typeof AdminOrder>
@@ -369,3 +371,19 @@ export const CancelPaidOrderRequest = z.object({
   note: z.string().trim().max(2000).optional(),
 })
 export type CancelPaidOrderRequest = z.input<typeof CancelPaidOrderRequest>
+
+/**
+ * Khách gửi được yêu cầu hủy đơn (spec M6b ticket 03): đơn đang xử lý, đã trả đủ hoặc đã cọc, chưa bàn giao vận chuyển.
+ * Đơn chưa trả thì khách tự hủy bằng nút sẵn có; đã bàn giao thì chỉ còn trả hàng sau khi nhận.
+ */
+export function canRequestCancel(order: {
+  status: OrderStatus
+  paymentStatus: PaymentStatus
+  fulfillmentStatus: FulfillmentStatus
+}) {
+  return (
+    order.status === 'processing' &&
+    (order.paymentStatus === 'paid' || order.paymentStatus === 'deposit_paid') &&
+    (order.fulfillmentStatus === 'not_prepared' || order.fulfillmentStatus === 'preparing')
+  )
+}

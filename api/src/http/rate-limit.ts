@@ -22,6 +22,10 @@ export const RATE_LIMITS = {
   payRemainderPerIp: { name: 'pay-remainder:ip', max: 10, windowMs: 60 * MINUTE },
   // Báo giá kèm mã giảm giá: chặn dò mã (spec M5, số tạm).
   voucherCheckPerIp: { name: 'voucher-check:ip', max: 10, windowMs: MINUTE },
+  // Yêu cầu hỗ trợ (spec M6b, số tạm): khách gửi nội dung tự do nên chặn spam theo IP và theo yêu cầu.
+  supportCreatePerIp: { name: 'support-create:ip', max: 5, windowMs: 60 * MINUTE },
+  supportMessagePerRequest: { name: 'support-message:request', max: 20, windowMs: 60 * MINUTE },
+  supportImagePerIp: { name: 'support-image:ip', max: 20, windowMs: 60 * MINUTE },
 } satisfies Record<string, RateLimit>
 
 /**

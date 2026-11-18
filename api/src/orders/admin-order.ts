@@ -28,6 +28,10 @@ export async function loadAdminOrder(
         include: { staff: { select: ACTOR_SELECT }, customer: { select: { id: true, email: true } } },
         orderBy: { seq: 'asc' },
       },
+      supportRequests: {
+        select: { code: true, kind: true, status: true, subject: true, createdAt: true },
+        orderBy: [{ createdAt: 'desc' }, { code: 'desc' }],
+      },
       refunds: {
         include: {
           createdBy: { select: ACTOR_SELECT },
@@ -130,6 +134,7 @@ export async function loadAdminOrder(
       settledBy: r.settledBy,
       completedAt: r.completedAt?.toISOString() ?? null,
     })),
+    supportRequests: order.supportRequests.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
     history,
   }
 }
