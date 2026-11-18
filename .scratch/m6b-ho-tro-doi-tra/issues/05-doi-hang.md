@@ -59,3 +59,8 @@ Spec: mục "Quy tắc" (đổi hàng), ADR 0015.
   - Nhân viên tạo hộ yêu cầu đổi được qua API (`AdminCreateSupportRequest`), trang tạo hộ chưa có form đổi.
 - Test `api/test/support-exchanges.test.ts` (8). Test "chỉ còn trả được" của ticket 04 sửa theo câu báo lỗi mới.
 - Kết quả: 8 test mới qua; cả bộ test API 689/689. Chưa chạy thử giao diện trên trình duyệt; E2E ở ticket 07.
+
+**Sửa sau review (2026-11-18):**
+- **Đổi hàng đổi cả dòng.** Số lượng đổi phải bằng mọi cái khách còn giữ của dòng (`keptQuantities`: số lượng dòng trừ số đã nhận về qua yêu cầu trả), và dòng không được có yêu cầu trả hay đổi nào khác đang chiếm, không thì 409. Nhờ vậy mọi cái khách giữ của một dòng luôn cùng một biến thể, và "biến thể khách đang giữ" tính theo dòng là đúng. Đánh đổi: khách mua 2 cái cùng biến thể không đổi được chỉ 1 cái. `exchange-options` trả `returnable` = số đổi được cả dòng, 0 nếu dòng đang bị chiếm; form hiện số lượng cố định.
+- **Không kết thúc yêu cầu đổi đã nhận hàng cũ mà chưa giao hàng mới** (409): phải bàn giao trước. Chỉ nhả hàng giữ khi đóng lúc chưa nhận hàng cũ.
+- **Sổ xuất nhập hiện mã yêu cầu** (`StockMovement.supportRequestCode`, link ở trang lịch sử kho). Test kiểm sổ qua `GET /api/admin/stock/movements`, không đọc prisma.

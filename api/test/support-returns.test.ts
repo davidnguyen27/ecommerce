@@ -148,7 +148,7 @@ describe('gửi yêu cầu trả hàng', () => {
 
 describe('xử lý yêu cầu trả hàng', () => {
   it('chấp nhận → kho nhận về → đề xuất hoàn: tồn, sổ, khoản hoàn origin return, đơn vẫn hoàn tất', async () => {
-    const { delivered, ask, admin, view, stock, warehouse, request, token, prisma, mailer, audits } = await returnShop()
+    const { delivered, ask, admin, view, stock, warehouse, request, token, mailer, audits, v40 } = await returnShop()
     const placed = await delivered()
     const code = (await ask(placed)).body.code as number
     const before = await stock()
@@ -176,9 +176,13 @@ describe('xử lý yêu cầu trả hàng', () => {
     expect(received.status).toBe(200)
     expect(received.body).toMatchObject({ receivedAt: expect.any(String), returnRefund: { suggested: 2_000_000 } })
     expect(await stock()).toEqual({ onHand: before.onHand + 1, reserved: before.reserved })
-    const request_ = await prisma.supportRequest.findUniqueOrThrow({ where: { code } })
-    const movements = await prisma.stockMovement.findMany({ where: { supportRequestId: request_.id } })
-    expect(movements).toEqual([expect.objectContaining({ kind: 'return', quantity: 1 })])
+    const movements = await request.get('/api/admin/stock/movements').query({ variantId: v40.id }).set(bearer(token))
+    expect(movements.body.items[0]).toMatchObject({
+      kind: 'return',
+      quantity: 1,
+      orderCode: placed.code,
+      supportRequestCode: code,
+    })
 
     const proposed = await admin(code, 'refund', { refundAmount: 2_000_000 })
     expect(proposed.status).toBe(200)
@@ -332,5 +336,59 @@ describe('khách thấy khoản hoàn; lọc quá hạn đổi trả', () => {
       .query({ status: 'all', returnOverdue: 'true' })
       .set(bearer(token))
     expect(list.body.items.map((i: { code: number }) => i.code)).toEqual([late])
+  })
+})
+
+describe('kết thúc yêu cầu đã nhận hàng; hoàn tạo lại', () => {
+  it('đã nhận hàng thì không từ chối được, và số đã nhận về không trả lại được lần nữa', async () => {
+    const { delivered, ask, admin, view, warehouse } = await returnShop()
+    const placed = await delivered(1)
+    const code = (await ask(placed)).body.code as number
+    expect((await admin(code, 'decide', { decision: 'accepted', message: 'Gửi về giúp shop' })).status).toBe(200)
+    const lines = [{ lineId: (await view(code)).lines[0]!.id, restocked: 1, writtenOff: 0 }]
+    expect((await admin(code, 'receive', { lines }, warehouse.accessToken)).status).toBe(200)
+
+    expect((await admin(code, 'reply', { message: 'Đóng', status: 'rejected' })).status).toBe(409)
+    expect((await admin(code, 'reply', { message: 'Shop đóng yêu cầu', status: 'resolved' })).status).toBe(200)
+    expect((await ask(placed)).status).toBe(409)
+  })
+
+  it('tạo lại khoản hoàn trả hàng thất bại: khoản mới vẫn thuộc yêu cầu, khách thấy khoản đang hoàn', async () => {
+    const { delivered, ask, admin, view, warehouse, request, token, prisma } = await returnShop()
+    const accountant = await createStaff(request, token, ['accountant'], 'ke-toan@example.com')
+    const placed = await delivered(1)
+    const code = (await ask(placed)).body.code as number
+    expect((await admin(code, 'decide', { decision: 'accepted', message: 'Gửi về giúp shop' })).status).toBe(200)
+    const lines = [{ lineId: (await view(code)).lines[0]!.id, restocked: 1, writtenOff: 0 }]
+    expect((await admin(code, 'receive', { lines }, warehouse.accessToken)).status).toBe(200)
+    const proposed = await admin(code, 'refund', { refundAmount: 2_000_000 })
+    const refundId = proposed.body.refunds[0].id as string
+    // Dựng trạng thái: cổng báo hoàn thất bại.
+    const transaction = await prisma.paymentTransaction.findFirstOrThrow({ where: { order: { code: placed.code } } })
+    await prisma.refund.update({
+      where: { id: refundId },
+      data: {
+        status: 'failed',
+        method: 'vnpay',
+        paymentTransactionId: transaction.id,
+        executedById: accountant.id,
+        executedAt: new Date(),
+        completedAt: new Date(),
+      },
+    })
+
+    const retried = await request
+      .post(`/api/admin/refunds/${refundId}/retry`)
+      .set(bearer(accountant.accessToken))
+      .send({ amount: 2_000_000 })
+    expect(retried.status).toBe(200)
+    expect((await view(code)).refunds).toEqual([
+      expect.objectContaining({ id: refundId, status: 'failed' }),
+      expect.objectContaining({ amount: 2_000_000, status: 'pending' }),
+    ])
+    const customer = await request
+      .get(`/api/orders/${placed.code}/support-requests/${code}`)
+      .query({ token: placed.token })
+    expect(customer.body.refunds).toEqual([expect.objectContaining({ amount: 2_000_000, status: 'refunding' })])
   })
 })

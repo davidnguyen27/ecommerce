@@ -103,4 +103,14 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
   },
 ]
 
+/** Trang không có trong menu nhưng có link từ trang khác; quyền khai ở đây như mục menu. */
+const ADMIN_SUBPAGES: Pick<AdminMenuItem, 'to' | 'permission'>[] = [
+  { to: '/admin/support/new', permission: 'support.handle' },
+]
+
 export const ADMIN_MENU_ITEMS = ADMIN_MENU_GROUPS.flatMap((group) => group.items)
+/** Quyền của mọi trang quản trị có link (menu và trang con), cho `canOpen`. */
+export const ADMIN_PAGE_PERMISSIONS: Pick<AdminMenuItem, 'to' | 'permission'>[] = [
+  ...ADMIN_MENU_ITEMS,
+  ...ADMIN_SUBPAGES,
+]
