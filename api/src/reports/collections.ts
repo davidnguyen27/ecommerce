@@ -16,6 +16,17 @@ const empty = (): CollectionsFigures => ({
   net: 0,
 })
 
+/**
+ * CTE `"root"` (`id`, `origin`): mỗi khoản hoàn kèm nguồn của khoản gốc đầu chuỗi tạo lại. Khoản `retry` mang nguồn của
+ * khoản nó thay, để báo cáo chỉ chia theo hủy, đối soát, trả hàng.
+ */
+export const REFUND_ROOTS = Prisma.sql`
+  WITH RECURSIVE "root" AS (
+    SELECT "id", "origin" FROM "refund" WHERE "retry_of_id" IS NULL
+    UNION ALL
+    SELECT c."id", "root"."origin" FROM "refund" c JOIN "root" ON c."retry_of_id" = "root"."id"
+  )`
+
 const RECEIVED = { full: 'receivedFull', deposit: 'receivedDeposit', remainder: 'receivedRemainder' } as const
 const REFUNDED = {
   cancellation: 'refundedCancellation',
@@ -36,13 +47,8 @@ export async function collectionsReport(db: DbClient, period: Period): Promise<C
       FROM "payment_transaction" t
       WHERE ${inPeriod(paidAt, period)}
       GROUP BY 1, 2`,
-    // Khoản tạo lại (`retry`) mang nguồn của khoản gốc đầu chuỗi, để tiền ra chỉ chia theo hủy, đối soát, trả hàng.
     db.$queryRaw<{ bucket: string; origin: keyof typeof REFUNDED; amount: bigint }[]>`
-      WITH RECURSIVE "root" AS (
-        SELECT "id", "origin" FROM "refund" WHERE "retry_of_id" IS NULL
-        UNION ALL
-        SELECT c."id", "root"."origin" FROM "refund" c JOIN "root" ON c."retry_of_id" = "root"."id"
-      )
+      ${REFUND_ROOTS}
       SELECT ${bucketOf(completedAt, period)} AS "bucket", "root"."origin"::text AS "origin",
         sum(r."amount")::bigint AS "amount"
       FROM "refund" r JOIN "root" ON "root"."id" = r."id"

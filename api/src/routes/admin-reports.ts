@@ -2,6 +2,7 @@ import { Router } from 'express'
 import {
   ReportQuery,
   StockReportQuery,
+  type CancellationReport,
   type CollectionsReport,
   type RevenueReport,
   type StockReport,
@@ -10,6 +11,7 @@ import {
 import { requirePermission } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
 import { parse } from '../http/validation.ts'
+import { cancellationReport } from '../reports/cancellations.ts'
 import { collectionsReport } from '../reports/collections.ts'
 import { periodOf } from '../reports/period.ts'
 import { revenueReport } from '../reports/revenue.ts'
@@ -38,6 +40,11 @@ export function adminReportRoutes(prisma: Db) {
     .get('/vouchers', async (req, res) => {
       const period = periodOf(parse(ReportQuery, req.query))
       const body: VoucherReport = await voucherReport(prisma, period)
+      res.json(body)
+    })
+    .get('/cancellations', async (req, res) => {
+      const period = periodOf(parse(ReportQuery, req.query))
+      const body: CancellationReport = await cancellationReport(prisma, period)
       res.json(body)
     })
 }

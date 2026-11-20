@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ProductType } from './catalog.ts'
-import { VoucherKind } from './orders.ts'
+import { OrderCancelCause, OrderCancelReason, VoucherKind } from './orders.ts'
+import { RefundStatus } from './refunds.ts'
 
 /** Khoảng ngày dài nhất của một báo cáo, tính cả hai đầu. */
 export const REPORT_MAX_DAYS = 366
@@ -193,3 +194,32 @@ export const VoucherReport = z.object({
   totals: VoucherFigures,
 })
 export type VoucherReport = z.infer<typeof VoucherReport>
+
+/** Số đơn chia theo hình thức bán; `total` là tổng hai số. */
+const KindCounts = z.object({ standard: z.number().int(), preorder: z.number().int(), total: z.number().int() })
+
+/** Nguồn của khoản hoàn trong báo cáo; khoản tạo lại tính theo nguồn của khoản gốc. */
+export const ReportRefundOrigin = z.enum(['cancellation', 'reconciliation', 'return'])
+export type ReportRefundOrigin = z.infer<typeof ReportRefundOrigin>
+
+/** Hủy đơn và hoàn tiền của các đơn, khoản hoàn tạo trong kỳ (GLOSSARY "Đơn đã xác nhận", "Đơn bỏ dở"). */
+export const CancellationReport = z.object({
+  from: z.iso.date(),
+  to: z.iso.date(),
+  /** Đơn đã xác nhận tạo trong kỳ: mẫu số của tỷ lệ hủy. */
+  confirmed: KindCounts,
+  /** Đơn đã xác nhận đã bị hủy (hủy khi đã nhận tiền). */
+  cancelled: KindCounts,
+  /** Tỷ lệ hủy 0–1; `null` khi không có đơn đã xác nhận. */
+  rate: z.object({ standard: z.number().nullable(), preorder: z.number().nullable(), total: z.number().nullable() }),
+  /** Mọi lý do hủy, kể cả lý do không có đơn nào. */
+  byCause: z.array(KindCounts.extend({ cause: OrderCancelCause })),
+  /** Đơn bỏ dở tạo trong kỳ theo lý do hủy; không vào tỷ lệ hủy. */
+  abandoned: z.array(z.object({ reason: OrderCancelReason, count: z.number().int() })),
+  abandonedTotal: z.number().int(),
+  /** Khoản hoàn tạo trong kỳ theo nguồn và trạng thái hiện tại; chỉ các ô có khoản. */
+  refunds: z.array(
+    z.object({ origin: ReportRefundOrigin, status: RefundStatus, count: z.number().int(), amount: z.number().int() }),
+  ),
+})
+export type CancellationReport = z.infer<typeof CancellationReport>
