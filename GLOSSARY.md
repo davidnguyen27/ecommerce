@@ -252,3 +252,28 @@ Trang nội dung loại chính sách, như đổi trả hoặc bảo hành. Sả
 
 **Phiên bản chính sách** (Policy version):
 Nội dung của một trang chính sách tại một lần xuất bản; được giữ lại để đơn hàng và lời đồng ý của khách tham chiếu đúng nội dung tại thời điểm đó.
+
+## Báo cáo
+
+**Doanh thu** (Revenue):
+Tiền hàng sau giảm giá của các đơn đã giao tới khách, ghi theo ngày giao; trừ phần hoàn tiền của trả hàng theo ngày hoàn xong. Không gồm phí giao, không tách VAT, không gồm mất cọc. Không phải tiền thu.
+_Avoid_: doanh số, tiền bán được
+
+**Tiền thu** (Collections):
+Các khoản cổng thanh toán báo về theo ngày nhận, trừ các khoản hoàn tiền đã xong; chia theo mục đích trả đủ, tiền cọc và phần còn lại. Không bao giờ cộng lẫn với doanh thu.
+_Avoid_: doanh thu (khi nói về tiền đã nhận), dòng tiền
+
+**Hàng trả lại** (Returns deduction):
+Tổng các khoản hoàn tiền của trả hàng đã xong trong kỳ, trừ vào doanh thu; không tách phần phí giao.
+
+**Tồn đầu** / **Tồn cuối** (Period opening / closing stock):
+Tồn của một biến thể lúc bắt đầu và lúc kết thúc khoảng ngày của một báo cáo.
+_Avoid_: tồn đầu kỳ (khi nói về kỳ báo cáo — tồn đầu kỳ là số ghi lần đầu khi bắt đầu dùng hệ thống)
+
+**Đơn đã xác nhận** (Confirmed order):
+Đơn đã từng nhận tiền, trả đủ hoặc đã cọc. Là mẫu số của tỷ lệ hủy.
+_Avoid_: đơn thành công, đơn hợp lệ
+
+**Đơn bỏ dở** (Abandoned order):
+Đơn bị hủy khi chưa nhận đồng nào: hết thời hạn giữ hàng, khách tự hủy hoặc nhân viên hủy. Không tính vào tỷ lệ hủy.
+_Avoid_: đơn hủy (khi nói về đơn chưa trả)
