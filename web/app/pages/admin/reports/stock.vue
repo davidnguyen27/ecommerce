@@ -38,6 +38,14 @@ function goTo(page: number) {
 }
 
 const lastPage = computed(() => Math.max(1, Math.ceil((report.value?.total ?? 0) / (report.value?.pageSize ?? 1))))
+// Xuất Excel theo kỳ và bộ lọc đang chọn, mọi dòng (không theo trang).
+const exportQuery = computed(() => ({
+  from: period.value.from,
+  to: period.value.to,
+  productType: filters.productType || undefined,
+  brandId: filters.brandId || undefined,
+  movedOnly: filters.movedOnly ? 'true' : undefined,
+}))
 
 const COLUMNS = [
   { key: 'opening', label: 'Tồn đầu' },
@@ -55,6 +63,7 @@ watch(period, search)
 
 <template>
   <div>
+    <ReportExportButton name="stock" slug="xuat-nhap-ton" :query="exportQuery" />
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <span>{{ error }}</span>
     </div>

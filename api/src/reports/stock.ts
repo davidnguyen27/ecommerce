@@ -33,7 +33,16 @@ const figures = (row: Row): StockFigures => ({
  * Xuất nhập tồn theo biến thể (spec M7). Tồn đầu/tồn cuối là `on_hand_after` của dòng sổ cuối cùng (theo `seq`) trước
  * đầu kỳ / trước hết kỳ; biến động trong kỳ cộng theo loại. Hiện mọi biến thể đã có dòng sổ tới hết kỳ.
  */
-export async function stockReport(db: DbClient, period: Period, query: StockReportQuery): Promise<StockReport> {
+export async function stockReport(
+  db: DbClient,
+  period: Period,
+  query: StockReportQuery,
+  /** Mọi dòng, không phân trang (xuất Excel). */
+  options: { all?: boolean } = {},
+): Promise<StockReport> {
+  const page = options.all
+    ? Prisma.empty
+    : Prisma.sql`LIMIT ${STOCK_REPORT_PAGE_SIZE} OFFSET ${(query.page - 1) * STOCK_REPORT_PAGE_SIZE}`
   const start = Prisma.sql`(${period.start.toISOString()}::timestamptz AT TIME ZONE 'UTC')`
   const end = Prisma.sql`(${period.end.toISOString()}::timestamptz AT TIME ZONE 'UTC')`
   const lastBefore = (bound: Prisma.Sql) => Prisma.sql`coalesce((
@@ -84,7 +93,7 @@ export async function stockReport(db: DbClient, period: Period, query: StockRepo
       ${perVariant}
       SELECT * FROM "per" ${shown}
       ORDER BY "sku"
-      LIMIT ${STOCK_REPORT_PAGE_SIZE} OFFSET ${(query.page - 1) * STOCK_REPORT_PAGE_SIZE}`,
+      ${page}`,
     db.$queryRaw<(Row & { count: number })[]>`
       ${perVariant}
       SELECT count(*)::int AS "count",
