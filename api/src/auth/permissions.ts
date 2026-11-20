@@ -13,7 +13,15 @@ const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
     'support.handle',
   ],
   warehouse: ['catalog.edit', 'media.upload', 'document.view', 'stock.adjust', 'order.view', 'order.fulfill'],
-  accountant: ['price.edit', 'document.view', 'audit.view', 'order.view', 'payment.reconcile', 'payment.refund'],
+  accountant: [
+    'price.edit',
+    'document.view',
+    'audit.view',
+    'order.view',
+    'payment.reconcile',
+    'payment.refund',
+    'report.view',
+  ],
 }
 
 export function permissionsOf(roles: readonly StaffRole[]): Permission[] {

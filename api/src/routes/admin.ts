@@ -24,6 +24,7 @@ import { adminVoucherRoutes } from './admin-vouchers.ts'
 import { adminSupportRoutes } from './admin-support.ts'
 import { adminReturnWindowRoutes } from './admin-return-windows.ts'
 import { adminProductRoutes } from './admin-products.ts'
+import { adminReportRoutes } from './admin-reports.ts'
 import { adminLegalInfoRoutes } from './legal-info.ts'
 import { adminStaffRoutes } from './admin-staff.ts'
 import { adminStockRoutes } from './admin-stock.ts'
@@ -70,5 +71,6 @@ export function adminRoutes(
       .use('/vouchers', adminVoucherRoutes(prisma))
       .use('/support-requests', adminSupportRoutes(prisma, storage, mail))
       .use('/return-windows', adminReturnWindowRoutes(prisma))
+      .use('/reports', adminReportRoutes(prisma))
   )
 }
