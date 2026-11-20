@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { ProductType } from './catalog.ts'
-import { OrderCancelCause, OrderCancelReason, VoucherKind } from './orders.ts'
+import { OrderCancelCause, OrderCancelReason, ReconciliationReason, VoucherKind } from './orders.ts'
 import { RefundStatus } from './refunds.ts'
-import { SupportReturnReason, WarrantyOutcome } from './support.ts'
+import { SupportRequestKind, SupportReturnReason, WarrantyOutcome } from './support.ts'
 
 /** Khoảng ngày dài nhất của một báo cáo, tính cả hai đầu. */
 export const REPORT_MAX_DAYS = 366
@@ -273,3 +273,46 @@ export const ReturnsReport = z.object({
   warrantyTotal: z.number().int(),
 })
 export type ReturnsReport = z.infer<typeof ReturnsReport>
+
+/** Một mục của bảng ngoại lệ: tổng số việc và tối đa vài dòng đầu. */
+const exceptionSection = <T extends z.ZodType>(item: T) => z.object({ count: z.number().int(), items: z.array(item) })
+
+/** Bảng ngoại lệ ở trang chủ quản trị (spec M7): việc đang chờ quyết, tính tại thời điểm xem. */
+export const ExceptionsReport = z.object({
+  /** Ngưỡng đang dùng, để trang ghi đúng số ngày và số cái. */
+  thresholds: z.object({ staleRefundDays: z.number().int(), lowStock: z.number().int() }),
+  reconciliation: exceptionSection(
+    z.object({
+      id: z.string(),
+      orderCode: z.number().int(),
+      reason: ReconciliationReason,
+      amount: z.number().int(),
+      receivedAt: z.string(),
+    }),
+  ),
+  /** Khoản hoàn chờ thực hiện hay cổng đang xử lý, tạo quá `staleRefundDays` ngày. */
+  staleRefunds: exceptionSection(
+    z.object({
+      id: z.string(),
+      orderCode: z.number().int(),
+      amount: z.number().int(),
+      status: RefundStatus,
+      createdAt: z.string(),
+    }),
+  ),
+  overdueRemainders: exceptionSection(
+    z.object({ orderCode: z.number().int(), remainingAmount: z.number().int(), remainderDueAt: z.string() }),
+  ),
+  /** Đơn đặt trước chưa giao, chưa hủy, đã quá ngày cuối của thời gian giao dự kiến. */
+  latePreorders: exceptionSection(
+    z.object({ orderCode: z.number().int(), productName: z.string(), deliveryTo: z.iso.date() }),
+  ),
+  unassignedSupport: exceptionSection(
+    z.object({ code: z.number().int(), kind: SupportRequestKind, subject: z.string(), createdAt: z.string() }),
+  ),
+  /** Biến thể đang bán của sản phẩm đã xuất bản, còn bán được (tồn − giữ hàng) không quá `lowStock` cái. */
+  lowStock: exceptionSection(
+    z.object({ variantId: z.string(), sku: z.string(), productName: z.string(), available: z.number().int() }),
+  ),
+})
+export type ExceptionsReport = z.infer<typeof ExceptionsReport>

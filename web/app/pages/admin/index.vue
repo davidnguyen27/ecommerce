@@ -16,6 +16,8 @@ const canCatalog = session.can('catalog.edit')
 const canPrice = session.can('price.edit')
 const canAudit = session.can('audit.view')
 const canSeeProducts = canCatalog || canPrice
+// Bảng ngoại lệ (M7) thuộc mục Báo cáo; người không có quyền không thấy khối và không gọi API.
+const canReports = session.canOpen('/admin/reports')
 
 // Lối tắt và số đếm lấy quyền từ menu nên chỉ hiện trang người dùng mở được.
 const canOpen = session.canOpen
@@ -135,6 +137,8 @@ onMounted(async () => {
         </NuxtLink>
       </div>
     </div>
+
+    <AdminExceptionsPanel v-if="canReports" />
 
     <div v-if="ORDER_COUNTS.length" class="stat-grid">
       <NuxtLink
