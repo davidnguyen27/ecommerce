@@ -1,4 +1,4 @@
-import type { RevenueFigures, RevenueReport } from '@ecommerce/shared'
+import { REVENUE_TOP_SKUS, type ProductType, type RevenueFigures, type RevenueReport } from '@ecommerce/shared'
 import type { DbClient } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { bucketOf, inPeriod, type Period } from './period.ts'
@@ -22,7 +22,8 @@ export async function revenueReport(db: DbClient, period: Period): Promise<Reven
   const deliveredAt = Prisma.sql`e."created_at"`
   const completedAt = Prisma.sql`r."completed_at"`
   const cancelledAt = Prisma.sql`f."cancelled_at"`
-  const [delivered, returns, forfeited] = await Promise.all([
+  const [breakdown, delivered, returns, forfeited] = await Promise.all([
+    salesBreakdown(db, period),
     db.$queryRaw<{ bucket: string; kind: 'standard' | 'preorder'; orders: number; gross: bigint; shipping: bigint }[]>`
       SELECT ${bucketOf(deliveredAt, period)} AS "bucket", o."kind"::text AS "kind", count(*)::int AS "orders",
         sum(o."subtotal" - o."discount")::bigint AS "gross", sum(o."shipping_fee")::bigint AS "shipping"
@@ -67,5 +68,52 @@ export async function revenueReport(db: DbClient, period: Period): Promise<Reven
     for (const key of Object.keys(total) as (keyof RevenueFigures)[]) total[key] += row[key]
     return { period: bucket, ...row }
   })
-  return { from: period.from, to: period.to, groupBy: period.groupBy, rows: items, total }
+  return { from: period.from, to: period.to, groupBy: period.groupBy, rows: items, total, ...breakdown }
+}
+
+type Sales = { quantity: number; gross: bigint }
+const figures = ({ quantity, gross }: Sales) => ({ quantity, gross: Number(gross) })
+
+/**
+ * Doanh thu gộp theo nhóm hàng, thương hiệu và SKU, từ dòng đơn của các đơn đã giao trong kỳ (tiền dòng trừ phần giảm
+ * của dòng). Nhóm hàng, thương hiệu, SKU và tên lấy theo hiện tại vì dòng đơn không chụp thương hiệu; hàng trả lại không
+ * chia xuống đây (spec M7).
+ */
+async function salesBreakdown(db: DbClient, period: Period) {
+  const lines = Prisma.sql`
+    WITH "sold" AS (
+      SELECT l."variant_id", l."quantity", l."price" * l."quantity" - l."discount" AS "gross"
+      FROM "order_event" e
+      JOIN "order" o ON o."id" = e."order_id"
+      JOIN "order_line" l ON l."order_id" = o."id"
+      WHERE e."kind" = 'delivered' AND o."status" = 'completed' AND ${inPeriod(Prisma.sql`e."created_at"`, period)}
+    )`
+  const from = Prisma.sql`
+    FROM "sold" s
+    JOIN "product_variant" v ON v."id" = s."variant_id"
+    JOIN "product" p ON p."id" = v."product_id"`
+  const totals = Prisma.sql`sum(s."quantity")::int AS "quantity", sum(s."gross")::bigint AS "gross"`
+  const [byType, byBrand, topSkus] = await Promise.all([
+    db.$queryRaw<(Sales & { productType: ProductType })[]>`${lines}
+      SELECT p."product_type"::text AS "productType", ${totals} ${from}
+      GROUP BY p."product_type" ORDER BY "gross" DESC, "productType"`,
+    db.$queryRaw<(Sales & { brandId: string; brandName: string })[]>`${lines}
+      SELECT b."id"::text AS "brandId", b."name" AS "brandName", ${totals} ${from}
+      JOIN "brand" b ON b."id" = p."brand_id"
+      GROUP BY b."id" ORDER BY "gross" DESC, b."name"`,
+    db.$queryRaw<(Sales & { variantId: string; sku: string; productName: string })[]>`${lines}
+      SELECT v."id"::text AS "variantId", v."sku", p."name" AS "productName", ${totals} ${from}
+      GROUP BY v."id", p."id" ORDER BY "gross" DESC, "quantity" DESC, v."sku"
+      LIMIT ${REVENUE_TOP_SKUS}`,
+  ])
+  return {
+    byProductType: byType.map((row) => ({ productType: row.productType, ...figures(row) })),
+    byBrand: byBrand.map((row) => ({ brandId: row.brandId, brandName: row.brandName, ...figures(row) })),
+    topSkus: topSkus.map((row) => ({
+      variantId: row.variantId,
+      sku: row.sku,
+      productName: row.productName,
+      ...figures(row),
+    })),
+  }
 }
