@@ -3,6 +3,7 @@ import {
   BadgeCheck,
   BellRing,
   CalendarClock,
+  ChartColumn,
   FileSpreadsheet,
   FileText,
   FolderTree,
@@ -37,7 +38,10 @@ export type AdminMenuGroup = { title: string; items: AdminMenuItem[] }
 export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
   {
     title: 'Tổng quan',
-    items: [{ to: '/admin', label: 'Bảng điều khiển', icon: LayoutDashboard }],
+    items: [
+      { to: '/admin', label: 'Bảng điều khiển', icon: LayoutDashboard },
+      { to: '/admin/reports', label: 'Báo cáo', icon: ChartColumn, permission: 'report.view' },
+    ],
   },
   {
     title: 'Hàng hóa & Danh mục',
