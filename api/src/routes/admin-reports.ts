@@ -1,11 +1,18 @@
 import { Router } from 'express'
-import { ReportQuery, type CollectionsReport, type RevenueReport } from '@ecommerce/shared'
+import {
+  ReportQuery,
+  StockReportQuery,
+  type CollectionsReport,
+  type RevenueReport,
+  type StockReport,
+} from '@ecommerce/shared'
 import { requirePermission } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
 import { parse } from '../http/validation.ts'
 import { collectionsReport } from '../reports/collections.ts'
 import { periodOf } from '../reports/period.ts'
 import { revenueReport } from '../reports/revenue.ts'
+import { stockReport } from '../reports/stock.ts'
 
 /** Báo cáo (M7), mount tại `/reports`; chỉ đọc nên không qua `audited()`. Mọi báo cáo cần `report.view`. */
 export function adminReportRoutes(prisma: Db) {
@@ -19,6 +26,11 @@ export function adminReportRoutes(prisma: Db) {
     .get('/collections', async (req, res) => {
       const period = periodOf(parse(ReportQuery, req.query))
       const body: CollectionsReport = await collectionsReport(prisma, period)
+      res.json(body)
+    })
+    .get('/stock', async (req, res) => {
+      const query = parse(StockReportQuery, req.query)
+      const body: StockReport = await stockReport(prisma, periodOf(query), query)
       res.json(body)
     })
 }

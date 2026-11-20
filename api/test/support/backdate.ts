@@ -30,3 +30,16 @@ export async function backdate(
     prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`),
   ])
 }
+
+/** Dời mọi dòng sổ xuất nhập hiện có của một biến thể về `at`, để chúng nằm trước kỳ báo cáo (sổ cũng chỉ ghi thêm). */
+export async function backdateStock(prisma: Db, variantId: string, at: Date) {
+  await prisma.$transaction([
+    prisma.$executeRawUnsafe(`ALTER TABLE "stock_movement" DISABLE TRIGGER "stock_movement_no_update_delete"`),
+    prisma.$executeRawUnsafe(
+      `UPDATE "stock_movement" SET "created_at" = $1::timestamptz AT TIME ZONE 'UTC' WHERE "variant_id" = $2::uuid`,
+      at.toISOString(),
+      variantId,
+    ),
+    prisma.$executeRawUnsafe(`ALTER TABLE "stock_movement" ENABLE TRIGGER "stock_movement_no_update_delete"`),
+  ])
+}
