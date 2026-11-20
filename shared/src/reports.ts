@@ -66,3 +66,45 @@ export const RevenueReport = z.object({
   topSkus: z.array(SalesFigures.extend({ variantId: z.string(), sku: z.string(), productName: z.string() })),
 })
 export type RevenueReport = z.infer<typeof RevenueReport>
+
+/** Tiền thu của một kỳ (GLOSSARY "Tiền thu"), VND. */
+export const CollectionsFigures = z.object({
+  /** Tiền vào theo ngày nhận, chia theo mục đích của khoản thu; `received` là tổng. */
+  receivedFull: z.number().int(),
+  receivedDeposit: z.number().int(),
+  receivedRemainder: z.number().int(),
+  received: z.number().int(),
+  /** Tiền ra: khoản hoàn đã xong theo ngày xong, chia theo nguồn (khoản tạo lại tính theo nguồn của khoản gốc). */
+  refundedCancellation: z.number().int(),
+  refundedReconciliation: z.number().int(),
+  refundedReturn: z.number().int(),
+  refunded: z.number().int(),
+  /** Tiền thu thuần = tiền vào − tiền ra. */
+  net: z.number().int(),
+})
+export type CollectionsFigures = z.infer<typeof CollectionsFigures>
+
+const CountedAmount = z.object({ count: z.number().int(), amount: z.number().int() })
+
+/** Số tại thời điểm xem, không theo kỳ. */
+export const CollectionsSnapshot = z.object({
+  /** Tiền đã nhận trừ đã hoàn của đơn đặt trước chưa giao, chưa hủy; `count` là số đơn. */
+  depositsHeld: CountedAmount,
+  /** Phần còn lại của đơn đặt trước đã cọc, chưa trả đủ, chưa hủy; `count` là số đơn. */
+  outstanding: CountedAmount,
+  /** Khoản hoàn chờ thực hiện hoặc cổng đang xử lý. */
+  refunding: CountedAmount,
+  /** Mục cần đối soát đang mở. */
+  reconciliation: CountedAmount,
+})
+export type CollectionsSnapshot = z.infer<typeof CollectionsSnapshot>
+
+export const CollectionsReport = z.object({
+  from: z.iso.date(),
+  to: z.iso.date(),
+  groupBy: ReportGroupBy,
+  rows: z.array(CollectionsFigures.extend({ period: z.string() })),
+  total: CollectionsFigures,
+  snapshot: CollectionsSnapshot,
+})
+export type CollectionsReport = z.infer<typeof CollectionsReport>

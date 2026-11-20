@@ -8,14 +8,14 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `GET /api/admin/reports/collections` theo spec mục "Tiền thu":
+- [x] `GET /api/admin/reports/collections` theo spec mục "Tiền thu":
   - tiền vào theo `paidAt` và `purpose`;
   - tiền ra là khoản hoàn `succeeded` theo `completedAt` và `origin`;
   - các ô tại thời điểm xem. Còn phải thu dùng `remainingOf` và `DEPOSITED_PREORDER`.
-- [ ] Web: tab Tiền thu (bốn ô ở đầu, bảng theo kỳ).
-- [ ] Test:
+- [x] Web: tab Tiền thu (bốn ô ở đầu, bảng theo kỳ).
+- [x] Test:
   - giao dịch chia đúng mục đích;
   - giao dịch về sau khi đơn hủy vẫn là tiền vào;
   - hoàn `pending`/`processing`/`failed` không trừ;
@@ -23,3 +23,11 @@
   - đang hoàn và cần đối soát đúng số và tổng.
 
 Spec: "Tiền thu".
+
+## Quyết định khi triển khai
+
+- API: `GET /api/admin/reports/collections`, cùng query và quyền với doanh thu. Mỗi dòng có tiền vào chia theo mục đích, tiền ra chia theo nguồn, và tiền thu thuần. Kèm `snapshot` gồm các số tại thời điểm xem.
+- **Tiền ra chỉ có ba nguồn:** hủy, đối soát, trả hàng. Khoản `retry` được quy về nguồn của khoản gốc đầu chuỗi (CTE đệ quy theo `retry_of_id`), để chủ DN không thấy một cột "tạo lại" khó hiểu.
+- **Cọc đang giữ** = tiền đã nhận − tiền đã hoàn xong, của đơn đặt trước chưa giao và chưa hủy. Số này gồm cả phần còn lại nếu khách đã trả mà hàng chưa giao; trang ghi rõ điều này. Chỉ đếm đơn có số > 0.
+- **Còn phải thu** = tổng (`total − depositAmount`) của `DEPOSITED_PREORDER`, tức `remainingOf` tính bằng aggregate.
+- Đang hoàn và cần đối soát dùng `aggregate` của Prisma. Ô "Cần đối soát" trên trang link tới `/admin/reconciliation`.

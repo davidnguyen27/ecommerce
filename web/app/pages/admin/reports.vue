@@ -6,7 +6,7 @@ definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'report.
 // Tab chưa làm hiện "Sắp có" cho tới khi ticket của nó xong (M7).
 const TABS = [
   { to: '/admin/reports/revenue', label: 'Doanh thu', ready: true },
-  { to: '/admin/reports/collections', label: 'Tiền thu', ready: false },
+  { to: '/admin/reports/collections', label: 'Tiền thu', ready: true },
   { to: '/admin/reports/stock', label: 'Xuất nhập tồn', ready: false },
   { to: '/admin/reports/vouchers', label: 'Mã giảm giá', ready: false },
   { to: '/admin/reports/cancellations', label: 'Hủy & hoàn tiền', ready: false },
