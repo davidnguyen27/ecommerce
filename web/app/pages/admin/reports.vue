@@ -8,7 +8,7 @@ const TABS = [
   { to: '/admin/reports/revenue', label: 'Doanh thu', ready: true },
   { to: '/admin/reports/collections', label: 'Tiền thu', ready: true },
   { to: '/admin/reports/stock', label: 'Xuất nhập tồn', ready: true },
-  { to: '/admin/reports/vouchers', label: 'Mã giảm giá', ready: false },
+  { to: '/admin/reports/vouchers', label: 'Mã giảm giá', ready: true },
   { to: '/admin/reports/cancellations', label: 'Hủy & hoàn tiền', ready: false },
   { to: '/admin/reports/returns', label: 'Đổi trả', ready: false },
 ]
@@ -19,6 +19,8 @@ const period = useReportPeriod()
 const form = reactive({ ...period.value })
 const error = ref<string | null>(null)
 watch(period, (value) => Object.assign(form, value))
+// Chỉ báo cáo theo ngày/tháng mới dùng cách nhóm; các tab khác là bảng của cả kỳ.
+const groupable = computed(() => ['/admin/reports/revenue', '/admin/reports/collections'].includes(route.path))
 
 function apply() {
   const parsed = ReportQuery.safeParse(form)
@@ -69,7 +71,7 @@ function apply() {
             <label class="form-label" for="report-to" style="font-size: 12px">Đến ngày</label>
             <input id="report-to" v-model="form.to" type="date" required class="form-input" />
           </div>
-          <div class="form-group" style="margin-bottom: 0">
+          <div v-if="groupable" class="form-group" style="margin-bottom: 0">
             <label class="form-label" for="report-group" style="font-size: 12px">Nhóm theo</label>
             <select id="report-group" v-model="form.groupBy" class="form-select">
               <option value="day">Ngày</option>
