@@ -3,14 +3,13 @@ import { ReportQuery } from '@ecommerce/shared'
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'report.view' })
 
-// Tab chưa làm hiện "Sắp có" cho tới khi ticket của nó xong (M7).
 const TABS = [
-  { to: '/admin/reports/revenue', label: 'Doanh thu', ready: true },
-  { to: '/admin/reports/collections', label: 'Tiền thu', ready: true },
-  { to: '/admin/reports/stock', label: 'Xuất nhập tồn', ready: true },
-  { to: '/admin/reports/vouchers', label: 'Mã giảm giá', ready: true },
-  { to: '/admin/reports/cancellations', label: 'Hủy & hoàn tiền', ready: true },
-  { to: '/admin/reports/returns', label: 'Đổi trả', ready: false },
+  { to: '/admin/reports/revenue', label: 'Doanh thu' },
+  { to: '/admin/reports/collections', label: 'Tiền thu' },
+  { to: '/admin/reports/stock', label: 'Xuất nhập tồn' },
+  { to: '/admin/reports/vouchers', label: 'Mã giảm giá' },
+  { to: '/admin/reports/cancellations', label: 'Hủy & hoàn tiền' },
+  { to: '/admin/reports/returns', label: 'Đổi trả' },
 ]
 
 const route = useRoute()
@@ -45,12 +44,9 @@ function apply() {
     </div>
 
     <nav class="report-tabs" aria-label="Các báo cáo">
-      <template v-for="tab in TABS" :key="tab.to">
-        <NuxtLink v-if="tab.ready" :to="{ path: tab.to, query: route.query }" class="report-tab">{{
-          tab.label
-        }}</NuxtLink>
-        <span v-else class="report-tab report-tab-soon" aria-disabled="true">{{ tab.label }} · Sắp có</span>
-      </template>
+      <NuxtLink v-for="tab in TABS" :key="tab.to" :to="{ path: tab.to, query: route.query }" class="report-tab">{{
+        tab.label
+      }}</NuxtLink>
     </nav>
 
     <div class="admin-panel" style="padding: 16px 20px; margin-bottom: 20px">
@@ -110,9 +106,5 @@ function apply() {
   color: inherit;
   font-weight: 600;
   border-bottom-color: currentColor;
-}
-.report-tab-soon {
-  opacity: 0.6;
-  cursor: default;
 }
 </style>

@@ -4,6 +4,7 @@ import {
   StockReportQuery,
   type CancellationReport,
   type CollectionsReport,
+  type ReturnsReport,
   type RevenueReport,
   type StockReport,
   type VoucherReport,
@@ -14,6 +15,7 @@ import { parse } from '../http/validation.ts'
 import { cancellationReport } from '../reports/cancellations.ts'
 import { collectionsReport } from '../reports/collections.ts'
 import { periodOf } from '../reports/period.ts'
+import { returnsReport } from '../reports/returns.ts'
 import { revenueReport } from '../reports/revenue.ts'
 import { stockReport } from '../reports/stock.ts'
 import { voucherReport } from '../reports/vouchers.ts'
@@ -45,6 +47,11 @@ export function adminReportRoutes(prisma: Db) {
     .get('/cancellations', async (req, res) => {
       const period = periodOf(parse(ReportQuery, req.query))
       const body: CancellationReport = await cancellationReport(prisma, period)
+      res.json(body)
+    })
+    .get('/returns', async (req, res) => {
+      const period = periodOf(parse(ReportQuery, req.query))
+      const body: ReturnsReport = await returnsReport(prisma, period)
       res.json(body)
     })
 }
