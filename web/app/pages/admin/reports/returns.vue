@@ -50,6 +50,7 @@ watch(period, load)
 
 <template>
   <div>
+    <ReportExportButton name="returns" slug="doi-tra" :query="period" />
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <span>{{ error }}</span>
     </div>
