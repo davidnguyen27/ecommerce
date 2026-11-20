@@ -23,12 +23,14 @@ export function periodOf(query: ReportQuery): Period {
 }
 
 /**
- * Điều kiện "cột thời điểm nằm trong kỳ". Cột `TIMESTAMP` không múi giờ của Prisma lưu giờ UTC, nên mốc truyền vào
- * cũng đổi về UTC không múi giờ, không phụ thuộc `TimeZone` của phiên DB.
+ * Mốc thời điểm để so với cột `TIMESTAMP` không múi giờ. Prisma lưu các cột này theo giờ UTC, nên mốc cũng đổi về UTC
+ * không múi giờ, không phụ thuộc `TimeZone` của phiên DB.
  */
+export const utcBound = (date: Date) => Prisma.sql`(${date.toISOString()}::timestamptz AT TIME ZONE 'UTC')`
+
+/** Điều kiện "cột thời điểm nằm trong kỳ" `[start, end)`. */
 export const inPeriod = (column: Prisma.Sql, period: Period) =>
-  Prisma.sql`${column} >= (${period.start.toISOString()}::timestamptz AT TIME ZONE 'UTC')
-    AND ${column} < (${period.end.toISOString()}::timestamptz AT TIME ZONE 'UTC')`
+  Prisma.sql`${column} >= ${utcBound(period.start)} AND ${column} < ${utcBound(period.end)}`
 
 /** Nhãn ngày (`YYYY-MM-DD`) hay tháng (`YYYY-MM`) theo giờ Việt Nam của một cột thời điểm. */
 export const bucketOf = (column: Prisma.Sql, period: Period) =>

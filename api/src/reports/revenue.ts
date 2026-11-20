@@ -2,6 +2,7 @@ import { REVENUE_TOP_SKUS, type ProductType, type RevenueFigures, type RevenueRe
 import type { DbClient } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { bucketOf, inPeriod, type Period } from './period.ts'
+import { REFUND_ROOTS, deliveredInPeriod } from './sql.ts'
 
 const empty = (): RevenueFigures => ({
   deliveredOrders: 0,
@@ -28,12 +29,14 @@ export async function revenueReport(db: DbClient, period: Period): Promise<Reven
       SELECT ${bucketOf(deliveredAt, period)} AS "bucket", o."kind"::text AS "kind", count(*)::int AS "orders",
         sum(o."subtotal" - o."discount")::bigint AS "gross", sum(o."shipping_fee")::bigint AS "shipping"
       FROM "order_event" e JOIN "order" o ON o."id" = e."order_id"
-      WHERE e."kind" = 'delivered' AND o."status" = 'completed' AND ${inPeriod(deliveredAt, period)}
+      WHERE ${deliveredInPeriod(period)}
       GROUP BY 1, 2`,
+    // Hàng trả lại gồm cả khoản tạo lại sau một khoản hoàn trả hàng thất bại (nguồn gốc `return`).
     db.$queryRaw<{ bucket: string; amount: bigint }[]>`
+      ${REFUND_ROOTS}
       SELECT ${bucketOf(completedAt, period)} AS "bucket", sum(r."amount")::bigint AS "amount"
-      FROM "refund" r
-      WHERE r."origin" = 'return' AND r."status" = 'succeeded' AND ${inPeriod(completedAt, period)}
+      FROM "refund" r JOIN "root" ON "root"."id" = r."id"
+      WHERE "root"."origin" = 'return' AND r."status" = 'succeeded' AND ${inPeriod(completedAt, period)}
       GROUP BY 1`,
     // Mất cọc: tiền đã nhận trừ mọi khoản hoàn chưa thất bại (kể cả đang hoàn) của đơn đặt trước đã hủy.
     db.$queryRaw<{ bucket: string; amount: bigint }[]>`
@@ -86,7 +89,7 @@ async function salesBreakdown(db: DbClient, period: Period) {
       FROM "order_event" e
       JOIN "order" o ON o."id" = e."order_id"
       JOIN "order_line" l ON l."order_id" = o."id"
-      WHERE e."kind" = 'delivered' AND o."status" = 'completed' AND ${inPeriod(Prisma.sql`e."created_at"`, period)}
+      WHERE ${deliveredInPeriod(period)}
     )`
   const from = Prisma.sql`
     FROM "sold" s

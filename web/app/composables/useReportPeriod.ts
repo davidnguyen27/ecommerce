@@ -23,3 +23,7 @@ export function useReportPeriod() {
 
 /** Nhãn của một dòng báo cáo: ngày `YYYY-MM-DD` thành `30/10/2026`, tháng `YYYY-MM` thành `10/2026`. */
 export const formatReportPeriod = (period: string) => period.split('-').reverse().join('/')
+
+/** Tỷ lệ 0–1 thành `33,3%`; `null` (mẫu số bằng 0) thành `—`. */
+export const formatReportRate = (rate: number | null) =>
+  rate === null ? '—' : `${(rate * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`

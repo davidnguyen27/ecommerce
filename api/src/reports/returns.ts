@@ -9,6 +9,7 @@ import {
 import type { DbClient } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { inPeriod, type Period } from './period.ts'
+import { deliveredInPeriod } from './sql.ts'
 
 /**
  * Đổi trả và bảo hành (spec M7): yêu cầu trả, đổi, bảo hành tạo trong kỳ. Tỷ lệ trả lấy tử số từ yêu cầu trả đã chấp
@@ -47,7 +48,7 @@ export async function returnsReport(db: DbClient, period: Period): Promise<Retur
       JOIN "order_line" l ON l."order_id" = o."id"
       JOIN "product_variant" v ON v."id" = l."variant_id"
       JOIN "product" p ON p."id" = v."product_id"
-      WHERE e."kind" = 'delivered' AND o."status" = 'completed' AND ${inPeriod(Prisma.sql`e."created_at"`, period)}
+      WHERE ${deliveredInPeriod(period)}
       GROUP BY 1`,
     db.$queryRaw<{ outcome: WarrantyOutcome | null; declined: boolean; count: number }[]>`
       SELECT s."warranty_outcome"::text AS "outcome", s."decision" IS NOT DISTINCT FROM 'rejected' AS "declined",
@@ -85,9 +86,14 @@ export async function returnsReport(db: DbClient, period: Period): Promise<Retur
   const returnRate = ProductType.options
     .filter((type) => returned.has(type) || deliveredBy.has(type))
     .map((productType) => {
-      const out = returned.get(productType) ?? 0
-      const sold = deliveredBy.get(productType) ?? 0
-      return { productType, returned: out, delivered: sold, rate: sold === 0 ? null : out / sold }
+      const returnedQty = returned.get(productType) ?? 0
+      const deliveredQty = deliveredBy.get(productType) ?? 0
+      return {
+        productType,
+        returned: returnedQty,
+        delivered: deliveredQty,
+        rate: deliveredQty === 0 ? null : returnedQty / deliveredQty,
+      }
     })
 
   const warrantyBy = new Map(WarrantyReportOutcome.options.map((outcome) => [outcome, 0]))

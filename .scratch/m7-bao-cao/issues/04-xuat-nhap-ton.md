@@ -39,4 +39,4 @@ Spec: "Xuất nhập tồn". GLOSSARY: "Tồn đầu"/"Tồn cuối" khác "Tồ
   Hai truy vấn dùng chung CTE: một lấy trang (100 dòng, sắp theo SKU), một lấy số dòng và dòng tổng của toàn bộ kết quả lọc.
 - **Danh sách thương hiệu cho bộ lọc:** response có thêm `brands` (thương hiệu có biến thể trong sổ). Lý do: kế toán không có `catalog.edit` nên không đọc được `/api/admin/brands`.
 - SKU link tới sổ xuất nhập của biến thể khi người xem mở được trang đó (`canOpen`). Kế toán không có quyền xem kho nên chỉ thấy chữ.
-- **Test** dời dòng sổ về trước kỳ bằng `backdateStock` (`test/support/backdate.ts`). Bất biến được kiểm với phiếu nhập, xuất bán, hàng hoàn về của trả hàng, và điều chỉnh tăng lẫn giảm. Loại `opening` chưa có trong test: nó chỉ sinh ra qua import Excel, và chỉ khác `receipt` ở điều kiện `IN ('receipt', 'opening')`.
+- **Test** dời dòng sổ về trước kỳ bằng `backdateStock` (`test/support/backdate.ts`). Bất biến được kiểm với phiếu nhập, xuất bán, hàng hoàn về của trả hàng, và điều chỉnh tăng lẫn giảm. Loại `opening` có test riêng: dựng dòng sổ bằng Prisma, vì loại này chỉ sinh ra qua import Excel.

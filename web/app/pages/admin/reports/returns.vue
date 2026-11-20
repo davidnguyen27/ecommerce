@@ -41,9 +41,6 @@ const pivot = computed(() => {
   return { types, rows: [...rows.entries()].map(([key, row]) => ({ key, ...row })) }
 })
 
-const percent = (rate: number | null) =>
-  rate === null ? '—' : `${(rate * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`
-
 await load()
 watch(period, load)
 </script>
@@ -160,7 +157,7 @@ watch(period, load)
                 <td>{{ PRODUCT_TYPE_LABELS[row.productType] }}</td>
                 <td class="admin-table-num">{{ row.returned }}</td>
                 <td class="admin-table-num">{{ row.delivered }}</td>
-                <td class="admin-table-num" style="font-weight: 600">{{ percent(row.rate) }}</td>
+                <td class="admin-table-num" style="font-weight: 600">{{ formatReportRate(row.rate) }}</td>
               </tr>
             </tbody>
           </table>

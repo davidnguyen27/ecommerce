@@ -122,6 +122,25 @@ describe('báo cáo xuất nhập tồn', () => {
     ])
   })
 
+  it('tồn đầu kỳ (lúc bắt đầu dùng hệ thống) tính vào cột nhập', async () => {
+    const app = await stockShop()
+    const { v41 } = app
+    // Dòng sổ `opening` chỉ sinh ra khi import Excel; dựng thẳng dòng sổ và tồn để không phải dựng cả file import.
+    const owner = await app.prisma.staff.findFirstOrThrow()
+    await app.prisma.$transaction([
+      app.prisma.stockMovement.create({
+        data: { variantId: v41.id, kind: 'opening', quantity: 4, onHandAfter: 4, actorId: owner.id },
+      }),
+      app.prisma.productVariant.update({ where: { id: v41.id }, data: { onHand: 4 } }),
+    ])
+
+    const report = await app.report()
+
+    expect(report.items).toContainEqual(
+      expect.objectContaining({ sku: 'AM-41', opening: 0, received: 4, sold: 0, closing: 4 }),
+    )
+  })
+
   it('biến thể không biến động trong kỳ vẫn hiện, trừ khi chỉ xem biến thể có biến động; chưa có dòng sổ thì không hiện', async () => {
     const app = await stockShop()
 
