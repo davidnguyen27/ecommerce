@@ -88,6 +88,36 @@ async function revenueShop() {
   return { ...app, step, paidOrder, handedOver, delivered, support, report, today }
 }
 
+/** Đơn 2 đôi đã giao; khách trả 1 đôi, kho nhập lại tồn, nhân viên đề xuất hoàn 2.000.000 (đang chờ). */
+async function proposeReturnRefund(app: Awaited<ReturnType<typeof revenueShop>>) {
+  const placed = await app.delivered(2)
+  const asked = await app.request
+    .post(`/api/orders/${placed.code}/support-requests`)
+    .query({ token: placed.token })
+    .send({
+      kind: 'return',
+      subject: 'Trả giày',
+      message: 'Không vừa',
+      lines: [{ variantId: app.v40.id, quantity: 1, reason: 'wrong_fit' }],
+    })
+  const request = asked.body.code as number
+  expect((await app.support(request, 'decide', { decision: 'accepted', message: 'Gửi về nhé' })).status).toBe(200)
+  const view = await app.request.get(`/api/admin/support-requests/${request}`).set(bearer(app.token))
+  const lines = [{ lineId: view.body.lines[0].id as string, restocked: 1, writtenOff: 0 }]
+  expect((await app.support(request, 'receive', { lines })).status).toBe(200)
+  const proposed = await app.support(request, 'refund', { refundAmount: 2_000_000 })
+  return { refundId: proposed.body.refunds[0].id as string, orderCode: placed.code }
+}
+
+/** Kế toán ghi đã chuyển khoản cho một khoản hoàn: khoản hoàn xong lúc này. */
+async function executeManual(app: Awaited<ReturnType<typeof revenueShop>>, refundId: string) {
+  const res = await app.request
+    .post(`/api/admin/refunds/${refundId}/manual`)
+    .set(bearer(app.token))
+    .send({ bankReference: `FT-${refundId.slice(0, 8)}`, transferredOn: vnDate(), note: 'VCB' })
+  expect(res.status).toBe(200)
+}
+
 describe('báo cáo doanh thu', () => {
   it('chỉ owner và kế toán xem được; bán hàng và kho bị 403', async () => {
     const { request, token } = await shop()
@@ -209,32 +239,11 @@ describe('báo cáo doanh thu', () => {
 
   it('hàng trả lại trừ theo ngày hoàn xong; khoản hoàn đang chờ chưa trừ', async () => {
     const app = await revenueShop()
-    const placed = await app.delivered(2)
-    const asked = await app.request
-      .post(`/api/orders/${placed.code}/support-requests`)
-      .query({ token: placed.token })
-      .send({
-        kind: 'return',
-        subject: 'Trả giày',
-        message: 'Không vừa',
-        lines: [{ variantId: app.v40.id, quantity: 1, reason: 'wrong_fit' }],
-      })
-    const request = asked.body.code as number
-    expect((await app.support(request, 'decide', { decision: 'accepted', message: 'Gửi về nhé' })).status).toBe(200)
-    const view = await app.request.get(`/api/admin/support-requests/${request}`).set(bearer(app.token))
-    const lineId = view.body.lines[0].id as string
-    const lines = [{ lineId, restocked: 1, writtenOff: 0 }]
-    expect((await app.support(request, 'receive', { lines })).status).toBe(200)
-    const proposed = await app.support(request, 'refund', { refundAmount: 2_000_000 })
-    const refundId = proposed.body.refunds[0].id as string
+    const { refundId } = await proposeReturnRefund(app)
 
     expect(await app.today()).toMatchObject({ gross: 4_000_000, returns: 0, net: 4_000_000 })
 
-    const manual = await app.request
-      .post(`/api/admin/refunds/${refundId}/manual`)
-      .set(bearer(app.token))
-      .send({ bankReference: 'FT-HOAN', transferredOn: vnDate(), note: 'VCB' })
-    expect(manual.status).toBe(200)
+    await executeManual(app, refundId)
     expect(await app.today()).toMatchObject({ gross: 4_000_000, returns: 2_000_000, net: 2_000_000 })
     // Hàng trả lại không chia xuống nhóm hàng hay SKU.
     const breakdown = await app.report({ from: vnDate(), to: vnDate() })
@@ -248,6 +257,36 @@ describe('báo cáo doanh thu', () => {
       [0, 2_000_000, -2_000_000],
       [4_000_000, 0, 4_000_000],
     ])
+  })
+
+  it('khoản hoàn trả hàng tạo lại sau khi thất bại vẫn là hàng trả lại; khoản thất bại không trừ', async () => {
+    const app = await revenueShop()
+    const { refundId, orderCode } = await proposeReturnRefund(app)
+    // Dựng trạng thái: cổng báo hoàn thất bại.
+    const transaction = await app.prisma.paymentTransaction.findFirstOrThrow({ where: { order: { code: orderCode } } })
+    const owner = await app.prisma.staff.findFirstOrThrow()
+    await app.prisma.refund.update({
+      where: { id: refundId },
+      data: {
+        status: 'failed',
+        method: 'vnpay',
+        paymentTransactionId: transaction.id,
+        executedById: owner.id,
+        executedAt: new Date(),
+        completedAt: new Date(),
+      },
+    })
+    expect(await app.today()).toMatchObject({ returns: 0, net: 4_000_000 })
+
+    const retried = await app.request
+      .post(`/api/admin/refunds/${refundId}/retry`)
+      .set(bearer(app.token))
+      .send({ amount: 2_000_000 })
+    expect(retried.status).toBe(200)
+    const retryId = (retried.body.refunds as { id: string; status: string }[]).find((r) => r.status === 'pending')!.id
+    await executeManual(app, retryId)
+
+    expect(await app.today()).toMatchObject({ gross: 4_000_000, returns: 2_000_000, net: 2_000_000 })
   })
 
   it('đổi hàng không đổi doanh thu', async () => {

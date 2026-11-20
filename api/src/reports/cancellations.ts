@@ -8,7 +8,7 @@ import {
 } from '@ecommerce/shared'
 import type { DbClient } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
-import { REFUND_ROOTS } from './collections.ts'
+import { REFUND_ROOTS } from './sql.ts'
 import { inPeriod, type Period } from './period.ts'
 
 type KindCounts = { standard: number; preorder: number; total: number }

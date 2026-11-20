@@ -50,3 +50,4 @@ Spec: "Chung", "Doanh thu", "Web".
   - `/admin/reports` tự chuyển sang tab Doanh thu;
   - tab chưa làm hiện "Sắp có";
   - menu "Báo cáo" nằm trong nhóm Tổng quan.
+- Sửa sau review: **hàng trả lại** gồm cả khoản hoàn tạo lại (`retry`) từ một khoản hoàn trả hàng thất bại. Truy vấn quy về nguồn gốc đầu chuỗi qua `REFUND_ROOTS` (`api/src/reports/sql.ts`), giống Tiền thu và Hủy & hoàn tiền. Có test riêng.

@@ -3,6 +3,7 @@ import type { DbClient } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { DEPOSITED_PREORDER } from '../orders/orders.ts'
 import { bucketOf, inPeriod, type Period } from './period.ts'
+import { REFUND_ROOTS } from './sql.ts'
 
 const empty = (): CollectionsFigures => ({
   receivedFull: 0,
@@ -15,17 +16,6 @@ const empty = (): CollectionsFigures => ({
   refunded: 0,
   net: 0,
 })
-
-/**
- * CTE `"root"` (`id`, `origin`): mỗi khoản hoàn kèm nguồn của khoản gốc đầu chuỗi tạo lại. Khoản `retry` mang nguồn của
- * khoản nó thay, để báo cáo chỉ chia theo hủy, đối soát, trả hàng.
- */
-export const REFUND_ROOTS = Prisma.sql`
-  WITH RECURSIVE "root" AS (
-    SELECT "id", "origin" FROM "refund" WHERE "retry_of_id" IS NULL
-    UNION ALL
-    SELECT c."id", "root"."origin" FROM "refund" c JOIN "root" ON c."retry_of_id" = "root"."id"
-  )`
 
 const RECEIVED = { full: 'receivedFull', deposit: 'receivedDeposit', remainder: 'receivedRemainder' } as const
 const REFUNDED = {

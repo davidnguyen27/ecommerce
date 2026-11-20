@@ -18,9 +18,6 @@ async function load() {
   }
 }
 
-const percent = (rate: number | null) =>
-  rate === null ? '—' : `${(rate * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`
-
 await load()
 watch(period, load)
 </script>
@@ -40,9 +37,10 @@ watch(period, load)
       <div class="stat-grid">
         <div class="stat-card">
           <div class="stat-label">Tỷ lệ hủy</div>
-          <div class="stat-value" data-testid="cancellation-rate">{{ percent(report.rate.total) }}</div>
+          <div class="stat-value" data-testid="cancellation-rate">{{ formatReportRate(report.rate.total) }}</div>
           <div class="stat-sub">
-            Hàng sẵn {{ percent(report.rate.standard) }} · đặt trước {{ percent(report.rate.preorder) }}
+            Hàng sẵn {{ formatReportRate(report.rate.standard) }} · đặt trước
+            {{ formatReportRate(report.rate.preorder) }}
           </div>
         </div>
         <div class="stat-card">

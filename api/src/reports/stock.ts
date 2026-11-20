@@ -7,7 +7,7 @@ import {
 } from '@ecommerce/shared'
 import type { DbClient } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
-import { inPeriod, type Period } from './period.ts'
+import { inPeriod, utcBound, type Period } from './period.ts'
 
 type Row = {
   opening: bigint
@@ -43,8 +43,8 @@ export async function stockReport(
   const page = options.all
     ? Prisma.empty
     : Prisma.sql`LIMIT ${STOCK_REPORT_PAGE_SIZE} OFFSET ${(query.page - 1) * STOCK_REPORT_PAGE_SIZE}`
-  const start = Prisma.sql`(${period.start.toISOString()}::timestamptz AT TIME ZONE 'UTC')`
-  const end = Prisma.sql`(${period.end.toISOString()}::timestamptz AT TIME ZONE 'UTC')`
+  const start = utcBound(period.start)
+  const end = utcBound(period.end)
   const lastBefore = (bound: Prisma.Sql) => Prisma.sql`coalesce((
     SELECT x."on_hand_after" FROM "stock_movement" x
     WHERE x."variant_id" = v."id" AND x."created_at" < ${bound}

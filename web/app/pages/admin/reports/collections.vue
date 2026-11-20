@@ -4,6 +4,8 @@ import { CollectionsReport } from '@ecommerce/shared'
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'report.view' })
 
 const session = useAdminSession()
+// Ô "Cần đối soát" chỉ là link khi người xem mở được trang đối soát.
+const reconciliationCard = session.canOpen('/admin/reconciliation') ? resolveComponent('NuxtLink') : 'div'
 const period = useReportPeriod()
 const report = ref<CollectionsReport | null>(null)
 const error = ref<string | null>(null)
@@ -64,11 +66,16 @@ watch(period, load)
           <div class="stat-value">{{ formatVnd(report.snapshot.refunding.amount) }}</div>
           <div class="stat-sub">{{ report.snapshot.refunding.count }} khoản chờ thực hiện hoặc cổng đang xử lý</div>
         </div>
-        <NuxtLink to="/admin/reconciliation" class="stat-card" style="text-decoration: none; color: inherit">
+        <component
+          :is="reconciliationCard"
+          to="/admin/reconciliation"
+          class="stat-card"
+          style="text-decoration: none; color: inherit"
+        >
           <div class="stat-label">Cần đối soát</div>
           <div class="stat-value">{{ formatVnd(report.snapshot.reconciliation.amount) }}</div>
           <div class="stat-sub">{{ report.snapshot.reconciliation.count }} mục đang mở</div>
-        </NuxtLink>
+        </component>
       </div>
 
       <h2 class="admin-section-title">Trong kỳ</h2>

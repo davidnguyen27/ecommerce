@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { backdate } from './support/backdate.ts'
 import { ADDRESS, shop } from './support/shop.ts'
 import { bearer, createStaff } from './support/staff.ts'
 import { adjust } from './support/stock.ts'
@@ -110,6 +111,18 @@ describe('báo cáo đổi trả và bảo hành', () => {
       { kind: 'return', reason: 'wrong_fit', productType: 'footwear', quantity: 1 },
     ])
     expect(report.returnRate).toEqual([{ productType: 'footwear', returned: 1, delivered: 3, rate: 1 / 3 }])
+  })
+
+  it('có hàng trả nhưng không có hàng giao trong kỳ: tỷ lệ trả là null', async () => {
+    const app = await returnsShop()
+    const order = await app.delivered(1)
+    await backdate(app.prisma, 'order_event', order.code, new Date(Date.now() - 3 * DAY), 'delivered')
+    const code = await app.ask(order, 'return', { reason: 'wrong_fit' })
+    await app.admin(code, 'decide', { decision: 'accepted', message: 'Gửi về nhé' })
+
+    expect((await app.report()).returnRate).toEqual([
+      { productType: 'footwear', returned: 1, delivered: 0, rate: null },
+    ])
   })
 
   it('bảo hành theo kết quả: đã sửa, từ chối tiếp nhận, đang xử lý', async () => {
