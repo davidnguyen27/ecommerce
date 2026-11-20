@@ -9,7 +9,7 @@ const TABS = [
   { to: '/admin/reports/collections', label: 'Tiền thu', ready: true },
   { to: '/admin/reports/stock', label: 'Xuất nhập tồn', ready: true },
   { to: '/admin/reports/vouchers', label: 'Mã giảm giá', ready: true },
-  { to: '/admin/reports/cancellations', label: 'Hủy & hoàn tiền', ready: false },
+  { to: '/admin/reports/cancellations', label: 'Hủy & hoàn tiền', ready: true },
   { to: '/admin/reports/returns', label: 'Đổi trả', ready: false },
 ]
 
