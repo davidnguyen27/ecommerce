@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { ProductType } from './catalog.ts'
 import { OrderCancelCause, OrderCancelReason, VoucherKind } from './orders.ts'
 import { RefundStatus } from './refunds.ts'
+import { SupportReturnReason, WarrantyOutcome } from './support.ts'
 
 /** Khoảng ngày dài nhất của một báo cáo, tính cả hai đầu. */
 export const REPORT_MAX_DAYS = 366
@@ -223,3 +224,52 @@ export const CancellationReport = z.object({
   ),
 })
 export type CancellationReport = z.infer<typeof CancellationReport>
+
+/** Loại yêu cầu trong báo cáo đổi trả. */
+export const ReturnKind = z.enum(['return', 'exchange'])
+export type ReturnKind = z.infer<typeof ReturnKind>
+
+/** Kết quả bảo hành trong báo cáo: kết quả đã ghi, từ chối tiếp nhận, hoặc đang xử lý. */
+export const WarrantyReportOutcome = z.enum([...WarrantyOutcome.options, 'declined', 'in_progress'])
+export type WarrantyReportOutcome = z.infer<typeof WarrantyReportOutcome>
+
+/** Đổi trả và bảo hành của các yêu cầu tạo trong kỳ (spec M7). */
+export const ReturnsReport = z.object({
+  from: z.iso.date(),
+  to: z.iso.date(),
+  /** Số yêu cầu trả và đổi theo quyết định; `pending` là chưa quyết. */
+  requests: z.array(
+    z.object({
+      kind: ReturnKind,
+      accepted: z.number().int(),
+      rejected: z.number().int(),
+      pending: z.number().int(),
+      total: z.number().int(),
+    }),
+  ),
+  /** Số lượng trên các dòng yêu cầu theo lý do và nhóm hàng; yêu cầu đổi không có lý do (`null`). */
+  lines: z.array(
+    z.object({
+      kind: ReturnKind,
+      reason: SupportReturnReason.nullable(),
+      productType: ProductType,
+      quantity: z.number().int(),
+    }),
+  ),
+  /**
+   * Tỷ lệ trả theo nhóm hàng: số cái của yêu cầu trả đã chấp nhận tạo trong kỳ / số cái của đơn giao trong kỳ. Hai số
+   * không cùng tập đơn. `rate` là `null` khi không giao cái nào.
+   */
+  returnRate: z.array(
+    z.object({
+      productType: ProductType,
+      returned: z.number().int(),
+      delivered: z.number().int(),
+      rate: z.number().nullable(),
+    }),
+  ),
+  /** Yêu cầu bảo hành theo kết quả, đủ mọi kết quả. */
+  warranty: z.array(z.object({ outcome: WarrantyReportOutcome, count: z.number().int() })),
+  warrantyTotal: z.number().int(),
+})
+export type ReturnsReport = z.infer<typeof ReturnsReport>
