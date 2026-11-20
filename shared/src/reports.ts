@@ -12,20 +12,36 @@ export const reportDays = (from: string, to: string) => (Date.parse(to) - Date.p
 export const ReportGroupBy = z.enum(['day', 'month'])
 export type ReportGroupBy = z.infer<typeof ReportGroupBy>
 
+const ReportPeriodShape = z.object({
+  from: z.iso.date(),
+  to: z.iso.date(),
+  groupBy: ReportGroupBy.default('day'),
+})
+
+/** Kiểm khoảng ngày; tách khỏi schema vì zod không cho `extend` một schema đã có refine. */
+const checkPeriod = (query: { from: string; to: string }, ctx: z.RefinementCtx) => {
+  const days = reportDays(query.from, query.to)
+  if (days < 1) ctx.addIssue({ code: 'custom', path: ['to'], message: 'Ngày kết thúc phải sau ngày bắt đầu' })
+  else if (days > REPORT_MAX_DAYS)
+    ctx.addIssue({ code: 'custom', path: ['to'], message: `Kỳ báo cáo dài tối đa ${REPORT_MAX_DAYS} ngày` })
+}
+
 /** Kỳ báo cáo: ngày lịch theo giờ Việt Nam, từ đầu ngày `from` tới hết ngày `to`. */
-export const ReportQuery = z
-  .object({
-    from: z.iso.date(),
-    to: z.iso.date(),
-    groupBy: ReportGroupBy.default('day'),
-  })
-  .superRefine((query, ctx) => {
-    const days = reportDays(query.from, query.to)
-    if (days < 1) ctx.addIssue({ code: 'custom', path: ['to'], message: 'Ngày kết thúc phải sau ngày bắt đầu' })
-    else if (days > REPORT_MAX_DAYS)
-      ctx.addIssue({ code: 'custom', path: ['to'], message: `Kỳ báo cáo dài tối đa ${REPORT_MAX_DAYS} ngày` })
-  })
+export const ReportQuery = ReportPeriodShape.superRefine(checkPeriod)
 export type ReportQuery = z.infer<typeof ReportQuery>
+
+/** Số dòng mỗi trang của báo cáo xuất nhập tồn. */
+export const STOCK_REPORT_PAGE_SIZE = 100
+
+/** Query của báo cáo xuất nhập tồn: kỳ (bỏ qua `groupBy`), bộ lọc và trang. */
+export const StockReportQuery = ReportPeriodShape.extend({
+  productType: ProductType.optional(),
+  brandId: z.uuid().optional(),
+  /** Chỉ biến thể có biến động trong kỳ. */
+  movedOnly: z.stringbool().default(false),
+  page: z.coerce.number().int().min(1).default(1),
+}).superRefine(checkPeriod)
+export type StockReportQuery = z.infer<typeof StockReportQuery>
 
 /** Số của một kỳ doanh thu (GLOSSARY "Doanh thu", ADR 0016), VND. */
 export const RevenueFigures = z.object({
@@ -108,3 +124,40 @@ export const CollectionsReport = z.object({
   snapshot: CollectionsSnapshot,
 })
 export type CollectionsReport = z.infer<typeof CollectionsReport>
+
+/** Số lượng xuất nhập của một biến thể trong kỳ (GLOSSARY "Tồn đầu" / "Tồn cuối"). */
+export const StockFigures = z.object({
+  opening: z.number().int(),
+  /** Phiếu nhập và tồn đầu kỳ. */
+  received: z.number().int(),
+  /** Xuất bán, gồm hàng đổi giao đi. */
+  sold: z.number().int(),
+  /** Hàng hoàn về: sau giao thất bại, và hàng khách trả hay đổi. */
+  returned: z.number().int(),
+  adjustedUp: z.number().int(),
+  adjustedDown: z.number().int(),
+  closing: z.number().int(),
+})
+export type StockFigures = z.infer<typeof StockFigures>
+
+export const StockReport = z.object({
+  from: z.iso.date(),
+  to: z.iso.date(),
+  items: z.array(
+    StockFigures.extend({
+      variantId: z.string(),
+      sku: z.string(),
+      productName: z.string(),
+      brandName: z.string(),
+      productType: ProductType,
+    }),
+  ),
+  /** Tổng của mọi dòng khớp bộ lọc, không chỉ trang này. */
+  totals: StockFigures,
+  /** Thương hiệu có biến thể trong sổ, cho bộ lọc (kế toán không có quyền đọc danh sách thương hiệu của danh mục). */
+  brands: z.array(z.object({ id: z.string(), name: z.string() })),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+})
+export type StockReport = z.infer<typeof StockReport>

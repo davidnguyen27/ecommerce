@@ -12,15 +12,15 @@ Lọc được theo nhóm hàng, thương hiệu, "chỉ biến thể có biến
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `GET /api/admin/reports/stock` theo spec mục "Xuất nhập tồn":
+- [x] `GET /api/admin/reports/stock` theo spec mục "Xuất nhập tồn":
   - tồn đầu/tồn cuối lấy từ `on_hand_after` của dòng sổ cuối cùng (theo `seq`) trước kỳ / tới hết kỳ;
   - biến động lấy theo `kind`.
 
   Truy vấn SQL dùng index `(variant_id, seq)` và `created_at`.
-- [ ] Web: tab Xuất nhập tồn với bộ lọc, bảng và phân trang.
-- [ ] Test:
+- [x] Web: tab Xuất nhập tồn với bộ lọc, bảng và phân trang.
+- [x] Test:
   - bất biến tồn đầu + biến động = tồn cuối, với đủ `opening`, `receipt`, `sale`, `return`, `adjustment` ±;
   - biến thể không biến động trong kỳ vẫn hiện, trừ khi bật lọc;
   - biến thể chưa có dòng sổ nào tới hết kỳ không hiện;
@@ -28,3 +28,15 @@ Lọc được theo nhóm hàng, thương hiệu, "chỉ biến thể có biến
   - dòng tổng.
 
 Spec: "Xuất nhập tồn". GLOSSARY: "Tồn đầu"/"Tồn cuối" khác "Tồn đầu kỳ".
+
+## Quyết định khi triển khai
+
+- **API:** `GET /api/admin/reports/stock?from&to&productType&brandId&movedOnly&page`, query `StockReportQuery`. Kỳ dùng chung phần kiểm với `ReportQuery`; zod không cho `extend` một schema đã refine, nên phần kiểm kỳ được tách thành `checkPeriod`. `groupBy` bị bỏ qua.
+- **Một CTE theo biến thể:**
+  - tồn đầu/tồn cuối là subquery `on_hand_after` của dòng sổ cuối cùng (`ORDER BY seq DESC`), có `created_at` trước đầu kỳ / trước hết kỳ;
+  - biến động trong kỳ là `sum(...) FILTER` theo loại.
+
+  Hai truy vấn dùng chung CTE: một lấy trang (100 dòng, sắp theo SKU), một lấy số dòng và dòng tổng của toàn bộ kết quả lọc.
+- **Danh sách thương hiệu cho bộ lọc:** response có thêm `brands` (thương hiệu có biến thể trong sổ). Lý do: kế toán không có `catalog.edit` nên không đọc được `/api/admin/brands`.
+- SKU link tới sổ xuất nhập của biến thể khi người xem mở được trang đó (`canOpen`). Kế toán không có quyền xem kho nên chỉ thấy chữ.
+- **Test** dời dòng sổ về trước kỳ bằng `backdateStock` (`test/support/backdate.ts`). Bất biến được kiểm với phiếu nhập, xuất bán, hàng hoàn về của trả hàng, và điều chỉnh tăng lẫn giảm. Loại `opening` chưa có trong test: nó chỉ sinh ra qua import Excel, và chỉ khác `receipt` ở điều kiện `IN ('receipt', 'opening')`.
