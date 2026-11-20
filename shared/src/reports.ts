@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ProductType } from './catalog.ts'
+import { VoucherKind } from './orders.ts'
 
 /** Khoảng ngày dài nhất của một báo cáo, tính cả hai đầu. */
 export const REPORT_MAX_DAYS = 366
@@ -161,3 +162,34 @@ export const StockReport = z.object({
   pageSize: z.number().int(),
 })
 export type StockReport = z.infer<typeof StockReport>
+
+/** Hiệu quả mã giảm giá, theo các đơn chưa hủy tạo trong kỳ. */
+export const VoucherFigures = z.object({
+  /** Số lượt: số đơn chưa hủy dùng mã (GLOSSARY "Lượt dùng"). */
+  redemptions: z.number().int(),
+  /** Tổng tiền giảm chụp trên đơn. */
+  discount: z.number().int(),
+  /** Tiền hàng sau giảm của các đơn đó. */
+  netGoods: z.number().int(),
+  /** Số đơn trong đó đã giao tới khách, tính tới lúc xem. */
+  deliveredOrders: z.number().int(),
+})
+export type VoucherFigures = z.infer<typeof VoucherFigures>
+
+export const VoucherReport = z.object({
+  from: z.iso.date(),
+  to: z.iso.date(),
+  /** Mỗi mã có ít nhất một lượt trong kỳ, số lượt giảm dần. Mã và mức giảm là của mã hiện tại. */
+  items: z.array(
+    VoucherFigures.extend({
+      voucherId: z.string(),
+      code: z.string(),
+      kind: VoucherKind,
+      amount: z.number().nullable(),
+      percent: z.number().nullable(),
+      maxDiscount: z.number().nullable(),
+    }),
+  ),
+  totals: VoucherFigures,
+})
+export type VoucherReport = z.infer<typeof VoucherReport>
