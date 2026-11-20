@@ -31,6 +31,8 @@ export const Permission = z.enum([
   'preorder.manage',
   /** Tạo, sửa, tắt mã giảm giá. */
   'voucher.manage',
+  /** Xem báo cáo, bảng ngoại lệ và xuất Excel (M7). */
+  'report.view',
 ])
 export type Permission = z.infer<typeof Permission>
 
