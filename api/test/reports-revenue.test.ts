@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import sharp from 'sharp'
 import { backdate } from './support/backdate.ts'
 import { REMAINING, depositedPreorder } from './support/preorder.ts'
 import { ADDRESS, shop } from './support/shop.ts'
@@ -20,7 +21,14 @@ type Figures = {
   shippingFees: number
   forfeitedDeposits: number
 }
-type Report = { rows: (Figures & { period: string })[]; total: Figures }
+type Sales = { quantity: number; gross: number }
+type Report = {
+  rows: (Figures & { period: string })[]
+  total: Figures
+  byProductType: (Sales & { productType: string })[]
+  byBrand: (Sales & { brandId: string; brandName: string })[]
+  topSkus: (Sales & { variantId: string; sku: string; productName: string })[]
+}
 
 const ZERO: Figures = {
   deliveredOrders: 0,
@@ -228,6 +236,10 @@ describe('báo cáo doanh thu', () => {
       .send({ bankReference: 'FT-HOAN', transferredOn: vnDate(), note: 'VCB' })
     expect(manual.status).toBe(200)
     expect(await app.today()).toMatchObject({ gross: 4_000_000, returns: 2_000_000, net: 2_000_000 })
+    // Hàng trả lại không chia xuống nhóm hàng hay SKU.
+    const breakdown = await app.report({ from: vnDate(), to: vnDate() })
+    expect(breakdown.byProductType).toEqual([{ productType: 'footwear', quantity: 2, gross: 4_000_000 }])
+    expect(breakdown.topSkus).toEqual([expect.objectContaining({ sku: 'AM-40', quantity: 2, gross: 4_000_000 })])
 
     // Hoàn xong hôm qua: hôm qua có hàng trả lại mà không có đơn giao, hôm nay chỉ còn doanh thu gộp.
     await app.prisma.refund.update({ where: { id: refundId }, data: { completedAt: new Date(Date.now() - DAY) } })
@@ -278,5 +290,104 @@ describe('báo cáo doanh thu', () => {
     const today = await revenue(request, token, { from: vnDate(), to: vnDate() })
 
     expect(today.total).toEqual({ ...ZERO, forfeitedDeposits: 330_000 })
+  })
+})
+
+/** Thêm vào cửa hàng một nước hoa Dior đã xuất bản: SAUVAGE-60 giá 2.750.000, còn 5 chai. */
+async function addPerfume(app: Awaited<ReturnType<typeof revenueShop>>) {
+  const { request, token, policy } = app
+  const created = async (path: string, body: Record<string, unknown>) => {
+    const res = await request.post(path).set(bearer(token)).send(body)
+    expect(res.status).toBe(201)
+    return res.body.id as string
+  }
+  const brandId = await created('/api/admin/brands', { name: 'Dior', slug: 'dior' })
+  const categoryId = await created('/api/admin/categories', {
+    name: 'Nước hoa nam',
+    slug: 'nuoc-hoa-nam',
+    productType: 'fragrance',
+  })
+  const productId = await created('/api/admin/products', {
+    brandId,
+    categoryId,
+    name: 'Sauvage EDT',
+    slug: 'sauvage-edt',
+    attributes: { gioi_tinh: 'Nam', nong_do: 'Eau de Toilette', nhom_huong: ['Hương gỗ'] },
+  })
+  const variantId = await created(`/api/admin/products/${productId}/variants`, {
+    sku: 'SAUVAGE-60',
+    attributes: { dung_tich: 60, dang_dong_goi: 'Fullbox' },
+    price: 2_750_000,
+  })
+  const photo = await sharp({ create: { width: 32, height: 32, channels: 3, background: '#333' } })
+    .jpeg()
+    .toBuffer()
+  const image = await request
+    .post(`/api/admin/products/${productId}/images`)
+    .set(bearer(token))
+    .attach('file', photo, 'anh.jpg')
+  expect(image.status).toBe(201)
+  const linked = await request
+    .put(`/api/admin/products/${productId}/policies`)
+    .set(bearer(token))
+    .send({ pageIds: [policy.id] })
+  expect(linked.status).toBe(200)
+  const published = await request
+    .put(`/api/admin/products/${productId}/status`)
+    .set(bearer(token))
+    .send({ status: 'published' })
+  expect(published.status).toBe(200)
+  await adjust(request, token, { variantId, reason: 'stocktake', countedQuantity: 5, expectedOnHand: 0 })
+  return { brandId, variantId }
+}
+
+describe('doanh thu theo nhóm hàng, thương hiệu, SKU', () => {
+  it('chia dòng đơn đã giao theo nhóm hàng, thương hiệu và SKU; tiền dòng đã trừ phần giảm; tổng mỗi bảng bằng doanh thu gộp', async () => {
+    const app = await revenueShop()
+    const perfume = await addPerfume(app)
+    const voucher = await app.request
+      .post('/api/admin/vouchers')
+      .set(bearer(app.token))
+      .send({
+        code: 'GIAM10',
+        kind: 'percent',
+        percent: 10,
+        maxDiscount: 500_000,
+        startsAt: new Date(Date.now() - DAY).toISOString(),
+        endsAt: new Date(Date.now() + 30 * DAY).toISOString(),
+        saleTypes: ['standard'],
+      })
+    expect(voucher.status).toBe(201)
+    await app.delivered(1, { voucherCode: 'giam10', discount: 200_000 })
+    await app.delivered(1)
+    await app.delivered(2, { lines: [{ variantId: perfume.variantId, quantity: 2, price: 2_750_000 }] })
+    await app.handedOver(1)
+
+    const report = await app.report({ from: vnDate(), to: vnDate() })
+
+    expect(report.total.gross).toBe(1_800_000 + 2_000_000 + 5_500_000)
+    expect(report.byProductType).toEqual([
+      { productType: 'fragrance', quantity: 2, gross: 5_500_000 },
+      { productType: 'footwear', quantity: 2, gross: 3_800_000 },
+    ])
+    expect(report.byBrand).toEqual([
+      { brandId: perfume.brandId, brandName: 'Dior', quantity: 2, gross: 5_500_000 },
+      { brandId: app.brand.id, brandName: 'Nike', quantity: 2, gross: 3_800_000 },
+    ])
+    expect(report.topSkus).toEqual([
+      { variantId: perfume.variantId, sku: 'SAUVAGE-60', productName: 'Sauvage EDT', quantity: 2, gross: 5_500_000 },
+      { variantId: app.v40.id, sku: 'AM-40', productName: 'Air Max', quantity: 2, gross: 3_800_000 },
+    ])
+    for (const table of [report.byProductType, report.byBrand, report.topSkus])
+      expect(table.reduce((sum, row) => sum + row.gross, 0)).toBe(report.total.gross)
+  })
+
+  it('kỳ không có đơn giao thì ba bảng rỗng', async () => {
+    const app = await revenueShop()
+    await app.delivered()
+
+    const report = await app.report({ from: vnDate(-3), to: vnDate(-1) })
+
+    expect(report).toMatchObject({ byProductType: [], byBrand: [], topSkus: [] })
   })
 })

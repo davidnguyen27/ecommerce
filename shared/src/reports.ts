@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ProductType } from './catalog.ts'
 
 /** Khoảng ngày dài nhất của một báo cáo, tính cả hai đầu. */
 export const REPORT_MAX_DAYS = 366
@@ -45,6 +46,12 @@ export const RevenueFigures = z.object({
 })
 export type RevenueFigures = z.infer<typeof RevenueFigures>
 
+/** Số lượng và doanh thu gộp của một nhóm dòng đơn đã giao; không trừ hàng trả lại. */
+const SalesFigures = z.object({ quantity: z.number().int(), gross: z.number().int() })
+
+/** Số SKU nhiều nhất trong bảng top SKU. */
+export const REVENUE_TOP_SKUS = 50
+
 export const RevenueReport = z.object({
   from: z.iso.date(),
   to: z.iso.date(),
@@ -52,5 +59,10 @@ export const RevenueReport = z.object({
   /** Mỗi ngày (`YYYY-MM-DD`) hay mỗi tháng (`YYYY-MM`) của kỳ, kể cả kỳ không có số. */
   rows: z.array(RevenueFigures.extend({ period: z.string() })),
   total: RevenueFigures,
+  /** Theo nhóm hàng và thương hiệu hiện tại của sản phẩm, doanh thu gộp giảm dần. */
+  byProductType: z.array(SalesFigures.extend({ productType: ProductType })),
+  byBrand: z.array(SalesFigures.extend({ brandId: z.string(), brandName: z.string() })),
+  /** Tối đa `REVENUE_TOP_SKUS` biến thể, doanh thu gộp giảm dần. */
+  topSkus: z.array(SalesFigures.extend({ variantId: z.string(), sku: z.string(), productName: z.string() })),
 })
 export type RevenueReport = z.infer<typeof RevenueReport>

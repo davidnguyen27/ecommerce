@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { RevenueReport } from '@ecommerce/shared'
+import { REVENUE_TOP_SKUS, RevenueReport } from '@ecommerce/shared'
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'report.view' })
 
@@ -16,6 +16,39 @@ async function load() {
     error.value = apiErrorMessage(err)
   }
 }
+
+type BreakdownRow = { key: string; label: string; sub?: string; quantity: number; gross: number }
+
+const breakdown = computed(() => {
+  const r = report.value
+  if (!r) return []
+  return [
+    {
+      title: 'Theo nhóm hàng',
+      column: 'Nhóm hàng',
+      rows: r.byProductType.map<BreakdownRow>((row) => ({
+        key: row.productType,
+        label: PRODUCT_TYPE_LABELS[row.productType],
+        ...row,
+      })),
+    },
+    {
+      title: 'Theo thương hiệu',
+      column: 'Thương hiệu',
+      rows: r.byBrand.map<BreakdownRow>((row) => ({ key: row.brandId, label: row.brandName, ...row })),
+    },
+    {
+      title: `Top ${REVENUE_TOP_SKUS} SKU`,
+      column: 'SKU',
+      rows: r.topSkus.map<BreakdownRow>((row) => ({
+        key: row.variantId,
+        label: row.sku,
+        sub: row.productName,
+        ...row,
+      })),
+    },
+  ]
+})
 
 await load()
 watch(period, load)
@@ -100,6 +133,51 @@ watch(period, load)
           </table>
         </div>
       </div>
+
+      <p style="margin: 24px 0 12px; font-size: 12px; color: var(--adm-muted)">
+        Ba bảng dưới tính doanh thu gộp của các đơn đã giao trong kỳ, chưa trừ hàng trả lại. Nhóm hàng, thương hiệu và
+        tên lấy theo sản phẩm hiện tại.
+      </p>
+      <div class="report-breakdown">
+        <section v-for="table in breakdown" :key="table.title" class="admin-table-card">
+          <h2 class="admin-section-title" style="padding: 14px 18px 0">{{ table.title }}</h2>
+          <div v-if="!table.rows.length" style="padding: 24px; text-align: center; color: var(--adm-muted)">
+            Chưa có đơn nào được giao trong kỳ.
+          </div>
+          <div v-else style="overflow-x: auto">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>{{ table.column }}</th>
+                  <th class="admin-table-num">Số lượng</th>
+                  <th class="admin-table-num">Doanh thu gộp</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in table.rows" :key="row.key">
+                  <td>
+                    <span :style="row.sub ? 'font-family: var(--adm-mono); font-size: 12px; font-weight: 600' : ''">{{
+                      row.label
+                    }}</span>
+                    <div v-if="row.sub" style="font-size: 11px; color: var(--adm-muted)">{{ row.sub }}</div>
+                  </td>
+                  <td class="admin-table-num">{{ row.quantity }}</td>
+                  <td class="admin-table-num">{{ formatVnd(row.gross) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </template>
   </div>
 </template>
+
+<style scoped>
+.report-breakdown {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+</style>
