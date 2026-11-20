@@ -2,21 +2,12 @@
 // 1. Khách mua và trả; nhân viên bán hàng hủy đơn, đề xuất hoàn đủ; kế toán ghi chuyển khoản; khách thấy "đã hoàn".
 // 2. Đơn đã bàn giao thì giao thất bại; kho nhận hàng hoàn về; bán hàng hủy; kế toán hoàn qua cổng (giả lập).
 // Mỗi luồng tự dọn: hàng giữ được nhả, hàng hoàn về nhập lại tồn, nên tồn của biến thể seed như trước khi chạy.
-import { expect, test, type Browser, type Page } from '@playwright/test'
+import { expect, test, type Browser } from '@playwright/test'
 import type { AdminOrder } from '@ecommerce/shared'
 import { adminLogin } from '../support/admin-login.ts'
+import { buyAndPay } from '../support/purchase.ts'
 import { resetRateLimits } from '../support/rate-limit.ts'
-import {
-  ACCOUNTANT,
-  AdminApi,
-  PRICE,
-  PRODUCT_PATH,
-  PROVINCE_CODE,
-  SALES,
-  SHIPPING_FEE,
-  SKU,
-  WAREHOUSE,
-} from '../support/stack.ts'
+import { ACCOUNTANT, AdminApi, PRICE, SALES, SHIPPING_FEE, SKU, WAREHOUSE } from '../support/stack.ts'
 
 const TOTAL = PRICE + SHIPPING_FEE
 const runId = Date.now().toString().slice(-7)
@@ -37,30 +28,6 @@ test.beforeAll(async () => {
     })
   }
 })
-
-/** Khách vãng lai mua một cái qua giỏ và đặt mua, rồi bấm "Giả lập đã thanh toán". Trả mã đơn và link trang đơn. */
-async function buyAndPay(page: Page, suffix: string) {
-  await page.goto(PRODUCT_PATH)
-  await page.getByRole('button', { name: 'Thêm vào giỏ' }).click()
-  await page.getByRole('link', { name: 'Giỏ hàng, 1 món', exact: true }).click()
-  await page.getByRole('link', { name: 'Đặt mua' }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Đặt mua' })).toBeVisible()
-  await page.getByLabel('Họ tên người nhận').fill('Khách Hoàn Tiền')
-  await page.getByLabel('Số điện thoại').fill(`08${runId}${suffix}`)
-  await page.getByLabel('Email').fill(`hoan-${runId}-${suffix}@example.com`)
-  await page.locator('select[name=province]').selectOption(PROVINCE_CODE)
-  const ward = page.locator('select[name=ward]')
-  await expect(ward).toBeEnabled()
-  await ward.selectOption({ index: 1 })
-  await page.getByLabel('Số nhà, tên đường').fill('1 Lê Lợi')
-  await page.getByRole('checkbox', { name: /chính sách bảo mật/ }).check()
-  await page.getByRole('button', { name: 'Đặt mua và thanh toán' }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Cổng thanh toán giả lập' })).toBeVisible()
-  const code = new URL(page.url()).searchParams.get('orderCode')!
-  await page.getByRole('button', { name: 'Giả lập đã thanh toán' }).click()
-  await expect(page.getByTestId('payment-status')).toHaveText('Đã thanh toán')
-  return { code, url: page.url() }
-}
 
 /** Trang quản trị của một nhân viên trong phiên trình duyệt riêng, tự đồng ý mọi hộp `confirm`. */
 async function staffPage(browser: Browser, credentials: { email: string; password: string }, code: string) {
@@ -95,7 +62,7 @@ const statusOf = (order: AdminOrder): Status => ({
 test('hủy đơn đã trả, kế toán ghi chuyển khoản, khách thấy đã hoàn', async ({ page, browser }) => {
   const api = await AdminApi.owner()
   const before = await api.stockOf(SKU)
-  const { code, url } = await buyAndPay(page, '1')
+  const { code, url } = await buyAndPay(page, 'hoan', '1')
   expect((await api.stockOf(SKU)).reserved).toBe(before.reserved + 1)
 
   await cancelPaid(browser, code, 'Khách đổi ý')
@@ -126,7 +93,7 @@ test('hủy đơn đã trả, kế toán ghi chuyển khoản, khách thấy đ�
 test('giao thất bại, nhận hàng hoàn về, hủy và hoàn qua cổng giả lập', async ({ page, browser }) => {
   const api = await AdminApi.owner()
   const before = await api.stockOf(SKU)
-  const { code, url } = await buyAndPay(page, '2')
+  const { code, url } = await buyAndPay(page, 'hoan', '2')
 
   // Kho chuẩn bị, bàn giao, rồi báo giao thất bại.
   const warehouse = await staffPage(browser, WAREHOUSE, code)
