@@ -11,7 +11,8 @@
     "e2e": "pnpm --filter @ecommerce/e2e e2e",
     "demo-seed": "node scripts/demo-seed.ts",
     "generate-regions": "node scripts/generate-regions.ts",
-    "prepare": "husky"
+    "prepare": "husky",
+    "chatbot-check": "node --env-file=.env scripts/chatbot-check.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
