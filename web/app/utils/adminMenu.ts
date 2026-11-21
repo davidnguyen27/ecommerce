@@ -2,6 +2,7 @@ import { STOCK_VIEW_PERMISSIONS, type Permission } from '@ecommerce/shared'
 import {
   BadgeCheck,
   BellRing,
+  Bot,
   CalendarClock,
   ChartColumn,
   FileSpreadsheet,
@@ -88,6 +89,7 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
         icon: LifeBuoy,
         permission: ['support.handle', 'order.view'],
       },
+      { to: '/admin/chatbot', label: 'Chatbot', icon: Bot, permission: 'chatbot.manage' },
     ],
   },
   {
@@ -110,6 +112,8 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
 /** Trang không có trong menu nhưng có link từ trang khác; quyền khai ở đây như mục menu. */
 const ADMIN_SUBPAGES: Pick<AdminMenuItem, 'to' | 'permission'>[] = [
   { to: '/admin/support/new', permission: 'support.handle' },
+  { to: '/admin/chatbot/conversations', permission: 'chatbot.manage' },
+  { to: '/admin/chatbot/report', permission: 'chatbot.manage' },
 ]
 
 export const ADMIN_MENU_ITEMS = ADMIN_MENU_GROUPS.flatMap((group) => group.items)

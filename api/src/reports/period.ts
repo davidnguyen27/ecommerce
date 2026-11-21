@@ -10,7 +10,10 @@ const DAY = 24 * 60 * 60_000
 export type Period = { from: string; to: string; groupBy: ReportGroupBy; start: Date; end: Date; buckets: string[] }
 
 /** Đầu ngày lịch `YYYY-MM-DD` theo giờ Việt Nam. */
-const startOfDay = (date: string) => new Date(Date.parse(date) - OFFSET_MS)
+export const startOfDay = (date: string) => new Date(Date.parse(date) - OFFSET_MS)
+
+/** Ngày lịch `YYYY-MM-DD` theo giờ Việt Nam của một thời điểm. */
+export const vnDate = (at: Date) => new Date(at.getTime() + OFFSET_MS).toISOString().slice(0, 10)
 
 export function periodOf(query: ReportQuery): Period {
   const start = startOfDay(query.from)

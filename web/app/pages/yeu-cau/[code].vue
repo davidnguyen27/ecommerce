@@ -2,7 +2,8 @@
 import type { PublicSupportRequest } from '@ecommerce/shared'
 
 // Yêu cầu hỗ trợ của khách vãng lai: mở bằng mã đơn và token tra cứu đơn trong link email (`?don=…&token=…`), hoặc
-// token đã nhớ của tab đặt mua. Dữ liệu cá nhân: chỉ nạp ở trình duyệt.
+// token đã nhớ của tab đặt mua. Yêu cầu không gắn đơn (chatbot chuyển nhân viên, M8) mở bằng token riêng của yêu cầu
+// (`?token=…`, không có `don`). Dữ liệu cá nhân: chỉ nạp ở trình duyệt.
 const route = useRoute()
 const code = computed(() => Number(route.params.code))
 const orderCode = computed(() => (typeof route.query.don === 'string' ? Number(route.query.don) : NaN))
@@ -11,9 +12,12 @@ const token = computed(() =>
 )
 const request = ref<PublicSupportRequest | null>(null)
 const error = ref<string | null>(null)
-const client = computed(() =>
-  token.value && Number.isInteger(orderCode.value) ? guestSupportClient(orderCode.value, token.value) : null,
-)
+const client = computed(() => {
+  if (token.value && Number.isInteger(orderCode.value)) return guestSupportClient(orderCode.value, token.value)
+  return route.query.don === undefined && typeof route.query.token === 'string'
+    ? contactSupportClient(route.query.token)
+    : null
+})
 
 onMounted(async () => {
   if (!client.value) return void (error.value = 'Link không đủ thông tin. Hãy mở yêu cầu từ email hoặc trang đơn hàng.')
@@ -33,7 +37,7 @@ useSeo({ title: () => `Yêu cầu #YC${code.value}`, description: 'Yêu cầu h�
     <p v-else-if="!request" class="text-muted-foreground">Đang tải…</p>
     <template v-else-if="client">
       <SupportThread :request="request" :client="client" @update="request = $event" />
-      <p class="mt-8 text-sm">
+      <p v-if="Number.isInteger(orderCode)" class="mt-8 text-sm">
         <NuxtLink :to="`/don-hang/${orderCode}?token=${encodeURIComponent(token!)}`"
           >‹ Về đơn hàng #{{ orderCode }}</NuxtLink
         >

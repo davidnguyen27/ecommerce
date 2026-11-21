@@ -1253,6 +1253,8 @@ enum SupportAuthor {
   customer
   staff
   system
+  /// Chatbot tạo khi khách xác nhận chuyển nhân viên (M8); tin đầu vẫn là của khách.
+  chatbot
 
   @@map("support_author")
 }
@@ -1316,11 +1318,15 @@ model SupportRequest {
   /// Lời nhắn cho khách kèm kết quả; bắt buộc khi từ chối.
   warrantyOutcomeNote          String?              @map("warranty_outcome_note")
 
-  messages       SupportMessage[]
-  attachments    SupportAttachment[]
-  lines          SupportRequestLine[]
-  stockMovements StockMovement[]
-  refunds        Refund[]
+  messages         SupportMessage[]
+  attachments      SupportAttachment[]
+  lines            SupportRequestLine[]
+  /// Link theo dõi của yêu cầu không gắn đơn và tài khoản (khách vãng lai chuyển từ chatbot).
+  tokens           SupportRequestToken[]
+  /// Cuộc trò chuyện với chatbot đã chuyển thành yêu cầu này (M8).
+  chatConversation ChatConversation?
+  stockMovements   StockMovement[]
+  refunds          Refund[]
 
   @@index([orderId])
   @@index([customerId])
@@ -1430,4 +1436,91 @@ model ReturnWindow {
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
   @@map("return_window")
+}
+
+/// Cài đặt chatbot (M8), tối đa một dòng (check `id`). Không có dòng là mặc định: tắt, chưa có câu thời gian phản hồi.
+model ChatbotSetting {
+  id               Boolean  @id @default(true)
+  enabled          Boolean  @default(false)
+  /// Câu owner soạn, chatbot đọc cho khách khi chuyển nhân viên. Rỗng là không đọc.
+  responseTimeNote String   @default("") @map("response_time_note")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("chatbot_setting")
+}
+
+enum ChatRole {
+  customer
+  assistant
+
+  @@map("chat_role")
+}
+
+/// Cuộc trò chuyện của một khách với chatbot (GLOSSARY "Chatbot"). Im quá 24 giờ thì tin tiếp theo mở cuộc mới; quá 90
+/// ngày thì job dọn xóa cả cuộc.
+model ChatConversation {
+  id                   String          @id @default(uuid()) @db.Uuid
+  /// IP của khách lúc mở cuộc, đã băm: để đối chiếu khi bị lạm dụng, không đọc ra được IP gốc.
+  ipHash               String          @map("ip_hash")
+  /// Số tin của khách, để chặn quá 30 tin mỗi cuộc mà không phải đếm lại.
+  customerMessageCount Int             @default(0) @map("customer_message_count")
+  createdAt            DateTime        @default(now()) @map("created_at")
+  lastMessageAt        DateTime        @default(now()) @map("last_message_at")
+  /// Yêu cầu hỗ trợ tạo khi khách xác nhận chuyển nhân viên; mỗi cuộc chuyển một lần. Có thì job dọn không xóa cuộc.
+  supportRequestId     String?         @unique @map("support_request_id") @db.Uuid
+  supportRequest       SupportRequest? @relation(fields: [supportRequestId], references: [id], onDelete: Restrict)
+  messages             ChatMessage[]
+
+  @@index([lastMessageAt])
+  @@map("chat_conversation")
+}
+
+/// Một tin trong cuộc trò chuyện. Lượt không trả lời được thì tin của khách mang `error`, không có tin của chatbot.
+model ChatMessage {
+  id             String           @id @default(uuid()) @db.Uuid
+  conversationId String           @map("conversation_id") @db.Uuid
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           ChatRole
+  content        String
+  /// Tin của chatbot: model đã trả lời (`nhà cung cấp:model`) và phiên bản system prompt.
+  model          String?
+  promptVersion  Int?             @map("prompt_version")
+  /// Tin của khách: `exhausted` (mọi model hết lượt) hay `failed` (lỗi) khi lượt đó không có trả lời.
+  error          String?
+  /// Tin của chatbot: sản phẩm đã gợi ý (`[{ slug, name }]`), và tóm tắt khi chatbot đề nghị chuyển nhân viên.
+  products       Json             @default("[]")
+  handoffSummary String?          @map("handoff_summary")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  @@index([conversationId, createdAt])
+  @@index([createdAt])
+  @@map("chat_message")
+}
+
+/// Lượt gọi model theo ngày (giờ Việt Nam) và model, cho báo cáo; không dùng để chặn (ADR 0017: nhà cung cấp tự chặn).
+model ChatUsageDay {
+  day          DateTime @db.Date
+  /// `nhà cung cấp:model`.
+  model        String
+  calls        Int      @default(0)
+  inputTokens  Int      @default(0) @map("input_tokens")
+  outputTokens Int      @default(0) @map("output_tokens")
+  /// Số lần model trả 429, và số lần lỗi khác (5xx, quá thời gian chờ, trả lời hỏng).
+  rateLimited  Int      @default(0) @map("rate_limited")
+  errors       Int      @default(0)
+
+  @@id([day, model])
+  @@map("chat_usage_day")
+}
+
+/// Token trong link email của yêu cầu không gắn đơn và tài khoản (M8); mỗi email một token, như `order_lookup_token`.
+model SupportRequestToken {
+  /// SHA-256 của token, hex.
+  tokenHash String         @id @map("token_hash")
+  requestId String         @map("request_id") @db.Uuid
+  request   SupportRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  @@index([requestId])
+  @@map("support_request_token")
 }

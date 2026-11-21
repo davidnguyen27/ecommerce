@@ -13,8 +13,8 @@ export const inDays = (days: number) => new Date(Date.now() + days * DAY).toISOS
  * chính sách đặt trước đã xuất bản. `open` mở đợt cọc 30%, giao 10–20/12/2026, mặc định AM-40 10 suất và AM-41 5 suất;
  * `preorder` đặt trước như khách vãng lai, mặc định 1 đôi AM-41 theo đợt `campaignId`.
  */
-export async function preorderShop(options?: { publishPolicy?: boolean }) {
-  const app = await shop()
+export async function preorderShop(options?: { publishPolicy?: boolean } & Parameters<typeof shop>[0]) {
+  const app = await shop(options)
   const { request, token, product, v40, v41 } = app
 
   if (options?.publishPolicy !== false) {

@@ -49,7 +49,8 @@ describe('dọn token và bộ đếm hết hạn', () => {
     for (let i = 0; i < 10; i++) await tryLogin()
     expect((await tryLogin()).status).toBe(429)
 
-    await deleteExpiredRecords(prisma, new Date(Date.now() + 2 * HOUR))
+    // Cửa sổ dài nhất là 24 giờ (chuyển nhân viên từ chatbot, M8).
+    await deleteExpiredRecords(prisma, new Date(Date.now() + 25 * HOUR))
 
     expect((await tryLogin()).status).toBe(401)
   })

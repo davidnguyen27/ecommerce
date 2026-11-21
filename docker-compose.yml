@@ -58,6 +58,10 @@ services:
       VNPAY_ENV: ${VNPAY_ENV:-}
       VNPAY_SERVER_IP: ${VNPAY_SERVER_IP:-}
       PAYMENT_SIMULATOR: ${PAYMENT_SIMULATOR:-}
+      # Chatbot (ADR 0017): khóa gói miễn phí; để trống thì chatbot tự tắt. LLM_CHAIN trống là chuỗi mặc định.
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      LLM_CHAIN: ${LLM_CHAIN:-}
     depends_on:
       migrate: { condition: service_completed_successfully }
       # Chỉ có khi bật profile local; staging/production bỏ qua.

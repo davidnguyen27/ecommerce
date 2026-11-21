@@ -221,6 +221,7 @@ export async function toAdminSupport(storage: Storage, request: SupportForView):
         : null,
     // Route điền khi đã nhận hàng mà chưa đề xuất hoàn (cần đọc thêm DB).
     returnRefund: null,
+    chatTranscript: null,
     refunds: request.refunds.map((r) => ({ id: r.id, amount: Number(r.amount), status: r.status })),
     messages: await Promise.all(
       request.messages.map(async (m) => ({
@@ -251,7 +252,8 @@ export async function findSupportCustomer(db: DbClient, where: Prisma.CustomerWh
 }
 
 /** Ai tạo yêu cầu: khách (đăng nhập hay cầm link đơn), nhân viên tạo hộ, hay hệ thống. */
-export type SupportCreator = { type: 'customer' } | { type: 'staff'; staffId: string } | { type: 'system' }
+export type SupportCreator =
+  { type: 'customer' } | { type: 'staff'; staffId: string } | { type: 'system' } | { type: 'chatbot' }
 
 export type NewSupportRequest = {
   kind: SupportRequestKind
@@ -261,6 +263,8 @@ export type NewSupportRequest = {
   order?: { id: string; code: number; email: string; recipientName: string; customerId: string | null }
   /** Tài khoản khách, khi yêu cầu không gắn đơn. */
   customer?: SupportCustomer
+  /** Chỉ tên và email: khách vãng lai chưa có đơn được chatbot chuyển nhân viên (M8). Chỉ loại `other`. */
+  contact?: { name: string; email: string }
   previousRequestCode?: number
   /** Trả hàng: các dòng theo biến thể, số lượng, lý do (ticket 04). */
   lines?: readonly { variantId: string; quantity: number; reason?: SupportReturnReason; toVariantId?: string }[]
@@ -273,11 +277,13 @@ export type NewSupportRequest = {
  * Trả yêu cầu vừa tạo.
  */
 export async function createSupportRequest(tx: DbClient, mail: CustomerMail, input: NewSupportRequest) {
-  const { order, customer } = input
-  if (!order && !customer) throw new Error('Yêu cầu cần đơn hoặc tài khoản khách')
+  const { order, customer, contact } = input
+  if (!order && !customer && !contact) throw new Error('Yêu cầu cần đơn, tài khoản khách hoặc liên hệ')
   const owner: Prisma.SupportRequestWhereInput = order
     ? { orderId: order.id }
-    : { customerId: customer!.id, orderId: null }
+    : customer
+      ? { customerId: customer.id, orderId: null }
+      : { contactEmail: contact!.email, orderId: null, customerId: null }
   if (input.kind !== 'other' && !order) throw invalidField('orderCode', 'Yêu cầu này cần gắn với một đơn')
   if (order) {
     const [locked] = await tx.$queryRaw<
@@ -298,7 +304,9 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
           : 'Chỉ trả hay đổi được hàng của đơn đã giao xong',
       )
     }
-  } else await tx.$queryRaw`SELECT "id" FROM "customer" WHERE "id" = ${customer!.id}::uuid FOR UPDATE`
+  } else if (customer) await tx.$queryRaw`SELECT "id" FROM "customer" WHERE "id" = ${customer.id}::uuid FOR UPDATE`
+  // Liên hệ không có dòng nào để khóa: khóa theo email, để hai lần chuyển cùng lúc không vượt giới hạn yêu cầu mở.
+  else await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`support_contact:${contact!.email}`}))`
 
   const open = await tx.supportRequest.count({
     where: { ...owner, status: { notIn: [...SUPPORT_CLOSED_STATUSES] } },
@@ -331,13 +339,20 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
       kind: input.kind,
       subject: input.subject,
       orderId: order?.id ?? null,
-      customerId: order ? order.customerId : customer!.id,
-      contactEmail: order?.email ?? customer!.email,
-      contactName: order?.recipientName ?? customer?.name ?? null,
+      customerId: order ? order.customerId : (customer?.id ?? null),
+      contactEmail: order?.email ?? customer?.email ?? contact!.email,
+      contactName: order?.recipientName ?? customer?.name ?? contact?.name ?? null,
       createdBy: input.creator.type,
       createdByStaffId: staffId,
       previousRequestId,
-      messages: { create: { author: input.creator.type, staffId, body: input.message } },
+      // Chatbot chỉ tạo yêu cầu; tin đầu là lời khách gõ trong form chuyển.
+      messages: {
+        create: {
+          author: input.creator.type === 'chatbot' ? 'customer' : input.creator.type,
+          staffId,
+          body: input.message,
+        },
+      },
       ...(window && {
         returnWindowDays: window.days,
         deliveredAt: window.deliveredAt,

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import express from 'express'
 import type { Logger } from 'pino'
 import { pinoHttp } from 'pino-http'
+import type { LlmClient } from './adapters/llm.ts'
 import type { Storage } from './adapters/storage.ts'
 import { requireAuth } from './auth/require-auth.ts'
 import { loadStaff } from './auth/staff-context.ts'
@@ -11,7 +12,7 @@ import type { PaymentGateway } from './payments/gateway.ts'
 import { errorHandler, notFound } from './http/errors.ts'
 import { accountOrderRoutes } from './routes/account-orders.ts'
 import { accountRoutes } from './routes/account.ts'
-import { accountSupportRoutes, orderSupportRoutes } from './routes/support-customer.ts'
+import { accountSupportRoutes, contactSupportRoutes, orderSupportRoutes } from './routes/support-customer.ts'
 import { adminRoutes } from './routes/admin.ts'
 import { adminAuthRoutes } from './routes/admin-auth.ts'
 import { customerAuthRoutes, customerSessions } from './routes/customer-auth.ts'
@@ -20,6 +21,7 @@ import { publicAttributeSchemaRoutes, publicBrandRoutes, publicCategoryRoutes } 
 import { publicPageRoutes } from './routes/public-pages.ts'
 import { publicProductRoutes } from './routes/public-products.ts'
 import { publicSitemapRoutes } from './routes/public-sitemap.ts'
+import { chatRoutes } from './routes/chat.ts'
 import { checkoutRoutes } from './routes/checkout.ts'
 import { preorderRoutes } from './routes/preorders.ts'
 import { publicOrderRoutes } from './routes/public-orders.ts'
@@ -48,6 +50,8 @@ export type AppDeps = {
    * trong mạng riêng (Caddy trên VPS); bản deploy Netlify → Render đặt số tầng proxy (ADR 0011).
    */
   trustProxy?: string | number
+  /** Model của chatbot (ADR 0017); không có là chưa đặt khóa nào, chatbot không trả lời. */
+  llm?: LlmClient
 }
 
 /** Đọc `TRUST_PROXY`: số là số tầng proxy, chuỗi khác là danh sách địa chỉ/từ khóa của Express, trống là mặc định. */
@@ -101,6 +105,8 @@ export function createApp(deps: AppDeps) {
   api.use('/orders/:code/support-requests', orderSupportRoutes(deps))
   api.use('/orders', publicOrderRoutes(deps))
   api.use('/payments', paymentRoutes(deps))
+  api.use('/chat', chatRoutes({ ...deps, secret }))
+  api.use('/support-requests', contactSupportRoutes(deps))
   const customerDeps = {
     prisma: deps.prisma,
     emails: deps.emails,
@@ -116,7 +122,7 @@ export function createApp(deps: AppDeps) {
     '/admin',
     requireAuth(secret, 'staff'),
     loadStaff(deps.prisma),
-    adminRoutes(deps.prisma, deps.storage, deps.payments, { emails: deps.emails, siteUrl: deps.siteUrl }),
+    adminRoutes(deps.prisma, deps.storage, deps.payments, { emails: deps.emails, siteUrl: deps.siteUrl }, deps.llm),
   )
   app.use('/api', api)
 

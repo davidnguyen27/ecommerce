@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import type { StaffProfile } from '@ecommerce/shared'
+import type { LlmClient } from '../adapters/llm.ts'
 import type { Storage } from '../adapters/storage.ts'
 import { currentStaff } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
@@ -10,6 +11,7 @@ import { adminReconciliationRoutes, type ReconciliationDeps } from './admin-reco
 import { adminRefundRoutes } from './admin-refunds.ts'
 import { adminAttributeSchemaRoutes } from './admin-attribute-schemas.ts'
 import { adminAuditRoutes } from './admin-audit.ts'
+import { adminChatbotReportRoutes, adminChatbotRoutes } from './admin-chatbot.ts'
 import { adminBrandRoutes } from './admin-brands.ts'
 import { adminCategoryRoutes } from './admin-categories.ts'
 import { adminCommitmentTypeRoutes } from './admin-commitment-types.ts'
@@ -38,6 +40,8 @@ export function adminRoutes(
   payments: PaymentGateway,
   /** Hàng đợi thư và địa chỉ website: email giao hàng (ticket 09) và khôi phục đơn khi đối soát (ticket 10). */
   mail: FulfillmentMail & ReconciliationDeps,
+  /** Model của chatbot, để trang quản trị hiện trạng thái từng model (M8). */
+  llm?: LlmClient,
 ) {
   return (
     Router()
@@ -71,6 +75,9 @@ export function adminRoutes(
       .use('/vouchers', adminVoucherRoutes(prisma))
       .use('/support-requests', adminSupportRoutes(prisma, storage, mail))
       .use('/return-windows', adminReturnWindowRoutes(prisma))
+      // Trước router báo cáo M7: router đó đòi `report.view` cho mọi đường bên dưới.
+      .use('/reports/chatbot', adminChatbotReportRoutes(prisma))
       .use('/reports', adminReportRoutes(prisma))
+      .use('/chatbot', adminChatbotRoutes(prisma, llm))
   )
 }
