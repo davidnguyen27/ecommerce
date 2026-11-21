@@ -1,10 +1,10 @@
 # Spec: M8 — Chatbot
 
-**Status:** needs-info
+**Status:** needs-triage
 
-Nháp. Chờ bản thử Groq và OpenRouter (ticket 01) và ADR 0017 trước khi chuyển sang `ready-for-agent`. Kết quả thử có thể đổi mục **Nguồn model**.
+Chờ người dùng duyệt trước khi chuyển sang `ready-for-agent`.
 
-Nguồn: `project-overview.md` (mục 2, 3, 4, 7, 8.2, 10), Out of Scope của spec M6b (`.scratch/m6b-ho-tro-doi-tra/spec.md`) và M7 (`.scratch/m7-bao-cao/spec.md`), và buổi làm rõ requirement ngày 2026-11-20 (29 câu, người dùng chấp nhận mọi đề xuất). Đây là mốc cuối của lộ trình M0 → M8 trong giai đoạn 1 (mở bán). Quyết định kiến trúc: `docs/adr/0017-…` (sẽ viết sau bản thử). Thuật ngữ mới trong GLOSSARY, mục **Chatbot**: Chatbot, Cuộc trò chuyện, Chuyển nhân viên. Mục **Yêu cầu hỗ trợ** được mở rộng cho khách vãng lai không có đơn.
+Nguồn: `project-overview.md` (mục 2, 3, 4, 7, 8.2, 10), Out of Scope của spec M6b (`.scratch/m6b-ho-tro-doi-tra/spec.md`) và M7 (`.scratch/m7-bao-cao/spec.md`), buổi làm rõ requirement ngày 2026-11-20 (29 câu) và vòng bổ sung sau bản thử (Q30–Q33); người dùng chấp nhận mọi đề xuất. Đây là mốc cuối của lộ trình M0 → M8 trong giai đoạn 1 (mở bán). Quyết định kiến trúc: `docs/adr/0017-chatbot-dung-model-mien-phi-qua-chuoi-du-phong.md` (mới, kèm kết quả bản thử). Thuật ngữ mới trong GLOSSARY, mục **Chatbot**: Chatbot, Cuộc trò chuyện, Chuyển nhân viên. Mục **Yêu cầu hỗ trợ** được mở rộng cho khách vãng lai không có đơn.
 
 ## Problem Statement
 
@@ -27,7 +27,7 @@ Web khách có một **khung chat** nổi ở mọi trang, trừ trang đặt mu
 
 Chatbot không đọc đơn: hỏi về đơn thì chatbot dẫn khách tới trang tra cứu đơn hay trang tài khoản. Chatbot không đổi dữ liệu nào. Việc duy nhất nó tạo ra là một **yêu cầu hỗ trợ** khi **chuyển nhân viên**, và chỉ khi khách bấm xác nhận. Khách vãng lai chưa có đơn cũng được chuyển, bằng tên và email.
 
-Model chạy trên gói miễn phí: Groq là nguồn chính, OpenRouter là dự phòng, qua một adapter kiểu OpenAI. Vòng lặp gọi công cụ chạy trong API. Có công tắc, trần lượt gọi mỗi ngày và giới hạn tần suất. Khi AI lỗi hay hết hạn mức, khung chat báo tạm không trả lời được và hiện nút gửi yêu cầu cho nhân viên; xem sản phẩm và mua hàng không bị ảnh hưởng.
+Model chạy trên gói miễn phí, qua một chuỗi ba model: hai model của Groq rồi một model của OpenRouter, dùng chung một adapter kiểu OpenAI (ADR 0017). Vòng lặp gọi công cụ chạy trong API. Có công tắc và giới hạn tần suất. Hạn mức mỗi ngày do nhà cung cấp chặn, mình không đặt trần riêng. Khi AI lỗi hay cả chuỗi hết hạn mức, khung chat báo tạm không trả lời được và hiện nút gửi yêu cầu cho nhân viên; xem sản phẩm và mua hàng không bị ảnh hưởng.
 
 Mỗi **cuộc trò chuyện** được lưu 90 ngày. Owner xem được mọi cuộc trò chuyện và một báo cáo nhỏ. Nhân viên chăm sóc khách thấy bản chép cuộc trò chuyện ngay trong yêu cầu được chuyển.
 
@@ -59,7 +59,7 @@ Mỗi **cuộc trò chuyện** được lưu 90 ngày. Owner xem được mọi 
 ### Chủ doanh nghiệp
 
 18. Là chủ doanh nghiệp, tôi muốn bật hay tắt chatbot ngay lập tức.
-19. Là chủ doanh nghiệp, tôi muốn đặt trần lượt gọi model mỗi ngày, để không vượt hạn mức miễn phí.
+19. Là chủ doanh nghiệp, tôi muốn biết mỗi ngày chatbot dùng bao nhiêu token và có hết lượt hay không, để biết khi nào cần nâng gói.
 20. Là chủ doanh nghiệp, tôi muốn soạn câu về thời gian phản hồi mà chatbot đọc cho khách khi chuyển nhân viên.
 21. Là chủ doanh nghiệp, tôi muốn xem danh sách cuộc trò chuyện và đọc từng cuộc, để biết khách hỏi gì và chatbot trả lời có đúng không.
 22. Là chủ doanh nghiệp, tôi muốn một báo cáo: số cuộc trò chuyện và số tin mỗi ngày, tỷ lệ chuyển nhân viên, số lần AI lỗi hay hết hạn mức.
@@ -67,28 +67,37 @@ Mỗi **cuộc trò chuyện** được lưu 90 ngày. Owner xem được mọi 
 
 ## Implementation Decisions
 
-### Nguồn model (chờ ADR 0017)
+### Nguồn model (ADR 0017)
 
 - **Adapter `api/src/adapters/llm.ts`**, nói chuẩn chat completions kiểu OpenAI có `tools`. Dùng `fetch`, không thêm SDK.
-- **Hai nguồn**, cấu hình bằng biến môi trường:
-  - chính: Groq, model `gpt-oss-120b` (`LLM_PRIMARY_*`: base URL, khóa, model);
-  - dự phòng: OpenRouter, một model `:free` (`LLM_FALLBACK_*`).
-  - Nguồn chính trả 429, 5xx hay quá thời gian chờ thì gọi nguồn dự phòng cho cùng lượt. Cả hai cùng hỏng thì lượt đó thất bại (xem **Khi lỗi**).
-- **Không dùng gói miễn phí của Gemini:** Google dùng dữ liệu của gói này để cải thiện sản phẩm.
-- Không có khóa nào thì chatbot coi như đang tắt. Dùng cho máy dev và cho bản demo khi chưa đặt khóa.
+- **Chuỗi ba model**, đặt bằng biến môi trường `LLM_CHAIN`: danh sách `nhà cung cấp:model` theo thứ tự. Khóa lấy từ `GROQ_API_KEY`, `OPENROUTER_API_KEY`. Mặc định:
+  1. `groq:openai/gpt-oss-120b` (gửi `reasoning_effort: low`);
+  2. `groq:qwen/qwen3.8-27b`;
+  3. `openrouter:nvidia/nemotron-3-ultra-550b-a55b:free`.
+- **Chuyển model:**
+  - Một lần gọi bị 429, 5xx hay quá thời gian chờ thì gọi ngay model kế tiếp cho cùng lần gọi đó, không chờ để thử lại.
+  - Model trả 429 bị đánh dấu **đang hết** tới lúc `retry-after` (không có header thì 60 giây), và bị bỏ qua cho tới lúc đó. Trạng thái này giữ trong bộ nhớ của process.
+  - Cả chuỗi cùng hỏng thì lượt đó thất bại (xem **Khi lỗi**).
+- **Không dùng gói miễn phí của Gemini**, vì Google dùng dữ liệu của gói này để cải thiện sản phẩm. Không dùng Gemma qua OpenRouter: bản thử bị 429 cả chín lần.
+- Thời gian chờ mỗi lần gọi: 20 giây với Groq, 30 giây với OpenRouter (Nemotron mất 2–14 giây mỗi tin).
+- Không có khóa nào thì chatbot coi như đang tắt. Dùng cho máy dev và cho bản demo khi chưa đặt khóa. Thiếu một khóa thì bỏ các model của nhà cung cấp đó khỏi chuỗi.
 - Test dùng một adapter giả trả theo kịch bản; không test nào gọi nhà cung cấp thật.
 
 ### Vòng lặp gọi công cụ
 
 - Mỗi tin của khách là một **lượt**:
-  1. gửi system prompt, ngữ cảnh trang và 20 tin gần nhất cho model;
+  1. gửi system prompt, ngữ cảnh trang và 10 tin gần nhất cho model;
   2. model gọi công cụ thì API chạy công cụ rồi gọi tiếp;
   3. tối đa 3 vòng công cụ, sau đó gọi một lần không kèm công cụ để buộc trả lời.
-- Mỗi lần gọi model tính một **lượt gọi** vào trần mỗi ngày.
+- **Tiết kiệm token** (giới hạn thật là token mỗi phút và mỗi ngày, ADR 0017): system prompt và mô tả công cụ viết gọn; kết quả công cụ chỉ gồm các trường cần dùng. Mục tiêu khoảng 1.000 token mỗi tin của khách (bản thử đo được khoảng 1.600).
+- Mỗi lần gọi model ghi số token vào và ra (`usage`) cùng model đã trả lời, cho báo cáo.
 - Câu trả lời được stream về khung chat (SSE). Thẻ sản phẩm gửi kèm như một sự kiện riêng, dựng từ kết quả công cụ.
 - **System prompt** nằm trong code, có phiên bản. Nội dung chính:
-  - vai trò trợ lý của cửa hàng; xưng "mình", gọi khách là "bạn"; trả lời theo ngôn ngữ khách dùng;
-  - chỉ nói giá, tình trạng hàng, đợt đặt trước khi đã lấy từ công cụ trong lượt này;
+  - vai trò trợ lý của cửa hàng; xưng "mình", gọi khách là "bạn";
+  - trả lời bằng ngôn ngữ của tin cuối của khách (bản thử: khách viết tiếng Anh, cả hai model vẫn trả lời tiếng Việt);
+  - từ khóa tìm kiếm luôn viết bằng tiếng Việt, vì danh mục ghi tiếng Việt;
+  - chỉ nói giá, tình trạng hàng, đợt đặt trước khi đã lấy từ công cụ trong lượt này; điều khoản cọc và phần còn lại chỉ nói sau khi đọc chính sách đặt trước;
+  - khi đề nghị chuyển nhân viên, nói khách bấm xác nhận, không nói "đã gửi";
   - không cam kết hàng chính hãng, tư cách đại lý, độ vừa hay ngày giao; gợi ý size luôn kèm câu miễn trừ;
   - không đọc đơn, chỉ dẫn khách tới trang tra cứu đơn;
   - từ chối nhẹ những câu ngoài chuyện mua sắm;
@@ -99,8 +108,8 @@ Mỗi **cuộc trò chuyện** được lưu 90 ngày. Owner xem được mọi 
 
 Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hiện: snapshot đã xuất bản, không bản nháp, không chứng từ, không giá vốn, không số tồn.
 
-- **`search_products`**: chữ tự do, nhóm hàng, danh mục, thương hiệu, khoảng giá, thuộc tính. Dùng lại `searchPage` của `api/src/catalog/search.ts`. Trả tối đa 6 sản phẩm: tên, slug, thương hiệu, khoảng giá, còn hàng/hết hàng/đang nhận đặt trước, ảnh đầu.
-- **`get_product`**: theo slug. Trả mô tả, thuộc tính, các biến thể kèm giá và còn/hết từng biến thể, bảng size, hướng dẫn sử dụng và bảo quản, thông tin nguồn gốc công bố, cam kết có bằng chứng đang hiện công khai, đợt đặt trước đang mở (tỷ lệ cọc, thời gian dự kiến về), và các trang chính sách mà sản phẩm liên kết.
+- **`search_products`**: chữ tự do, nhóm hàng, danh mục, thương hiệu, khoảng giá, thuộc tính. Dùng lại `searchPage` của `api/src/catalog/search.ts`. Trả tối đa 5 sản phẩm: tên, slug, thương hiệu, khoảng giá, còn hàng/hết hàng/đang nhận đặt trước. Ảnh không gửi cho model, chỉ thẻ sản phẩm dùng.
+- **`get_product`**: theo slug. Trả mô tả (cắt còn khoảng 600 ký tự), thuộc tính, các biến thể kèm giá và còn/hết từng biến thể, bảng size, hướng dẫn sử dụng và bảo quản, thông tin nguồn gốc công bố, cam kết có bằng chứng đang hiện công khai, đợt đặt trước đang mở (tỷ lệ cọc, thời gian dự kiến về), và các trang chính sách mà sản phẩm liên kết.
 - **`list_policies`** và **`get_policy`**: danh sách trang chính sách đã xuất bản, và nội dung đầy đủ của một trang theo slug, kèm link. Không làm tìm kiếm ngữ nghĩa.
 - **`handoff`**: model chỉ **đề nghị** chuyển, kèm tóm tắt một câu. Khung chat hiện nút xác nhận và form (tên, email cho khách vãng lai). Yêu cầu chỉ được tạo khi khách gửi form, qua một endpoint riêng, không qua model.
 - Ngữ cảnh trang: khung chat gửi slug sản phẩm đang xem (nếu có). API tự đọc sản phẩm đó và đưa vào ngữ cảnh, model không phải gọi công cụ.
@@ -114,10 +123,9 @@ Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hi�
   - yêu cầu hỗ trợ đã chuyển (có thể trống);
   - số tin của khách, số lượt gọi.
 - **Bảng `chat_message`:** cuộc trò chuyện, vai trò (`customer`, `assistant`), nội dung, thẻ sản phẩm kèm theo (JSON: slug và tên, để hiện lại), nguồn model đã trả lời, lỗi (nếu lượt thất bại), lúc tạo. Chỉ ghi thêm. Lời gọi công cụ và kết quả không lưu, chỉ lưu thẻ sản phẩm.
-- **Bảng `chat_usage_day`:** ngày (giờ VN), số lượt gọi, số lượt lỗi, số lần chạm trần. Dùng để chặn theo trần và cho báo cáo.
+- **Bảng `chat_usage_day`:** ngày (giờ VN) × model: số lượt gọi, token vào, token ra, số lần 429, số lần lỗi khác. Thêm một dòng cho cả ngày: số lượt khách bị báo hết lượt. Chỉ phục vụ báo cáo, không dùng để chặn.
 - **Cài đặt chatbot**: một dòng cấu hình, theo cách của `ShippingFeeSetting`:
   - bật/tắt (mặc định tắt);
-  - trần lượt gọi mỗi ngày (mặc định 800);
   - câu thời gian phản hồi.
 - **Cuộc trò chuyện hết hạn:** không có tin nào trong 24 giờ thì tin tiếp theo mở cuộc mới. Khách có nút "Bắt đầu lại".
 - **Xóa:** job theo lịch trong `api/src/jobs` xóa cuộc trò chuyện có tin cuối quá 90 ngày, trừ cuộc đã gắn yêu cầu hỗ trợ. Cuộc gắn yêu cầu được giữ theo yêu cầu.
@@ -146,8 +154,9 @@ Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hi�
   - tin dài 1–500 ký tự;
   - mỗi cuộc trò chuyện tối đa 30 tin của khách;
   - mỗi IP tối đa 60 tin mỗi giờ.
-- **Trước mỗi lượt**, chatbot phải đang bật, có khóa, và lượt gọi hôm nay chưa chạm trần. Không đủ điều kiện thì trả ngay trạng thái "tạm không trả lời", không gọi model. Lần đầu chạm trần trong ngày được ghi vào `chat_usage_day`.
-- **Lượt thất bại** (cả hai nguồn lỗi, quá thời gian chờ, model trả rỗng): lưu tin của khách cùng lỗi. Khung chat hiện "Trợ lý tạm không trả lời được", kèm nút gửi yêu cầu cho nhân viên và link trang chính sách.
+- **Trước mỗi lượt**, chatbot phải đang bật, có khóa, và còn ít nhất một model chưa bị đánh dấu đang hết. Không đủ điều kiện thì trả ngay trạng thái tương ứng, không gọi model.
+- **Hết lượt:** mọi model trong chuỗi đang bị đánh dấu hết. Khung chat báo "Trợ lý đã hết lượt trả lời, bạn thử lại sau hoặc gửi yêu cầu cho nhân viên", kèm nút gửi yêu cầu. Mỗi lần như vậy được đếm vào `chat_usage_day`.
+- **Lượt thất bại** (cả chuỗi lỗi, quá thời gian chờ, model trả rỗng): lưu tin của khách cùng lỗi. Khung chat hiện "Trợ lý tạm không trả lời được", kèm nút gửi yêu cầu cho nhân viên và link trang chính sách.
 - **Cô lập lỗi:** route chat có lỗi riêng, không đụng các route khác. Khung chat tải sau trang (lazy), nên lỗi của nó không chặn trang. Trang đặt mua và thanh toán không tải khung chat.
 
 ### API
@@ -167,9 +176,10 @@ Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hi�
 ### Báo cáo
 
 - Báo cáo **Chatbot** đặt trong trang Báo cáo của M7, nhưng dùng quyền `chatbot.manage` thay cho `report.view`. Theo khoảng ngày giờ VN:
-  - số cuộc trò chuyện, số tin của khách, số lượt gọi;
+  - số cuộc trò chuyện, số tin của khách;
   - số cuộc đã chuyển nhân viên và tỷ lệ chuyển;
-  - số lượt lỗi, số ngày chạm trần.
+  - theo từng model: số lượt gọi, token vào và ra, số lần 429, số lần lỗi;
+  - số lần khách bị báo hết lượt.
 - Không tính chuyện khách có mua sau khi chat hay không.
 
 ### Web
@@ -188,21 +198,22 @@ Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hi�
   - **Vòng lặp:**
     - công cụ chạy đúng tham số;
     - quá 3 vòng thì buộc trả lời;
-    - nguồn chính 429 thì dùng nguồn dự phòng;
-    - cả hai lỗi thì lượt thất bại, tin khách vẫn lưu cùng lỗi;
-    - mỗi lần gọi model cộng một lượt.
+    - model đầu 429 thì gọi model kế tiếp ngay trong cùng lần gọi;
+    - model đã 429 bị bỏ qua tới hết `retry-after`, sau đó được gọi lại;
+    - cả chuỗi lỗi thì lượt thất bại, tin khách vẫn lưu cùng lỗi;
+    - mỗi lần gọi ghi đúng model và token vào `chat_usage_day`.
   - **Dữ liệu công cụ:**
     - sản phẩm nháp, ẩn, lưu trữ không xuất hiện;
     - giá và tình trạng lấy từ bản đã xuất bản và tồn hiện tại;
     - không trả số tồn, giá vốn, chứng từ;
     - trang chính sách nháp không đọc được.
   - **Thẻ sản phẩm:** dựng từ kết quả công cụ; model viết giá sai thì thẻ vẫn đúng giá.
-  - **Bật/tắt và trần:**
-    - tắt, không khóa, hay chạm trần thì không gọi model;
-    - chạm trần được ghi một lần mỗi ngày;
-    - trần mới có hiệu lực ngay.
+  - **Bật/tắt và hết lượt:**
+    - tắt, hay không có khóa nào, thì không gọi model;
+    - thiếu một khóa thì chuỗi bỏ các model của nhà cung cấp đó;
+    - mọi model đang hết thì báo hết lượt, không gọi model, và đếm một lần hết lượt.
   - **Giới hạn:** tin quá 500 ký tự là 400; tin thứ 31 của một cuộc và tin thứ 61 mỗi giờ mỗi IP là 429.
-  - **Cuộc trò chuyện:** im quá 24 giờ thì mở cuộc mới; chỉ gửi 20 tin gần nhất cho model.
+  - **Cuộc trò chuyện:** im quá 24 giờ thì mở cuộc mới; chỉ gửi 10 tin gần nhất cho model.
   - **Chuyển nhân viên:**
     - khách vãng lai tạo được yêu cầu `other` không đơn, không tài khoản, có email; nhận email kèm link token;
     - link sai token là 404;
@@ -227,7 +238,10 @@ Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hi�
   - bấm "Gặp nhân viên", nhập tên và email;
   - nhân viên thấy yêu cầu kèm bản chép.
   - Khi chatbot tắt, nút chat báo tạm không trả lời và trang đặt mua vẫn chạy.
-- **Kiểm chất lượng model** không nằm trong test tự động. Bản thử ở ticket 01 và việc owner đọc lại cuộc trò chuyện thay cho kiểm này.
+- **Kiểm chất lượng model** không nằm trong test tự động. Thay cho nó có ba thứ:
+  - bản thử ngày 2026-11-20 (ADR 0017);
+  - một script thủ công trong `scripts/` chạy chín tình huống của bản thử trên chuỗi thật, chạy lại khi đổi model hay sửa prompt;
+  - việc owner đọc lại cuộc trò chuyện.
 
 ## Out of Scope
 
@@ -245,22 +259,27 @@ Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hi�
 - Buổi làm rõ 2026-11-20 chốt:
   - năm khả năng của mục 7.1, chỉ đọc; không đọc đơn;
   - mở cho mọi khách, có giới hạn tần suất;
-  - **model miễn phí**: người dùng yêu cầu bỏ Claude API; chọn Groq chính và OpenRouter dự phòng sau khi so với Gemini và Cloudflare Workers AI;
+  - **model miễn phí**: người dùng yêu cầu bỏ Claude API; chọn Groq và OpenRouter sau khi so với Gemini và Cloudflare Workers AI;
   - vòng lặp tự chạy trong Express;
   - khách vãng lai được chuyển nhân viên bằng tên và email;
   - lưu cuộc trò chuyện 90 ngày; quyền `chatbot.manage`; báo cáo nhỏ.
-- **Hạn mức** đọc được ngày 2026-11-20 (phần lớn từ nguồn thứ ba, cần kiểm lại trong console ở bản thử):
-  - Groq miễn phí: khoảng 30 lượt/phút, 1.000 lượt/ngày, 200.000 token/ngày;
+- **Vòng sau bản thử** (Q30–Q33) chốt:
+  - chuỗi ba model thay cho hai nguồn;
+  - thu gọn prompt, gửi 10 tin gần nhất;
+  - bỏ trần mỗi ngày do mình tự đặt, vì gói miễn phí không tốn tiền và nhà cung cấp đã tự chặn.
+- **Hạn mức đo được** (bản thử 2026-11-20, console Groq):
+  - Groq mỗi model: 1.000 lượt/ngày, 200.000 token/ngày;
+  - `gpt-oss-120b`: 8.000 token/phút; `qwen3.8-27b`: 7.000 token vào/phút;
   - OpenRouter `:free`: 50 lượt/ngày, hay 1.000 lượt/ngày sau khi đã nạp tổng $10.
-  - Mỗi tin của khách tốn 2–3 lượt gọi, nên trần 800 đủ cho khoảng 300–400 tin mỗi ngày.
+  - Với khoảng 1.000 token mỗi tin, cả chuỗi đủ cho khoảng 420 tin mỗi ngày, và khoảng 10 tin mỗi phút khi đông khách.
 - **Chủ doanh nghiệp cần xác nhận:**
   - đoạn về chatbot trong chính sách bảo mật (Claude soạn nháp);
-  - các số tạm: 500 ký tự, 30 tin mỗi cuộc, 60 tin mỗi giờ, trần 800, 3 lần chuyển mỗi IP mỗi ngày;
+  - các số tạm: 500 ký tự, 30 tin mỗi cuộc, 60 tin mỗi giờ, 3 lần chuyển mỗi IP mỗi ngày;
   - câu thời gian phản hồi;
   - có nạp $10 cho OpenRouter trước khi mở bán hay không.
 - **Ticket dự kiến:**
-  1. adapter model và bản thử (spike, ADR 0017);
-  2. cuộc trò chuyện, API chat, giới hạn, trần;
+  1. adapter model, chuỗi dự phòng, script kiểm tình huống;
+  2. cuộc trò chuyện, API chat, giới hạn, đếm token;
   3. công cụ;
   4. khung chat và thẻ sản phẩm;
   5. chuyển nhân viên cho khách vãng lai;
