@@ -45,6 +45,12 @@ Các lỗi gặp được đều sửa bằng prompt:
   - Đo được mỗi tin của khách tốn khoảng 1.600 token cộng dồn qua các lượt gọi. Riêng system prompt và mô tả công cụ đã khoảng 650 token mỗi lượt.
   - Prompt và kết quả công cụ được thu gọn (mô tả sản phẩm cắt ngắn, tối đa 5 sản phẩm, gửi 10 tin gần nhất), nhắm khoảng 1.000 token mỗi tin.
   - Với mức đó, sức chứa khoảng 200 tin mỗi ngày cho mỗi model Groq, cộng khoảng 20 tin qua OpenRouter: khoảng 420 tin mỗi ngày.
+  - **Đo thật (2026-11-21, `pnpm chatbot-check --api`, 9 tình huống trên dữ liệu demo):** bản đầu tốn khoảng 2.800 token vào mỗi câu, 2,4 lượt gọi. Phần cố định mỗi lượt gọi là khoảng 710 token với gpt-oss và khoảng 1.000 với qwen (qwen dàn schema công cụ rất dài). Sau khi thu gọn còn khoảng 1.300 token vào mỗi câu, 1,7 lượt gọi, tức khoảng 280 câu mỗi ngày cho hai model Groq:
+    - system prompt, mô tả công cụ viết tiếng Anh, gọn; câu khách đọc nguyên văn giữ tiếng Việt;
+    - bỏ công cụ liệt kê chính sách: prompt mang slug các trang chính sách;
+    - `get_product` nhận tên khi chưa biết slug, bớt một lượt tìm;
+    - biến thể viết một dòng, bỏ URL trong kết quả công cụ, cắt câu trả lời cũ trong lịch sử;
+    - lời nhắc ngôn ngữ chọn theo tin của khách (`looksEnglish`), vì qwen vẫn trả lời tiếng Việt cho tin tiếng Anh khi chỉ có lời nhắc chung.
 - **Không có trần chi tiêu do mình tự đặt.** Gói miễn phí không phát sinh tiền, và nhà cung cấp tự chặn bằng 429.
   - Model trả 429 thì API ghi nhớ model đó đang hết tới lúc `retry-after`, rồi bỏ qua nó thay vì gọi lại liên tục.
   - Cả ba cùng hết thì chatbot báo đã hết lượt hôm nay, kèm nút gửi yêu cầu cho nhân viên.

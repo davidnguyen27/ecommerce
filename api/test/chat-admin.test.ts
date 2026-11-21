@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LlmUnavailableError, ScriptedLlm, type LlmClient } from '../src/adapters/llm.ts'
+import { PROMPT_VERSION } from '../src/chat/prompt.ts'
 import { publishPrivacyPolicy } from './support/customer.ts'
 import { OWNER, appWithOwner, bearer, createStaff, login } from './support/staff.ts'
 
@@ -98,7 +99,7 @@ describe('trang quản trị chatbot', () => {
       ),
     ).toEqual([
       ['customer', null, null, null],
-      ['assistant', 'groq:openai/gpt-oss-120b', 1, null],
+      ['assistant', 'groq:openai/gpt-oss-120b', PROMPT_VERSION, null],
       ['customer', null, null, 'failed'],
     ])
     expect(JSON.stringify(detail.body)).not.toMatch(/ip/i)
