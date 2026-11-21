@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import type { StaffProfile } from '@ecommerce/shared'
+import type { LlmClient } from '../adapters/llm.ts'
 import type { Storage } from '../adapters/storage.ts'
 import { currentStaff } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
@@ -39,6 +40,8 @@ export function adminRoutes(
   payments: PaymentGateway,
   /** Hàng đợi thư và địa chỉ website: email giao hàng (ticket 09) và khôi phục đơn khi đối soát (ticket 10). */
   mail: FulfillmentMail & ReconciliationDeps,
+  /** Model của chatbot, để trang quản trị hiện trạng thái từng model (M8). */
+  llm?: LlmClient,
 ) {
   return (
     Router()
@@ -73,6 +76,6 @@ export function adminRoutes(
       .use('/support-requests', adminSupportRoutes(prisma, storage, mail))
       .use('/return-windows', adminReturnWindowRoutes(prisma))
       .use('/reports', adminReportRoutes(prisma))
-      .use('/chatbot', adminChatbotRoutes(prisma))
+      .use('/chatbot', adminChatbotRoutes(prisma, llm))
   )
 }
