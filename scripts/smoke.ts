@@ -26,6 +26,10 @@ const env = {
   VNPAY_TMN_CODE: '',
   VNPAY_HASH_SECRET: '',
   PAYMENT_SIMULATOR: 'allow',
+  // Chatbot dùng model giả, kể cả khi .env local có khóa: smoke và E2E không gọi Groq hay OpenRouter (ADR 0017).
+  GROQ_API_KEY: '',
+  OPENROUTER_API_KEY: '',
+  LLM_CHAIN: 'fake',
 }
 
 function compose(...args: string[]) {
