@@ -89,7 +89,7 @@ Mỗi **cuộc trò chuyện** được lưu 90 ngày. Owner xem được mọi 
   1. gửi system prompt, ngữ cảnh trang và 10 tin gần nhất cho model;
   2. model gọi công cụ thì API chạy công cụ rồi gọi tiếp;
   3. tối đa 3 vòng công cụ, sau đó gọi một lần không kèm công cụ để buộc trả lời.
-- **Tiết kiệm token** (giới hạn thật là token mỗi phút và mỗi ngày, ADR 0017): system prompt và mô tả công cụ viết gọn; kết quả công cụ chỉ gồm các trường cần dùng. Mục tiêu khoảng 1.000 token mỗi tin của khách (bản thử đo được khoảng 1.600). **Chưa đạt:** báo cáo chatbot trên máy local đo được khoảng 2.500 token vào mỗi câu (ticket 07), cần thu gọn thêm trước khi mở bán.
+- **Tiết kiệm token** (giới hạn thật là token mỗi phút và mỗi ngày, ADR 0017): system prompt và mô tả công cụ viết gọn; kết quả công cụ chỉ gồm các trường cần dùng. Mục tiêu khoảng 1.000 token mỗi tin của khách (bản thử đo được khoảng 1.600). Bản đầu đo được khoảng 2.800 token vào mỗi câu; sau đợt thu gọn ngày 2026-11-21 còn khoảng 1.300 (ADR 0017, mục Consequences).
 - Mỗi lần gọi model ghi số token vào và ra (`usage`) cùng model đã trả lời, cho báo cáo.
 - Câu trả lời trả về một lần dạng JSON, không stream (ticket 02: adapter không stream, proxy Netlify có thể giữ SSE). Thẻ sản phẩm nằm trong cùng body, dựng từ kết quả công cụ.
 - **System prompt** nằm trong code, có phiên bản. Nội dung chính:
@@ -271,7 +271,7 @@ Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hi�
   - Groq mỗi model: 1.000 lượt/ngày, 200.000 token/ngày;
   - `gpt-oss-120b`: 8.000 token/phút; `qwen3.8-27b`: 7.000 token vào/phút;
   - OpenRouter `:free`: 50 lượt/ngày, hay 1.000 lượt/ngày sau khi đã nạp tổng $10.
-  - Với khoảng 1.000 token mỗi tin, cả chuỗi đủ cho khoảng 420 tin mỗi ngày, và khoảng 10 tin mỗi phút khi đông khách. Với khoảng 2.500 token mỗi câu đo được ở ticket 07, hai model Groq chỉ đủ khoảng 150 câu mỗi ngày.
+  - Với khoảng 1.000 token mỗi tin, cả chuỗi đủ cho khoảng 420 tin mỗi ngày, và khoảng 10 tin mỗi phút khi đông khách. Đo thật sau khi thu gọn: khoảng 1.300 token vào mỗi câu, hai model Groq đủ khoảng 280 câu mỗi ngày.
 - **Chủ doanh nghiệp cần xác nhận:**
   - đoạn về chatbot trong chính sách bảo mật (Claude soạn nháp);
   - các số tạm: 500 ký tự, 30 tin mỗi cuộc, 60 tin mỗi giờ, 3 lần chuyển mỗi IP mỗi ngày;

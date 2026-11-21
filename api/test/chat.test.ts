@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LlmChain, LlmUnavailableError, ScriptedLlm, type LlmClient, type LlmMessage } from '../src/adapters/llm.ts'
-import { HISTORY_LIMIT, LANGUAGE_REMINDER, SYSTEM_PROMPT } from '../src/chat/prompt.ts'
+import { ENGLISH_REMINDER, HISTORY_LIMIT, SYSTEM_PROMPT } from '../src/chat/prompt.ts'
 import { deleteExpiredRecords } from '../src/jobs/cleanup.ts'
 import { OWNER, appWithOwner, bearer, createStaff, login, type Request } from './support/staff.ts'
 
@@ -97,8 +97,10 @@ describe('hỏi chatbot', () => {
     await ask(request, 'Do you ship to Hanoi?', first.body.conversationId)
 
     const messages = llm.requests[1]!.messages
-    expect(messages[0]).toEqual({ role: 'system', content: SYSTEM_PROMPT })
-    expect(messages.at(-1)).toEqual({ role: 'system', content: LANGUAGE_REMINDER })
+    // System prompt, kèm slug các trang chính sách nếu có.
+    expect(messages[0]).toEqual({ role: 'system', content: expect.stringContaining(SYSTEM_PROMPT) })
+    // Tin cuối tiếng Anh: lời nhắc trả lời tiếng Anh.
+    expect(messages.at(-1)).toEqual({ role: 'system', content: ENGLISH_REMINDER })
     expect(dialogue(messages)).toEqual(['Có túi đen không?', 'Có ạ.', 'Do you ship to Hanoi?'])
   })
 
