@@ -1,5 +1,6 @@
 import type { ProductCard } from '@ecommerce/shared'
 import { LlmUnavailableError, type LlmAttempt, type LlmClient, type LlmMessage } from '../adapters/llm.ts'
+import type { ModelUsage } from './chat.ts'
 import { LANGUAGE_REMINDER } from './prompt.ts'
 import { CHAT_TOOLS, runTool, type ToolDeps } from './tools.ts'
 
@@ -7,7 +8,7 @@ import { CHAT_TOOLS, runTool, type ToolDeps } from './tools.ts'
 export const MAX_TOOL_ROUNDS = 3
 
 /** Một lần gọi model trong lượt, để ghi `chat_usage_day`. */
-export type TurnCall = { attempts: LlmAttempt[]; usage: { model: string; input: number; output: number } | null }
+export type TurnCall = { attempts: LlmAttempt[]; usage: ModelUsage | null }
 
 export type TurnResult = {
   content: string
@@ -22,11 +23,11 @@ export type TurnResult = {
 
 /** Lượt không có câu trả lời. `calls` gồm cả các lần gọi đã thành công trước đó, để vẫn ghi đủ lượt gọi. */
 export class TurnFailedError extends Error {
-  readonly reason: 'exhausted' | 'failed'
+  readonly reason: LlmUnavailableError['reason']
   readonly calls: TurnCall[]
   readonly cause: unknown
 
-  constructor(reason: 'exhausted' | 'failed', calls: TurnCall[], cause: unknown) {
+  constructor(reason: LlmUnavailableError['reason'], calls: TurnCall[], cause: unknown) {
     super('Chatbot không trả lời được')
     this.name = 'TurnFailedError'
     this.reason = reason

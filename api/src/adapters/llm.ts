@@ -210,11 +210,14 @@ export class LlmChain implements LlmClient {
     const parsed = ChatResponse.safeParse(await res.json().catch(() => null))
     if (!parsed.success) return { kind: 'error', detail: 'Trả lời không đúng định dạng' }
     const message = parsed.data.choices[0]!.message
-    const toolCalls = (message.tool_calls ?? []).map((call) => ({
-      id: call.id,
-      name: call.function.name,
-      arguments: call.function.arguments ?? '{}',
-    }))
+    // Không gửi công cụ (lần gọi buộc trả lời) mà model vẫn gọi công cụ thì bỏ các lời gọi đó: không ai chạy chúng.
+    const toolCalls = request.tools?.length
+      ? (message.tool_calls ?? []).map((call) => ({
+          id: call.id,
+          name: call.function.name,
+          arguments: call.function.arguments ?? '{}',
+        }))
+      : []
     const content = message.content?.trim() ?? ''
     if (!content && toolCalls.length === 0) return { kind: 'error', detail: 'Trả lời rỗng' }
     return {
@@ -294,13 +297,13 @@ export class ScriptedLlm implements LlmClient {
   }
 }
 
+const DEMO_SEARCH_ID = 'demo-search'
+
 /**
  * Model giả cho E2E và chạy thử không cần khóa (`LLM_CHAIN=fake`): chưa tìm kể từ tin cuối của khách thì tìm sản phẩm
  * bằng đúng câu đó (nên hỏi bằng tên sản phẩm, ví dụ "Air Max"); đã tìm thì trả lời bằng tên các sản phẩm tìm được.
  * Kết quả công cụ khác (sản phẩm đang xem mà API dựng sẵn) không tính. Không gọi mạng, luôn như nhau.
  */
-const DEMO_SEARCH_ID = 'demo-search'
-
 export class DemoLlm implements LlmClient {
   status(): LlmModelStatus[] {
     return [{ model: 'fake:demo', exhaustedUntil: null }]

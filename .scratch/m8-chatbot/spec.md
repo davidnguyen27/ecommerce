@@ -2,7 +2,7 @@
 
 **Status:** resolved
 
-Người dùng duyệt ngày 2026-11-21. Ticket ở `.scratch/m8-chatbot/issues/`.
+Người dùng duyệt ngày 2026-11-21. Ticket ở `.scratch/m8-chatbot/issues/`. Sau review toàn nhánh, spec được cập nhật theo các quyết định trong ticket (JSON thay SSE, đường dẫn chuyển nhân viên, trang báo cáo riêng, cột của `chat_conversation`, đếm hết lượt).
 
 Nguồn: `project-overview.md` (mục 2, 3, 4, 7, 8.2, 10), Out of Scope của spec M6b (`.scratch/m6b-ho-tro-doi-tra/spec.md`) và M7 (`.scratch/m7-bao-cao/spec.md`), buổi làm rõ requirement ngày 2026-11-20 (29 câu) và vòng bổ sung sau bản thử (Q30–Q33); người dùng chấp nhận mọi đề xuất. Đây là mốc cuối của lộ trình M0 → M8 trong giai đoạn 1 (mở bán). Quyết định kiến trúc: `docs/adr/0017-chatbot-dung-model-mien-phi-qua-chuoi-du-phong.md` (mới, kèm kết quả bản thử). Thuật ngữ mới trong GLOSSARY, mục **Chatbot**: Chatbot, Cuộc trò chuyện, Chuyển nhân viên. Mục **Yêu cầu hỗ trợ** được mở rộng cho khách vãng lai không có đơn.
 
@@ -89,9 +89,9 @@ Mỗi **cuộc trò chuyện** được lưu 90 ngày. Owner xem được mọi 
   1. gửi system prompt, ngữ cảnh trang và 10 tin gần nhất cho model;
   2. model gọi công cụ thì API chạy công cụ rồi gọi tiếp;
   3. tối đa 3 vòng công cụ, sau đó gọi một lần không kèm công cụ để buộc trả lời.
-- **Tiết kiệm token** (giới hạn thật là token mỗi phút và mỗi ngày, ADR 0017): system prompt và mô tả công cụ viết gọn; kết quả công cụ chỉ gồm các trường cần dùng. Mục tiêu khoảng 1.000 token mỗi tin của khách (bản thử đo được khoảng 1.600).
+- **Tiết kiệm token** (giới hạn thật là token mỗi phút và mỗi ngày, ADR 0017): system prompt và mô tả công cụ viết gọn; kết quả công cụ chỉ gồm các trường cần dùng. Mục tiêu khoảng 1.000 token mỗi tin của khách (bản thử đo được khoảng 1.600). **Chưa đạt:** báo cáo chatbot trên máy local đo được khoảng 2.500 token vào mỗi câu (ticket 07), cần thu gọn thêm trước khi mở bán.
 - Mỗi lần gọi model ghi số token vào và ra (`usage`) cùng model đã trả lời, cho báo cáo.
-- Câu trả lời được stream về khung chat (SSE). Thẻ sản phẩm gửi kèm như một sự kiện riêng, dựng từ kết quả công cụ.
+- Câu trả lời trả về một lần dạng JSON, không stream (ticket 02: adapter không stream, proxy Netlify có thể giữ SSE). Thẻ sản phẩm nằm trong cùng body, dựng từ kết quả công cụ.
 - **System prompt** nằm trong code, có phiên bản. Nội dung chính:
   - vai trò trợ lý của cửa hàng; xưng "mình", gọi khách là "bạn";
   - trả lời bằng ngôn ngữ của tin cuối của khách (bản thử: khách viết tiếng Anh, cả hai model vẫn trả lời tiếng Việt);
@@ -118,12 +118,12 @@ Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hi�
 
 - **Bảng `chat_conversation`:**
   - mã (uuid, khách giữ trong `localStorage`);
-  - tài khoản khách (có thể trống), IP băm;
+  - IP băm (không lưu tài khoản khách: tài khoản gắn vào yêu cầu hỗ trợ khi chuyển nhân viên, chưa có chỗ nào cần đọc trên cuộc);
   - lúc tạo, lúc có tin cuối;
   - yêu cầu hỗ trợ đã chuyển (có thể trống);
-  - số tin của khách, số lượt gọi.
+  - số tin của khách (số lượt gọi nằm ở `chat_usage_day`, không lưu theo cuộc).
 - **Bảng `chat_message`:** cuộc trò chuyện, vai trò (`customer`, `assistant`), nội dung, thẻ sản phẩm kèm theo (JSON: slug và tên, để hiện lại), nguồn model đã trả lời, lỗi (nếu lượt thất bại), lúc tạo. Chỉ ghi thêm. Lời gọi công cụ và kết quả không lưu, chỉ lưu thẻ sản phẩm.
-- **Bảng `chat_usage_day`:** ngày (giờ VN) × model: số lượt gọi, token vào, token ra, số lần 429, số lần lỗi khác. Thêm một dòng cho cả ngày: số lượt khách bị báo hết lượt. Chỉ phục vụ báo cáo, không dùng để chặn.
+- **Bảng `chat_usage_day`:** ngày (giờ VN) × model: số lượt gọi, token vào, token ra, số lần 429, số lần lỗi khác. Số lần khách bị báo hết lượt đếm từ `chat_message.error = 'exhausted'`, không có dòng riêng. Chỉ phục vụ báo cáo, không dùng để chặn.
 - **Cài đặt chatbot**: một dòng cấu hình, theo cách của `ShippingFeeSetting`:
   - bật/tắt (mặc định tắt);
   - câu thời gian phản hồi.
@@ -155,7 +155,7 @@ Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hi�
   - mỗi cuộc trò chuyện tối đa 30 tin của khách;
   - mỗi IP tối đa 60 tin mỗi giờ.
 - **Trước mỗi lượt**, chatbot phải đang bật, có khóa, và còn ít nhất một model chưa bị đánh dấu đang hết. Không đủ điều kiện thì trả ngay trạng thái tương ứng, không gọi model.
-- **Hết lượt:** mọi model trong chuỗi đang bị đánh dấu hết. Khung chat báo "Trợ lý đã hết lượt trả lời, bạn thử lại sau hoặc gửi yêu cầu cho nhân viên", kèm nút gửi yêu cầu. Mỗi lần như vậy được đếm vào `chat_usage_day`.
+- **Hết lượt:** mọi model trong chuỗi đang bị đánh dấu hết. Khung chat báo "Trợ lý đã hết lượt trả lời, bạn thử lại sau hoặc gửi yêu cầu cho nhân viên", kèm nút gửi yêu cầu. Tin của khách mang lỗi `exhausted`, báo cáo đếm từ đó.
 - **Lượt thất bại** (cả chuỗi lỗi, quá thời gian chờ, model trả rỗng): lưu tin của khách cùng lỗi. Khung chat hiện "Trợ lý tạm không trả lời được", kèm nút gửi yêu cầu cho nhân viên và link trang chính sách.
 - **Cô lập lỗi:** route chat có lỗi riêng, không đụng các route khác. Khung chat tải sau trang (lazy), nên lỗi của nó không chặn trang. Trang đặt mua và thanh toán không tải khung chat.
 
@@ -163,19 +163,19 @@ Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hi�
 
 - **Khách:**
   - `GET /api/chat/status`: chatbot có đang trả lời không, câu thông báo quyền riêng tư;
-  - `POST /api/chat/messages`: mã cuộc trò chuyện (có thể trống), nội dung, slug sản phẩm đang xem; trả SSE;
+  - `POST /api/chat/messages`: mã cuộc trò chuyện (có thể trống), nội dung, slug sản phẩm đang xem; trả JSON;
   - `GET /api/chat/conversations/:id`: các tin để hiện lại khi tải trang;
-  - `POST /api/chat/conversations/:id/handoff`: tên, email (khách vãng lai), lời nhắn.
+  - `POST /api/chat/handoff`: mã cuộc trò chuyện (không bắt buộc: chatbot tắt thì có thể chưa có cuộc), tên, email (khách vãng lai), lời nhắn.
 - **Quản trị**, quyền mới `chatbot.manage`, mặc định chỉ owner:
   - `GET/PUT /api/admin/chatbot/settings` (ghi qua `audited()`);
   - `GET /api/admin/chatbot/conversations` lọc theo ngày, đã chuyển hay chưa, có lỗi hay không;
   - `GET /api/admin/chatbot/conversations/:id`;
   - `GET /api/admin/reports/chatbot`.
-- Nhân viên có `support.handle` đọc bản chép cuộc trò chuyện qua trang yêu cầu, không cần `chatbot.manage`.
+- Nhân viên có `support.handle` đọc bản chép cuộc trò chuyện qua trang yêu cầu, không cần `chatbot.manage`. Người chỉ có `order.view` (kho, kế toán) mở được yêu cầu nhưng không thấy bản chép.
 
 ### Báo cáo
 
-- Báo cáo **Chatbot** đặt trong trang Báo cáo của M7, nhưng dùng quyền `chatbot.manage` thay cho `report.view`. Theo khoảng ngày giờ VN:
+- Báo cáo **Chatbot** là trang riêng `/admin/chatbot/report` (quyền `chatbot.manage` thay cho `report.view`; trang Báo cáo của M7 đòi `report.view` nên không đặt trong đó), có tab dẫn sang từ trang Báo cáo. Theo khoảng ngày giờ VN:
   - số cuộc trò chuyện, số tin của khách;
   - số cuộc đã chuyển nhân viên và tỷ lệ chuyển;
   - theo từng model: số lượt gọi, token vào và ra, số lần 429, số lần lỗi;
@@ -186,7 +186,7 @@ Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hi�
 
 - **Khung chat:** nút nổi ở góc dưới, mở thành khung chat (trên điện thoại thì toàn màn hình). Không có trên trang đặt mua và thanh toán.
   - Đầu khung có dòng: "Cuộc trò chuyện được lưu 90 ngày và xử lý bởi nhà cung cấp AI bên ngoài; đừng nhập thông tin nhạy cảm", kèm link chính sách bảo mật.
-  - Chữ hiện dần theo stream. Thẻ sản phẩm có ảnh, tên, giá, tình trạng và link.
+  - Hiện "Đang trả lời…" tới khi có câu trả lời. Thẻ sản phẩm có ảnh, tên, giá, tình trạng và link.
   - Có nút "Gặp nhân viên" luôn hiện, và form chuyển khi model đề nghị.
 - **Trang `/yeu-cau/:code?token=…`** cho khách vãng lai, dùng lại các thành phần của trang yêu cầu ở M6b.
 - **Quản trị:** trang Chatbot gồm Cài đặt và Cuộc trò chuyện. Trang yêu cầu hỗ trợ có khối "Cuộc trò chuyện với chatbot" khi có.
@@ -271,7 +271,7 @@ Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hi�
   - Groq mỗi model: 1.000 lượt/ngày, 200.000 token/ngày;
   - `gpt-oss-120b`: 8.000 token/phút; `qwen3.8-27b`: 7.000 token vào/phút;
   - OpenRouter `:free`: 50 lượt/ngày, hay 1.000 lượt/ngày sau khi đã nạp tổng $10.
-  - Với khoảng 1.000 token mỗi tin, cả chuỗi đủ cho khoảng 420 tin mỗi ngày, và khoảng 10 tin mỗi phút khi đông khách.
+  - Với khoảng 1.000 token mỗi tin, cả chuỗi đủ cho khoảng 420 tin mỗi ngày, và khoảng 10 tin mỗi phút khi đông khách. Với khoảng 2.500 token mỗi câu đo được ở ticket 07, hai model Groq chỉ đủ khoảng 150 câu mỗi ngày.
 - **Chủ doanh nghiệp cần xác nhận:**
   - đoạn về chatbot trong chính sách bảo mật (Claude soạn nháp);
   - các số tạm: 500 ký tự, 30 tin mỗi cuộc, 60 tin mỗi giờ, 3 lần chuyển mỗi IP mỗi ngày;

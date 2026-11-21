@@ -109,7 +109,10 @@ describe('gọi qua chuỗi model', () => {
         }),
       ],
     })
-    const result = await llm.complete(REQUEST)
+    const result = await llm.complete({
+      ...REQUEST,
+      tools: [{ name: 'search_products', description: 'Tìm', parameters: { type: 'object', properties: {} } }],
+    })
     expect(result.toolCalls).toEqual([{ id: 'c1', name: 'search_products', arguments: '{"maxPrice":5000000}' }])
   })
 
@@ -218,5 +221,22 @@ describe('model giả cho E2E', () => {
       ],
     })
     expect(answer).toMatchObject({ content: 'Mình tìm được: Air Max 90.', toolCalls: [] })
+  })
+})
+
+describe('lần gọi buộc trả lời', () => {
+  it('không gửi công cụ mà model vẫn gọi công cụ, chữ rỗng: coi là trả lời rỗng, chuyển model sau', async () => {
+    const { llm } = chain({
+      'openai/gpt-oss-120b': [
+        okReply('', {
+          content: null,
+          tool_calls: [{ id: 'c1', type: 'function', function: { name: 'search_products', arguments: '{}' } }],
+        }),
+      ],
+      'qwen/qwen3.8-27b': [okReply('Mình gợi ý Air Max.')],
+    })
+    const result = await llm.complete(REQUEST)
+    expect(result).toMatchObject({ content: 'Mình gợi ý Air Max.', toolCalls: [], model: 'groq:qwen/qwen3.8-27b' })
+    expect(result.attempts.map((a) => a.outcome)).toEqual(['error', 'ok'])
   })
 })

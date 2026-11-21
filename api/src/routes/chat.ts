@@ -31,7 +31,7 @@ import { TurnFailedError, runTurn } from '../chat/turn.ts'
 import { findPublicProduct } from '../catalog/public-products.ts'
 import type { Db } from '../db.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
-import { parse } from '../http/validation.ts'
+import { isUuid, parse } from '../http/validation.ts'
 
 /** Tiêu đề yêu cầu khi chatbot chưa tóm tắt được (khách bấm "Gặp nhân viên" trước khi hỏi gì). */
 const HANDOFF_SUBJECT = 'Khách cần nhân viên hỗ trợ (từ trợ lý tư vấn)'
@@ -168,14 +168,6 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
             })
           : null
         const subject = (suggested?.handoffSummary ?? HANDOFF_SUBJECT).slice(0, HANDOFF_SUBJECT_MAX).trim()
-        // Đếm sau khi kiểm dữ liệu: khách quên điền tên hay email không mất lượt chuyển trong ngày.
-        await enforceRateLimits(
-          prisma,
-          res,
-          [{ limit: RATE_LIMITS.chatHandoffPerIp, subject: req.ip ?? 'unknown' }],
-          'Bạn đã gửi nhiều yêu cầu hôm nay; nhân viên sẽ trả lời các yêu cầu đã gửi',
-        )
-
         const request = await prisma.$transaction(async (tx) => {
           const created = await createSupportRequest(
             tx,
@@ -197,6 +189,14 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
             if (count === 0)
               throw new AppError(409, ErrorCode.CONFLICT, 'Cuộc trò chuyện này đã được chuyển cho nhân viên')
           }
+          // Đếm trong cùng transaction, sau khi đã tạo được: lần bị 400 hay 409 rollback cả bộ đếm, nên không mất lượt
+          // chuyển trong ngày; quá giới hạn thì 429 rollback cả yêu cầu vừa tạo.
+          await enforceRateLimits(
+            tx,
+            res,
+            [{ limit: RATE_LIMITS.chatHandoffPerIp, subject: req.ip ?? 'unknown' }],
+            'Bạn đã gửi nhiều yêu cầu hôm nay; nhân viên sẽ trả lời các yêu cầu đã gửi',
+          )
           return created
         })
         const settings = await readChatbotSettings(prisma)
@@ -209,17 +209,13 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
       })
       .get('/conversations/:id', async (req, res) => {
         const id = String(req.params.id)
-        const body: ChatConversationView = await conversationView(prisma, parseUuid(id))
+        const body: ChatConversationView = await conversationView(
+          prisma,
+          isUuid(id) ? id : '00000000-0000-0000-0000-000000000000',
+        )
         res.json(body)
       })
   )
-}
-
-/** Mã không phải uuid thì coi như không thấy, thay vì để Postgres báo lỗi kiểu. */
-function parseUuid(id: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-    ? id
-    : '00000000-0000-0000-0000-000000000000'
 }
 
 /** Sản phẩm khách đang xem, để khách hỏi "cái này" (spec M8). Slug không có hay chưa xuất bản thì bỏ qua. */

@@ -217,24 +217,18 @@ describe('khi model không trả lời được', () => {
         { model: 'groq:qwen/qwen3.8-27b', outcome: 'error' },
       ]),
     ])
-    const { request, prisma } = await chatApp({ llm })
+    const { request, ownerToken } = await chatApp({ llm })
     await ask(request, 'Có túi đen không?')
     await ask(request, 'Còn không?')
 
-    // Báo cáo chatbot (ticket 07) mới có API đọc số này; tạm đọc thẳng bảng.
-    const usage = await prisma.chatUsageDay.findMany({ orderBy: { model: 'asc' } })
-    expect(
-      usage.map(({ model, calls, inputTokens, outputTokens, rateLimited, errors }) => ({
-        model,
-        calls,
-        inputTokens,
-        outputTokens,
-        rateLimited,
-        errors,
-      })),
-    ).toEqual([
-      { model: 'groq:openai/gpt-oss-120b', calls: 1, inputTokens: 0, outputTokens: 0, rateLimited: 1, errors: 0 },
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
+    const report = await request
+      .get('/api/admin/reports/chatbot')
+      .query({ from: today, to: today })
+      .set(bearer(ownerToken))
+    expect(report.body.models).toEqual([
       { model: 'groq:qwen/qwen3.8-27b', calls: 2, inputTokens: 700, outputTokens: 50, rateLimited: 0, errors: 1 },
+      { model: 'groq:openai/gpt-oss-120b', calls: 1, inputTokens: 0, outputTokens: 0, rateLimited: 1, errors: 0 },
     ])
   })
 })

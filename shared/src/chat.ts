@@ -97,7 +97,8 @@ export type ChatbotSettings = z.infer<typeof ChatbotSettings>
 export const ChatHandoffRequest = z.object({
   conversationId: z.uuid().optional(),
   name: z.string().trim().min(1, 'Nhập tên').max(100, 'Tên tối đa 100 ký tự').optional(),
-  email: z.email('Email không hợp lệ').trim().toLowerCase().max(254).optional(),
+  // Cắt khoảng trắng và đổi chữ thường trước khi kiểm: giới hạn yêu cầu mở tính theo email (ticket 05).
+  email: z.string().trim().toLowerCase().max(254).pipe(z.email('Email không hợp lệ')).optional(),
   message: z.string().trim().max(2000, 'Lời nhắn tối đa 2.000 ký tự').default(''),
 })
 export type ChatHandoffRequest = z.input<typeof ChatHandoffRequest>

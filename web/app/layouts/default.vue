@@ -208,7 +208,7 @@ onBeforeUnmount(() => {
           <p class="mt-3 max-w-xs leading-relaxed">Giày dép, quần áo, đồng hồ, túi xách và nước hoa.</p>
         </div>
 
-        <nav v-if="data.pages.length" aria-label="Chính sách" class="md:col-span-3">
+        <nav v-if="data.pages.length" id="chinh-sach" aria-label="Chính sách" class="md:col-span-3">
           <p class="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-foreground">Chính sách</p>
           <ul class="space-y-2.5">
             <li v-for="page in data.pages" :key="page.slug">

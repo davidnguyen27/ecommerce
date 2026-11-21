@@ -70,7 +70,7 @@ test('khách vãng lai hỏi, thấy thẻ sản phẩm, gửi cho nhân viên; 
   await staff.goto(`/admin/support/${code}`)
   await expect(staff.getByText('chuyển từ chatbot')).toBeVisible()
   await expect(staff.getByText('Mình muốn hỏi thêm về size.')).toBeVisible()
-  const transcript = staff.getByTestId('admin-chat-transcript')
+  const transcript = staff.getByRole('region', { name: 'Cuộc trò chuyện với chatbot' })
   await expect(transcript.getByText('Air Max', { exact: true })).toBeVisible()
   await expect(transcript.getByText('Mình tìm được: Air Max 90.')).toBeVisible()
   await staff.close()

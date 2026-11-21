@@ -131,6 +131,26 @@ describe('khách vãng lai chuyển nhân viên', () => {
   })
 })
 
+describe('giới hạn chuyển nhân viên chỉ tính lần tạo được', () => {
+  it('lần bị 409 (cuộc đã chuyển) hay 400 không mất lượt trong ngày; email có khoảng trắng, chữ hoa vẫn nhận', async () => {
+    const { request, ownerToken } = await handoffApp()
+    const ip = '203.0.113.120'
+    const conversationId = await conversationWithHandoff(request)
+    expect((await handoff(request, { conversationId, ...GUEST }, ip)).status).toBe(201)
+    expect((await handoff(request, { conversationId, ...GUEST }, ip)).status).toBe(409)
+    expect((await handoff(request, { name: 'Lan' }, ip)).status).toBe(400)
+
+    const spaced = await handoff(request, { name: 'Lan', email: '  LAN@Example.com ', message: 'Hỏi thêm' }, ip)
+    expect(spaced.status).toBe(201)
+    expect((await handoff(request, { name: 'Lan', email: 'lan2@example.com', message: 'Hỏi' }, ip)).status).toBe(201)
+    expect((await handoff(request, { name: 'Lan', email: 'lan3@example.com', message: 'Hỏi' }, ip)).status).toBe(429)
+
+    // Email đã cắt khoảng trắng và đổi chữ thường: cùng email với yêu cầu đầu.
+    const view = await request.get(`/api/admin/support-requests/${spaced.body.requestCode}`).set(bearer(ownerToken))
+    expect(view.body.contactEmail).toBe(GUEST.email)
+  })
+})
+
 describe('khách đã đăng nhập chuyển nhân viên', () => {
   it('không cần tên, email; yêu cầu gắn vào tài khoản và hiện ở trang tài khoản', async () => {
     const { request } = await handoffApp()
@@ -149,14 +169,18 @@ describe('khách đã đăng nhập chuyển nhân viên', () => {
 })
 
 describe('nhân viên và dữ liệu', () => {
-  it('nhân viên bán hàng đọc được bản chép; yêu cầu tạo từ form khác không có bản chép', async () => {
+  it('nhân viên bán hàng đọc được bản chép, kho (chỉ order.view) thì không; yêu cầu không từ chat không có bản chép', async () => {
     const { request, ownerToken } = await handoffApp()
     const sales = await createStaff(request, ownerToken, ['sales'])
+    const warehouse = await createStaff(request, ownerToken, ['warehouse'], 'kho@example.com')
     const conversationId = await conversationWithHandoff(request)
     const fromChat = (await handoff(request, { conversationId, ...GUEST })).body.requestCode as number
 
     const view = await request.get(`/api/admin/support-requests/${fromChat}`).set(bearer(sales.accessToken))
     expect(view.body.chatTranscript).toHaveLength(2)
+    const asWarehouse = await request.get(`/api/admin/support-requests/${fromChat}`).set(bearer(warehouse.accessToken))
+    expect(asWarehouse.status).toBe(200)
+    expect(asWarehouse.body.chatTranscript).toBeNull()
     expect(view.body.messages[0].body).toContain('trợ lý tư vấn')
 
     const noChat = (await handoff(request, { name: 'B', email: 'b@example.com', message: 'Hỏi' })).body

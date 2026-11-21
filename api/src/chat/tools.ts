@@ -31,9 +31,9 @@ const object = (properties: Record<string, unknown> = {}, required: string[] = [
   additionalProperties: false,
 })
 
-export const CHAT_TOOLS: LlmTool[] = [
-  {
-    name: 'search_products',
+/** Mô tả từng công cụ gửi cho model; mỗi tên phải có hàm chạy trong `RUNNERS` và ngược lại (typecheck). */
+const TOOL_DEFINITIONS: Record<ChatToolName, Omit<LlmTool, 'name'>> = {
+  search_products: {
     description:
       'Tìm sản phẩm đang bán, tối đa 5. Loại hàng (túi, giày, đồng hồ…) dùng productType, màu dùng color, giới tính dùng gender, ngân sách dùng minPrice/maxPrice (đồng). text chỉ khớp tên mẫu, thương hiệu hay mã sản phẩm; để trống nếu khách không nêu tên mẫu.',
     parameters: object({
@@ -50,25 +50,24 @@ export const CHAT_TOOLS: LlmTool[] = [
       maxPrice: { type: 'integer' },
     }),
   },
-  {
-    name: 'get_product',
+  get_product: {
     description:
       'Chi tiết một sản phẩm theo slug lấy từ search_products: biến thể kèm giá và tình trạng, bảng size, đợt đặt trước, nguồn gốc, cam kết, chính sách áp dụng.',
     parameters: object({ slug: { type: 'string' } }, ['slug']),
   },
-  { name: 'list_policies', description: 'Danh sách trang chính sách của cửa hàng.', parameters: object() },
-  {
-    name: 'get_policy',
+  list_policies: { description: 'Danh sách trang chính sách của cửa hàng.', parameters: object() },
+  get_policy: {
     description: 'Nội dung một trang chính sách theo slug lấy từ list_policies.',
     parameters: object({ slug: { type: 'string' } }, ['slug']),
   },
-  {
-    name: 'handoff',
+  handoff: {
     description:
       'Đề nghị chuyển khách sang nhân viên. Không gửi gì: khung chat hiện nút để khách tự xác nhận. Tóm tắt một câu khách cần gì.',
     parameters: object({ summary: { type: 'string' } }, ['summary']),
   },
-]
+}
+
+export const CHAT_TOOLS: LlmTool[] = Object.entries(TOOL_DEFINITIONS).map(([name, tool]) => ({ name, ...tool }))
 
 type Args = Record<string, unknown>
 
@@ -171,6 +170,8 @@ async function attributeFilters(prisma: Db, type: ProductType | undefined, args:
   const color = str(args.color)
   const gender = GENDER_OPTIONS.find((option) => option.toLowerCase() === str(args.gender)?.toLowerCase())
   if (!gender && !(color && type)) return []
+  // Chưa biết nhóm hàng thì chỉ lọc giới tính, mà giới tính có ở mọi nhóm hàng với cùng định nghĩa (ADR 0004): nạp
+  // schema nhóm nào cũng được, như trang tìm kiếm của web.
   const schema = await loadAttributeSchema(prisma, type ?? ProductType.enum.footwear)
   const filters: SearchCriteria['attributes'] = []
   const genderDefinition = schema.attributes.find((a) => a.key === GENDER_KEY)
@@ -221,6 +222,19 @@ function handoff(args: Args): ToolOutcome {
   }
 }
 
+type ToolRunner = (deps: ToolDeps, args: Args) => Promise<ToolOutcome> | ToolOutcome
+
+/** Hàm chạy của từng công cụ, theo tên model gọi. */
+const RUNNERS = {
+  search_products: searchProducts,
+  get_product: getProduct,
+  list_policies: (deps) => listPolicies(deps),
+  get_policy: getPolicy,
+  handoff: (_deps, args) => handoff(args),
+} satisfies Record<string, ToolRunner>
+
+export type ChatToolName = keyof typeof RUNNERS
+
 /** Chạy một lời gọi công cụ. Tham số hỏng hay công cụ lạ thì báo lỗi cho model, không ném. */
 export async function runTool(deps: ToolDeps, call: LlmToolCall): Promise<ToolOutcome> {
   let args: Args
@@ -230,18 +244,6 @@ export async function runTool(deps: ToolDeps, call: LlmToolCall): Promise<ToolOu
   } catch {
     return { output: { error: 'Tham số không phải JSON hợp lệ' } }
   }
-  switch (call.name) {
-    case 'search_products':
-      return searchProducts(deps, args)
-    case 'get_product':
-      return getProduct(deps, args)
-    case 'list_policies':
-      return listPolicies(deps)
-    case 'get_policy':
-      return getPolicy(deps, args)
-    case 'handoff':
-      return handoff(args)
-    default:
-      return { output: { error: `Không có công cụ ${call.name}` } }
-  }
+  const run = call.name in RUNNERS ? RUNNERS[call.name as ChatToolName] : undefined
+  return run ? run(deps, args) : { output: { error: `Không có công cụ ${call.name}` } }
 }
