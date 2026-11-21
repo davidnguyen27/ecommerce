@@ -94,10 +94,19 @@ function rejectedText(request: SupportForView, message?: string): string[] {
   return message ? [head, '', 'Lý do:', message] : [head, 'Bạn xem trao đổi trong trang yêu cầu để biết lý do.']
 }
 
-/** Link trang yêu cầu: trang tài khoản nếu yêu cầu thuộc tài khoản, không thì link tra cứu đơn kèm token mới. */
+/**
+ * Link trang yêu cầu: trang tài khoản nếu yêu cầu thuộc tài khoản; link tra cứu đơn kèm token mới nếu gắn đơn; không thì
+ * (khách vãng lai chuyển từ chatbot, M8) link kèm token mới của chính yêu cầu.
+ */
 async function requestUrl(tx: DbClient, siteUrl: string, request: SupportForView) {
   if (request.customerId) return new URL(`/tai-khoan/yeu-cau/${request.code}`, siteUrl).toString()
   const token = newOpaqueToken()
+  if (!request.orderId) {
+    await tx.supportRequestToken.create({ data: { requestId: request.id, tokenHash: hashOpaqueToken(token) } })
+    const url = new URL(`/yeu-cau/${request.code}`, siteUrl)
+    url.searchParams.set('token', token)
+    return url.toString()
+  }
   await tx.orderLookupToken.create({ data: { orderId: request.orderId!, tokenHash: hashOpaqueToken(token) } })
   const url = new URL(`/yeu-cau/${request.code}`, siteUrl)
   url.searchParams.set('don', String(request.order!.code))

@@ -8,6 +8,7 @@ import {
   type PublicSupportRequest,
 } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
+import { hashOpaqueToken } from '../auth/opaque-token.ts'
 import { authSubject } from '../auth/require-auth.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, invalidField } from '../http/errors.ts'
@@ -172,6 +173,23 @@ export function orderSupportRoutes(deps: Deps) {
     return {
       where: { orderId: order.id },
       owner: async () => ({ order: { ...selected, customerId: order.customerId } }),
+    }
+  })
+}
+
+/**
+ * `/api/support-requests?token=…`: yêu cầu của khách vãng lai không có đơn (chatbot chuyển nhân viên, M8), mở bằng token
+ * trong email. Mỗi token chỉ thấy đúng yêu cầu của nó; không tạo yêu cầu mới qua đường này.
+ */
+export function contactSupportRoutes(deps: Deps) {
+  return customerSupportRoutes(deps, async (req) => {
+    const token = typeof req.query.token === 'string' ? req.query.token : ''
+    if (!token) throw notFound()
+    return {
+      where: { tokens: { some: { tokenHash: hashOpaqueToken(token) } } },
+      owner: async () => {
+        throw notFound()
+      },
     }
   })
 }

@@ -141,10 +141,11 @@ export async function recordUsage(
   }
 }
 
-/** Xóa cuộc trò chuyện có tin cuối quá 90 ngày (tin nhắn xóa theo). Job dọn gọi mỗi đêm. */
+/** Xóa cuộc trò chuyện có tin cuối quá 90 ngày (tin nhắn xóa theo), trừ cuộc đã chuyển nhân viên. Job dọn gọi mỗi đêm. */
 export async function deleteOldConversations(db: DbClient, now = new Date()) {
   const { count } = await db.chatConversation.deleteMany({
-    where: { lastMessageAt: { lte: new Date(now.getTime() - CONVERSATION_RETENTION_MS) } },
+    // Cuộc đã chuyển thành yêu cầu hỗ trợ được giữ theo yêu cầu.
+    where: { lastMessageAt: { lte: new Date(now.getTime() - CONVERSATION_RETENTION_MS) }, supportRequestId: null },
   })
   return count
 }

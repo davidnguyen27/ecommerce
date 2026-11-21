@@ -69,6 +69,13 @@ export function guestSupportClient(orderCode: number, token: string) {
   )
 }
 
+/** Yêu cầu không gắn đơn (chatbot chuyển nhân viên, M8) qua link email: mọi lời gọi kèm token của yêu cầu. */
+export function contactSupportClient(token: string) {
+  const request = $fetch as unknown as (url: string, options: Record<string, unknown>) => Promise<unknown>
+  const call: Fetch = (path, options) => request(path, { ...options, query: { token } })
+  return clientOf('/api/support-requests', call, (code) => `/yeu-cau/${code}?token=${encodeURIComponent(token)}`)
+}
+
 /** Tải lần lượt `files` vào một tin; trả yêu cầu mới nhất và lỗi đầu tiên (nếu có) để báo cho người gửi. */
 export async function attachAll<T>(
   attach: (file: File) => Promise<T>,

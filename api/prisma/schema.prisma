@@ -1253,6 +1253,8 @@ enum SupportAuthor {
   customer
   staff
   system
+  /// Chatbot tạo khi khách xác nhận chuyển nhân viên (M8); tin đầu vẫn là của khách.
+  chatbot
 
   @@map("support_author")
 }
@@ -1316,11 +1318,15 @@ model SupportRequest {
   /// Lời nhắn cho khách kèm kết quả; bắt buộc khi từ chối.
   warrantyOutcomeNote          String?              @map("warranty_outcome_note")
 
-  messages       SupportMessage[]
-  attachments    SupportAttachment[]
-  lines          SupportRequestLine[]
-  stockMovements StockMovement[]
-  refunds        Refund[]
+  messages         SupportMessage[]
+  attachments      SupportAttachment[]
+  lines            SupportRequestLine[]
+  /// Link theo dõi của yêu cầu không gắn đơn và tài khoản (khách vãng lai chuyển từ chatbot).
+  tokens           SupportRequestToken[]
+  /// Cuộc trò chuyện với chatbot đã chuyển thành yêu cầu này (M8).
+  chatConversation ChatConversation?
+  stockMovements   StockMovement[]
+  refunds          Refund[]
 
   @@index([orderId])
   @@index([customerId])
@@ -1453,13 +1459,16 @@ enum ChatRole {
 /// Cuộc trò chuyện của một khách với chatbot (GLOSSARY "Chatbot"). Im quá 24 giờ thì tin tiếp theo mở cuộc mới; quá 90
 /// ngày thì job dọn xóa cả cuộc.
 model ChatConversation {
-  id                   String        @id @default(uuid()) @db.Uuid
+  id                   String          @id @default(uuid()) @db.Uuid
   /// IP của khách lúc mở cuộc, đã băm: để đối chiếu khi bị lạm dụng, không đọc ra được IP gốc.
-  ipHash               String        @map("ip_hash")
+  ipHash               String          @map("ip_hash")
   /// Số tin của khách, để chặn quá 30 tin mỗi cuộc mà không phải đếm lại.
-  customerMessageCount Int           @default(0) @map("customer_message_count")
-  createdAt            DateTime      @default(now()) @map("created_at")
-  lastMessageAt        DateTime      @default(now()) @map("last_message_at")
+  customerMessageCount Int             @default(0) @map("customer_message_count")
+  createdAt            DateTime        @default(now()) @map("created_at")
+  lastMessageAt        DateTime        @default(now()) @map("last_message_at")
+  /// Yêu cầu hỗ trợ tạo khi khách xác nhận chuyển nhân viên; mỗi cuộc chuyển một lần. Có thì job dọn không xóa cuộc.
+  supportRequestId     String?         @unique @map("support_request_id") @db.Uuid
+  supportRequest       SupportRequest? @relation(fields: [supportRequestId], references: [id], onDelete: Restrict)
   messages             ChatMessage[]
 
   @@index([lastMessageAt])
@@ -1502,4 +1511,16 @@ model ChatUsageDay {
 
   @@id([day, model])
   @@map("chat_usage_day")
+}
+
+/// Token trong link email của yêu cầu không gắn đơn và tài khoản (M8); mỗi email một token, như `order_lookup_token`.
+model SupportRequestToken {
+  /// SHA-256 của token, hex.
+  tokenHash String         @id @map("token_hash")
+  requestId String         @map("request_id") @db.Uuid
+  request   SupportRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  @@index([requestId])
+  @@map("support_request_token")
 }
