@@ -33,6 +33,8 @@ export const Permission = z.enum([
   'voucher.manage',
   /** Xem báo cáo, bảng ngoại lệ và xuất Excel (M7). */
   'report.view',
+  /** Bật, tắt chatbot, đọc cuộc trò chuyện và báo cáo chatbot (M8); mặc định chỉ owner. */
+  'chatbot.manage',
 ])
 export type Permission = z.infer<typeof Permission>
 

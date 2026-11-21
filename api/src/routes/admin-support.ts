@@ -1,4 +1,5 @@
-import { Router } from 'express'
+import { Router, type Request } from 'express'
+import { toMessageView } from '../chat/chat.ts'
 import {
   AdminCreateSupportRequest,
   AdminSupportQuery,
@@ -18,7 +19,7 @@ import {
 } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
 import { audited } from '../audit/audited.ts'
-import { currentStaff, requirePermission } from '../auth/staff-context.ts'
+import { currentStaff, hasPermission, requirePermission } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, invalidField } from '../http/errors.ts'
@@ -52,19 +53,31 @@ const requestCode = (code: string) => {
   return Number(code)
 }
 
+/** Cuộc trò chuyện với chatbot đã chuyển thành yêu cầu (M8); chỉ người có `support.handle` đọc được qua yêu cầu. */
+async function chatTranscript(prisma: Db, requestId: string) {
+  const conversation = await prisma.chatConversation.findUnique({
+    where: { supportRequestId: requestId },
+    include: { messages: { orderBy: { createdAt: 'asc' } } },
+  })
+  return conversation ? conversation.messages.map(toMessageView) : null
+}
+
 /**
  * Yêu cầu hỗ trợ ở trang quản trị (spec M6b), mount tại `/support-requests`. Xem cần `support.handle` hoặc
  * `order.view`; trả lời, ghi chú, đổi trạng thái, nhận việc, tạo hộ cần `support.handle`; giao cho người khác chỉ owner
  * (`staff.manage`). Mọi thao tác ghi đi qua `audited()` và trả lại chi tiết yêu cầu.
  */
 export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerMail) {
-  const load = async (code: number) => {
+  // Bản chép chatbot là lời khách nói với chatbot, như tin nhắn với nhân viên chăm sóc: chỉ `support.handle` đọc (spec
+  // M8). Kho, kế toán (`order.view`) mở yêu cầu vẫn không thấy.
+  const load = async (code: number, req: Request) => {
     const request = await prisma.supportRequest.findUnique({ where: { code }, include: SUPPORT_INCLUDE })
     if (!request) throw notFound()
     const body: AdminSupportRequest = {
       ...(await toAdminSupport(storage, request)),
       returnRefund: await returnRefundHint(prisma, request),
       hasWarrantyCommitment: await hasWarrantyCommitment(prisma, request),
+      chatTranscript: hasPermission(req, 'support.handle') ? await chatTranscript(prisma, request.id) : null,
     }
     return body
   }
@@ -121,7 +134,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         res.json(body)
       })
       .get('/:code', async (req, res) => {
-        res.json(await load(requestCode(String(req.params.code))))
+        res.json(await load(requestCode(String(req.params.code)), req))
       })
       .post('/', requirePermission('support.handle'), async (req, res) => {
         const input = parse(AdminCreateSupportRequest, req.body)
@@ -153,20 +166,20 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
           })
           return request.code
         })
-        res.status(201).json(await load(code))
+        res.status(201).json(await load(code, req))
       })
       .post('/:code/reply', requirePermission('support.handle'), async (req, res) => {
         const input = parse(AdminSupportReply, req.body)
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
         await audited(prisma, req, (tx, audit) => staffReply(tx, mail, audit, code, staffId, input))
-        res.json(await load(code))
+        res.json(await load(code, req))
       })
       .post('/:code/claim', requirePermission('support.handle'), async (req, res) => {
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
         await audited(prisma, req, (tx, audit) => claimSupportRequest(tx, audit, code, staffId))
-        res.json(await load(code))
+        res.json(await load(code, req))
       })
       // Ảnh gắn vào tin của chính nhân viên (spec M6b ticket 02).
       .post(
@@ -199,7 +212,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
             await deleteSupportImageQuietly(storage, req, image.key)
             throw err
           }
-          res.status(201).json(await load(code))
+          res.status(201).json(await load(code, req))
         },
       )
       // Trả hàng (ticket 04): chấp nhận/từ chối, kho nhận hàng về, đề xuất hoàn.
@@ -208,14 +221,14 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
         await audited(prisma, req, (tx, audit) => decideSupportRequest(tx, mail, audit, code, staffId, input))
-        res.json(await load(code))
+        res.json(await load(code, req))
       })
       .post('/:code/receive', requirePermission('order.fulfill'), async (req, res) => {
         const input = parse(ReceiveSupportReturn, req.body)
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
         await audited(prisma, req, (tx, audit) => receiveSupportReturn(tx, audit, code, staffId, input))
-        res.json(await load(code))
+        res.json(await load(code, req))
       })
       // Đổi hàng: kho bàn giao biến thể mới sau khi đã nhận hàng cũ (ADR 0015).
       .post('/:code/exchange-ship', requirePermission('order.fulfill'), async (req, res) => {
@@ -223,7 +236,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
         await audited(prisma, req, (tx, audit) => shipExchange(tx, mail, audit, code, staffId, input))
-        res.json(await load(code))
+        res.json(await load(code, req))
       })
       // Bảo hành: mốc và kết quả (spec M6b ticket 06). Không mốc nào đụng tới tồn.
       .post('/:code/warranty-milestone', requirePermission('support.handle'), async (req, res) => {
@@ -231,27 +244,27 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
         await audited(prisma, req, (tx, audit) => recordWarrantyMilestone(tx, mail, audit, code, staffId, input))
-        res.json(await load(code))
+        res.json(await load(code, req))
       })
       .post('/:code/warranty-outcome', requirePermission('support.handle'), async (req, res) => {
         const input = parse(RecordWarrantyOutcome, req.body)
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
         await audited(prisma, req, (tx, audit) => recordWarrantyOutcome(tx, mail, audit, code, staffId, input))
-        res.json(await load(code))
+        res.json(await load(code, req))
       })
       .post('/:code/refund', requirePermission('support.handle'), async (req, res) => {
         const input = parse(ProposeReturnRefund, req.body)
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
         await audited(prisma, req, (tx, audit) => proposeReturnRefund(tx, mail, audit, code, staffId, input))
-        res.json(await load(code))
+        res.json(await load(code, req))
       })
       .post('/:code/assign', requirePermission('staff.manage'), async (req, res) => {
         const { staffId } = parse(AssignSupportRequest, req.body)
         const code = requestCode(String(req.params.code))
         await audited(prisma, req, (tx, audit) => assignSupportRequest(tx, audit, code, staffId))
-        res.json(await load(code))
+        res.json(await load(code, req))
       })
   )
 }

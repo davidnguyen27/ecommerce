@@ -213,7 +213,7 @@ _Avoid_: đã nhập, sẵn hàng
 ## Hậu mãi
 
 **Yêu cầu hỗ trợ** (Support request):
-Một việc khách nhờ cửa hàng xử lý, gồm một chuỗi tin nhắn giữa khách và nhân viên, một người phụ trách và trạng thái xử lý. Mỗi yêu cầu thuộc một loại: hủy đơn, trả hàng, đổi hàng, bảo hành hoặc khác; mọi loại trừ khác luôn gắn với một đơn. Khách, nhân viên tạo hộ hay chatbot đều tạo ra cùng một loại yêu cầu.
+Một việc khách nhờ cửa hàng xử lý, gồm một chuỗi tin nhắn giữa khách và nhân viên, một người phụ trách và trạng thái xử lý. Mỗi yêu cầu thuộc một loại: hủy đơn, trả hàng, đổi hàng, bảo hành hoặc khác; mọi loại trừ khác luôn gắn với một đơn. Yêu cầu loại khác gắn với một đơn, một tài khoản khách, hoặc chỉ một tên và email liên hệ khi khách vãng lai được chatbot chuyển nhân viên. Khách, nhân viên tạo hộ hay chatbot đều tạo ra cùng một loại yêu cầu.
 _Avoid_: ticket, khiếu nại, phiếu hỗ trợ
 
 **Ghi chú nội bộ** (Internal note):
@@ -277,3 +277,17 @@ _Avoid_: đơn thành công, đơn hợp lệ
 **Đơn bỏ dở** (Abandoned order):
 Đơn bị hủy khi chưa nhận đồng nào: hết thời hạn giữ hàng, khách tự hủy hoặc nhân viên hủy. Không tính vào tỷ lệ hủy.
 _Avoid_: đơn hủy (khi nói về đơn chưa trả)
+
+## Chatbot
+
+**Chatbot** (Chatbot):
+Trợ lý tự động trên website giúp khách tìm và chọn sản phẩm, đọc bảng size và hiểu chính sách. Chỉ dùng những gì khách đã thấy được trên web; không đọc đơn, không đổi dữ liệu, chỉ tạo được yêu cầu hỗ trợ khi chuyển nhân viên.
+_Avoid_: AI, bot tư vấn, nhân viên ảo
+
+**Cuộc trò chuyện** (Conversation):
+Chuỗi tin giữa một khách và chatbot trong một khung chat. Không phải yêu cầu hỗ trợ; khi được chuyển nhân viên, yêu cầu hỗ trợ tạo ra mang theo bản chép cuộc trò chuyện.
+_Avoid_: phiên chat, ticket
+
+**Chuyển nhân viên** (Handoff):
+Chatbot tạo một yêu cầu hỗ trợ thay khách, khi khách muốn gặp người hoặc chatbot không có căn cứ để trả lời.
+_Avoid_: chuyển tiếp, escalate

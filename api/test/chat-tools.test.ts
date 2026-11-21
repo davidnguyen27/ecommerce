@@ -1,0 +1,247 @@
+import { describe, expect, it } from 'vitest'
+import { ScriptedLlm, type LlmMessage, type LlmToolCall } from '../src/adapters/llm.ts'
+import { LANGUAGE_REMINDER, SYSTEM_PROMPT } from '../src/chat/prompt.ts'
+import { MAX_TOOL_ROUNDS } from '../src/chat/turn.ts'
+import { preorderShop } from './support/preorder.ts'
+import { shop } from './support/shop.ts'
+import { bearer, type Request } from './support/staff.ts'
+
+/** Cửa hàng của `shop()` (Air Max đã xuất bản, chính sách đổi trả đã xuất bản), chatbot đã bật với model giả. */
+async function chatShop(llm = new ScriptedLlm()) {
+  const app = await shop({ llm })
+  const res = await app.request
+    .put('/api/admin/chatbot/settings')
+    .set(bearer(app.token))
+    .send({ enabled: true, responseTimeNote: '' })
+  expect(res.status).toBe(200)
+  return { ...app, llm }
+}
+
+const call = (name: string, args: Record<string, unknown> = {}, id = `call-${name}`): LlmToolCall => ({
+  id,
+  name,
+  arguments: JSON.stringify(args),
+})
+
+function ask(request: Request, content: string, extra: Record<string, unknown> = {}) {
+  return request.post('/api/chat/messages').send({ content, ...extra })
+}
+
+/** Kết quả công cụ model nhận ở lần gọi thứ `index`, theo thứ tự lời gọi. */
+function toolOutputs(llm: ScriptedLlm, index: number) {
+  return llm.requests[index]!.messages.flatMap((m: LlmMessage) =>
+    m.role === 'tool' ? [JSON.parse(m.content) as Record<string, unknown>] : [],
+  )
+}
+
+describe('tìm sản phẩm', () => {
+  it('chatbot tìm được sản phẩm đã xuất bản; khung chat nhận thẻ dựng từ DB, tin lưu slug và tên', async () => {
+    const { request, llm } = await chatShop(
+      new ScriptedLlm([
+        { toolCalls: [call('search_products', { text: 'Air Max', maxPrice: 3_000_000 })] },
+        { content: 'Có Air Max, giá chỉ 1.000đ.' },
+      ]),
+    )
+    const res = await ask(request, 'Có giày Air Max không?')
+    expect(res.status).toBe(200)
+    // Model viết sai giá; thẻ vẫn đúng giá vì lấy từ DB.
+    expect(res.body.cards).toHaveLength(1)
+    expect(res.body.cards[0]).toMatchObject({ slug: 'air-max', name: 'Air Max', fromPrice: 2_000_000, inStock: true })
+    expect(res.body.reply.products).toEqual([{ slug: 'air-max', name: 'Air Max' }])
+
+    const [output] = toolOutputs(llm, 1)
+    expect(output).toEqual({
+      products: [
+        {
+          slug: 'air-max',
+          url: '/san-pham/air-max',
+          name: 'Air Max',
+          brand: 'Nike',
+          fromPrice: 2_000_000,
+          availability: 'in_stock',
+        },
+      ],
+    })
+
+    const view = await request.get(`/api/chat/conversations/${res.body.conversationId}`)
+    expect(view.body.messages[1].products).toEqual([{ slug: 'air-max', name: 'Air Max' }])
+  })
+
+  it('sản phẩm nháp không xuất hiện; thương hiệu tìm theo tên; quá ngân sách thì không có', async () => {
+    const llm = new ScriptedLlm([
+      { toolCalls: [call('search_products', { text: 'Air', brand: 'NIKE' })] },
+      { content: 'Có Air Max.' },
+      { toolCalls: [call('search_products', { text: 'Air Max', maxPrice: 1_000_000 })] },
+      { content: 'Không có.' },
+    ])
+    const { request, token, brand, category } = await chatShop(llm)
+    const draft = await request
+      .post('/api/admin/products')
+      .set(bearer(token))
+      .send({
+        brandId: brand.id,
+        categoryId: category.id,
+        name: 'Air Force',
+        slug: 'air-force',
+        attributes: { gioi_tinh: 'Nam', he_size: 'EU' },
+      })
+    expect(draft.status).toBe(201)
+
+    const found = await ask(request, 'Giày Nike nào có?')
+    expect(found.body.cards.map((c: { slug: string }) => c.slug)).toEqual(['air-max'])
+    const tooCheap = await ask(request, 'Dưới 1 triệu có không?')
+    expect(tooCheap.body.cards).toEqual([])
+    // Từ khóa và giá đều không khớp: tìm lại không dùng từ khóa cũng rỗng, kèm ghi chú.
+    expect(toolOutputs(llm, 3)).toEqual([{ products: [], note: expect.any(String) }])
+  })
+
+  it('lọc theo màu khi biết nhóm hàng; từ khóa không khớp tên nào thì tìm lại theo các bộ lọc còn lại', async () => {
+    const llm = new ScriptedLlm([
+      { toolCalls: [call('search_products', { productType: 'footwear', color: 'đen' })] },
+      { content: 'Có.' },
+      { toolCalls: [call('search_products', { productType: 'footwear', color: 'Trắng' })] },
+      { content: 'Không có.' },
+      { toolCalls: [call('search_products', { text: 'giày đi làm', productType: 'footwear', maxPrice: 3_000_000 })] },
+      { content: 'Có Air Max.' },
+    ])
+    const { request } = await chatShop(llm)
+
+    expect((await ask(request, 'Giày màu đen?')).body.cards.map((c: { slug: string }) => c.slug)).toEqual(['air-max'])
+    expect((await ask(request, 'Giày màu trắng?')).body.cards).toEqual([])
+    const fallback = await ask(request, 'Giày đi làm dưới 3 triệu?')
+    expect(fallback.body.cards.map((c: { slug: string }) => c.slug)).toEqual(['air-max'])
+    expect(toolOutputs(llm, 5)[0]).toMatchObject({ note: expect.any(String), products: [{ slug: 'air-max' }] })
+  })
+})
+
+describe('chi tiết sản phẩm', () => {
+  it('trả giá và tình trạng từng biến thể, đợt đặt trước đang mở, chính sách; không có số tồn, id hay SKU', async () => {
+    const llm = new ScriptedLlm([{ toolCalls: [call('get_product', { slug: 'air-max' })] }, { content: 'Đây ạ.' }])
+    const app = await preorderShop({ llm })
+    await app.request
+      .put('/api/admin/chatbot/settings')
+      .set(bearer(app.token))
+      .send({ enabled: true, responseTimeNote: '' })
+    await app.open([{ variantId: app.v41.id, allocation: 5 }])
+
+    await ask(app.request, 'Air Max size 41 còn không?')
+    const [product] = toolOutputs(llm, 1)
+    expect(product).toMatchObject({
+      slug: 'air-max',
+      name: 'Air Max',
+      brand: 'Nike',
+      policies: [{ slug: 'doi-tra', title: 'Đổi trả' }],
+    })
+    expect(product!.variants).toEqual([
+      { attributes: expect.anything(), price: 2_000_000, availability: 'in_stock' },
+      {
+        attributes: expect.anything(),
+        price: 2_100_000,
+        availability: 'preorder',
+        preorder: { depositPercent: 30, expectedDelivery: '2026-12-10 – 2026-12-20 (dự kiến)' },
+      },
+    ])
+    const raw = JSON.stringify(product)
+    for (const hidden of [app.v40.id, app.v41.id, 'AM-40', 'onHand', 'reserved']) expect(raw).not.toContain(hidden)
+  })
+
+  it('slug không có hay sản phẩm nháp thì báo model tìm lại, không ném lỗi', async () => {
+    const llm = new ScriptedLlm([
+      { toolCalls: [call('get_product', { slug: 'khong-co' })] },
+      { content: 'Không thấy.' },
+    ])
+    const { request } = await chatShop(llm)
+    expect((await ask(request, 'Còn mẫu không có không?')).body.outcome).toBe('answered')
+    expect(toolOutputs(llm, 1)[0]).toHaveProperty('error')
+  })
+})
+
+describe('chính sách', () => {
+  it('chỉ liệt kê và đọc được trang chính sách đã xuất bản', async () => {
+    const llm = new ScriptedLlm([
+      {
+        toolCalls: [
+          call('list_policies'),
+          call('get_policy', { slug: 'doi-tra' }),
+          call('get_policy', { slug: 'bao-hanh' }),
+        ],
+      },
+      { content: 'Đổi trong 7 ngày.' },
+    ])
+    const { request, token } = await chatShop(llm)
+    const draft = await request
+      .post('/api/admin/pages')
+      .set(bearer(token))
+      .send({ slug: 'bao-hanh', kind: 'policy', title: 'Bảo hành', body: 'Bản nháp' })
+    expect(draft.status).toBe(201)
+
+    await ask(request, 'Đổi trả thế nào?')
+    const [list, policy, missing] = toolOutputs(llm, 1)
+    const slugs = (list!.policies as { slug: string }[]).map((p) => p.slug)
+    expect(slugs).toContain('doi-tra')
+    expect(slugs).not.toContain('bao-hanh')
+    expect(policy).toEqual({ slug: 'doi-tra', title: 'Đổi trả', url: '/trang/doi-tra', body: 'Đổi trong 7 ngày' })
+    expect(missing).toHaveProperty('error')
+  })
+})
+
+describe('vòng lặp và ngữ cảnh', () => {
+  it(`sau ${MAX_TOOL_ROUNDS} vòng công cụ thì gọi model không kèm công cụ để buộc trả lời; mỗi lần gọi đều được ghi`, async () => {
+    const search = { toolCalls: [call('search_products', { text: 'Air' })] }
+    const llm = new ScriptedLlm([search, search, search, { content: 'Mình gợi ý Air Max.' }])
+    const { request, token } = await chatShop(llm)
+
+    const res = await ask(request, 'Gợi ý giày?')
+    expect(res.body.reply.content).toBe('Mình gợi ý Air Max.')
+    expect(res.body.cards).toHaveLength(1)
+    expect(llm.requests.map((r) => r.tools?.length ?? 0)).toEqual([5, 5, 5, 0])
+    // Mỗi lần gọi có đúng một lời nhắc ngôn ngữ, ở cuối, sau kết quả công cụ.
+    for (const { messages } of llm.requests) {
+      expect(messages.filter((m) => m.role === 'system' && m.content === LANGUAGE_REMINDER)).toHaveLength(1)
+      expect(messages.at(-1)).toEqual({ role: 'system', content: LANGUAGE_REMINDER })
+    }
+
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
+    const report = await request.get('/api/admin/reports/chatbot').query({ from: today, to: today }).set(bearer(token))
+    expect(report.body.models).toEqual([expect.objectContaining({ model: 'fake:scripted', calls: 4 })])
+  })
+
+  it('sản phẩm khách đang xem đi vào như kết quả công cụ, không vào system message', async () => {
+    const llm = new ScriptedLlm([{ content: 'Size 41 hết hàng ạ.' }, { content: 'Dạ.' }])
+    const { request } = await chatShop(llm)
+
+    await ask(request, 'Cái này còn size 41 không?', { viewingProductSlug: 'air-max' })
+    const messages = llm.requests[0]!.messages
+    expect(messages.filter((m) => m.role === 'system').map((m) => m.content)).toEqual([
+      SYSTEM_PROMPT,
+      LANGUAGE_REMINDER,
+    ])
+    expect(toolOutputs(llm, 0)).toEqual([expect.objectContaining({ slug: 'air-max', name: 'Air Max' })])
+
+    await ask(request, 'Còn mẫu khác không?', { viewingProductSlug: 'khong-co' })
+    expect(toolOutputs(llm, 1)).toEqual([])
+  })
+
+  it('chatbot đề nghị chuyển nhân viên thì khung chat được báo, nhưng không tạo yêu cầu nào', async () => {
+    const llm = new ScriptedLlm([
+      { toolCalls: [call('handoff', { summary: 'Khách nghi hàng không chính hãng' })] },
+      { content: 'Bạn bấm nút xác nhận bên dưới nhé.' },
+    ])
+    const { request, token } = await chatShop(llm)
+
+    const res = await ask(request, 'Cho mình gặp nhân viên')
+    expect(res.body.handoffSuggested).toBe(true)
+    const requests = await request.get('/api/admin/support-requests').set(bearer(token))
+    expect(requests.body.total).toBe(0)
+  })
+
+  it('tham số công cụ hỏng hay công cụ lạ thì báo lỗi cho model, lượt vẫn trả lời được', async () => {
+    const llm = new ScriptedLlm([
+      { toolCalls: [{ id: 'x', name: 'search_products', arguments: '{hỏng' }, call('delete_order')] },
+      { content: 'Mình chưa tìm được.' },
+    ])
+    const { request } = await chatShop(llm)
+    expect((await ask(request, 'Tìm giày')).body.outcome).toBe('answered')
+    expect(toolOutputs(llm, 1)).toEqual([{ error: expect.any(String) }, { error: expect.any(String) }])
+  })
+})

@@ -13,6 +13,7 @@ const TABS = [
 ]
 
 const route = useRoute()
+const session = useAdminSession()
 const router = useRouter()
 const period = useReportPeriod()
 const form = reactive({ ...period.value })
@@ -47,6 +48,13 @@ function apply() {
       <NuxtLink v-for="tab in TABS" :key="tab.to" :to="{ path: tab.to, query: route.query }" class="report-tab">{{
         tab.label
       }}</NuxtLink>
+      <!-- Báo cáo chatbot là trang riêng (quyền chatbot.manage, không cần report.view), cùng kỳ đang chọn. -->
+      <NuxtLink
+        v-if="session.canOpen('/admin/chatbot/report')"
+        :to="{ path: '/admin/chatbot/report', query: route.query }"
+        class="report-tab"
+        >Chatbot</NuxtLink
+      >
     </nav>
 
     <div class="admin-panel" style="padding: 16px 20px; margin-bottom: 20px">
