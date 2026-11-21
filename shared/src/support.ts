@@ -1,5 +1,6 @@
 import { PublicRefund } from './refunds.ts'
 import { z } from 'zod'
+import { ChatMessageView } from './chat.ts'
 import { ProductType } from './catalog.ts'
 import { PageQuery, pageOf } from './pagination.ts'
 
@@ -14,8 +15,8 @@ export type SupportRequestStatus = z.infer<typeof SupportRequestStatus>
 /** Trạng thái kết thúc: không nhận thêm tin, không mở lại. */
 export const SUPPORT_CLOSED_STATUSES: readonly SupportRequestStatus[] = ['resolved', 'rejected']
 
-/** Ai viết tin: khách, nhân viên, hay hệ thống. */
-export const SupportAuthor = z.enum(['customer', 'staff', 'system'])
+/** Ai viết tin hay tạo yêu cầu: khách, nhân viên, hệ thống, hay chatbot (chỉ tạo yêu cầu khi khách xác nhận chuyển). */
+export const SupportAuthor = z.enum(['customer', 'staff', 'system', 'chatbot'])
 export type SupportAuthor = z.infer<typeof SupportAuthor>
 
 const Body = z
@@ -270,6 +271,8 @@ export const AdminSupportRequest = AdminSupportSummary.extend({
   previousRequestCode: z.number().nullable(),
   resolvedAt: z.string().nullable(),
   messages: z.array(AdminSupportMessage),
+  /** Cuộc trò chuyện với chatbot trước khi chuyển (M8); route điền. `null` khi yêu cầu không đến từ chatbot. */
+  chatTranscript: z.array(ChatMessageView).nullable(),
 })
 export type AdminSupportRequest = z.infer<typeof AdminSupportRequest>
 

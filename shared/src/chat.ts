@@ -88,3 +88,24 @@ export const ChatbotSettings = z.object({
   responseTimeNote: z.string().trim().max(300, 'Tối đa 300 ký tự'),
 })
 export type ChatbotSettings = z.infer<typeof ChatbotSettings>
+
+/**
+ * Body của `POST /api/chat/handoff`: khách xác nhận chuyển nhân viên. Khách đã đăng nhập không cần tên, email; khách
+ * vãng lai thì bắt buộc. Không có cuộc trò chuyện (chatbot đang tắt) thì phải có lời nhắn.
+ */
+export const ChatHandoffRequest = z.object({
+  conversationId: z.uuid().optional(),
+  name: z.string().trim().min(1, 'Nhập tên').max(100, 'Tên tối đa 100 ký tự').optional(),
+  email: z.email('Email không hợp lệ').trim().toLowerCase().max(254).optional(),
+  message: z.string().trim().max(2000, 'Lời nhắn tối đa 2.000 ký tự').default(''),
+})
+export type ChatHandoffRequest = z.input<typeof ChatHandoffRequest>
+
+/** Trả về khi đã tạo yêu cầu: mã yêu cầu và câu thời gian phản hồi owner soạn (rỗng là không có). */
+export const ChatHandoffResponse = z.object({
+  requestCode: z.number(),
+  responseTimeNote: z.string(),
+  /** Đường dẫn xem yêu cầu khi khách đã đăng nhập; khách vãng lai mở bằng link trong email. */
+  link: z.string().nullable(),
+})
+export type ChatHandoffResponse = z.infer<typeof ChatHandoffResponse>

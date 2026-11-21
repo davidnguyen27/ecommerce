@@ -2,6 +2,7 @@
 import {
   CHAT_MESSAGE_MAX_LENGTH,
   ChatConversationView,
+  ChatHandoffResponse,
   ChatStatus,
   ChatTurnResponse,
   PRIVACY_POLICY_SLUG,
@@ -24,7 +25,44 @@ const error = ref<string | null>(null)
 /** Lý do lượt gần nhất không có trả lời; xóa khi lượt sau trả lời được. */
 const unavailable = ref<ChatUnavailableReason | Exclude<ChatTurnOutcome, 'answered'> | null>(null)
 const handoffSuggested = ref(false)
-const staffInfoOpen = ref(false)
+const handoffOpen = ref(false)
+/** Đã đăng nhập thì yêu cầu gắn vào tài khoản, không hỏi tên và email. */
+const signedIn = ref(false)
+const handoffForm = reactive({ name: '', email: '', message: '' })
+const handoffSending = ref(false)
+const handoffError = ref<string | null>(null)
+const handoffDone = ref<ChatHandoffResponse | null>(null)
+const session = useCustomerSession()
+
+async function openHandoff() {
+  handoffOpen.value = !handoffOpen.value
+  handoffError.value = null
+  if (handoffOpen.value) signedIn.value = await session.signedIn()
+}
+
+/** Khách xác nhận chuyển nhân viên (spec M8 ticket 05): tạo yêu cầu hỗ trợ, gắn cuộc trò chuyện đang có. */
+async function submitHandoff() {
+  if (handoffSending.value) return
+  handoffSending.value = true
+  handoffError.value = null
+  try {
+    handoffDone.value = ChatHandoffResponse.parse(
+      await session.optionalAuthFetch('/api/chat/handoff', {
+        method: 'POST',
+        body: {
+          conversationId: conversationId.value ?? undefined,
+          message: handoffForm.message,
+          ...(signedIn.value ? {} : { name: handoffForm.name, email: handoffForm.email }),
+        },
+      }),
+    )
+    handoffOpen.value = false
+  } catch (err) {
+    handoffError.value = apiErrorMessage(err)
+  } finally {
+    handoffSending.value = false
+  }
+}
 
 const panel = ref<HTMLElement>()
 const list = ref<HTMLElement>()
@@ -96,7 +134,9 @@ function restart() {
   entries.value = []
   unavailable.value = null
   handoffSuggested.value = false
-  staffInfoOpen.value = false
+  handoffOpen.value = false
+  handoffDone.value = null
+  handoffError.value = null
   error.value = null
   writeStorage(null)
   input.value?.focus()
@@ -277,12 +317,51 @@ watch(
         </div>
         <p v-if="error" class="notice-error" role="alert">{{ error }}</p>
 
-        <!-- Form chuyển nhân viên làm ở ticket 05; tạm chỉ đường gửi yêu cầu hỗ trợ đang có. -->
-        <div v-if="staffInfoOpen" class="rounded-md border border-border px-3 py-2 text-sm leading-relaxed">
-          Bạn có thể gửi yêu cầu hỗ trợ từ trang
-          <NuxtLink to="/tai-khoan" class="link">tài khoản</NuxtLink> hoặc từ link tra cứu đơn trong email.
+        <div v-if="handoffDone" class="notice-ok" role="status">
+          Đã gửi yêu cầu #YC{{ handoffDone.requestCode }} cho nhân viên.
+          <template v-if="handoffDone.responseTimeNote">{{ handoffDone.responseTimeNote }}</template>
+          <NuxtLink v-if="handoffDone.link" :to="handoffDone.link" class="link">Xem yêu cầu</NuxtLink>
+          <template v-else>Bạn sẽ nhận email kèm link theo dõi.</template>
         </div>
+
+        <form
+          v-if="handoffOpen"
+          class="space-y-2 rounded-md border border-border p-3"
+          aria-label="Gửi cho nhân viên"
+          @submit.prevent="submitHandoff"
+        >
+          <p class="text-sm leading-relaxed">
+            Nhân viên sẽ đọc cuộc trò chuyện này và trả lời
+            {{ signedIn ? 'trong trang tài khoản của bạn' : 'qua email' }}.
+          </p>
+          <template v-if="!signedIn">
+            <label class="field">
+              Tên
+              <input v-model="handoffForm.name" class="field-input" autocomplete="name" required maxlength="100" />
+            </label>
+            <label class="field">
+              Email
+              <input v-model="handoffForm.email" class="field-input" type="email" autocomplete="email" required />
+            </label>
+          </template>
+          <label class="field">
+            Lời nhắn {{ conversationId ? '(không bắt buộc)' : '' }}
+            <textarea
+              v-model="handoffForm.message"
+              rows="2"
+              maxlength="2000"
+              :required="!conversationId"
+              class="field-input h-auto py-2"
+            />
+          </label>
+          <p v-if="handoffError" class="notice-error" role="alert">{{ handoffError }}</p>
+          <button type="submit" class="btn-primary h-10 w-full" :disabled="handoffSending">
+            {{ handoffSending ? 'Đang gửi…' : 'Gửi cho nhân viên' }}
+          </button>
+        </form>
+
         <button
+          v-if="!handoffDone"
           type="button"
           class="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors"
           :class="
@@ -290,8 +369,8 @@ watch(
               ? 'border-foreground bg-foreground text-background hover:bg-foreground/85'
               : 'border-border hover:border-foreground'
           "
-          :aria-expanded="staffInfoOpen"
-          @click="staffInfoOpen = !staffInfoOpen"
+          :aria-expanded="handoffOpen"
+          @click="openHandoff"
         >
           <UserRound class="h-4 w-4" aria-hidden="true" />
           Gặp nhân viên

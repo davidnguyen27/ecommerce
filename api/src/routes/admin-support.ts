@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { toMessageView } from '../chat/chat.ts'
 import {
   AdminCreateSupportRequest,
   AdminSupportQuery,
@@ -57,6 +58,15 @@ const requestCode = (code: string) => {
  * `order.view`; trả lời, ghi chú, đổi trạng thái, nhận việc, tạo hộ cần `support.handle`; giao cho người khác chỉ owner
  * (`staff.manage`). Mọi thao tác ghi đi qua `audited()` và trả lại chi tiết yêu cầu.
  */
+/** Cuộc trò chuyện với chatbot đã chuyển thành yêu cầu (M8); người có `support.handle` đọc được qua yêu cầu. */
+async function chatTranscript(prisma: Db, requestId: string) {
+  const conversation = await prisma.chatConversation.findUnique({
+    where: { supportRequestId: requestId },
+    include: { messages: { orderBy: { createdAt: 'asc' } } },
+  })
+  return conversation ? conversation.messages.map(toMessageView) : null
+}
+
 export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerMail) {
   const load = async (code: number) => {
     const request = await prisma.supportRequest.findUnique({ where: { code }, include: SUPPORT_INCLUDE })
@@ -65,6 +75,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
       ...(await toAdminSupport(storage, request)),
       returnRefund: await returnRefundHint(prisma, request),
       hasWarrantyCommitment: await hasWarrantyCommitment(prisma, request),
+      chatTranscript: await chatTranscript(prisma, request.id),
     }
     return body
   }

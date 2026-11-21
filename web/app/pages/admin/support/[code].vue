@@ -130,6 +130,7 @@ if (canAssign.value) {
           {{ SUPPORT_KIND_LABELS[request.kind] }} · {{ request.subject }} · gửi lúc
           {{ formatDateTime(request.createdAt) }}
           <template v-if="request.createdBy === 'staff'"> · {{ request.createdByStaff?.name }} tạo hộ</template>
+          <template v-else-if="request.createdBy === 'chatbot'"> · chuyển từ chatbot</template>
         </p>
       </div>
       <NuxtLink to="/admin/support" class="btn btn-secondary btn-sm">‹ Danh sách yêu cầu</NuxtLink>
@@ -159,6 +160,30 @@ if (canAssign.value) {
             </div>
             <div style="white-space: pre-line; font-size: 13px">{{ m.body }}</div>
             <SupportAttachments :attachments="m.attachments" />
+          </div>
+        </div>
+
+        <!-- Cuộc trò chuyện với chatbot trước khi khách xác nhận chuyển (M8). -->
+        <div
+          v-if="request.chatTranscript"
+          class="admin-panel"
+          style="margin-bottom: 24px"
+          data-testid="admin-chat-transcript"
+        >
+          <h2 class="admin-section-title">Cuộc trò chuyện với chatbot</h2>
+          <div
+            v-for="m in request.chatTranscript"
+            :key="m.id"
+            style="border-top: 1px solid var(--adm-border); padding: 10px 0"
+          >
+            <div style="font-size: 12px; color: var(--adm-muted); margin-bottom: 4px">
+              {{ m.role === 'customer' ? 'Khách' : 'Chatbot' }} · {{ formatDateTime(m.createdAt) }}
+              <span v-if="m.failed"> · không có trả lời</span>
+            </div>
+            <div style="white-space: pre-line; font-size: 13px">{{ m.content }}</div>
+            <div v-if="m.products.length" style="font-size: 12px; color: var(--adm-muted); margin-top: 4px">
+              Đã gợi ý: {{ m.products.map((p) => p.name).join(', ') }}
+            </div>
           </div>
         </div>
 

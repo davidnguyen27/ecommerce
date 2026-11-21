@@ -12,7 +12,7 @@ import type { PaymentGateway } from './payments/gateway.ts'
 import { errorHandler, notFound } from './http/errors.ts'
 import { accountOrderRoutes } from './routes/account-orders.ts'
 import { accountRoutes } from './routes/account.ts'
-import { accountSupportRoutes, orderSupportRoutes } from './routes/support-customer.ts'
+import { accountSupportRoutes, contactSupportRoutes, orderSupportRoutes } from './routes/support-customer.ts'
 import { adminRoutes } from './routes/admin.ts'
 import { adminAuthRoutes } from './routes/admin-auth.ts'
 import { customerAuthRoutes, customerSessions } from './routes/customer-auth.ts'
@@ -105,7 +105,8 @@ export function createApp(deps: AppDeps) {
   api.use('/orders/:code/support-requests', orderSupportRoutes(deps))
   api.use('/orders', publicOrderRoutes(deps))
   api.use('/payments', paymentRoutes(deps))
-  api.use('/chat', chatRoutes(deps))
+  api.use('/chat', chatRoutes({ ...deps, secret }))
+  api.use('/support-requests', contactSupportRoutes(deps))
   const customerDeps = {
     prisma: deps.prisma,
     emails: deps.emails,
