@@ -49,7 +49,13 @@ describe('trạng thái chatbot', () => {
     const { request } = await chatApp({ llm, enabled: false })
     const res = await ask(request, 'Có túi đen không?')
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ conversationId: null, outcome: 'disabled', reply: null })
+    expect(res.body).toEqual({
+      conversationId: null,
+      outcome: 'disabled',
+      reply: null,
+      cards: [],
+      handoffSuggested: false,
+    })
     expect(llm.requests).toHaveLength(0)
 
     const noKey = await chatApp()

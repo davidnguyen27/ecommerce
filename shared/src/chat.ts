@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ProductCard } from './products.ts'
 
 /** Tin của khách dài tối đa (spec M8, số tạm). */
 export const CHAT_MESSAGE_MAX_LENGTH = 500
@@ -47,6 +48,8 @@ export const ChatMessageView = z.object({
   role: ChatRole,
   content: z.string(),
   failed: z.boolean(),
+  /** Tin của chatbot: sản phẩm đã gợi ý, đủ để hiện link khi mở lại khung chat (giá, ảnh xem ở thẻ lúc trả lời). */
+  products: z.array(z.object({ slug: z.string(), name: z.string() })),
   createdAt: z.string(),
 })
 export type ChatMessageView = z.infer<typeof ChatMessageView>
@@ -64,6 +67,10 @@ export const ChatTurnResponse = z.object({
   conversationId: z.string().nullable(),
   outcome: ChatTurnOutcome,
   reply: ChatMessageView.nullable(),
+  /** Thẻ của các sản phẩm chatbot đã tìm trong lượt này, dựng từ DB (giá, tình trạng đúng lúc trả lời). */
+  cards: z.array(ProductCard),
+  /** Chatbot đề nghị chuyển nhân viên: khung chat hiện nút xác nhận (ticket 05). */
+  handoffSuggested: z.boolean(),
 })
 export type ChatTurnResponse = z.infer<typeof ChatTurnResponse>
 
