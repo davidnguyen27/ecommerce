@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ScriptedLlm, type LlmMessage, type LlmToolCall } from '../src/adapters/llm.ts'
-import { LANGUAGE_REMINDER, SYSTEM_PROMPT } from '../src/chat/prompt.ts'
+import { SYSTEM_PROMPT, VIETNAMESE_REMINDER } from '../src/chat/prompt.ts'
 import { MAX_TOOL_ROUNDS } from '../src/chat/turn.ts'
 import { preorderShop } from './support/preorder.ts'
 import { shop } from './support/shop.ts'
@@ -54,11 +54,10 @@ describe('tìm sản phẩm', () => {
       products: [
         {
           slug: 'air-max',
-          url: '/san-pham/air-max',
           name: 'Air Max',
           brand: 'Nike',
           fromPrice: 2_000_000,
-          availability: 'in_stock',
+          availability: 'in stock',
         },
       ],
     })
@@ -130,19 +129,23 @@ describe('chi tiết sản phẩm', () => {
       slug: 'air-max',
       name: 'Air Max',
       brand: 'Nike',
-      policies: [{ slug: 'doi-tra', title: 'Đổi trả' }],
+      policies: ['doi-tra'],
     })
+    // Một dòng mỗi biến thể, tiết kiệm token.
     expect(product!.variants).toEqual([
-      { attributes: expect.anything(), price: 2_000_000, availability: 'in_stock' },
-      {
-        attributes: expect.anything(),
-        price: 2_100_000,
-        availability: 'preorder',
-        preorder: { depositPercent: 30, expectedDelivery: '2026-12-10 – 2026-12-20 (dự kiến)' },
-      },
+      'Đen / 40: 2000000 in stock',
+      'Đen / 41: 2100000 pre-order (cọc 30%, dự kiến 2026-12-10 – 2026-12-20)',
     ])
+    expect(product!.sizeChart).toBe('none')
     const raw = JSON.stringify(product)
     for (const hidden of [app.v40.id, app.v41.id, 'AM-40', 'onHand', 'reserved']) expect(raw).not.toContain(hidden)
+  })
+
+  it('không biết slug thì lấy theo tên, khỏi phải tìm trước', async () => {
+    const llm = new ScriptedLlm([{ toolCalls: [call('get_product', { name: 'Air Max' })] }, { content: 'Đây ạ.' }])
+    const { request } = await chatShop(llm)
+    await ask(request, 'Air Max còn size nào?')
+    expect(toolOutputs(llm, 1)[0]).toMatchObject({ slug: 'air-max', name: 'Air Max' })
   })
 
   it('slug không có hay sản phẩm nháp thì báo model tìm lại, không ném lỗi', async () => {
@@ -157,15 +160,9 @@ describe('chi tiết sản phẩm', () => {
 })
 
 describe('chính sách', () => {
-  it('chỉ liệt kê và đọc được trang chính sách đã xuất bản', async () => {
+  it('prompt liệt kê slug các trang chính sách đã xuất bản; chỉ đọc được trang đã xuất bản', async () => {
     const llm = new ScriptedLlm([
-      {
-        toolCalls: [
-          call('list_policies'),
-          call('get_policy', { slug: 'doi-tra' }),
-          call('get_policy', { slug: 'bao-hanh' }),
-        ],
-      },
+      { toolCalls: [call('get_policy', { slug: 'doi-tra' }), call('get_policy', { slug: 'bao-hanh' })] },
       { content: 'Đổi trong 7 ngày.' },
     ])
     const { request, token } = await chatShop(llm)
@@ -176,11 +173,11 @@ describe('chính sách', () => {
     expect(draft.status).toBe(201)
 
     await ask(request, 'Đổi trả thế nào?')
-    const [list, policy, missing] = toolOutputs(llm, 1)
-    const slugs = (list!.policies as { slug: string }[]).map((p) => p.slug)
-    expect(slugs).toContain('doi-tra')
-    expect(slugs).not.toContain('bao-hanh')
-    expect(policy).toEqual({ slug: 'doi-tra', title: 'Đổi trả', url: '/trang/doi-tra', body: 'Đổi trong 7 ngày' })
+    const system = llm.requests[0]!.messages[0]!.content
+    expect(system).toMatch(/Policy slugs: .*doi-tra/)
+    expect(system).not.toContain('bao-hanh')
+    const [policy, missing] = toolOutputs(llm, 1)
+    expect(policy).toEqual({ slug: 'doi-tra', title: 'Đổi trả', body: 'Đổi trong 7 ngày' })
     expect(missing).toHaveProperty('error')
   })
 })
@@ -194,11 +191,11 @@ describe('vòng lặp và ngữ cảnh', () => {
     const res = await ask(request, 'Gợi ý giày?')
     expect(res.body.reply.content).toBe('Mình gợi ý Air Max.')
     expect(res.body.cards).toHaveLength(1)
-    expect(llm.requests.map((r) => r.tools?.length ?? 0)).toEqual([5, 5, 5, 0])
+    expect(llm.requests.map((r) => r.tools?.length ?? 0)).toEqual([4, 4, 4, 0])
     // Mỗi lần gọi có đúng một lời nhắc ngôn ngữ, ở cuối, sau kết quả công cụ.
     for (const { messages } of llm.requests) {
-      expect(messages.filter((m) => m.role === 'system' && m.content === LANGUAGE_REMINDER)).toHaveLength(1)
-      expect(messages.at(-1)).toEqual({ role: 'system', content: LANGUAGE_REMINDER })
+      expect(messages.filter((m) => m.role === 'system' && m.content === VIETNAMESE_REMINDER)).toHaveLength(1)
+      expect(messages.at(-1)).toEqual({ role: 'system', content: VIETNAMESE_REMINDER })
     }
 
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
@@ -213,8 +210,8 @@ describe('vòng lặp và ngữ cảnh', () => {
     await ask(request, 'Cái này còn size 41 không?', { viewingProductSlug: 'air-max' })
     const messages = llm.requests[0]!.messages
     expect(messages.filter((m) => m.role === 'system').map((m) => m.content)).toEqual([
-      SYSTEM_PROMPT,
-      LANGUAGE_REMINDER,
+      expect.stringMatching(new RegExp(`^${SYSTEM_PROMPT.slice(0, 40)}`)),
+      VIETNAMESE_REMINDER,
     ])
     expect(toolOutputs(llm, 0)).toEqual([expect.objectContaining({ slug: 'air-max', name: 'Air Max' })])
 

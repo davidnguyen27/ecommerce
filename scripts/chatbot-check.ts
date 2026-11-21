@@ -3,6 +3,8 @@
 // Chạy: pnpm chatbot-check                       (chuỗi theo LLM_CHAIN và khóa trong .env)
 //       LLM_CHAIN=groq:qwen/qwen3.8-27b pnpm chatbot-check   (chỉ thử một model)
 //       pnpm chatbot-check --api http://localhost    (hỏi API thật trên dữ liệu demo; bật chatbot của bản đó)
+//       CHATBOT_CHECK_DELAY_MS=20000 pnpm chatbot-check --api …   (giãn các câu khi API chỉ dùng một model)
+//       CHATBOT_CHECK_ONLY=size,tieng-anh pnpm chatbot-check --api …   (chỉ chạy các tình huống này)
 // Không có --api thì danh mục, chính sách và công cụ là bản giả trong file này, chỉ prompt là của API.
 import {
   LlmChain,
@@ -134,8 +136,10 @@ const TOOL_IMPL: Record<string, (args: Args) => unknown> = {
     )
     return { products: hits.slice(0, 5).map(card) }
   },
-  get_product: ({ slug }) => getProduct(String(slug)),
-  list_policies: () => ({ policies: Object.entries(POLICIES).map(([slug, p]) => ({ slug, title: p.title })) }),
+  get_product: ({ slug, name }) =>
+    getProduct(
+      String(slug ?? PRODUCTS.find((p) => p.name.toLowerCase().includes(String(name).toLowerCase()))?.slug ?? ''),
+    ),
   get_policy: ({ slug }) => {
     const p = POLICIES[String(slug)]
     return p ? { slug, ...p, url: `/chinh-sach/${String(slug)}` } : { error: 'Không có trang này' }
@@ -163,10 +167,9 @@ const TOOLS: LlmTool[] = [
   },
   {
     name: 'get_product',
-    description: 'Chi tiết sản phẩm: biến thể, bảng size, đợt đặt trước.',
-    parameters: object({ slug: { type: 'string' } }, ['slug']),
+    description: 'Chi tiết sản phẩm theo slug, hay theo tên khi không có slug: biến thể, bảng size, đợt đặt trước.',
+    parameters: object({ slug: { type: 'string' }, name: { type: 'string' } }),
   },
-  { name: 'list_policies', description: 'Danh sách trang chính sách.', parameters: object() },
   {
     name: 'get_policy',
     description: 'Nội dung một trang chính sách.',
@@ -263,7 +266,29 @@ async function checkApi(base: string) {
   await post('/api/admin/chatbot/settings', { ...settings, enabled: true }, auth, 'PUT')
   console.log('API:', base)
 
-  for (const scenario of API_SCENARIOS) {
+  // Token mỗi câu: hiệu số của báo cáo chatbot hôm nay trước và sau câu đó (báo cáo cộng theo ngày giờ VN).
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
+  const usage = async () => {
+    const report = (await (
+      await fetch(`${base}/api/admin/reports/chatbot?from=${today}&to=${today}`, { headers: auth })
+    ).json()) as { models: { calls: number; inputTokens: number; outputTokens: number }[] }
+    return report.models.reduce(
+      (sum, m) => ({
+        calls: sum.calls + m.calls,
+        input: sum.input + m.inputTokens,
+        output: sum.output + m.outputTokens,
+      }),
+      { calls: 0, input: 0, output: 0 },
+    )
+  }
+  const totals = { calls: 0, input: 0, output: 0 }
+
+  // Chạy một model (LLM_CHAIN của API) thì giãn các câu ra, để không chạm giới hạn token mỗi phút của Groq.
+  const delayMs = Number(process.env.CHATBOT_CHECK_DELAY_MS ?? 0)
+  const only = process.env.CHATBOT_CHECK_ONLY?.split(',')
+  for (const scenario of API_SCENARIOS.filter((x) => !only || only.includes(x.id))) {
+    if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs))
+    const before = await usage()
     const started = Date.now()
     const res = await post('/api/chat/messages', { content: scenario.user, viewingProductSlug: scenario.viewing })
     const body = (await res.json()) as {
@@ -280,8 +305,21 @@ async function checkApi(base: string) {
         body.cards?.map((c) => `${c.slug} ${c.fromPrice}`).join(', ') || '(không)'
       } | chuyển: ${body.handoffSuggested ? 'có' : 'không'} | ${Date.now() - started} ms`,
     )
+    const after = await usage()
+    const spent = {
+      calls: after.calls - before.calls,
+      input: after.input - before.input,
+      output: after.output - before.output,
+    }
+    for (const key of ['calls', 'input', 'output'] as const) totals[key] += spent[key]
+    console.log(`token: ${spent.input} vào, ${spent.output} ra, ${spent.calls} lượt gọi`)
     console.log(`trả lời: ${body.reply?.content ?? ''}`)
   }
+  const n = API_SCENARIOS.filter((x) => !only || only.includes(x.id)).length
+  console.log(
+    `
+Trung bình mỗi câu: ${Math.round(totals.input / n)} token vào, ${Math.round(totals.output / n)} token ra, ${(totals.calls / n).toFixed(1)} lượt gọi`,
+  )
 }
 
 const apiFlag = process.argv.indexOf('--api')
@@ -305,6 +343,7 @@ for (const scenario of SCENARIOS) {
   const messages: LlmMessage[] = promptMessages(
     [{ role: 'customer', content: scenario.user }],
     scenario.viewing ? { slug: scenario.viewing, product: getProduct(scenario.viewing) } : undefined,
+    Object.keys(POLICIES),
   )
   const used: string[] = []
   const models = new Set<string>()

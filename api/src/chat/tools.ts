@@ -1,4 +1,12 @@
-import { GENDER_KEY, GENDER_OPTIONS, ProductType, type ProductCard, type PublicProduct } from '@ecommerce/shared'
+import {
+  GENDER_KEY,
+  GENDER_OPTIONS,
+  GENDER_UNISEX,
+  ProductType,
+  type ProductCard,
+  type PublicProduct,
+  type VariantAvailability,
+} from '@ecommerce/shared'
 import type { LlmTool, LlmToolCall } from '../adapters/llm.ts'
 import type { Storage } from '../adapters/storage.ts'
 import { loadAttributeSchema } from '../catalog/attribute-schemas.ts'
@@ -20,54 +28,58 @@ export type ToolOutcome = { output: unknown; cards?: ProductCard[]; handoffSumma
 export const SEARCH_LIMIT = 5
 /** Key thuộc tính màu trong schema của các nhóm hàng (dữ liệu hiện có). */
 const COLOR_KEY = 'mau'
-const DESCRIPTION_LIMIT = 600
-const USAGE_CARE_LIMIT = 300
+const DESCRIPTION_LIMIT = 400
+const USAGE_CARE_LIMIT = 200
 const POLICY_LIMIT = 4000
 
-const object = (properties: Record<string, unknown> = {}, required: string[] = []) => ({
+// Schema tối thiểu: mỗi khóa thừa (`additionalProperties`, `required` rỗng) tốn token ở mọi lần gọi, nhất là với qwen.
+const object = (properties: Record<string, unknown>, required?: string[]) => ({
   type: 'object',
   properties,
-  required,
-  additionalProperties: false,
+  ...(required && { required }),
 })
 
-/** Mô tả từng công cụ gửi cho model; mỗi tên phải có hàm chạy trong `RUNNERS` và ngược lại (typecheck). */
+/**
+ * Mô tả từng công cụ gửi cho model; mỗi tên phải có hàm chạy trong `RUNNERS` và ngược lại (typecheck). Tiếng Anh, gọn:
+ * gửi kèm mọi lần gọi model (xem `SYSTEM_PROMPT`).
+ */
 const TOOL_DEFINITIONS: Record<ChatToolName, Omit<LlmTool, 'name'>> = {
   search_products: {
-    description:
-      'Tìm sản phẩm đang bán, tối đa 5. Loại hàng (túi, giày, đồng hồ…) dùng productType, màu dùng color, giới tính dùng gender, ngân sách dùng minPrice/maxPrice (đồng). text chỉ khớp tên mẫu, thương hiệu hay mã sản phẩm; để trống nếu khách không nêu tên mẫu.',
+    description: 'Find products on sale (max 5). text matches only model, brand or SKU; leave empty otherwise.',
     parameters: object({
-      text: { type: 'string', description: 'Tên mẫu, thương hiệu hay mã, ví dụ "Air Max", "Tabby"' },
-      productType: {
-        type: 'string',
-        enum: ProductType.options,
-        description: 'footwear: giày dép; apparel: quần áo; watch: đồng hồ; bag: túi; fragrance: nước hoa',
-      },
-      brand: { type: 'string', description: 'Tên thương hiệu' },
-      color: { type: 'string', description: 'Màu bằng tiếng Việt, ví dụ "Đen", "Trắng"; chỉ dùng kèm productType' },
-      gender: { type: 'string', enum: [...GENDER_OPTIONS] },
+      text: { type: 'string' },
+      productType: { type: 'string', enum: ProductType.options },
+      brand: { type: 'string' },
+      color: { type: 'string' },
+      // Nam, Nữ đã gồm Unisex khi lọc (ADR 0004); cho chọn Unisex thì model hay tự thêm và loại mất hàng Nam, Nữ.
+      gender: { type: 'string', enum: ['Nam', 'Nữ'] },
       minPrice: { type: 'integer' },
       maxPrice: { type: 'integer' },
     }),
   },
   get_product: {
     description:
-      'Chi tiết một sản phẩm theo slug lấy từ search_products: biến thể kèm giá và tình trạng, bảng size, đợt đặt trước, nguồn gốc, cam kết, chính sách áp dụng.',
-    parameters: object({ slug: { type: 'string' } }, ['slug']),
+      'Product details by slug, or by name if no slug: variants, size chart, pre-order, origin, commitments.',
+    parameters: object({ slug: { type: 'string' }, name: { type: 'string' } }),
   },
-  list_policies: { description: 'Danh sách trang chính sách của cửa hàng.', parameters: object() },
   get_policy: {
-    description: 'Nội dung một trang chính sách theo slug lấy từ list_policies.',
+    description: 'Policy page by slug.',
     parameters: object({ slug: { type: 'string' } }, ['slug']),
   },
   handoff: {
-    description:
-      'Đề nghị chuyển khách sang nhân viên. Không gửi gì: khung chat hiện nút để khách tự xác nhận. Tóm tắt một câu khách cần gì.',
+    description: 'Offer to pass the customer to staff; the customer confirms. summary: one line of what they need.',
     parameters: object({ summary: { type: 'string' } }, ['summary']),
   },
 }
 
 export const CHAT_TOOLS: LlmTool[] = Object.entries(TOOL_DEFINITIONS).map(([name, tool]) => ({ name, ...tool }))
+
+/** Tình trạng bằng chữ thường: mã như `in_stock` thì model hay chép nguyên vào câu trả lời. */
+const AVAILABILITY_TEXT: Record<VariantAvailability, string> = {
+  in_stock: 'in stock',
+  out_of_stock: 'out of stock',
+  preorder: 'pre-order',
+}
 
 type Args = Record<string, unknown>
 
@@ -75,40 +87,33 @@ const cut = (text: string, limit: number) => (text.length > limit ? `${text.slic
 const str = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
 const int = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : undefined)
 
-const productUrl = (slug: string) => `/san-pham/${slug}`
-const policyUrl = (slug: string) => `/trang/${slug}`
-
 /** Tên thuộc tính thay cho key, để model đọc được ("Màu" thay vì `color`). */
 function labelled(product: PublicProduct, values: Record<string, unknown>) {
   const labelOf = new Map(product.attributeSchema.map((a) => [a.key, a.label]))
   return Object.fromEntries(Object.entries(values).map(([key, value]) => [labelOf.get(key) ?? key, value]))
 }
 
-/** Sản phẩm viết gọn cho model: không ảnh, không id biến thể; mô tả và hướng dẫn cắt ngắn. */
+/** Sản phẩm viết gọn cho model: không ảnh, không id biến thể, không URL (prompt nêu cách dựng link); mô tả cắt ngắn. */
 export function productForModel(product: PublicProduct) {
   return {
     slug: product.slug,
-    url: productUrl(product.slug),
     name: product.name,
     brand: product.brand.name,
     description: cut(product.description, DESCRIPTION_LIMIT),
     usageCare: cut(product.usageCare, USAGE_CARE_LIMIT),
     attributes: labelled(product, product.attributes),
-    variants: product.variants.map((variant) => ({
-      attributes: labelled(product, variant.attributes),
-      price: variant.price,
-      availability: variant.availability,
-      ...(variant.preorder && {
-        preorder: {
-          depositPercent: variant.preorder.depositPercent,
-          expectedDelivery: `${variant.preorder.deliveryFrom} – ${variant.preorder.deliveryTo} (dự kiến)`,
-        },
-      }),
-    })),
-    sizeChart: product.sizeChart,
+    // Một dòng mỗi biến thể ("Đen / 41: 3490000 in_stock"): object có nhãn lặp lại ở mọi biến thể tốn token gấp mấy lần.
+    variants: product.variants.map((variant) => {
+      const preorder = variant.preorder
+        ? ` (cọc ${variant.preorder.depositPercent}%, dự kiến ${variant.preorder.deliveryFrom} – ${variant.preorder.deliveryTo})`
+        : ''
+      return `${Object.values(variant.attributes).join(' / ')}: ${variant.price} ${AVAILABILITY_TEXT[variant.availability]}${preorder}`
+    }),
+    // "none" thay cho null: chạy thử thì gpt-oss bỏ qua null và tự đoán size "theo bảng đo chuẩn EU".
+    sizeChart: product.sizeChart ?? 'none',
     originStatement: product.originStatement,
     commitments: product.commitments.map((c) => ({ type: c.type, statement: c.statement })),
-    policies: product.policies.map((page) => ({ ...page, url: policyUrl(page.slug) })),
+    policies: product.policies.map((page) => page.slug),
   }
 }
 
@@ -144,17 +149,16 @@ async function searchProducts({ prisma, storage }: ToolDeps, args: Args): Promis
   if (items.length === 0 && text && otherFilters) {
     items = (await searchProductCards(prisma, storage, { ...criteria, text: undefined }, undefined, 1, SEARCH_LIMIT))
       .items
-    note = 'Không có sản phẩm khớp từ khóa; đây là các sản phẩm khớp các bộ lọc còn lại.'
+    note = 'No match for text; these match the other filters.'
   }
   return {
     output: {
       products: items.map((card) => ({
         slug: card.slug,
-        url: productUrl(card.slug),
         name: card.name,
         brand: card.brand.name,
         fromPrice: card.fromPrice,
-        availability: card.inStock ? 'in_stock' : card.preorder ? 'preorder' : 'out_of_stock',
+        availability: AVAILABILITY_TEXT[card.inStock ? 'in_stock' : card.preorder ? 'preorder' : 'out_of_stock'],
       })),
       ...(note && { note }),
     },
@@ -168,7 +172,9 @@ async function searchProducts({ prisma, storage }: ToolDeps, args: Args): Promis
  */
 async function attributeFilters(prisma: Db, type: ProductType | undefined, args: Args) {
   const color = str(args.color)
-  const gender = GENDER_OPTIONS.find((option) => option.toLowerCase() === str(args.gender)?.toLowerCase())
+  const gender = GENDER_OPTIONS.find(
+    (option) => option !== GENDER_UNISEX && option.toLowerCase() === str(args.gender)?.toLowerCase(),
+  )
   if (!gender && !(color && type)) return []
   // Chưa biết nhóm hàng thì chỉ lọc giới tính, mà giới tính có ở mọi nhóm hàng với cùng định nghĩa (ADR 0004): nạp
   // schema nhóm nào cũng được, như trang tìm kiếm của web.
@@ -183,32 +189,36 @@ async function attributeFilters(prisma: Db, type: ProductType | undefined, args:
   return filters
 }
 
+/**
+ * Chi tiết theo slug; không có slug (hay slug sai) mà có tên thì lấy sản phẩm khớp tên nhất. Câu như "túi Coach Tabby có
+ * bảo hành không" khỏi phải tìm trước rồi mới xem chi tiết: bớt một lượt gọi model.
+ */
 async function getProduct({ prisma, storage }: ToolDeps, args: Args): Promise<ToolOutcome> {
   const slug = str(args.slug)
-  const product = slug ? await findPublicProduct(prisma, storage, slug) : null
-  return { output: product ? productForModel(product) : { error: 'Không có sản phẩm này; tìm bằng search_products' } }
+  const name = str(args.name)
+  let product = slug ? await findPublicProduct(prisma, storage, slug) : null
+  if (!product && name) {
+    const [best] = (await searchProductCards(prisma, storage, { text: name, attributes: [] }, undefined, 1, 1)).items
+    product = best ? await findPublicProduct(prisma, storage, best.slug) : null
+  }
+  return { output: product ? productForModel(product) : { error: 'Not found; try search_products' } }
 }
 
-async function listPolicies({ prisma }: ToolDeps): Promise<ToolOutcome> {
-  const pages = (await listPublishedPages(prisma)).filter((page) => page.kind === 'policy')
-  return {
-    output: {
-      policies: pages.map((page) => ({ slug: page.slug, title: page.version.title, url: policyUrl(page.slug) })),
-    },
-  }
+/** Slug các trang chính sách đã xuất bản, cho dòng "Policy slugs" của prompt (thay công cụ liệt kê, bớt một lượt gọi). */
+export async function policySlugs(prisma: Db) {
+  return (await listPublishedPages(prisma)).filter((page) => page.kind === 'policy').map((page) => page.slug)
 }
 
 async function getPolicy({ prisma }: ToolDeps, args: Args): Promise<ToolOutcome> {
   const slug = str(args.slug)
   const version = slug ? await findPublishedVersion(prisma, slug) : null
   if (!version || version.page.kind !== 'policy') {
-    return { output: { error: 'Không có trang chính sách này; xem list_policies' } }
+    return { output: { error: 'Unknown policy slug; see Policy slugs' } }
   }
   return {
     output: {
       slug: version.page.slug,
       title: version.title,
-      url: policyUrl(version.page.slug),
       body: cut(version.body, POLICY_LIMIT),
     },
   }
@@ -217,7 +227,7 @@ async function getPolicy({ prisma }: ToolDeps, args: Args): Promise<ToolOutcome>
 function handoff(args: Args): ToolOutcome {
   const summary = str(args.summary) ?? 'Khách muốn gặp nhân viên'
   return {
-    output: { ok: true, note: 'Chưa gửi gì. Khung chat hiện nút để khách tự bấm xác nhận.' },
+    output: { ok: true, note: 'Nothing sent yet; the customer must press confirm.' },
     handoffSummary: summary,
   }
 }
@@ -228,7 +238,6 @@ type ToolRunner = (deps: ToolDeps, args: Args) => Promise<ToolOutcome> | ToolOut
 const RUNNERS = {
   search_products: searchProducts,
   get_product: getProduct,
-  list_policies: (deps) => listPolicies(deps),
   get_policy: getPolicy,
   handoff: (_deps, args) => handoff(args),
 } satisfies Record<string, ToolRunner>

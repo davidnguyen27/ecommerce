@@ -1,7 +1,7 @@
 import type { ProductCard } from '@ecommerce/shared'
 import { LlmUnavailableError, type LlmAttempt, type LlmClient, type LlmMessage } from '../adapters/llm.ts'
 import type { ModelUsage } from './chat.ts'
-import { LANGUAGE_REMINDER } from './prompt.ts'
+import { isLanguageReminder } from './prompt.ts'
 import { CHAT_TOOLS, runTool, type ToolDeps } from './tools.ts'
 
 /** Số vòng gọi công cụ tối đa mỗi lượt; sau đó gọi một lần không kèm công cụ để buộc trả lời (spec M8). */
@@ -39,6 +39,7 @@ export class TurnFailedError extends Error {
 /** Chạy một lượt: gọi model, chạy công cụ model yêu cầu, gửi kết quả lại, tới khi model trả lời bằng chữ. */
 export async function runTurn(llm: LlmClient, deps: ToolDeps, prompt: LlmMessage[]): Promise<TurnResult> {
   const messages = [...prompt]
+  const reminder = isLanguageReminder(prompt.at(-1)) ? prompt.at(-1) : undefined
   const calls: TurnCall[] = []
   const cards = new Map<string, ProductCard>()
   let handoffSummary: string | null = null
@@ -62,7 +63,7 @@ export async function runTurn(llm: LlmClient, deps: ToolDeps, prompt: LlmMessage
 
     // Chỉ giữ một lời nhắc ngôn ngữ, luôn ở cuối: nhiều system message xen giữa làm gpt-oss viết ra chữ vô nghĩa
     // (chatbot-check 2026-11-21).
-    if (messages.at(-1)?.role === 'system' && messages.at(-1)?.content === LANGUAGE_REMINDER) messages.pop()
+    if (isLanguageReminder(messages.at(-1))) messages.pop()
     messages.push({ role: 'assistant', content: result.content, toolCalls: result.toolCalls })
     for (const call of result.toolCalls) {
       tools.push({ name: call.name, arguments: call.arguments })
@@ -72,6 +73,6 @@ export async function runTurn(llm: LlmClient, deps: ToolDeps, prompt: LlmMessage
       messages.push({ role: 'tool', toolCallId: call.id, content: JSON.stringify(outcome.output) })
     }
     // Kết quả công cụ là tiếng Việt; lời nhắc đứng trước chúng thì khách hỏi tiếng Anh vẫn nhận câu trả lời tiếng Việt.
-    messages.push({ role: 'system', content: LANGUAGE_REMINDER })
+    if (reminder) messages.push(reminder)
   }
 }

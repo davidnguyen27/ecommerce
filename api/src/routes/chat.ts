@@ -26,7 +26,7 @@ import {
 } from '../chat/chat.ts'
 import { PROMPT_VERSION, promptMessages } from '../chat/prompt.ts'
 import { asksForStaff } from '../chat/intent.ts'
-import { productForModel } from '../chat/tools.ts'
+import { policySlugs, productForModel } from '../chat/tools.ts'
 import { TurnFailedError, runTurn } from '../chat/turn.ts'
 import { findPublicProduct } from '../catalog/public-products.ts'
 import type { Db } from '../db.ts'
@@ -86,7 +86,11 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
         const viewing = await viewingProduct(prisma, storage, input.viewingProductSlug)
         // Gọi model ngoài transaction: một lượt có thể mất tới vài chục giây.
         try {
-          const result = await runTurn(llm, { prisma, storage }, promptMessages(turn.history, viewing))
+          const result = await runTurn(
+            llm,
+            { prisma, storage },
+            promptMessages(turn.history, viewing, await policySlugs(prisma)),
+          )
           // Không ghi nội dung khách gõ; công cụ và tham số đủ để biết vì sao chatbot trả lời như vậy.
           logger.info(
             { conversationId: turn.conversationId, model: result.model, tools: result.tools },
