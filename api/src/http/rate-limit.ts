@@ -26,6 +26,8 @@ export const RATE_LIMITS = {
   supportCreatePerIp: { name: 'support-create:ip', max: 5, windowMs: 60 * MINUTE },
   supportMessagePerRequest: { name: 'support-message:request', max: 20, windowMs: 60 * MINUTE },
   supportImagePerIp: { name: 'support-image:ip', max: 20, windowMs: 60 * MINUTE },
+  // Chatbot (spec M8, số tạm): mỗi tin tốn hạn mức model miễn phí chung của cả cửa hàng (ADR 0017).
+  chatMessagePerIp: { name: 'chat-message:ip', max: 60, windowMs: 60 * MINUTE },
 } satisfies Record<string, RateLimit>
 
 /**

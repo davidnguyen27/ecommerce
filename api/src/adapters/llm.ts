@@ -20,6 +20,8 @@ export type LlmResult = {
   usage: { input: number; output: number }
   /** Model đã trả lời, dạng `nhà cung cấp:model`. */
   model: string
+  /** Mọi model đã thử hay bỏ qua trong lần gọi này, kể cả model trả lời ở cuối, để ghi báo cáo. */
+  attempts: LlmAttempt[]
 }
 
 /** Một lần gọi model thất bại trên cả chuỗi. Mỗi model đã thử hay bỏ qua có trong `attempts`, để ghi báo cáo. */
@@ -172,7 +174,7 @@ export class LlmChain implements LlmClient {
       if (outcome.kind === 'ok') {
         this.exhaustedUntil.delete(model)
         attempts.push({ model, outcome: 'ok' })
-        return outcome.result
+        return { ...outcome.result, attempts }
       }
       if (outcome.kind === 'rate_limited') this.exhaustedUntil.set(model, this.now() + outcome.retryAfterMs)
       attempts.push({ model, outcome: outcome.kind, detail: outcome.detail })
@@ -185,7 +187,7 @@ export class LlmChain implements LlmClient {
     endpoint: LlmEndpoint,
     request: LlmRequest,
   ): Promise<
-    | { kind: 'ok'; result: LlmResult }
+    | { kind: 'ok'; result: Omit<LlmResult, 'attempts'> }
     | { kind: 'rate_limited'; retryAfterMs: number; detail: string }
     | { kind: 'error'; detail: string }
   > {
@@ -287,6 +289,7 @@ export class ScriptedLlm implements LlmClient {
       toolCalls: step?.toolCalls ?? [],
       usage: step?.usage ?? { input: 0, output: 0 },
       model: step?.model ?? 'fake:scripted',
+      attempts: step?.attempts ?? [{ model: step?.model ?? 'fake:scripted', outcome: 'ok' }],
     }
   }
 }

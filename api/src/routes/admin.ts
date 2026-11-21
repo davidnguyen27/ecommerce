@@ -10,6 +10,7 @@ import { adminReconciliationRoutes, type ReconciliationDeps } from './admin-reco
 import { adminRefundRoutes } from './admin-refunds.ts'
 import { adminAttributeSchemaRoutes } from './admin-attribute-schemas.ts'
 import { adminAuditRoutes } from './admin-audit.ts'
+import { adminChatbotRoutes } from './admin-chatbot.ts'
 import { adminBrandRoutes } from './admin-brands.ts'
 import { adminCategoryRoutes } from './admin-categories.ts'
 import { adminCommitmentTypeRoutes } from './admin-commitment-types.ts'
@@ -72,5 +73,6 @@ export function adminRoutes(
       .use('/support-requests', adminSupportRoutes(prisma, storage, mail))
       .use('/return-windows', adminReturnWindowRoutes(prisma))
       .use('/reports', adminReportRoutes(prisma))
+      .use('/chatbot', adminChatbotRoutes(prisma))
   )
 }
