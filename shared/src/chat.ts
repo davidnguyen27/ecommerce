@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PageQuery, pageOf } from './pagination.ts'
 import { ProductCard } from './products.ts'
 
 /** Tin của khách dài tối đa (spec M8, số tạm). */
@@ -109,3 +110,56 @@ export const ChatHandoffResponse = z.object({
   link: z.string().nullable(),
 })
 export type ChatHandoffResponse = z.infer<typeof ChatHandoffResponse>
+
+/** Query của `GET /api/admin/chatbot/conversations`: ngày theo giờ Việt Nam, lọc theo tin cuối của cuộc. */
+export const AdminChatConversationQuery = PageQuery.extend({
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  /** `true`: chỉ cuộc đã chuyển nhân viên; `false`: chỉ cuộc chưa chuyển. */
+  handedOff: z.stringbool().optional(),
+  /** `true`: chỉ cuộc có lượt không trả lời được (lỗi hay hết lượt). */
+  failed: z.stringbool().optional(),
+})
+export type AdminChatConversationQuery = z.input<typeof AdminChatConversationQuery>
+
+/** Một dòng trong danh sách cuộc trò chuyện của owner. Không có IP. */
+export const AdminChatConversationSummary = z.object({
+  id: z.string(),
+  createdAt: z.string(),
+  lastMessageAt: z.string(),
+  customerMessageCount: z.number(),
+  /** Câu hỏi đầu của khách, cắt ngắn. */
+  firstQuestion: z.string(),
+  failedTurns: z.number(),
+  /** Mã yêu cầu hỗ trợ khi đã chuyển nhân viên. */
+  supportRequestCode: z.number().nullable(),
+})
+export type AdminChatConversationSummary = z.infer<typeof AdminChatConversationSummary>
+
+export const AdminChatConversationPage = pageOf(AdminChatConversationSummary)
+export type AdminChatConversationPage = z.infer<typeof AdminChatConversationPage>
+
+/** Chi tiết một cuộc cho owner: mỗi tin kèm model đã trả lời, phiên bản prompt và lỗi của lượt. */
+export const AdminChatConversation = z.object({
+  id: z.string(),
+  createdAt: z.string(),
+  lastMessageAt: z.string(),
+  supportRequestCode: z.number().nullable(),
+  messages: z.array(
+    ChatMessageView.extend({
+      model: z.string().nullable(),
+      promptVersion: z.number().nullable(),
+      error: z.string().nullable(),
+      handoffSummary: z.string().nullable(),
+    }),
+  ),
+})
+export type AdminChatConversation = z.infer<typeof AdminChatConversation>
+
+/** `GET /api/admin/chatbot/status`: các model của chuỗi (ADR 0017) và lúc hết bị đánh dấu đang hết lượt. */
+export const ChatbotModelStatus = z.object({
+  /** `false`: máy chủ chưa đặt khóa model nào, chatbot không trả lời được dù bật. */
+  configured: z.boolean(),
+  models: z.array(z.object({ model: z.string(), exhaustedUntil: z.string().nullable() })),
+})
+export type ChatbotModelStatus = z.infer<typeof ChatbotModelStatus>
