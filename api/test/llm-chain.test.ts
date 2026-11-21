@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_LLM_CHAIN,
+  DemoLlm,
   LlmChain,
   LlmUnavailableError,
   ScriptedLlm,
@@ -66,7 +67,7 @@ describe('đọc chuỗi model từ biến môi trường', () => {
 
   it('không có khóa nào thì chatbot không có model; LLM_CHAIN=fake dùng model giả', () => {
     expect(llmFromEnv({})).toBeUndefined()
-    expect(llmFromEnv({ LLM_CHAIN: 'fake' })).toBeInstanceOf(ScriptedLlm)
+    expect(llmFromEnv({ LLM_CHAIN: 'fake' })).toBeInstanceOf(DemoLlm)
     expect(llmFromEnv(KEYS)).toBeInstanceOf(LlmChain)
   })
 
@@ -184,5 +185,38 @@ describe('model giả', () => {
     await expect(llm.complete(REQUEST)).rejects.toThrow(LlmUnavailableError)
     expect((await llm.complete(REQUEST)).content).toBe('Trợ lý thử: Có túi đen dưới 5 triệu không?')
     expect(llm.requests).toHaveLength(3)
+  })
+})
+
+describe('model giả cho E2E', () => {
+  it('tin cuối của khách thì tìm sản phẩm bằng câu đó; có kết quả công cụ thì trả lời bằng tên sản phẩm', async () => {
+    const llm = new DemoLlm()
+    const tools = [{ name: 'search_products', description: 'Tìm', parameters: {} }]
+    // Sản phẩm đang xem (API dựng sẵn) là kết quả công cụ khác: vẫn tìm bằng câu của khách.
+    const viewing = [
+      {
+        role: 'assistant' as const,
+        content: '',
+        toolCalls: [{ id: 'viewing_product', name: 'get_product', arguments: '{}' }],
+      },
+      { role: 'tool' as const, toolCallId: 'viewing_product', content: '{"name":"Áo khác"}' },
+    ]
+    const search = await llm.complete({ messages: [{ role: 'user', content: 'Air Max' }, ...viewing], tools })
+    expect(search.toolCalls).toEqual([{ id: 'demo-search', name: 'search_products', arguments: '{"text":"Air Max"}' }])
+
+    const answer = await llm.complete({
+      messages: [
+        { role: 'user', content: 'Air Max' },
+        ...viewing,
+        { role: 'assistant', content: '', toolCalls: search.toolCalls },
+        {
+          role: 'tool',
+          toolCallId: 'demo-search',
+          content: '{"products":[{"slug":"air-max-90","name":"Air Max 90"}]}',
+        },
+        { role: 'system', content: 'nhắc ngôn ngữ' },
+      ],
+    })
+    expect(answer).toMatchObject({ content: 'Mình tìm được: Air Max 90.', toolCalls: [] })
   })
 })

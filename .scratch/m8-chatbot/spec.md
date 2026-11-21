@@ -1,6 +1,6 @@
 # Spec: M8 — Chatbot
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Người dùng duyệt ngày 2026-11-21. Ticket ở `.scratch/m8-chatbot/issues/`.
 

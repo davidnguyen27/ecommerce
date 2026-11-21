@@ -295,11 +295,49 @@ export class ScriptedLlm implements LlmClient {
 }
 
 /**
- * Chọn model cho chatbot: `LLM_CHAIN=fake` dùng `ScriptedLlm` (E2E, không gọi mạng); còn lại dùng `LlmChain` theo khóa
+ * Model giả cho E2E và chạy thử không cần khóa (`LLM_CHAIN=fake`): chưa tìm kể từ tin cuối của khách thì tìm sản phẩm
+ * bằng đúng câu đó (nên hỏi bằng tên sản phẩm, ví dụ "Air Max"); đã tìm thì trả lời bằng tên các sản phẩm tìm được.
+ * Kết quả công cụ khác (sản phẩm đang xem mà API dựng sẵn) không tính. Không gọi mạng, luôn như nhau.
+ */
+const DEMO_SEARCH_ID = 'demo-search'
+
+export class DemoLlm implements LlmClient {
+  status(): LlmModelStatus[] {
+    return [{ model: 'fake:demo', exhaustedUntil: null }]
+  }
+
+  async complete(request: LlmRequest): Promise<LlmResult> {
+    const result = (content: string, toolCalls: LlmToolCall[] = []): LlmResult => ({
+      content,
+      toolCalls,
+      usage: { input: 0, output: 0 },
+      model: 'fake:demo',
+      attempts: [{ model: 'fake:demo', outcome: 'ok' }],
+    })
+    const askedAt = request.messages.findLastIndex((message) => message.role === 'user')
+    const question = request.messages[askedAt]
+    const searched = request.messages
+      .slice(askedAt + 1)
+      .find((message) => message.role === 'tool' && message.toolCallId === DEMO_SEARCH_ID)
+    if (searched?.role === 'tool') {
+      const found = [...searched.content.matchAll(/"name":"([^"]+)"/g)].map((match) => match[1])
+      return result(found.length ? `Mình tìm được: ${found.join(', ')}.` : 'Mình chưa tìm được sản phẩm phù hợp.')
+    }
+    if (question?.role === 'user' && request.tools?.some((tool) => tool.name === 'search_products')) {
+      return result('', [
+        { id: DEMO_SEARCH_ID, name: 'search_products', arguments: JSON.stringify({ text: question.content }) },
+      ])
+    }
+    return result('Mình là trợ lý thử.')
+  }
+}
+
+/**
+ * Chọn model cho chatbot: `LLM_CHAIN=fake` dùng `DemoLlm` (E2E, không gọi mạng); còn lại dùng `LlmChain` theo khóa
  * đã đặt. Không có khóa nào thì `undefined`: chatbot không trả lời được.
  */
 export function llmFromEnv(env: NodeJS.ProcessEnv): LlmClient | undefined {
-  if (env.LLM_CHAIN?.trim() === 'fake') return new ScriptedLlm()
+  if (env.LLM_CHAIN?.trim() === 'fake') return new DemoLlm()
   const endpoints = llmEndpointsFromEnv(env)
   return endpoints.length > 0 ? new LlmChain(endpoints) : undefined
 }
