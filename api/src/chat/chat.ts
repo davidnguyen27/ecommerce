@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import {
   CHAT_MESSAGES_PER_CONVERSATION,
   ErrorCode,
@@ -11,6 +12,9 @@ import type { DbClient } from '../db.ts'
 import type { ChatMessage } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import { HISTORY_LIMIT } from './prompt.ts'
+
+/** `chat_message.products`: sản phẩm chatbot đã gợi ý trong tin đó. */
+export const StoredProducts = z.array(z.object({ slug: z.string(), name: z.string() }))
 
 /** Im quá chừng này thì tin tiếp theo mở cuộc mới (spec M8). */
 export const CONVERSATION_IDLE_MS = 24 * 60 * 60_000
@@ -39,6 +43,7 @@ export function toMessageView(message: ChatMessage): ChatMessageView {
     role: message.role,
     content: message.content,
     failed: message.error !== null,
+    products: StoredProducts.parse(message.products),
     createdAt: message.createdAt.toISOString(),
   }
 }

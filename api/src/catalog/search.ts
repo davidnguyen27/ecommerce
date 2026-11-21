@@ -119,12 +119,18 @@ function orderBy(c: SearchCriteria, sort: ProductSort | undefined) {
 }
 
 /** Một trang id phiên bản đang xuất bản khớp điều kiện, theo thứ tự hiển thị, kèm tổng số. */
-export async function searchPage(db: Db, c: SearchCriteria, sort: ProductSort | undefined, page: number) {
+export async function searchPage(
+  db: Db,
+  c: SearchCriteria,
+  sort: ProductSort | undefined,
+  page: number,
+  pageSize = PRODUCT_PAGE_SIZE,
+) {
   const [rows, [count]] = await Promise.all([
     db.$queryRaw<{ id: string }[]>`
       SELECT v."id"::text AS id ${FROM} ${whereOf(conditions(c))}
       ORDER BY ${orderBy(c, sort)}
-      LIMIT ${PRODUCT_PAGE_SIZE} OFFSET ${(page - 1) * PRODUCT_PAGE_SIZE}`,
+      LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
     db.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total ${FROM} ${whereOf(conditions(c))}`,
   ])
   return { versionIds: rows.map((r) => r.id), total: count!.total }

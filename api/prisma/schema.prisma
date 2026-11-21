@@ -1478,6 +1478,9 @@ model ChatMessage {
   promptVersion  Int?             @map("prompt_version")
   /// Tin của khách: `exhausted` (mọi model hết lượt) hay `failed` (lỗi) khi lượt đó không có trả lời.
   error          String?
+  /// Tin của chatbot: sản phẩm đã gợi ý (`[{ slug, name }]`), và tóm tắt khi chatbot đề nghị chuyển nhân viên.
+  products       Json             @default("[]")
+  handoffSummary String?          @map("handoff_summary")
   createdAt      DateTime         @default(now()) @map("created_at")
 
   @@index([conversationId, createdAt])

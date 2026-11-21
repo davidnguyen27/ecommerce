@@ -2,7 +2,8 @@
 // Gọi nhà cung cấp thật và tốn hạn mức miễn phí (khoảng 20 lượt gọi), nên không chạy trong CI.
 // Chạy: pnpm chatbot-check                       (chuỗi theo LLM_CHAIN và khóa trong .env)
 //       LLM_CHAIN=groq:qwen/qwen3.8-27b pnpm chatbot-check   (chỉ thử một model)
-// Danh mục, chính sách và công cụ ở đây là bản giả; ticket 03 chuyển sang công cụ thật trên dữ liệu seed.
+//       pnpm chatbot-check --api http://localhost    (hỏi API thật trên dữ liệu demo; bật chatbot của bản đó)
+// Không có --api thì danh mục, chính sách và công cụ là bản giả trong file này, chỉ prompt là của API.
 import {
   LlmChain,
   LlmUnavailableError,
@@ -215,6 +216,80 @@ const SCENARIOS: { id: string; user: string; expect: string; viewing?: string }[
   { id: 'ngoai-le', user: 'viết giúp mình đoạn code python sắp xếp mảng', expect: 'từ chối nhẹ' },
 ]
 
+// --api: hỏi API thật (công cụ thật trên dữ liệu của `scripts/demo-seed.ts`), mỗi tình huống một cuộc mới.
+const API_SCENARIOS: { id: string; user: string; expect: string; viewing?: string }[] = [
+  { id: 'tim-tui', user: 'Mình cần túi đi làm, tầm 7 triệu đổ lại', expect: 'thẻ Michael Kors Jet Set 6.490.000đ' },
+  {
+    id: 'size',
+    viewing: 'nike-air-max-90',
+    user: 'chân mình dài 25,5 cm thì đi size nào? màu đen size 41 còn không?',
+    expect: 'size theo bảng size, tình trạng màu đen 41, câu miễn trừ',
+  },
+  {
+    id: 'chinh-sach',
+    user: 'mua rồi không vừa thì đổi được không, trong bao lâu?',
+    expect: '7 ngày, link /trang/chinh-sach-doi-tra',
+  },
+  { id: 'bao-hanh', user: 'túi Coach Tabby có bảo hành không?', expect: 'khóa và đường may 12 tháng' },
+  { id: 'don-hang', user: 'đơn #1234 của mình giao tới đâu rồi?', expect: 'chỉ tới Tra cứu đơn, không chuyển' },
+  { id: 'ma-giam-gia', user: 'có mã giảm giá nào cho mình không?', expect: 'không tự đưa mã' },
+  {
+    id: 'gap-nguoi',
+    user: 'mình nghi hàng bên bạn không phải chính hãng, cho mình gặp nhân viên',
+    expect: 'đề nghị chuyển',
+  },
+  { id: 'tieng-anh', user: 'Do you have black sneakers under 4 million VND?', expect: 'tiếng Anh, Air Max 90 đen' },
+  { id: 'ngoai-le', user: 'viết giúp mình đoạn code python sắp xếp mảng', expect: 'từ chối nhẹ' },
+]
+
+async function checkApi(base: string) {
+  // Tài khoản owner của dữ liệu demo local (`scripts/demo-seed.ts`); bản khác thì đặt OWNER_EMAIL, OWNER_PASSWORD.
+  const owner = {
+    email: process.env.OWNER_EMAIL ?? 'chu-shop@example.com',
+    password: process.env.OWNER_PASSWORD ?? 'mat-khau-demo-local',
+  }
+  const post = (path: string, body: unknown, headers: Record<string, string> = {}, method = 'POST') =>
+    fetch(`${base}${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(body),
+    })
+  const login = await post('/api/admin/auth/login', owner, { 'X-Client': 'mobile' })
+  if (!login.ok) throw new Error(`Đăng nhập owner thất bại: ${login.status}`)
+  const { accessToken } = (await login.json()) as { accessToken: string }
+  const auth = { Authorization: `Bearer ${accessToken}` }
+  const settings = (await (await fetch(`${base}/api/admin/chatbot/settings`, { headers: auth })).json()) as object
+  // Bật chatbot để thử; giữ nguyên câu thời gian phản hồi đang có.
+  await post('/api/admin/chatbot/settings', { ...settings, enabled: true }, auth, 'PUT')
+  console.log('API:', base)
+
+  for (const scenario of API_SCENARIOS) {
+    const started = Date.now()
+    const res = await post('/api/chat/messages', { content: scenario.user, viewingProductSlug: scenario.viewing })
+    const body = (await res.json()) as {
+      outcome?: string
+      reply?: { content: string } | null
+      cards?: { slug: string; fromPrice: number }[]
+      handoffSuggested?: boolean
+      error?: unknown
+    }
+    console.log(`\n=== [${scenario.id}] ${scenario.user}`)
+    console.log(`mong đợi: ${scenario.expect}`)
+    console.log(
+      `HTTP ${res.status} | ${body.outcome ?? JSON.stringify(body.error)} | thẻ: ${
+        body.cards?.map((c) => `${c.slug} ${c.fromPrice}`).join(', ') || '(không)'
+      } | chuyển: ${body.handoffSuggested ? 'có' : 'không'} | ${Date.now() - started} ms`,
+    )
+    console.log(`trả lời: ${body.reply?.content ?? ''}`)
+  }
+}
+
+const apiFlag = process.argv.indexOf('--api')
+if (apiFlag !== -1) {
+  await checkApi(process.argv[apiFlag + 1] ?? `http://localhost:${process.env.HTTP_PORT ?? '80'}`)
+  process.exit(0)
+}
+
 const MAX_TOOL_ROUNDS = 3
 
 const endpoints = llmEndpointsFromEnv(process.env)
@@ -229,7 +304,7 @@ for (const scenario of SCENARIOS) {
   // Đúng prompt API đang dùng, kể cả lời nhắc ngôn ngữ đặt sau tin của khách.
   const messages: LlmMessage[] = promptMessages(
     [{ role: 'customer', content: scenario.user }],
-    scenario.viewing ? `Khách đang xem: ${JSON.stringify(getProduct(scenario.viewing))}` : undefined,
+    scenario.viewing ? { slug: scenario.viewing, product: getProduct(scenario.viewing) } : undefined,
   )
   const used: string[] = []
   const models = new Set<string>()

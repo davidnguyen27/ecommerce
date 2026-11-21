@@ -50,3 +50,8 @@ services:
       # Image chạy NODE_ENV=production; khóa VNPAY sandbox ở production cần dòng này (bản demo, không nhận tiền thật).
       - key: PAYMENT_SIMULATOR
         value: allow
+      # Chatbot (ADR 0017): khóa gói miễn phí; để trống thì chatbot tự tắt.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
