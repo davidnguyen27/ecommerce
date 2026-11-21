@@ -316,3 +316,39 @@ export const ExceptionsReport = z.object({
   ),
 })
 export type ExceptionsReport = z.infer<typeof ExceptionsReport>
+
+/** Số của chatbot trong một kỳ (M8): cuộc trò chuyện tính theo lúc mở cuộc, tin theo lúc gửi. */
+export const ChatbotFigures = z.object({
+  conversations: z.number().int(),
+  customerMessages: z.number().int(),
+  /** Cuộc mở trong kỳ đã chuyển thành yêu cầu hỗ trợ. */
+  handedOff: z.number().int(),
+})
+export type ChatbotFigures = z.infer<typeof ChatbotFigures>
+
+/** Báo cáo chatbot (`GET /api/admin/reports/chatbot`, quyền `chatbot.manage`). */
+export const ChatbotReport = z.object({
+  from: z.iso.date(),
+  to: z.iso.date(),
+  groupBy: ReportGroupBy,
+  rows: z.array(ChatbotFigures.extend({ period: z.string() })),
+  total: ChatbotFigures.extend({
+    /** Cuộc đã chuyển trên cuộc mở trong kỳ; `null` khi không có cuộc nào. */
+    handoffRate: z.number().nullable(),
+    /** Tin của khách không có trả lời vì mọi model hết lượt, và vì lỗi. */
+    exhaustedTurns: z.number().int(),
+    failedTurns: z.number().int(),
+  }),
+  /** Theo model, theo ngày của `chat_usage_day`; model nhiều lượt gọi trước. */
+  models: z.array(
+    z.object({
+      model: z.string(),
+      calls: z.number().int(),
+      inputTokens: z.number().int(),
+      outputTokens: z.number().int(),
+      rateLimited: z.number().int(),
+      errors: z.number().int(),
+    }),
+  ),
+})
+export type ChatbotReport = z.infer<typeof ChatbotReport>

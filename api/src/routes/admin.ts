@@ -11,7 +11,7 @@ import { adminReconciliationRoutes, type ReconciliationDeps } from './admin-reco
 import { adminRefundRoutes } from './admin-refunds.ts'
 import { adminAttributeSchemaRoutes } from './admin-attribute-schemas.ts'
 import { adminAuditRoutes } from './admin-audit.ts'
-import { adminChatbotRoutes } from './admin-chatbot.ts'
+import { adminChatbotReportRoutes, adminChatbotRoutes } from './admin-chatbot.ts'
 import { adminBrandRoutes } from './admin-brands.ts'
 import { adminCategoryRoutes } from './admin-categories.ts'
 import { adminCommitmentTypeRoutes } from './admin-commitment-types.ts'
@@ -75,6 +75,8 @@ export function adminRoutes(
       .use('/vouchers', adminVoucherRoutes(prisma))
       .use('/support-requests', adminSupportRoutes(prisma, storage, mail))
       .use('/return-windows', adminReturnWindowRoutes(prisma))
+      // Trước router báo cáo M7: router đó đòi `report.view` cho mọi đường bên dưới.
+      .use('/reports/chatbot', adminChatbotReportRoutes(prisma))
       .use('/reports', adminReportRoutes(prisma))
       .use('/chatbot', adminChatbotRoutes(prisma, llm))
   )

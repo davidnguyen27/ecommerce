@@ -113,6 +113,7 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
 const ADMIN_SUBPAGES: Pick<AdminMenuItem, 'to' | 'permission'>[] = [
   { to: '/admin/support/new', permission: 'support.handle' },
   { to: '/admin/chatbot/conversations', permission: 'chatbot.manage' },
+  { to: '/admin/chatbot/report', permission: 'chatbot.manage' },
 ]
 
 export const ADMIN_MENU_ITEMS = ADMIN_MENU_GROUPS.flatMap((group) => group.items)

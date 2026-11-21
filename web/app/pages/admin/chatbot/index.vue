@@ -50,6 +50,7 @@ await loadStatus()
       </div>
       <div class="admin-topbar-actions">
         <NuxtLink to="/admin/chatbot/conversations" class="btn btn-secondary">Cuộc trò chuyện</NuxtLink>
+        <NuxtLink to="/admin/chatbot/report" class="btn btn-secondary">Báo cáo</NuxtLink>
         <button type="submit" form="chatbot-form" class="btn btn-primary" :disabled="isSaving">
           {{ isSaving ? 'Đang lưu...' : 'Lưu thay đổi' }}
         </button>

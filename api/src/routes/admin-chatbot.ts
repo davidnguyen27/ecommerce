@@ -4,6 +4,8 @@ import {
   AdminChatConversationQuery,
   ChatbotSettings,
   ErrorCode,
+  ReportQuery,
+  type ChatbotReport,
   type AdminChatConversation,
   type AdminChatConversationPage,
   type ChatbotModelStatus,
@@ -16,6 +18,8 @@ import type { Db } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
+import { chatbotReport } from '../reports/chatbot.ts'
+import { periodOf } from '../reports/period.ts'
 
 const VN_OFFSET_MS = 7 * 60 * 60_000
 const DAY_MS = 24 * 60 * 60_000
@@ -132,4 +136,17 @@ export function adminChatbotRoutes(prisma: Db, llm: LlmClient | undefined) {
         res.json(body)
       })
   )
+}
+
+/**
+ * Báo cáo chatbot (spec M8), mount tại `/reports/chatbot` trước router báo cáo M7: dùng quyền `chatbot.manage` thay cho
+ * `report.view`, nên người chỉ có `chatbot.manage` vẫn xem được.
+ */
+export function adminChatbotReportRoutes(prisma: Db) {
+  return Router()
+    .use(requirePermission('chatbot.manage'))
+    .get('/', async (req, res) => {
+      const body: ChatbotReport = await chatbotReport(prisma, periodOf(parse(ReportQuery, req.query)))
+      res.json(body)
+    })
 }
