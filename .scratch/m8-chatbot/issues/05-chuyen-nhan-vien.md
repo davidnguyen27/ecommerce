@@ -28,3 +28,7 @@
   - nhân viên `support.handle` đọc được bản chép; không có quyền thì không.
 
 Spec: "Chuyển nhân viên (mở rộng M6b)".
+
+## Comments
+
+- Ghi chú từ ticket 04: trang `web/app/pages/yeu-cau/[code].vue` đã có từ M6b, mở yêu cầu bằng `?don=<mã đơn>&token=<token tra cứu đơn>`. Link cho khách vãng lai không có đơn phải dùng chung trang này với một kiểu token khác, không tạo trang mới trùng đường dẫn.
