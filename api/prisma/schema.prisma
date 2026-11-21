@@ -1431,3 +1431,72 @@ model ReturnWindow {
 
   @@map("return_window")
 }
+
+/// Cài đặt chatbot (M8), tối đa một dòng (check `id`). Không có dòng là mặc định: tắt, chưa có câu thời gian phản hồi.
+model ChatbotSetting {
+  id               Boolean  @id @default(true)
+  enabled          Boolean  @default(false)
+  /// Câu owner soạn, chatbot đọc cho khách khi chuyển nhân viên. Rỗng là không đọc.
+  responseTimeNote String   @default("") @map("response_time_note")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("chatbot_setting")
+}
+
+enum ChatRole {
+  customer
+  assistant
+
+  @@map("chat_role")
+}
+
+/// Cuộc trò chuyện của một khách với chatbot (GLOSSARY "Chatbot"). Im quá 24 giờ thì tin tiếp theo mở cuộc mới; quá 90
+/// ngày thì job dọn xóa cả cuộc.
+model ChatConversation {
+  id                   String        @id @default(uuid()) @db.Uuid
+  /// IP của khách lúc mở cuộc, đã băm: để đối chiếu khi bị lạm dụng, không đọc ra được IP gốc.
+  ipHash               String        @map("ip_hash")
+  /// Số tin của khách, để chặn quá 30 tin mỗi cuộc mà không phải đếm lại.
+  customerMessageCount Int           @default(0) @map("customer_message_count")
+  createdAt            DateTime      @default(now()) @map("created_at")
+  lastMessageAt        DateTime      @default(now()) @map("last_message_at")
+  messages             ChatMessage[]
+
+  @@index([lastMessageAt])
+  @@map("chat_conversation")
+}
+
+/// Một tin trong cuộc trò chuyện. Lượt không trả lời được thì tin của khách mang `error`, không có tin của chatbot.
+model ChatMessage {
+  id             String           @id @default(uuid()) @db.Uuid
+  conversationId String           @map("conversation_id") @db.Uuid
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           ChatRole
+  content        String
+  /// Tin của chatbot: model đã trả lời (`nhà cung cấp:model`) và phiên bản system prompt.
+  model          String?
+  promptVersion  Int?             @map("prompt_version")
+  /// Tin của khách: `exhausted` (mọi model hết lượt) hay `failed` (lỗi) khi lượt đó không có trả lời.
+  error          String?
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  @@index([conversationId, createdAt])
+  @@index([createdAt])
+  @@map("chat_message")
+}
+
+/// Lượt gọi model theo ngày (giờ Việt Nam) và model, cho báo cáo; không dùng để chặn (ADR 0017: nhà cung cấp tự chặn).
+model ChatUsageDay {
+  day          DateTime @db.Date
+  /// `nhà cung cấp:model`.
+  model        String
+  calls        Int      @default(0)
+  inputTokens  Int      @default(0) @map("input_tokens")
+  outputTokens Int      @default(0) @map("output_tokens")
+  /// Số lần model trả 429, và số lần lỗi khác (5xx, quá thời gian chờ, trả lời hỏng).
+  rateLimited  Int      @default(0) @map("rate_limited")
+  errors       Int      @default(0)
+
+  @@id([day, model])
+  @@map("chat_usage_day")
+}

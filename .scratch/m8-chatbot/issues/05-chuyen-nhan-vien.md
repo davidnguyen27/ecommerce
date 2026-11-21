@@ -19,6 +19,7 @@
 - [ ] Trang `/yeu-cau/[code]` cho khách vãng lai: đọc, trả lời, đính ảnh, dùng lại thành phần của trang yêu cầu M6b; token sai là 404.
 - [ ] Khung chat: form chuyển, rồi hiện câu thời gian phản hồi từ cài đặt.
 - [ ] Trang yêu cầu của nhân viên: khối "Cuộc trò chuyện với chatbot", chỉ cần `support.handle`.
+- [ ] Job xóa cuộc trò chuyện (ticket 02) giữ lại cuộc đã gắn yêu cầu hỗ trợ.
 - [ ] Test:
   - khách vãng lai tạo được yêu cầu không đơn, không tài khoản; email có link token; token sai là 404;
   - đã đăng nhập thì gắn tài khoản; người tạo là `chatbot`;

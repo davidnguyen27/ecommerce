@@ -90,6 +90,7 @@ describe('gọi qua chuỗi model', () => {
       toolCalls: [],
       usage: { input: 650, output: 60 },
       model: 'groq:openai/gpt-oss-120b',
+      attempts: [{ model: 'groq:openai/gpt-oss-120b', outcome: 'ok' }],
     })
     expect(calls).toHaveLength(1)
     expect(calls[0]!.auth).toBe('Bearer gsk_test')
@@ -116,7 +117,9 @@ describe('gọi qua chuỗi model', () => {
       'openai/gpt-oss-120b': [{ status: 429, headers: { 'retry-after': '30' } }, okReply('Lại là gpt-oss')],
       'qwen/qwen3.8-27b': [okReply('Qwen trả lời'), okReply('Qwen lần hai')],
     })
-    expect((await llm.complete(REQUEST)).model).toBe('groq:qwen/qwen3.8-27b')
+    const fallback = await llm.complete(REQUEST)
+    expect(fallback.model).toBe('groq:qwen/qwen3.8-27b')
+    expect(fallback.attempts.map((a) => a.outcome)).toEqual(['rate_limited', 'ok'])
     expect(llm.status()[0]!.exhaustedUntil).not.toBeNull()
 
     advance(29_000)
