@@ -258,5 +258,10 @@ onBeforeUnmount(() => {
         </p>
       </div>
     </footer>
+
+    <!-- Khung chat chỉ ở trình duyệt và tải sau trang: HTML từ server không đổi, lỗi của nó không làm hỏng trang. -->
+    <ClientOnly>
+      <LazyChatWidget v-if="!chatHiddenOn(route.path)" />
+    </ClientOnly>
   </div>
 </template>
