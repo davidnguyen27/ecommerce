@@ -164,13 +164,13 @@ if (canAssign.value) {
         </div>
 
         <!-- Cuộc trò chuyện với chatbot trước khi khách xác nhận chuyển (M8). -->
-        <div
+        <section
           v-if="request.chatTranscript"
           class="admin-panel"
           style="margin-bottom: 24px"
-          data-testid="admin-chat-transcript"
+          aria-labelledby="chat-transcript-title"
         >
-          <h2 class="admin-section-title">Cuộc trò chuyện với chatbot</h2>
+          <h2 id="chat-transcript-title" class="admin-section-title">Cuộc trò chuyện với chatbot</h2>
           <div
             v-for="m in request.chatTranscript"
             :key="m.id"
@@ -185,7 +185,7 @@ if (canAssign.value) {
               Đã gợi ý: {{ m.products.map((p) => p.name).join(', ') }}
             </div>
           </div>
-        </div>
+        </section>
 
         <AdminSupportReturnPanel
           v-if="request.kind === 'return' || request.kind === 'exchange'"

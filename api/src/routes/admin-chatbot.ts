@@ -17,17 +17,12 @@ import { readChatbotSettings, toMessageView } from '../chat/chat.ts'
 import type { Db } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
+import { isUuid, parse } from '../http/validation.ts'
 import { chatbotReport } from '../reports/chatbot.ts'
-import { periodOf } from '../reports/period.ts'
+import { periodOf, startOfDay } from '../reports/period.ts'
 
-const VN_OFFSET_MS = 7 * 60 * 60_000
 const DAY_MS = 24 * 60 * 60_000
 const FIRST_QUESTION_LENGTH = 120
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-/** Đầu ngày lịch `YYYY-MM-DD` theo giờ Việt Nam. */
-const startOfVnDay = (date: string) => new Date(Date.parse(date) - VN_OFFSET_MS)
 
 /**
  * Chatbot ở trang quản trị (spec M8): quyền `chatbot.manage`, mặc định chỉ owner. Cuộc trò chuyện không kèm IP (chỉ
@@ -68,8 +63,8 @@ export function adminChatbotRoutes(prisma: Db, llm: LlmClient | undefined) {
       .get('/conversations', async (req, res) => {
         const query = parse(AdminChatConversationQuery, req.query)
         const lastMessageAt: Prisma.DateTimeFilter = {
-          ...(query.from && { gte: startOfVnDay(query.from) }),
-          ...(query.to && { lt: new Date(startOfVnDay(query.to).getTime() + DAY_MS) }),
+          ...(query.from && { gte: startOfDay(query.from) }),
+          ...(query.to && { lt: new Date(startOfDay(query.to).getTime() + DAY_MS) }),
         }
         const where: Prisma.ChatConversationWhereInput = {
           ...((query.from || query.to) && { lastMessageAt }),
@@ -113,7 +108,7 @@ export function adminChatbotRoutes(prisma: Db, llm: LlmClient | undefined) {
       })
       .get('/conversations/:id', async (req, res) => {
         const id = String(req.params.id)
-        const conversation = UUID.test(id)
+        const conversation = isUuid(id)
           ? await prisma.chatConversation.findUnique({
               where: { id },
               include: { supportRequest: { select: { code: true } }, messages: { orderBy: { createdAt: 'asc' } } },

@@ -6,6 +6,7 @@ definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'chatbot
 const PAGE_SIZE = 50
 
 const session = useAdminSession()
+const canOpenSupport = computed(() => session.canOpen('/admin/support'))
 const result = ref<AdminChatConversationPage | null>(null)
 const error = ref<string | null>(null)
 const filters = reactive({ from: '', to: '', handedOff: 'all' as 'all' | 'true' | 'false', failed: false })
@@ -112,9 +113,13 @@ await load()
                 <td class="admin-table-num">{{ item.customerMessageCount }}</td>
                 <td class="admin-table-num">{{ item.failedTurns || '' }}</td>
                 <td>
-                  <NuxtLink v-if="item.supportRequestCode" :to="`/admin/support/${item.supportRequestCode}`"
+                  <!-- Người có chatbot.manage chưa chắc mở được trang yêu cầu hỗ trợ: chỉ hiện mã khi không có quyền. -->
+                  <NuxtLink
+                    v-if="item.supportRequestCode && canOpenSupport"
+                    :to="`/admin/support/${item.supportRequestCode}`"
                     >#YC{{ item.supportRequestCode }}</NuxtLink
                   >
+                  <span v-else-if="item.supportRequestCode">#YC{{ item.supportRequestCode }}</span>
                   <span v-else style="color: var(--adm-muted)">—</span>
                 </td>
                 <td style="white-space: nowrap; font-size: 12px">{{ formatDateTime(item.lastMessageAt) }}</td>

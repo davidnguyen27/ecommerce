@@ -314,6 +314,8 @@ watch(
       <div class="space-y-2 border-t border-border px-4 py-3">
         <div v-if="notice" class="rounded-md border border-border bg-secondary px-3 py-2 text-sm">
           {{ notice }}
+          <!-- Chân trang của layout khách liệt kê các trang chính sách (spec M8: kèm link trang chính sách). -->
+          <a href="#chinh-sach" class="link" @click="close">Xem các chính sách</a>
         </div>
         <p v-if="error" class="notice-error" role="alert">{{ error }}</p>
 

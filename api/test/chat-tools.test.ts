@@ -189,7 +189,7 @@ describe('vòng lặp và ngữ cảnh', () => {
   it(`sau ${MAX_TOOL_ROUNDS} vòng công cụ thì gọi model không kèm công cụ để buộc trả lời; mỗi lần gọi đều được ghi`, async () => {
     const search = { toolCalls: [call('search_products', { text: 'Air' })] }
     const llm = new ScriptedLlm([search, search, search, { content: 'Mình gợi ý Air Max.' }])
-    const { request, prisma } = await chatShop(llm)
+    const { request, token } = await chatShop(llm)
 
     const res = await ask(request, 'Gợi ý giày?')
     expect(res.body.reply.content).toBe('Mình gợi ý Air Max.')
@@ -201,8 +201,9 @@ describe('vòng lặp và ngữ cảnh', () => {
       expect(messages.at(-1)).toEqual({ role: 'system', content: LANGUAGE_REMINDER })
     }
 
-    // Báo cáo chatbot (ticket 07) mới có API đọc số này; tạm đọc thẳng bảng.
-    expect((await prisma.chatUsageDay.findFirst())?.calls).toBe(4)
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
+    const report = await request.get('/api/admin/reports/chatbot').query({ from: today, to: today }).set(bearer(token))
+    expect(report.body.models).toEqual([expect.objectContaining({ model: 'fake:scripted', calls: 4 })])
   })
 
   it('sản phẩm khách đang xem đi vào như kết quả công cụ, không vào system message', async () => {

@@ -11,7 +11,11 @@ import type { LlmAttempt, LlmClient } from '../adapters/llm.ts'
 import type { DbClient } from '../db.ts'
 import type { ChatMessage } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
+import { vnDate } from '../reports/period.ts'
 import { HISTORY_LIMIT } from './prompt.ts'
+
+/** Token của một lần gọi model, theo model đã trả lời. */
+export type ModelUsage = { model: string; input: number; output: number }
 
 /** `chat_message.products`: sản phẩm chatbot đã gợi ý trong tin đó. */
 export const StoredProducts = z.array(z.object({ slug: z.string(), name: z.string() }))
@@ -20,8 +24,6 @@ export const StoredProducts = z.array(z.object({ slug: z.string(), name: z.strin
 export const CONVERSATION_IDLE_MS = 24 * 60 * 60_000
 /** Cuộc trò chuyện có tin cuối quá chừng này bị job dọn xóa (spec M8). */
 export const CONVERSATION_RETENTION_MS = 90 * 24 * 60 * 60_000
-
-const VN_OFFSET_MS = 7 * 60 * 60_000
 
 const DEFAULT_SETTINGS: ChatbotSettings = { enabled: false, responseTimeNote: '' }
 
@@ -110,20 +112,12 @@ export async function appendCustomerMessage(
   return { conversationId, message, history: recent.reverse() }
 }
 
-/** Ngày lịch `YYYY-MM-DD` theo giờ Việt Nam. */
-const vnDay = (at: Date) => new Date(at.getTime() + VN_OFFSET_MS).toISOString().slice(0, 10)
-
 /**
  * Cộng các lần gọi model của một lượt vào `chat_usage_day`: mỗi lần gọi thật (không tính model bị bỏ qua) là một lượt;
  * token chỉ có ở model đã trả lời.
  */
-export async function recordUsage(
-  db: DbClient,
-  attempts: readonly LlmAttempt[],
-  usage: { model: string; input: number; output: number } | null,
-  at: Date,
-) {
-  const day = vnDay(at)
+export async function recordUsage(db: DbClient, attempts: readonly LlmAttempt[], usage: ModelUsage | null, at: Date) {
+  const day = vnDate(at)
   for (const attempt of attempts) {
     if (attempt.outcome === 'skipped') continue
     const tokens = usage && attempt.outcome === 'ok' && attempt.model === usage.model ? usage : { input: 0, output: 0 }

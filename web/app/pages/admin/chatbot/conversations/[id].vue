@@ -30,9 +30,10 @@ const ERROR_LABELS: Record<string, string> = { exhausted: 'hết lượt', faile
           {{ formatDateTime(conversation.lastMessageAt) }}
           <template v-if="conversation.supportRequestCode">
             · đã chuyển thành
-            <NuxtLink :to="`/admin/support/${conversation.supportRequestCode}`"
+            <NuxtLink v-if="session.canOpen('/admin/support')" :to="`/admin/support/${conversation.supportRequestCode}`"
               >#YC{{ conversation.supportRequestCode }}</NuxtLink
             >
+            <span v-else>#YC{{ conversation.supportRequestCode }}</span>
           </template>
         </p>
       </div>
