@@ -213,10 +213,14 @@ watch(
 
 <template>
   <div class="chat-widget">
+    <!--
+      Bản demo trên Netlify có badge "Powered by Netlify" (iframe cố định ở góc phải dưới, cao 64px, z-index 2147483645)
+      đè lên góc đó. Nút đặt cao hơn badge; khung chat khi mở là hộp thoại nên nằm trên badge.
+    -->
     <button
       v-if="!open"
       type="button"
-      class="fixed bottom-4 right-4 z-40 inline-flex h-12 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg transition-colors hover:bg-primary/85"
+      class="fixed bottom-20 right-4 z-40 inline-flex h-12 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg transition-colors hover:bg-primary/85"
       aria-haspopup="dialog"
       @click="toggle"
     >
@@ -229,7 +233,7 @@ watch(
       ref="panel"
       role="dialog"
       aria-label="Trợ lý tư vấn"
-      class="fixed inset-0 z-50 flex flex-col bg-card sm:inset-auto sm:bottom-4 sm:right-4 sm:h-[min(640px,calc(100vh-2rem))] sm:w-96 sm:rounded-lg sm:border sm:border-border sm:shadow-xl"
+      class="fixed inset-0 z-[2147483646] flex flex-col bg-card sm:inset-auto sm:bottom-4 sm:right-4 sm:h-[min(640px,calc(100vh-2rem))] sm:w-96 sm:rounded-lg sm:border sm:border-border sm:shadow-xl"
       @keydown="onPanelKeydown"
     >
       <header class="flex items-center gap-2 border-b border-border px-4 py-3">
