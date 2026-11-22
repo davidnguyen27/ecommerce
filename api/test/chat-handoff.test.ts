@@ -257,4 +257,18 @@ describe('nhận ra khách đòi gặp nhân viên', () => {
     const saved = await app.request.get(`/api/chat/conversations/${res.body.conversationId}`)
     expect(saved.body.messages.at(-1).content).toBe(res.body.reply.content)
   })
+
+  it('nhãn công cụ lẫn trong câu trả lời bị bỏ, và chỉ vậy thì không đề nghị chuyển', async () => {
+    const llm = new ScriptedLlm([{ content: 'Tool: search_products - Có túi Coach Tabby giá 4.890.000 đ.' }])
+    const app = await appWithOwner({ llm })
+    const { accessToken } = await login(app.request, OWNER.email, OWNER.password)
+    await app.request
+      .put('/api/admin/chatbot/settings')
+      .set(bearer(accessToken))
+      .send({ enabled: true, responseTimeNote: '' })
+
+    const res = await app.request.post('/api/chat/messages').send({ content: 'có túi Coach không?' })
+    expect(res.body.reply.content).toBe('Có túi Coach Tabby giá 4.890.000 đ.')
+    expect(res.body.handoffSuggested).toBe(false)
+  })
 })
