@@ -25,7 +25,7 @@ import {
   unavailableReason,
 } from '../chat/chat.ts'
 import { PROMPT_VERSION, promptMessages } from '../chat/prompt.ts'
-import { asksForStaff, dropSentClaims, looksEnglish } from '../chat/intent.ts'
+import { asksForStaff, dropSentClaims, looksEnglish, stripToolLabels } from '../chat/intent.ts'
 import { policySlugs, productForModel } from '../chat/tools.ts'
 import { TurnFailedError, runTurn } from '../chat/turn.ts'
 import { findPublicProduct } from '../catalog/public-products.ts'
@@ -96,14 +96,13 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
             { conversationId: turn.conversationId, model: result.model, tools: result.tools },
             'Chatbot đã trả lời',
           )
-          const content = dropSentClaims(result.content, looksEnglish(input.content))
+          const unlabeled = stripToolLabels(result.content)
+          const content = dropSentClaims(unlabeled, looksEnglish(input.content))
           // Model đề nghị chuyển, nói tới chuyện chuyển (`dropSentClaims` vừa bỏ câu "đã gửi"), hay khách tự đòi gặp nhân
           // viên (`asksForStaff`): tóm tắt làm tiêu đề yêu cầu (ticket 05).
           const handoffSummary =
             result.handoffSummary ??
-            (asksForStaff(input.content) || content !== result.content
-              ? input.content.slice(0, HANDOFF_SUBJECT_MAX)
-              : null)
+            (asksForStaff(input.content) || content !== unlabeled ? input.content.slice(0, HANDOFF_SUBJECT_MAX) : null)
           const answeredAt = new Date()
           const reply = await prisma.$transaction(async (tx) => {
             for (const call of result.calls) await recordUsage(tx, call.attempts, call.usage, answeredAt)

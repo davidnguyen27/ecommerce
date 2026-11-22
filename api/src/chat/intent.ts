@@ -46,6 +46,23 @@ export function suggestsSize(text: string): boolean {
     .some((sentence) => SIZE_WORD.test(sentence) && SIZE_NUMBER.test(sentence) && RECOMMENDS.test(sentence))
 }
 
+/** Nhãn công cụ đầu dòng: "Tool: handoff - ", "[Tool call: get_product(...)]", "Function: search_products:". */
+const TOOL_LABEL =
+  /^[ \t]*\[?(?:tool|function)(?:[ \t]+call)?[ \t]*:[ \t]*[a-z_]+(?:\([^)\n]*\))?\]?[ \t]*(?:[-–—:][ \t]*)?/gim
+
+/**
+ * Bỏ nhãn công cụ model viết lẫn vào câu trả lời: qwen từng trả lời "Tool: handoff - Tôi sẽ chuyển bạn…" (2026-11-22).
+ * Giữ phần chữ sau nhãn; dòng chỉ có nhãn thì bỏ cả dòng. Không có nhãn thì trả nguyên văn.
+ */
+export function stripToolLabels(text: string): string {
+  const stripped = text.replace(TOOL_LABEL, '')
+  if (stripped === text) return text
+  return stripped
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\s*\n/, '')
+    .trim()
+}
+
 /** Một câu, kèm dấu câu và khoảng trắng sau nó; dấu chấm trong số ("25.5") không cắt câu. */
 const SENTENCE = /(?:[^.!?\n]|\.(?=\d))+(?:[.!?]+|$)[ \t]*/gm
 /**
