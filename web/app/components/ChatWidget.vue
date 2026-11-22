@@ -280,7 +280,7 @@ watch(
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div
               class="prose-content rounded-lg bg-secondary px-3 py-2 text-sm"
-              v-html="renderMarkdown(entry.content)"
+              v-html="renderMarkdown(linkifyShopPaths(entry.content))"
             />
             <ul v-if="entry.cards.length" class="space-y-2">
               <li v-for="card in entry.cards" :key="card.slug">

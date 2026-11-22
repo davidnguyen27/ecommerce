@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   chatHiddenOn,
+  linkifyShopPaths,
   pendingCustomerEntry,
   readConversationId,
   unavailableText,
@@ -41,5 +42,20 @@ describe('khung chat', () => {
   it('tin của khách hiện ngay khi gửi, đã cắt khoảng trắng', () => {
     const entry = pendingCustomerEntry('  Có túi đen không?  ', new Date('2026-11-21T03:00:00Z'))
     expect(entry).toMatchObject({ role: 'customer', content: 'Có túi đen không?', failed: false, cards: [] })
+  })
+})
+
+describe('link trong câu trả lời', () => {
+  it('đường dẫn sản phẩm, chính sách viết trơn thành link; link markdown sẵn có giữ nguyên', () => {
+    expect(linkifyShopPaths('Xem tại: /san-pham/coach-tabby-shoulder-bag-26.')).toBe(
+      'Xem tại: [/san-pham/coach-tabby-shoulder-bag-26](/san-pham/coach-tabby-shoulder-bag-26).',
+    )
+    expect(linkifyShopPaths('Chi tiết ở /trang/chinh-sach-doi-tra')).toBe(
+      'Chi tiết ở [/trang/chinh-sach-doi-tra](/trang/chinh-sach-doi-tra)',
+    )
+    const markdown = 'Xem [Coach Tabby](/san-pham/coach-tabby) hay [/trang/doi-tra](/trang/doi-tra)'
+    expect(linkifyShopPaths(markdown)).toBe(markdown)
+    expect(linkifyShopPaths('https://shop.vn/san-pham/abc')).toBe('https://shop.vn/san-pham/abc')
+    expect(linkifyShopPaths('Không có link nào')).toBe('Không có link nào')
   })
 })
