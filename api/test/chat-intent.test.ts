@@ -1,5 +1,33 @@
 import { describe, expect, it } from 'vitest'
-import { asksForStaff, dropSentClaims, looksEnglish, suggestsSize } from '../src/chat/intent.ts'
+import { asksForStaff, dropSentClaims, looksEnglish, stripToolLabels, suggestsSize } from '../src/chat/intent.ts'
+
+describe('bỏ nhãn công cụ lẫn trong câu trả lời', () => {
+  it('bỏ nhãn, giữ chữ sau nhãn (câu thật của qwen, 2026-11-22)', () => {
+    expect(
+      stripToolLabels(
+        'Tool: handoff - Tôi sẽ chuyển bạn qua cho nhân viên, bạn vui lòng nhấn nút xác nhận bên dưới nhé!\nRất xin lỗi bạn.',
+      ),
+    ).toBe('Tôi sẽ chuyển bạn qua cho nhân viên, bạn vui lòng nhấn nút xác nhận bên dưới nhé!\nRất xin lỗi bạn.')
+  })
+
+  it('dòng chỉ có nhãn thì bỏ cả dòng; nhãn dạng gọi hàm, trong ngoặc vuông', () => {
+    expect(stripToolLabels('Tool: handoff\n\nBạn bấm nút xác nhận bên dưới nhé.')).toBe(
+      'Bạn bấm nút xác nhận bên dưới nhé.',
+    )
+    expect(stripToolLabels('[Tool call: get_product(slug="air-max")]\nGiá 3.490.000 đ.')).toBe('Giá 3.490.000 đ.')
+    expect(stripToolLabels('Có 2 mẫu:\nFunction: search_products: Air Max 90')).toBe('Có 2 mẫu:\nAir Max 90')
+  })
+
+  it('không có nhãn đầu dòng thì giữ nguyên văn', () => {
+    for (const text of [
+      'Giá 3.490.000 đ.\n\n- Màu đen: còn hàng',
+      'Bộ dụng cụ: kéo, kìm (Tool: không bán lẻ).',
+      'Tools: chưa có.',
+    ]) {
+      expect(stripToolLabels(text)).toBe(text)
+    }
+  })
+})
 
 describe('bỏ câu nói đã gửi cho nhân viên', () => {
   it('bỏ câu "đã gửi", giữ câu mời bấm nút (câu thật của qwen, chatbot-check 2026-11-21)', () => {
