@@ -57,3 +57,11 @@ export function pendingCustomerEntry(content: string, now = new Date()): ChatEnt
     cards: [],
   }
 }
+
+/**
+ * Đường dẫn trang sản phẩm, trang chính sách mà chatbot viết trơn ("/san-pham/air-max-90") thành link markdown, vì
+ * markdown-it không tự tạo link cho đường dẫn tương đối. Đường dẫn đã nằm trong link markdown thì giữ nguyên.
+ */
+export function linkifyShopPaths(text: string): string {
+  return text.replace(/(?<![([/\w])\/(?:san-pham|trang)\/[a-z0-9-]+(?![\w\]])/g, (path) => `[${path}](${path})`)
+}
