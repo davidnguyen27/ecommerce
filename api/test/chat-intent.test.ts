@@ -1,5 +1,38 @@
 import { describe, expect, it } from 'vitest'
-import { asksForStaff, looksEnglish, suggestsSize } from '../src/chat/intent.ts'
+import { asksForStaff, dropSentClaims, looksEnglish, suggestsSize } from '../src/chat/intent.ts'
+
+describe('bỏ câu nói đã gửi cho nhân viên', () => {
+  it('bỏ câu "đã gửi", giữ câu mời bấm nút (câu thật của qwen, chatbot-check 2026-11-21)', () => {
+    expect(
+      dropSentClaims(
+        'Mình đã gửi yêu cầu chuyển cho nhân viên. Bạn vui lòng bấm nút xác nhận bên dưới để được hỗ trợ nhé.',
+        false,
+      ),
+    ).toBe('Bạn vui lòng bấm nút xác nhận bên dưới để được hỗ trợ nhé.')
+  })
+
+  it('không còn lời mời thì thêm lời mời theo ngôn ngữ của khách', () => {
+    expect(dropSentClaims('Yêu cầu của bạn đã được chuyển tới nhân viên!', false)).toBe(
+      'Bạn bấm nút "Gặp nhân viên" bên dưới để gửi câu hỏi cho nhân viên nhé.',
+    )
+    expect(dropSentClaims("Sorry about that. I've forwarded your request to our staff.", true)).toBe(
+      'Sorry about that.\n\nPress the "Gặp nhân viên" button below to send your question to our staff.',
+    )
+    expect(dropSentClaims('Your request has been sent to the support team.', true)).toContain('Press the')
+  })
+
+  it('câu không tự nhận đã gửi thì giữ nguyên văn', () => {
+    for (const text of [
+      'Bạn bấm nút xác nhận bên dưới để mình chuyển câu hỏi cho nhân viên nhé.',
+      'Sau khi yêu cầu đã được gửi, nhân viên sẽ phản hồi trong 24 giờ.',
+      'Mình đã gửi link sản phẩm ở trên: /san-pham/nike-air-max-90.',
+      'Đơn đã gửi đi thì bạn xem ở Tra cứu đơn.',
+      'Nothing has been sent yet; press confirm below to reach our staff.',
+    ]) {
+      expect(dropSentClaims(text, false)).toBe(text)
+    }
+  })
+})
 
 describe('nhận ra khách đòi gặp nhân viên', () => {
   it('có dấu, không dấu, tiếng Anh', () => {

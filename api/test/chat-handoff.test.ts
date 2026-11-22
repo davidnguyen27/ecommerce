@@ -241,4 +241,20 @@ describe('nhận ra khách đòi gặp nhân viên', () => {
     const view = await app.request.get(`/api/admin/support-requests/${res.body.requestCode}`).set(bearer(accessToken))
     expect(view.body.subject).toBe('Cho mình gap nhan vien nhé')
   })
+
+  it('model nói đã chuyển cho nhân viên thì bỏ câu đó, mời bấm nút, và đề nghị chuyển', async () => {
+    const llm = new ScriptedLlm([{ content: 'Dạ, mình đã chuyển yêu cầu của bạn cho nhân viên.' }])
+    const app = await appWithOwner({ llm })
+    const { accessToken } = await login(app.request, OWNER.email, OWNER.password)
+    await app.request
+      .put('/api/admin/chatbot/settings')
+      .set(bearer(accessToken))
+      .send({ enabled: true, responseTimeNote: '' })
+
+    const res = await app.request.post('/api/chat/messages').send({ content: 'Túi này có chính hãng không?' })
+    expect(res.body.handoffSuggested).toBe(true)
+    expect(res.body.reply.content).toBe('Bạn bấm nút "Gặp nhân viên" bên dưới để gửi câu hỏi cho nhân viên nhé.')
+    const saved = await app.request.get(`/api/chat/conversations/${res.body.conversationId}`)
+    expect(saved.body.messages.at(-1).content).toBe(res.body.reply.content)
+  })
 })
