@@ -245,23 +245,26 @@ const API_SCENARIOS: { id: string; user: string; expect: string; viewing?: strin
   { id: 'ngoai-le', user: 'viết giúp mình đoạn code python sắp xếp mảng', expect: 'từ chối nhẹ' },
 ]
 
+/** Giới hạn mỗi lần gọi API ở chế độ --api. */
+const REQUEST_TIMEOUT_MS = 120_000
+
 async function checkApi(base: string) {
   // Tài khoản owner của dữ liệu demo local (`scripts/demo-seed.ts`); bản khác thì đặt OWNER_EMAIL, OWNER_PASSWORD.
   const owner = {
     email: process.env.OWNER_EMAIL ?? 'chu-shop@example.com',
     password: process.env.OWNER_PASSWORD ?? 'mat-khau-demo-local',
   }
+  // Không có giới hạn thì một lần API treo làm cả script treo theo (2026-11-22). Một lượt chat có thể gọi model
+  // vài lần, mỗi lần tới 20–30 giây (`PROVIDERS` trong adapters/llm.ts), nên cho rộng.
+  const call = (path: string, init: RequestInit = {}) =>
+    fetch(`${base}${path}`, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
   const post = (path: string, body: unknown, headers: Record<string, string> = {}, method = 'POST') =>
-    fetch(`${base}${path}`, {
-      method,
-      headers: { 'Content-Type': 'application/json', ...headers },
-      body: JSON.stringify(body),
-    })
+    call(path, { method, headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) })
   const login = await post('/api/admin/auth/login', owner, { 'X-Client': 'mobile' })
   if (!login.ok) throw new Error(`Đăng nhập owner thất bại: ${login.status}`)
   const { accessToken } = (await login.json()) as { accessToken: string }
   const auth = { Authorization: `Bearer ${accessToken}` }
-  const settings = (await (await fetch(`${base}/api/admin/chatbot/settings`, { headers: auth })).json()) as object
+  const settings = (await (await call('/api/admin/chatbot/settings', { headers: auth })).json()) as object
   // Bật chatbot để thử; giữ nguyên câu thời gian phản hồi đang có.
   await post('/api/admin/chatbot/settings', { ...settings, enabled: true }, auth, 'PUT')
   console.log('API:', base)
@@ -270,7 +273,7 @@ async function checkApi(base: string) {
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
   const usage = async () => {
     const report = (await (
-      await fetch(`${base}/api/admin/reports/chatbot?from=${today}&to=${today}`, { headers: auth })
+      await call(`/api/admin/reports/chatbot?from=${today}&to=${today}`, { headers: auth })
     ).json()) as { models: { calls: number; inputTokens: number; outputTokens: number }[] }
     return report.models.reduce(
       (sum, m) => ({
@@ -282,6 +285,7 @@ async function checkApi(base: string) {
     )
   }
   const totals = { calls: 0, input: 0, output: 0 }
+  let skipped = 0
 
   // Chạy một model (LLM_CHAIN của API) thì giãn các câu ra, để không chạm giới hạn token mỗi phút của Groq.
   const delayMs = Number(process.env.CHATBOT_CHECK_DELAY_MS ?? 0)
@@ -290,7 +294,18 @@ async function checkApi(base: string) {
     if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs))
     const before = await usage()
     const started = Date.now()
-    const res = await post('/api/chat/messages', { content: scenario.user, viewingProductSlug: scenario.viewing })
+    let res
+    try {
+      res = await post('/api/chat/messages', { content: scenario.user, viewingProductSlug: scenario.viewing })
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'TimeoutError')) throw error
+      // Một câu quá lâu thì ghi lại rồi chạy câu sau; không tính vào trung bình.
+      console.log(
+        `\n=== [${scenario.id}] ${scenario.user}\nquá ${REQUEST_TIMEOUT_MS / 1000} giây không trả lời, bỏ qua`,
+      )
+      skipped++
+      continue
+    }
     const body = (await res.json()) as {
       outcome?: string
       reply?: { content: string } | null
@@ -315,7 +330,9 @@ async function checkApi(base: string) {
     console.log(`token: ${spent.input} vào, ${spent.output} ra, ${spent.calls} lượt gọi`)
     console.log(`trả lời: ${body.reply?.content ?? ''}`)
   }
-  const n = API_SCENARIOS.filter((x) => !only || only.includes(x.id)).length
+  const n = API_SCENARIOS.filter((x) => !only || only.includes(x.id)).length - skipped
+  if (skipped) console.log(`\n${skipped} câu quá thời gian, không tính vào trung bình`)
+  if (n === 0) return
   console.log(
     `
 Trung bình mỗi câu: ${Math.round(totals.input / n)} token vào, ${Math.round(totals.output / n)} token ra, ${(totals.calls / n).toFixed(1)} lượt gọi`,
