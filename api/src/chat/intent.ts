@@ -45,3 +45,46 @@ export function suggestsSize(text: string): boolean {
     .split(/[!?\n]+|\.(?!\d)/)
     .some((sentence) => SIZE_WORD.test(sentence) && SIZE_NUMBER.test(sentence) && RECOMMENDS.test(sentence))
 }
+
+/** Một câu, kèm dấu câu và khoảng trắng sau nó; dấu chấm trong số ("25.5") không cắt câu. */
+const SENTENCE = /(?:[^.!?\n]|\.(?=\d))+(?:[.!?]+|$)[ \t]*/gm
+/**
+ * Chatbot nói chính nó đã làm ("mình đã gửi", "I've forwarded"), hay yêu cầu của khách đã được gửi. Câu chính sách kiểu
+ * "sau khi yêu cầu đã được gửi, nhân viên sẽ phản hồi" không tính.
+ */
+const VERB_VI = '(?:gửi|chuyển|kết nối|báo|thông báo|liên hệ)'
+const VERB_EN = '(?:sent|forwarded|transferred|passed|escalated|connected|notified)'
+const SENT = new RegExp(
+  `(?:mình|tôi|em|chúng tôi)\\s+(?:đã|vừa)\\s+${VERB_VI}|của (?:bạn|anh|chị)\\s+(?:đã|vừa)\\s+được\\s+${VERB_VI}` +
+    `|\\b(?:I|we)(?:'ve|\\s+have)?\\s+(?:just\\s+|already\\s+)?${VERB_EN}\\b` +
+    `|\\byour\\s+(?:request|question|message|conversation)\\s+(?:has|have)\\s+(?:just\\s+|already\\s+)?been\\s+${VERB_EN}\\b`,
+  'i',
+)
+/** Câu đó nói về nhân viên hay yêu cầu hỗ trợ, không phải ví dụ "hàng đã gửi đi". */
+const TO_STAFF =
+  /nhân viên|yêu cầu|bộ phận|tư vấn viên|người hỗ trợ|\bstaff\b|\bteam\b|\bagents?\b|\brequest\b|\bhuman\b|\bsupport\b/i
+/** Câu trả lời còn lại đã mời khách bấm nút thì không thêm lời mời. */
+const INVITES = /bấm|nhấn|\bpress\b|\bclick\b|\btap\b/i
+const INVITE_VI = 'Bạn bấm nút "Gặp nhân viên" bên dưới để gửi câu hỏi cho nhân viên nhé.'
+const INVITE_EN = 'Press the "Gặp nhân viên" button below to send your question to our staff.'
+
+/**
+ * Bỏ các câu nói đã gửi, đã chuyển cho nhân viên: chưa có gì được gửi tới khi khách bấm xác nhận. Prompt đã cấm, nhưng
+ * qwen vẫn viết "Mình đã gửi yêu cầu chuyển cho nhân viên" (chatbot-check 2026-11-21). Bỏ câu thay vì gọi model viết
+ * lại: không tốn thêm lượt; còn câu nào mời bấm nút thì giữ, không còn thì thêm lời mời. Không có câu như vậy thì trả
+ * nguyên văn.
+ */
+export function dropSentClaims(text: string, english: boolean): string {
+  let dropped = false
+  const kept = text
+    .replace(SENTENCE, (sentence) => {
+      if (!SENT.test(sentence) || !TO_STAFF.test(sentence)) return sentence
+      dropped = true
+      return ''
+    })
+    .trim()
+  if (!dropped) return text
+  if (INVITES.test(kept)) return kept
+  const invite = english ? INVITE_EN : INVITE_VI
+  return kept ? `${kept}\n\n${invite}` : invite
+}
