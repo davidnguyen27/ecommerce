@@ -219,6 +219,43 @@ describe('vòng lặp và ngữ cảnh', () => {
     expect(toolOutputs(llm, 1)).toEqual([])
   })
 
+  it('sản phẩm không có bảng size mà model vẫn đoán size thì gọi thêm một lần để viết lại, không gợi ý size', async () => {
+    const llm = new ScriptedLlm([
+      { toolCalls: [call('get_product', { slug: 'air-max' })] },
+      { content: 'Chân 25 cm thì size 41 là phù hợp. Size 41 còn hàng.' },
+      { content: 'Air Max không có bảng size nên mình không gợi ý size được. Size 41 còn hàng.' },
+    ])
+    const { request } = await chatShop(llm)
+
+    const res = await ask(request, 'Chân 25 cm đi size nào?')
+    expect(res.body.reply.content).toBe('Air Max không có bảng size nên mình không gợi ý size được. Size 41 còn hàng.')
+    const rewrite = llm.requests[2]!
+    expect(rewrite.tools).toBeUndefined()
+    expect(rewrite.messages.some((m) => m.role === 'system' && m.content.includes('no size chart'))).toBe(true)
+    expect(rewrite.messages.at(-1)).toEqual({ role: 'system', content: VIETNAMESE_REMINDER })
+  })
+
+  it('không đoán size (hay sản phẩm có bảng size) thì không gọi thêm', async () => {
+    const llm = new ScriptedLlm([
+      { toolCalls: [call('get_product', { slug: 'air-max' })] },
+      { content: 'Air Max không có bảng size. Size 41 còn hàng.' },
+    ])
+    const { request } = await chatShop(llm)
+    await ask(request, 'Size 41 còn không?')
+    expect(llm.requests).toHaveLength(2)
+  })
+
+  it('sản phẩm khách đang xem không có bảng size: câu đoán size cũng được viết lại', async () => {
+    const llm = new ScriptedLlm([
+      { content: 'Size EU 41 sẽ vừa với bạn.' },
+      { content: 'Sản phẩm không có bảng size.' },
+    ])
+    const { request } = await chatShop(llm)
+    const res = await ask(request, 'Cái này mình đi size nào?', { viewingProductSlug: 'air-max' })
+    expect(res.body.reply.content).toBe('Sản phẩm không có bảng size.')
+    expect(llm.requests).toHaveLength(2)
+  })
+
   it('chatbot đề nghị chuyển nhân viên thì khung chat được báo, nhưng không tạo yêu cầu nào', async () => {
     const llm = new ScriptedLlm([
       { toolCalls: [call('handoff', { summary: 'Khách nghi hàng không chính hãng' })] },

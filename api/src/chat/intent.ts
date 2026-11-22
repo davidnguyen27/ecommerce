@@ -24,3 +24,24 @@ export function looksEnglish(text: string): boolean {
   if (VIETNAMESE_LETTER.test(text)) return false
   return (text.match(ENGLISH_WORD)?.length ?? 0) >= 2
 }
+
+/** Nói về size: "size", "cỡ", hệ size EU, US, UK. "cỡ" không kèm `\b`: regex coi "ỡ" không phải chữ cái. */
+const SIZE_WORD = /\b(?:size|eu|us|uk)\b|(?<![a-zà-ỹ])cỡ(?![a-zà-ỹ])/i
+/**
+ * Một con số có dạng size giày, quần áo (30–49, hay 5–13 kiểu US), kể cả "38,5". Số không cần đứng sát chữ size:
+ * model hay viết "size EU thường tương ứng là 41" (chatbot-check 2026-11-22).
+ */
+const SIZE_NUMBER = /(?<![\d.,])(?:[34]\d|[5-9]|1[0-3])(?:,5)?(?![\d.,]?\d)(?!\s*(?:cm|mm|triệu|nghìn|k\b|%))/i
+/** Cụm từ gợi ý một size hợp với khách. */
+const RECOMMENDS =
+  /phù hợp|gợi ý|khuyên|tương ứng|nên (?:chọn|đi|mặc|lấy|mang)|vừa với|thường|\bfits?\b|recommend|suggest|should|would suit|corresponds?|usually|typically/i
+
+/**
+ * Câu trả lời có gợi ý size: một câu nói về size, có một con số dạng size, và có cụm gợi ý. "Size 41 còn hàng" không
+ * tính. Bắt nhầm chỉ tốn thêm một lần gọi model để viết lại (`runTurn`).
+ */
+export function suggestsSize(text: string): boolean {
+  return text
+    .split(/[!?\n]+|\.(?!\d)/)
+    .some((sentence) => SIZE_WORD.test(sentence) && SIZE_NUMBER.test(sentence) && RECOMMENDS.test(sentence))
+}
