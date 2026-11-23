@@ -19,6 +19,16 @@ describe('link sản phẩm, chính sách có tên miền bịa', () => {
     )
   })
 
+  it('link HTML thành link markdown, có tên miền thì bỏ (câu thật của gpt-oss trên demo, 2026-11-23)', () => {
+    expect(
+      relativeShopLinks('6 490 000 ₫ <a href="/san-pham/michael-kors-jet-set-travel-tote">Xem chi tiết</a> (hiện hết)'),
+    ).toBe('6 490 000 ₫ [Xem chi tiết](/san-pham/michael-kors-jet-set-travel-tote) (hiện hết)')
+    expect(relativeShopLinks(`<a target='_blank' href='https://x.vn/trang/doi-tra'><b>Đổi trả</b></a>`)).toBe(
+      '[Đổi trả](/trang/doi-tra)',
+    )
+    expect(relativeShopLinks('<a href="/san-pham/a"></a>')).toBe('[/san-pham/a](/san-pham/a)')
+  })
+
   it('link khác và đường dẫn sẵn đúng thì giữ nguyên', () => {
     for (const text of [
       'Xem /san-pham/air-max-90.',
