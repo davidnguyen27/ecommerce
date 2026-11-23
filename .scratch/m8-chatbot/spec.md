@@ -272,7 +272,7 @@ Mọi công cụ chỉ đọc, và chỉ đọc những gì web khách đã hi�
   - `gpt-oss-120b`: 8.000 token/phút; `qwen3.8-27b`: 7.000 token vào/phút;
   - OpenRouter `:free`: 50 lượt/ngày, hay 1.000 lượt/ngày sau khi đã nạp tổng $10.
   - Với khoảng 1.000 token mỗi tin, cả chuỗi đủ cho khoảng 420 tin mỗi ngày, và khoảng 10 tin mỗi phút khi đông khách. Đo thật sau khi thu gọn: khoảng 1.300 token vào mỗi câu, hai model Groq đủ khoảng 280 câu mỗi ngày.
-- **Chủ doanh nghiệp cần xác nhận:**
+- **Đã chốt (2026-11-23, người dùng thay chủ doanh nghiệp): giữ nguyên các số và nội dung dưới đây.** Không nạp $10 cho OpenRouter.
   - đoạn về chatbot trong chính sách bảo mật (Claude soạn nháp);
   - các số tạm: 500 ký tự, 30 tin mỗi cuộc, 60 tin mỗi giờ, 3 lần chuyển mỗi IP mỗi ngày;
   - câu thời gian phản hồi;

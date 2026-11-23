@@ -1,6 +1,6 @@
 # Spec: M0 + M1 — Nền móng hệ thống và danh mục sản phẩm
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Nguồn: `project-overview.md` và phiên làm rõ requirement ngày 2026-10-21. Đây là spec đầu tiên trong lộ trình M0 → M9 của giai đoạn 1 (mở bán).
 
