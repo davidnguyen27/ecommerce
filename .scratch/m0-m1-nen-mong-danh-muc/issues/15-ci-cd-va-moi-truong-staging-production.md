@@ -9,7 +9,9 @@ Ticket này cần người làm: tạo repo GitHub, có VPS, có tài khoản Cl
 
 **Blocked by:** 01 (Khung chạy được end-to-end)
 
-**Status:** ready-for-human
+**Status:** wontfix
+
+**Đóng (2026-11-23):** người dùng chốt phạm vi: không cần VPS, staging hay production riêng; CI đã có ở ticket 13 của M3. Sản phẩm chạy trên bản demo Netlify + Render + Neon (ADR 0011, `docs/deploy.md`).
 
 - [ ] Người vận hành đã chạy xong wizard: có repo GitHub, có 2 environment `staging` và `production`, phần tổng kết của wizard không còn mục nào phải làm tay
 - [ ] Workflow CI chạy lint, typecheck và test (Testcontainers) cho mọi push và PR. Runner Linux; CI là cửa kiểm tra test, không bật retry để che lỗi (xem ghi chú dưới)

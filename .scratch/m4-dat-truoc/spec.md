@@ -1,6 +1,6 @@
 # Spec: M4 — Đặt trước và đặt cọc
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Nguồn: `project-overview.md` (mục 3.2, 4, 5.2, 5.3, 5.4, 5.5, 6.1), Out of Scope của spec M3 (`.scratch/m3-mua-hang/spec.md`) và buổi làm rõ requirement ngày 2026-11-14 (23 câu, người dùng chấp nhận mọi đề xuất). Đây là mốc thứ tư trong lộ trình M0 → M8 của giai đoạn 1 (mở bán). Quyết định kiến trúc: `docs/adr/0012-dat-truoc-nam-ngoai-gio-hang.md`, `docs/adr/0013-hang-ve-chia-cho-don-dat-truoc-trong-phieu-nhap.md`; giữ hàng theo `docs/adr/0007-giu-hang-khong-tru-ton-hang-roi-ton-khi-ban-giao.md`.
 
@@ -197,5 +197,5 @@ Các email bàn giao và giao thất bại dùng lại M3.
 
 - GLOSSARY có mục **Đặt trước** mới: đợt đặt trước, đơn đặt trước, đang nhận đặt trước, suất, tiền cọc, phần còn lại, hàng đã về.
 - Buổi làm rõ 2026-11-14 chốt: đơn vị mở bán là đợt; đặt trước chỉ hiện khi biến thể hết hàng sẵn; đặt trước ngoài giỏ; giá lấy từ giá bán; cọc theo % của đợt, tính trên tiền hàng, làm tròn lên 1.000, phí giao nằm trong phần còn lại; mỗi đơn có suất; mọi phiếu nhập tự chia hàng từng cái theo thứ tự cọc; thanh toán `unpaid` → `deposit_paid` → `paid`; địa chỉ và phí giao chốt lúc đặt; trạng thái nhập hàng theo dõi ở cấp đợt; mỗi sản phẩm tối đa một đợt mở; M4 không hủy đơn đã cọc; quá hạn chỉ gắn cờ; chính sách đặt trước là trang chính sách có phiên bản; khách vãng lai được đặt trước; quyền `preorder.manage` cho owner và sales.
-- Các con số tạm, chờ chủ doanh nghiệp xác nhận: tỷ lệ cọc tối thiểu 10%, mặc định 7 ngày trả phần còn lại, nhắc trước 2 ngày, 1–5 cái mỗi đơn.
+- Các con số, đã chốt giữ nguyên (2026-11-23): tỷ lệ cọc tối thiểu 10%, mặc định 7 ngày trả phần còn lại, nhắc trước 2 ngày, 1–5 cái mỗi đơn.
 - Trước khi mở bán thật, doanh nghiệp cần xuất bản trang chính sách đặt trước, gồm điều kiện hủy/hoàn và xử lý khi quá hạn hay khi không nhập được hàng, dù M4 chưa tự động hóa các phần đó.

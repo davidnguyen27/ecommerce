@@ -10,7 +10,9 @@ Ticket này cần người làm: Sentry và khóa age được tạo qua wizard 
 
 **Blocked by:** 15 (CI/CD và môi trường staging/production)
 
-**Status:** ready-for-human
+**Status:** wontfix
+
+**Đóng (2026-11-23):** người dùng chốt phạm vi: không cần VPS, nên không dựng Sentry, Uptime Kuma hay backup lên R2. Sản phẩm chạy trên bản demo Netlify + Render + Neon (ADR 0011, `docs/deploy.md`).
 
 - [ ] Sentry đã cài cho API (Express) và web (Nuxt), dùng `SENTRY_DSN_API` và `SENTRY_DSN_WEB`. CI upload source map bằng `SENTRY_AUTH_TOKEN`. Lỗi thử ở staging hiện đúng project và đúng môi trường
 - [ ] Uptime Kuma theo dõi `/healthz` của staging và production. Kuma chạy ở nơi khác VPS chính, hoặc ghi rõ lý do nếu chấp nhận chạy chung VPS

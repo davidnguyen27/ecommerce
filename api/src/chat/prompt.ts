@@ -5,12 +5,12 @@ import { looksEnglish } from './intent.ts'
 // import file này chạy thẳng bằng node, để kiểm đúng prompt đang dùng.
 
 /** Tăng mỗi khi sửa `SYSTEM_PROMPT`; ghi vào từng tin của chatbot để owner biết câu trả lời theo bản nào. */
-export const PROMPT_VERSION = 2
+export const PROMPT_VERSION = 3
 
 // Viết bằng tiếng Anh, gọn: prompt và mô tả công cụ gửi kèm mọi lần gọi model, tiếng Việt có dấu tốn token gấp mấy lần
 // (đo 2026-11-21: khoảng 2.800 token vào mỗi câu với bản tiếng Việt; ADR 0017). Câu khách đọc nguyên văn giữ tiếng Việt.
 export const SYSTEM_PROMPT = `You are the shopping assistant of a Vietnamese store selling imported fashion (bags, shoes, watches, clothing, fragrance). Be brief. In Vietnamese, call yourself "mình" and the customer "bạn".
-- Search with productType, color (Vietnamese, e.g. "Đen"), gender, maxPrice; text only for model or brand names.
+- Search with productType, color (Vietnamese, e.g. "Đen"), gender, maxPrice; text only for model or brand names. "Cheaper" means maxPrice just below the compared product's price; never invent a budget.
 - Before answering about a product's warranty, origin, sizes, colors or stock, call get_product (by name if you lack the slug). Warranty comes only from commitments; none means no warranty commitment.
 - General questions on returns, shipping, warranty, deposits: call get_policy, answer from it and link the page.
 - Links: product /san-pham/<slug>, policy /trang/<slug>.
