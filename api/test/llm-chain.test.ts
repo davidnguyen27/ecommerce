@@ -95,7 +95,7 @@ describe('gọi qua chuỗi model', () => {
     })
     expect(calls).toHaveLength(1)
     expect(calls[0]!.auth).toBe('Bearer gsk_test')
-    expect(calls[0]!.body).toMatchObject({ reasoning_effort: 'low', tool_choice: 'auto' })
+    expect(calls[0]!.body).toMatchObject({ reasoning_effort: 'medium', tool_choice: 'auto' })
   })
 
   it('đọc lời gọi công cụ, kể cả khi không có chữ', async () => {

@@ -59,6 +59,10 @@ export async function cancelPaidOrder(
   if (refundAmount > refundable) {
     throw invalidField('refundAmount', `Số tiền hoàn vượt số còn hoàn được ${vnd(refundable)}`)
   }
+  // Chỉ đơn đặt trước có phần còn lại phải trả; với đơn thường, khách sẽ đọc lý do vô nghĩa ở email và trang đơn.
+  if (input.cause === 'remainder_overdue' && locked.kind !== 'preorder') {
+    throw invalidField('cause', 'Đơn thường không có phần còn lại phải trả; chọn lý do khác')
+  }
   if (input.cause === 'supply_failed' && refundAmount !== refundable) {
     throw invalidField('refundAmount', `Không nhập được hàng thì hoàn đủ ${vnd(refundable)}`)
   }

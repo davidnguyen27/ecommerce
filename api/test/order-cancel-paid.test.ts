@@ -140,6 +140,10 @@ describe('hủy đơn hàng sẵn đã trả', () => {
     expect(noNote.status).toBe(400)
     expect(noNote.body.error.fields).toEqual([expect.objectContaining({ path: 'note' })])
     expect((await cancel(code, { cause: 'supply_failed', refundAmount: 0, note: 'x' })).status).toBe(400)
+    // Đơn thường không có phần còn lại phải trả (đi luồng demo 2026-11-23: khách đọc "vì đã quá hạn trả phần còn lại").
+    const overdue = await cancel(code, { cause: 'remainder_overdue', refundAmount: TOTAL })
+    expect(overdue.status).toBe(400)
+    expect(overdue.body.error.fields).toEqual([expect.objectContaining({ path: 'cause' })])
     expect((await cancel(code, { cause: 'changed_mind', refundAmount: -1 })).status).toBe(400)
     expect((await cancel(code, { cause: 'khong-co', refundAmount: TOTAL })).status).toBe(400)
 

@@ -116,8 +116,10 @@ function requestBody(endpoint: LlmEndpoint, request: LlmRequest) {
   return {
     model: endpoint.model,
     max_tokens: MAX_OUTPUT_TOKENS,
-    // gpt-oss suy luận dài nếu để mặc định; mức thấp đủ cho tư vấn và tiết kiệm token (ADR 0017).
-    ...(endpoint.model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low' } : {}),
+    // gpt-oss suy luận dài nếu để mặc định (ADR 0017). Mức `low` tiết kiệm hơn nhưng có ngữ cảnh làm model viết ra chữ
+    // vô nghĩa ("**Michael … Sorry… Oops…"): đang xem túi Coach, hỏi "có túi nào rẻ hơn không?", 5/5 lần với `low`,
+    // 0/5 với `medium` (đi luồng demo 2026-11-23). `temperature` thấp không chữa được.
+    ...(endpoint.model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'medium' } : {}),
     messages: request.messages.map(toWireMessage),
     ...(request.tools?.length
       ? {
