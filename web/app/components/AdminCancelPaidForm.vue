@@ -14,6 +14,13 @@ const busy = ref(false)
 const error = ref<string | null>(null)
 const form = reactive({ cause: 'changed_mind' as OrderCancelCause, refundAmount: props.order.refundable, note: '' })
 
+// "Quá hạn trả phần còn lại" chỉ có ở đơn đặt trước; API từ chối lý do này cho đơn thường.
+const causeLabels = computed(() =>
+  Object.fromEntries(
+    Object.entries(CANCEL_CAUSE_LABELS).filter(([cause]) => props.order.preorder || cause !== 'remainder_overdue'),
+  ),
+)
+
 const fullRefund = computed(() => form.cause === 'supply_failed')
 watch(fullRefund, (full) => {
   if (full) form.refundAmount = props.order.refundable
@@ -70,7 +77,7 @@ async function submit() {
     <div class="form-group">
       <label class="form-label" for="cancel-paid-cause">Lý do</label>
       <select id="cancel-paid-cause" v-model="form.cause" class="form-select" data-testid="cancel-paid-cause">
-        <option v-for="(label, value) in CANCEL_CAUSE_LABELS" :key="value" :value="value">{{ label }}</option>
+        <option v-for="(label, value) in causeLabels" :key="value" :value="value">{{ label }}</option>
       </select>
     </div>
     <div class="form-group">

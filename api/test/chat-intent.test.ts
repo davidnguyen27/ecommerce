@@ -1,5 +1,34 @@
 import { describe, expect, it } from 'vitest'
-import { asksForStaff, dropSentClaims, looksEnglish, stripToolLabels, suggestsSize } from '../src/chat/intent.ts'
+import {
+  asksForStaff,
+  dropSentClaims,
+  looksEnglish,
+  relativeShopLinks,
+  stripToolLabels,
+  suggestsSize,
+} from '../src/chat/intent.ts'
+
+describe('link sản phẩm, chính sách có tên miền bịa', () => {
+  it('đổi thành đường dẫn của shop, kể cả dạng <…> và link markdown (câu thật của gpt-oss, 2026-11-23)', () => {
+    expect(
+      relativeShopLinks('Xem chi tiết: https://www.example.com/san-pham/michael-kors-jet-set-travel-tote Bạn'),
+    ).toBe('Xem chi tiết: /san-pham/michael-kors-jet-set-travel-tote Bạn')
+    expect(relativeShopLinks('(<https://www.example.com/san-pham/mk-tote>).')).toBe('(/san-pham/mk-tote).')
+    expect(relativeShopLinks('[Xem](https://shop.vn/trang/chinh-sach-doi-tra)')).toBe(
+      '[Xem](/trang/chinh-sach-doi-tra)',
+    )
+  })
+
+  it('link khác và đường dẫn sẵn đúng thì giữ nguyên', () => {
+    for (const text of [
+      'Xem /san-pham/air-max-90.',
+      'Hỏi thêm ở https://vnpay.vn/huong-dan',
+      'https://example.com/blog/x',
+    ]) {
+      expect(relativeShopLinks(text)).toBe(text)
+    }
+  })
+})
 
 describe('bỏ nhãn công cụ lẫn trong câu trả lời', () => {
   it('bỏ nhãn, giữ chữ sau nhãn (câu thật của qwen, 2026-11-22)', () => {
