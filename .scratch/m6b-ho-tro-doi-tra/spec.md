@@ -1,6 +1,6 @@
 # Spec: M6b — Yêu cầu hỗ trợ, trả hàng, đổi hàng, bảo hành
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Nguồn: `project-overview.md` (mục 2, 4, 5, 6, 7, 9), Out of Scope của spec M6a (`.scratch/m6a-huy-va-hoan-tien/spec.md`), và buổi làm rõ requirement ngày 2026-11-17 (23 câu, người dùng chấp nhận mọi đề xuất). M6b là nửa sau của M6 trong lộ trình M0 → M8. Nó chạy trên nền của M6a: hủy đơn đã nhận tiền, hoàn tiền (ADR 0014), nhận hàng hoàn về, loại sổ `return`. Quyết định kiến trúc: `docs/adr/0015-doi-hang-khong-tao-don-moi.md` (mới), `docs/adr/0005-bao-hanh-chi-la-cam-ket-co-bang-chung.md`, `docs/adr/0014-hoan-tien-la-truc-rieng.md`.
 

@@ -1,6 +1,6 @@
 # Spec: M6a — Hủy đơn đã nhận tiền, hoàn tiền, giao thất bại
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Nguồn: `project-overview.md` (mục 2, 5, 6.1, 9, 10, 11), Out of Scope của spec M3 (`.scratch/m3-mua-hang/spec.md`), M4 (`.scratch/m4-dat-truoc/spec.md`) và M5 (`.scratch/m5-ma-giam-gia/spec.md`), và buổi làm rõ requirement ngày 2026-11-17 (25 câu, người dùng chấp nhận mọi đề xuất). M6 trong lộ trình M0 → M8 được tách làm hai: **M6a** (spec này) lo tiền và hàng khi đơn không đi tới cuối; **M6b** lo đổi trả sau khi giao, bảo hành và yêu cầu hỗ trợ, và chạy trên nền của M6a. Quyết định kiến trúc: `docs/adr/0014-hoan-tien-la-truc-rieng.md` (mới), `docs/adr/0010-vnpay-thay-zalopay.md`, `docs/adr/0013-hang-ve-chia-cho-don-dat-truoc-trong-phieu-nhap.md`.
 
@@ -181,7 +181,7 @@ Hai email mới, theo mẫu email hiện có:
 - **Đơn đã hủy**: mã đơn, lý do theo cách nói với khách, số tiền sẽ hoàn (hoặc không hoàn, kèm lời nhắc chính sách đặt trước), lời mời liên hệ.
 - **Đã hoàn tiền**: mã đơn, số tiền, ngày.
 
-Không có email khi giao thất bại hay giao lại. Nội dung là bản tạm, chờ chủ doanh nghiệp duyệt.
+Không có email khi giao thất bại hay giao lại. Nội dung đã chốt giữ nguyên (2026-11-23).
 
 ### Web
 
@@ -251,7 +251,7 @@ Không có email khi giao thất bại hay giao lại. Nội dung là bản tạ
   - giao lại không thu thêm;
   - cổng giả lập hỗ trợ hoàn.
 - Khi viết spec, đã thêm một chi tiết so với buổi làm rõ: hàng ghi "hỏng/mất" lúc nhận hàng hoàn về **không** ghi vào sổ xuất nhập, vì hàng đã rời tồn từ lúc bàn giao. Chỉ phần nhập lại tồn mới ghi sổ.
-- **Cần chủ doanh nghiệp xác nhận trước khi mở bán:**
+- **Đã chốt (2026-11-23, người dùng thay chủ doanh nghiệp): giữ nguyên các số và nội dung dưới đây.**
   1. Nội dung hai email: đơn đã hủy, và đã hoàn tiền.
   2. Mức mất cọc theo từng lý do, ghi vào trang chính sách đặt trước (`chinh-sach-dat-truoc`).
   3. Khi giao thất bại do khách, có khấu trừ phí giao vào số hoàn không.

@@ -1,6 +1,6 @@
 # Spec: M2 — Tồn kho
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Nguồn: `project-overview.md`, phần Out of Scope của spec M0+M1 (`.scratch/m0-m1-nen-mong-danh-muc/spec.md`) và phiên làm rõ requirement ngày 2026-10-29. Đây là mốc thứ hai trong lộ trình M0 → M8 của giai đoạn 1 (mở bán).
 
@@ -209,7 +209,7 @@ Mốc này **chưa có giỏ hàng, giữ hàng hay xuất bán** (M3) và **ch�
 - Quyết định đọc tồn trực tiếp thay vì từ snapshot ghi ở `docs/adr/0006-ton-kho-doc-truc-tiep-khong-qua-snapshot.md` (2026-10-29).
 - Thuật ngữ mới (sổ xuất nhập, phiếu nhập, điều chỉnh, tồn đầu kỳ, còn hàng/hết hàng) đã thêm vào `GLOSSARY.md`. Lưu ý GLOSSARY tách **Hết hàng** (tồn bằng 0) khỏi **Ngừng bán** (biến thể không còn bán).
 - Migration theo quy ước của M1: viết SQL tay, giữ `schema.prisma` đồng bộ.
-- Cần chủ doanh nghiệp xác nhận:
+- Đã chốt (2026-11-23, người dùng thay chủ doanh nghiệp): giữ nguyên các số và nội dung dưới đây.
   - danh sách lý do điều chỉnh (kiểm kê, hàng hỏng, mất hàng, khác);
   - không công khai số tồn, và xếp sản phẩm hết hàng xuống sau;
   - giới hạn import 2.000 dòng và 5 MB.

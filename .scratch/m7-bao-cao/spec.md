@@ -1,6 +1,6 @@
 # Spec: M7 — Báo cáo
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Nguồn: `project-overview.md` (mục 2, 4, 6.1, 10.2), các mục Out of Scope ghi "M7" ở spec M2–M6b, và buổi làm rõ requirement ngày 2026-11-20 (21 câu, người dùng chấp nhận mọi đề xuất). Quyết định kiến trúc: `docs/adr/0016-doanh-thu-ghi-theo-ngay-giao.md` (mới), `docs/adr/0014-hoan-tien-la-truc-rieng.md`, `docs/adr/0015-doi-hang-khong-tao-don-moi.md`. Thuật ngữ mới trong GLOSSARY, mục **Báo cáo**: Doanh thu, Tiền thu, Hàng trả lại, Tồn đầu/Tồn cuối, Đơn đã xác nhận, Đơn bỏ dở.
 
@@ -146,7 +146,7 @@ Doanh thu và tiền thu là hai trục riêng (ADR 0016). Mọi số đều tí
   4. **Đặt trước trễ hẹn**: đơn đặt trước chưa hủy, chưa giao, có `deliveryTo` trước hôm nay (giờ VN) → trang đơn.
   5. **Yêu cầu chưa ai nhận**: yêu cầu hỗ trợ chưa kết thúc, chưa có người phụ trách → trang yêu cầu.
   6. **Sắp hết hàng**: biến thể `active` của sản phẩm `published`, có tồn − giữ hàng ≤ 2 (kể cả 0) → trang tồn của biến thể. Ngưỡng là hằng số trong code.
-- Ngưỡng 3 ngày và 2 cái là hằng số đặt tên ở `api/src/reports/`, chờ chủ doanh nghiệp xác nhận.
+- Ngưỡng 3 ngày và 2 cái là hằng số đặt tên ở `api/src/reports/`, đã chốt giữ nguyên (2026-11-23).
 
 ### Xuất Excel
 
@@ -228,7 +228,7 @@ Doanh thu và tiền thu là hai trục riêng (ADR 0016). Mọi số đều tí
   - bảng ngoại lệ ở trang chủ admin;
   - Excel không có dữ liệu cá nhân.
 - Trang chủ admin đã có số đếm (đơn, đối soát, đặt trước cần xử lý, yêu cầu chưa nhận) theo các quyền khác. Khối "Cần xử lý" bổ sung cho người có `report.view` và không bỏ các số đếm cũ.
-- **Chủ doanh nghiệp cần xác nhận:**
+- **Đã chốt (2026-11-23, người dùng thay chủ doanh nghiệp): giữ nguyên các số và nội dung dưới đây.**
   1. Định nghĩa doanh thu: ghi theo ngày giao, không gồm phí giao, mất cọc để riêng (ADR 0016).
   2. Ngưỡng "sắp hết" = còn bán được ≤ 2 cái.
   3. Hoàn tiền coi là "treo" sau 3 ngày chưa xong.

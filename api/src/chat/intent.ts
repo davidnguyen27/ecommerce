@@ -46,6 +46,17 @@ export function suggestsSize(text: string): boolean {
     .some((sentence) => SIZE_WORD.test(sentence) && SIZE_NUMBER.test(sentence) && RECOMMENDS.test(sentence))
 }
 
+/** URL đầy đủ tới trang sản phẩm hay chính sách, kể cả dạng `<…>`; nhóm 1 là đường dẫn của shop. */
+const ABSOLUTE_SHOP_LINK = /<?https?:\/\/[^\s/()<>[\]]+(\/(?:san-pham|trang)\/[a-z0-9-]+)>?/gi
+
+/**
+ * Đổi link sản phẩm, chính sách mà model tự gắn tên miền ("https://www.example.com/san-pham/…", đi luồng demo
+ * 2026-11-23: 3/6 lần) thành đường dẫn của shop, để link mở đúng trang. Prompt chỉ đưa đường dẫn, model tự bịa tên miền.
+ */
+export function relativeShopLinks(text: string): string {
+  return text.replace(ABSOLUTE_SHOP_LINK, '$1')
+}
+
 /** Nhãn công cụ đầu dòng: "Tool: handoff - ", "[Tool call: get_product(...)]", "Function: search_products:". */
 const TOOL_LABEL =
   /^[ \t]*\[?(?:tool|function)(?:[ \t]+call)?[ \t]*:[ \t]*[a-z_]+(?:\([^)\n]*\))?\]?[ \t]*(?:[-–—:][ \t]*)?/gim

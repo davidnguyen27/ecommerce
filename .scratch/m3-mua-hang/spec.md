@@ -2,7 +2,7 @@
 
 > Đổi cổng sang ZaloPay ngày 2026-11-09 (ADR 0009, thay ADR 0008), rồi sang VNPAY ngày 2026-11-11 (ADR 0010, thay ADR 0009) vì ZaloPay sandbox cần tài khoản test do ZaloPay cấp tay. M3 chỉ thanh toán qua VNPAY sandbox, chưa có tiền thật.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Nguồn: `project-overview.md` (mục 4, 5.1, 5.4, 5.5, 6.1, 10.1), Out of Scope của spec M2 (`.scratch/m2-ton-kho/spec.md`) và phiên làm rõ requirement ngày 2026-10-30 (35 câu, người dùng chấp nhận mọi đề xuất). Đây là mốc thứ ba trong lộ trình M0 → M8 của giai đoạn 1 (mở bán). Quyết định kiến trúc: `docs/adr/0007-giu-hang-khong-tru-ton-hang-roi-ton-khi-ban-giao.md`, `docs/adr/0010-vnpay-thay-zalopay.md` (thay `docs/adr/0009-zalopay-thay-payos.md`, vốn thay `docs/adr/0008-payos-chuyen-khoan-vietqr.md`).
 
@@ -249,7 +249,7 @@ Không gửi email khi đơn mới tạo, khi hết hạn hay khi khách tự h�
 - (Lịch sử) Sự kiện thực tế về PayOS (2026-10-30, từ tài liệu chính thức): chỉ chuyển khoản Napas qua VietQR; `orderCode` là số nguyên, trùng thì lỗi; `expiredAt` là Unix timestamp; webhook ký HMAC-SHA256 trên `data`, phải trả 2xx, bước xác nhận URL webhook gọi thử vào URL nên cần URL công khai (tunnel khi chạy local); không công bố việc gửi lại hay gửi trùng webhook; trạng thái gồm `PENDING`, `PAID`, `UNDERPAID`, `CANCELLED`, `EXPIRED`, `PROCESSING`, `FAILED`; không có sandbox, không có API hoàn tiền. Tài liệu không xác nhận chuyện chuyển tiền sau khi link hết hạn, nên thiết kế coi là có thể xảy ra.
 - Việc cần người làm (`ready-for-human`, ticket 16): đăng ký sandbox VNPAY ở `pay.vnpaytest.vn/dev-registration`, điền `VNPAY_TMN_CODE` và `VNPAY_HASH_SECRET` vào `.env`; sau đó agent tự trả bằng thẻ test NCB qua Playwright và kiểm các điểm chưa xác minh.
 - Migration theo quy ước hiện có: SQL viết tay, giữ `schema.prisma` đồng bộ, trigger chặn sửa xóa cho bảng chỉ ghi thêm.
-- Cần chủ doanh nghiệp xác nhận:
+- Đã chốt (2026-11-23, người dùng thay chủ doanh nghiệp): giữ nguyên các số và nội dung dưới đây.
   - thời hạn giữ hàng 15 phút;
   - tối đa 5 cái mỗi biến thể trong một đơn;
   - giới hạn 5 lần đặt mua/giờ/IP và 3 đơn chờ thanh toán mỗi email hoặc số điện thoại;
