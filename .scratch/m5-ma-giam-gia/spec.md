@@ -1,6 +1,6 @@
 # Spec: M5 — Mã giảm giá
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Nguồn: `project-overview.md` (mục 4, 5.3, 6.2, 11), Out of Scope của spec M3 (`.scratch/m3-mua-hang/spec.md`) và M4 (`.scratch/m4-dat-truoc/spec.md`), và buổi làm rõ requirement ngày 2026-11-16 (28 câu, người dùng chấp nhận mọi đề xuất). Đây là mốc thứ năm trong lộ trình M0 → M8 của giai đoạn 1 (mở bán). Quyết định kiến trúc có liên quan: `docs/adr/0012-dat-truoc-nam-ngoai-gio-hang.md` (ưu đãi cho đơn đặt trước tính một lần trên đơn). Mốc này không có ADR mới.
 
@@ -156,7 +156,7 @@ Các email đã có (đã nhận thanh toán, đã nhận cọc, hàng đã về
 
 - GLOSSARY có mục mới **Mã giảm giá** và **Lượt dùng**; định nghĩa **Đơn hàng** thêm mã giảm giá đã dùng; **Tiền cọc** tính trên tiền hàng sau giảm.
 - Buổi làm rõ 2026-11-16 chốt: chỉ mã khách gõ, gọi là mã giảm giá; giảm số tiền cố định hoặc tỷ lệ có mức tối đa; chỉ giảm vào tiền hàng; một mã mỗi đơn; mã dùng chung có tổng lượt và lượt mỗi khách; áp cho cả hàng sẵn và đặt trước theo cấu hình; trần 50%; quyền `voucher.manage` cho owner và sales; phạm vi theo thương hiệu, danh mục; ngưỡng miễn phí giao tính sau giảm; phần giảm của đơn đặt trước chia theo tỷ lệ giữa cọc và phần còn lại; lượt chiếm khi tạo đơn, trả khi hủy trước thanh toán; khách nhận diện theo email hoặc số điện thoại; chụp vào đơn và khóa điều kiện khi đã có lượt; 409 khi mã hết hiệu lực lúc xác nhận; mã 4–20 ký tự không phân biệt hoa thường, không có trang liệt kê; giới hạn 10 lần kiểm mỗi phút theo IP; khôi phục đơn giữ phần giảm dù vượt lượt; không cần ADR mới.
-- **Cần chủ doanh nghiệp xác nhận trước khi mở bán:**
+- **Đã chốt (2026-11-23, người dùng thay chủ doanh nghiệp): giữ nguyên các số và nội dung dưới đây.**
   1. Trần giảm 50% theo Nghị định 81/2018, và việc chương trình mã giảm giá có phải thông báo với Sở Công Thương hay không.
   2. Ngưỡng miễn phí giao tính trên tiền hàng sau giảm.
   3. Cách chia phần giảm giữa tiền cọc và phần còn lại của đơn đặt trước; nội dung này cần ghi vào trang chính sách đặt trước.
