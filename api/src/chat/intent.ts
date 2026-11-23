@@ -54,7 +54,22 @@ const ABSOLUTE_SHOP_LINK = /<?https?:\/\/[^\s/()<>[\]]+(\/(?:san-pham|trang)\/[a
  * 2026-11-23: 3/6 lần) thành đường dẫn của shop, để link mở đúng trang. Prompt chỉ đưa đường dẫn, model tự bịa tên miền.
  */
 export function relativeShopLinks(text: string): string {
-  return text.replace(ABSOLUTE_SHOP_LINK, '$1')
+  return htmlLinksToMarkdown(text).replace(ABSOLUTE_SHOP_LINK, '$1')
+}
+
+/** Thẻ `<a href="…">chữ</a>`; nhóm 1 là href, nhóm 2 là chữ (bỏ thẻ con). */
+const HTML_LINK = /<a\s[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
+
+/**
+ * Model đôi khi viết link bằng HTML (`<a href="/san-pham/…">Xem chi tiết</a>`, demo 2026-11-23: 3/5 lần sau khi gpt-oss
+ * chuyển sang `reasoning_effort: 'medium'`). Khung chat render markdown với `html: false` nên khách thấy nguyên chuỗi
+ * thẻ; đổi thành link markdown, markdown-it vẫn chặn link nguy hiểm như `javascript:`.
+ */
+function htmlLinksToMarkdown(text: string): string {
+  return text.replace(HTML_LINK, (_tag, href: string, inner: string) => {
+    const label = inner.replace(/<[^>]*>/g, '').trim() || href
+    return `[${label}](${href})`
+  })
 }
 
 /** Nhãn công cụ đầu dòng: "Tool: handoff - ", "[Tool call: get_product(...)]", "Function: search_products:". */
