@@ -58,7 +58,6 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
         const ip = req.ip ?? 'unknown'
         await enforceRateLimits(
           prisma,
-          res,
           [{ limit: RATE_LIMITS.chatMessagePerIp, subject: ip }],
           'Bạn gửi quá nhiều câu hỏi, vui lòng thử lại sau',
         )
@@ -201,7 +200,6 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
           // chuyển trong ngày; quá giới hạn thì 429 rollback cả yêu cầu vừa tạo.
           await enforceRateLimits(
             tx,
-            res,
             [{ limit: RATE_LIMITS.chatHandoffPerIp, subject: req.ip ?? 'unknown' }],
             'Bạn đã gửi nhiều yêu cầu hôm nay; nhân viên sẽ trả lời các yêu cầu đã gửi',
           )

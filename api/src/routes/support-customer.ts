@@ -71,7 +71,7 @@ function customerSupportRoutes({ prisma, emails, siteUrl, storage }: Deps, scope
       .post('/', async (req, res) => {
         const input = parse(CreateSupportRequest, req.body)
         const scope = await scopeOf(req)
-        await enforceRateLimits(prisma, res, [{ limit: RATE_LIMITS.supportCreatePerIp, subject: String(req.ip) }])
+        await enforceRateLimits(prisma, [{ limit: RATE_LIMITS.supportCreatePerIp, subject: String(req.ip) }])
         const owner = await scope.owner({ orderCode: input.orderCode })
         const request = await prisma.$transaction((tx) =>
           createSupportRequest(tx, mail, {
@@ -110,7 +110,7 @@ function customerSupportRoutes({ prisma, emails, siteUrl, storage }: Deps, scope
         const { where } = await scopeOf(req)
         const scoped = { ...where, code: parseRequestCode(String(req.params.requestCode)) }
         const { id } = await view(scoped)
-        await enforceRateLimits(prisma, res, [{ limit: RATE_LIMITS.supportMessagePerRequest, subject: id }])
+        await enforceRateLimits(prisma, [{ limit: RATE_LIMITS.supportMessagePerRequest, subject: id }])
         const request = await prisma.$transaction((tx) => addCustomerMessage(tx, scoped, message))
         const body: PublicSupportRequest = await toPublicSupport(storage, request)
         res.set('Cache-Control', 'no-store').json(body)
@@ -120,7 +120,7 @@ function customerSupportRoutes({ prisma, emails, siteUrl, storage }: Deps, scope
         const { where } = await scopeOf(req)
         const scoped = { ...where, code: parseRequestCode(String(req.params.requestCode)) }
         const { id } = await view(scoped)
-        await enforceRateLimits(prisma, res, [{ limit: RATE_LIMITS.supportImagePerIp, subject: String(req.ip) }])
+        await enforceRateLimits(prisma, [{ limit: RATE_LIMITS.supportImagePerIp, subject: String(req.ip) }])
         const image = await storeSupportImage(storage, req, id)
         try {
           await prisma.$transaction((tx) =>

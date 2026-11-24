@@ -218,6 +218,24 @@ describe('đặt trước', () => {
     expect(await app.orderCount()).toBe(0)
     expect(await app.usedV41()).toBe(0)
   })
+
+  it('email đã có 3 đơn chờ thanh toán thì đặt trước thứ tư 429 kèm Retry-After, như đặt mua', async () => {
+    const app = await withCampaign()
+    // Mỗi lần một IP khác, để chỉ giới hạn theo email có tác dụng.
+    const place = (i: number) =>
+      app
+        .preorder(app.campaignId, { address: { ...ADDRESS, phone: `091000000${i}` } })
+        .set('X-Forwarded-For', `198.51.100.${i + 1}`)
+    for (let i = 0; i < 3; i++) expect((await place(i)).status).toBe(201)
+
+    const fourth = await place(3)
+
+    expect(fourth.status).toBe(429)
+    expect(fourth.body.error.message).toMatch(/3 đơn đang chờ thanh toán/)
+    expect(fourth.body.error.fields).toEqual([{ path: 'address.email', message: expect.any(String) }])
+    expect(Number(fourth.headers['retry-after'])).toBeGreaterThan(0)
+    expect(await app.orderCount()).toBe(3)
+  })
 })
 
 describe('hết hạn và hủy đơn chờ cọc', () => {

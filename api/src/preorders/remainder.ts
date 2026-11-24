@@ -1,5 +1,5 @@
 import { ErrorCode, RESERVATION_MINUTES, type PayRemainderResult } from '@ecommerce/shared'
-import type { Request, Response } from 'express'
+import type { Request } from 'express'
 import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
 import { createOrderPaymentLink } from '../checkout/order-snapshot.ts'
 import type { Db } from '../db.ts'
@@ -11,24 +11,19 @@ import type { PaymentGateway } from '../payments/gateway.ts'
 const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, message)
 
 /**
- * Tạo link trả phần còn lại của đơn đặt trước đã cọc và đã về hàng (GLOSSARY "Phần còn lại"). Mỗi lần gọi một link mới,
- * hạn `RESERVATION_MINUTES` phút; link hết hạn không đổi gì của đơn, khách gọi lại là có link khác. Khóa đơn `FOR UPDATE`
- * như ghi nhận thanh toán, nên không tạo link cho đơn vừa được trả đủ.
- *
- * Giới hạn tần suất theo IP trước khi làm gì (`payRemainderPerIp`): mỗi lần gọi tạo một link ở cổng.
- *
- * `issueToken`: cấp thêm token tra cứu (chỉ lưu hash) để trình duyệt mở được trang kết quả khi cổng đưa khách về; dùng
- * khi khách vào từ tài khoản, chưa có token của đơn.
+ * Creates a payment link for the remaining balance of a deposited, arrived pre-order (GLOSSARY "Phần còn lại"). Each
+ * call makes a new link valid `RESERVATION_MINUTES`; expiry changes nothing on the order. Locks the order like payment
+ * recording, so a just-paid order gets no link. Rate-limited per IP first, since each call hits the gateway.
+ * `issueToken`: also issue a lookup token so the browser can open the result page (for customers coming from the account).
  */
 export async function createRemainderLink(
   prisma: Db,
-  deps: { payments: PaymentGateway; siteUrl: string; req: Request; res: Response },
+  deps: { payments: PaymentGateway; siteUrl: string; req: Request },
   orderId: string,
   { issueToken = false }: { issueToken?: boolean } = {},
 ): Promise<PayRemainderResult> {
   await enforceRateLimits(
     prisma,
-    deps.res,
     [{ limit: RATE_LIMITS.payRemainderPerIp, subject: String(deps.req.ip) }],
     'Bạn đã tạo quá nhiều lần thanh toán, vui lòng thử lại sau',
   )
@@ -43,12 +38,17 @@ export async function createRemainderLink(
         if (!order.arrivedAt) throw conflict('Hàng chưa về đủ, chưa trả phần còn lại được')
 
         const expiresAt = new Date(Date.now() + RESERVATION_MINUTES * 60_000)
-        const checkoutUrl = await createOrderPaymentLink(tx, deps, order, {
-          purpose: 'remainder',
-          amount: Number(remainingOf(order)),
-          description: `Thanh toán phần còn lại đơn hàng #${order.code}`,
-          expiresAt,
-        })
+        const checkoutUrl = await createOrderPaymentLink(
+          tx,
+          { ...deps, clientIp: deps.req.ip, log: deps.req.log },
+          order,
+          {
+            purpose: 'remainder',
+            amount: Number(remainingOf(order)),
+            description: `Thanh toán phần còn lại đơn hàng #${order.code}`,
+            expiresAt,
+          },
+        )
         let token: string | null = null
         if (issueToken) {
           token = newOpaqueToken()
@@ -56,11 +56,11 @@ export async function createRemainderLink(
         }
         return { checkoutUrl, expiresAt: expiresAt.toISOString(), token }
       },
-      // Gọi cổng thanh toán nằm trong transaction nên cần lâu hơn mặc định 5 giây.
+      // The gateway call runs inside the transaction, so allow more than the default 5 s.
       { timeout: 30_000, maxWait: 10_000 },
     )
   } catch (err) {
-    // Mã giao dịch VNPAY chỉ phân biệt tới giây: hai lần bấm trong cùng một giây thì lần sau trùng mã link.
+    // VNPAY transaction refs have one-second precision: two clicks in a second collide.
     if (isUniqueViolation(err)) throw conflict('Vừa tạo link thanh toán, vui lòng thử lại sau vài giây')
     throw err
   }

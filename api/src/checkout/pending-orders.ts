@@ -1,19 +1,17 @@
-import type { Response } from 'express'
 import { ErrorCode } from '@ecommerce/shared'
 import type { DbClient } from '../db.ts'
 import { AppError } from '../http/errors.ts'
 
-/** Số đơn chờ thanh toán tối đa cho mỗi email và mỗi số điện thoại. Số tạm, chờ chủ doanh nghiệp xác nhận. */
+/** Max pending orders per email and per phone. Provisional, pending owner confirmation. */
 export const MAX_PENDING_ORDERS_PER_CONTACT = 3
 
 /**
- * Chặn giữ hàng ác ý: email hay số điện thoại đã có đủ `MAX_PENDING_ORDERS_PER_CONTACT` đơn chờ thanh toán còn hạn
- * giữ hàng thì 429, `Retry-After` là lúc đơn sớm nhất hết hạn. Gọi trong transaction đặt mua, trước khi tạo đơn.
- * `email` chữ thường và `phone` dạng `0xxxxxxxxx`, như đã lưu trên đơn.
+ * Blocks malicious reservations: 429 when the email or phone already has `MAX_PENDING_ORDERS_PER_CONTACT` unexpired
+ * pending orders; `retryAfter` is seconds until the earliest expires. Call inside the placement transaction.
+ * `email` lowercase and `phone` as `0xxxxxxxxx`, as stored on orders.
  */
 export async function enforcePendingOrderLimit(
   tx: DbClient,
-  res: Response,
   contact: { email: string; phone: string },
   now = new Date(),
 ) {
@@ -26,14 +24,13 @@ export async function enforcePendingOrderLimit(
       label: 'Số điện thoại',
     },
   ]
-  // Hai lần đặt cùng email hay số điện thoại chạy lần lượt nên không vượt giới hạn. Luôn khóa email trước
-  // số điện thoại, nên hai khóa thuộc hai không gian khác nhau và không deadlock.
+  // Serializes orders for the same contact so the limit holds. Email is always locked before phone: no deadlock.
   for (const { key } of checks) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`
   }
 
   for (const { path, where, label } of checks) {
-    // Đơn đã quá hạn giữ hàng mà job chưa kịp hủy (ticket 06) thì không tính.
+    // Expired orders the job has not cancelled yet (ticket 06) do not count.
     const pending = await tx.order.findMany({
       where: { ...where, status: 'pending_payment', reservedUntil: { gt: now } },
       select: { reservedUntil: true },
@@ -44,7 +41,6 @@ export async function enforcePendingOrderLimit(
       `${label} này đang có ${pending.length} đơn đang chờ thanh toán. ` +
       'Hãy thanh toán hoặc chờ đơn cũ hết hạn rồi đặt lại.'
     const retryAfter = Math.ceil((pending[0]!.reservedUntil!.getTime() - now.getTime()) / 1000)
-    res.setHeader('Retry-After', String(Math.max(retryAfter, 1)))
-    throw new AppError(429, ErrorCode.RATE_LIMITED, message, [{ path, message }])
+    throw new AppError(429, ErrorCode.RATE_LIMITED, message, [{ path, message }], undefined, Math.max(retryAfter, 1))
   }
 }
