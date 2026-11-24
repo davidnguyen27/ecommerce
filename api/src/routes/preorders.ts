@@ -4,9 +4,7 @@ import {
   PreorderQuoteRequest,
   PreorderRequest,
   RESERVATION_MINUTES,
-  depositFor,
   provinceName,
-  shippingFeeFor,
   type CheckoutResult,
   type PreorderChange,
   type PreorderConflictDetails,
@@ -26,6 +24,7 @@ import { parse } from '../http/validation.ts'
 import { imageRenditions } from '../media/images.ts'
 import { isoDay } from '../orders/format.ts'
 import { recordOrderEvent } from '../orders/orders.ts'
+import { priceOrder } from '../orders/price-order.ts'
 import { checkPreorder } from '../preorders/check.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
 import { applyVoucherToOrder, quoteVoucher, voucherSnapshot } from '../vouchers/apply.ts'
@@ -87,17 +86,16 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
         })
       }
       const discount = voucher?.applied ? voucher.discount : 0
-      /** Phí giao, tổng và tiền cọc khi tiền hàng được giảm `discount` (spec M5: ngưỡng và cọc tính sau giảm). */
-      const amounts = (discount: number) => {
-        if (subtotal === null) return { shippingFee: null, total: null, depositAmount: null }
-        const goods = subtotal - discount
-        const shippingFee = input.provinceCode === undefined ? null : shippingFeeFor(config, input.provinceCode, goods)
-        return {
-          shippingFee,
-          total: shippingFee === null ? null : goods + shippingFee,
-          depositAmount: campaign ? depositFor(goods, campaign.depositPercent) : null,
-        }
-      }
+      /** Phí giao, tổng và tiền cọc khi tiền hàng được giảm `discount`; chưa có biến thể thì chưa tính được gì. */
+      const amounts = (discount: number) =>
+        subtotal === null
+          ? { shippingFee: null, total: null, depositAmount: null }
+          : priceOrder(config, {
+              subtotal,
+              discount,
+              provinceCode: input.provinceCode,
+              depositPercent: campaign?.depositPercent,
+            })
       const { shippingFee, total, depositAmount } = amounts(discount)
       const withoutVoucher = amounts(0)
 
@@ -200,16 +198,26 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
                   ],
                   customer: { email: address.email, phone: address.phone },
                   seenDiscount: input.discount,
-                  withoutVoucher: {
-                    totalWithoutVoucher: subtotal + shippingFeeFor(config, address.provinceCode, subtotal),
-                    depositAmountWithoutVoucher: depositFor(subtotal, campaign.depositPercent),
-                  },
+                  withoutVoucher: (({ total, depositAmount }) => ({
+                    totalWithoutVoucher: total,
+                    depositAmountWithoutVoucher: depositAmount,
+                  }))(
+                    priceOrder(config, {
+                      subtotal,
+                      discount: 0,
+                      provinceCode: address.provinceCode,
+                      depositPercent: campaign.depositPercent,
+                    }),
+                  ),
                   detailsOf: (voucher): PreorderConflictDetails => ({ voucher }),
                 })
           const discount = applied ? Number(applied.discount) : 0
-          const shippingFee = shippingFeeFor(config, address.provinceCode, subtotal - discount)
-          const total = subtotal - discount + shippingFee
-          const depositAmount = depositFor(subtotal - discount, campaign.depositPercent)
+          const { shippingFee, total, depositAmount } = priceOrder(config, {
+            subtotal,
+            discount,
+            provinceCode: address.provinceCode,
+            depositPercent: campaign.depositPercent,
+          })
           const policies = await livePolicyVersions(tx, [found])
           const reservedUntil = new Date(Date.now() + RESERVATION_MINUTES * 60_000)
 

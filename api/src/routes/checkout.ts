@@ -5,7 +5,6 @@ import {
   ErrorCode,
   RESERVATION_MINUTES,
   provinceName,
-  shippingFeeFor,
   type CheckoutConflictDetails,
   type CheckoutQuote,
   type CheckoutResult,
@@ -25,6 +24,7 @@ import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { parse } from '../http/validation.ts'
 import { imageRenditions } from '../media/images.ts'
 import { recordOrderEvent } from '../orders/orders.ts'
+import { priceOrder } from '../orders/price-order.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
 import { enoughStockIds, reserveStock } from '../stock/stock.ts'
 import { applyVoucherToOrder, quoteVoucher, voucherSnapshot, type VoucherLine } from '../vouchers/apply.ts'
@@ -77,11 +77,8 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
         })
       }
       const discount = voucher?.applied ? voucher.discount : 0
-      // Ngưỡng miễn phí giao so với tiền hàng sau giảm (spec M5).
-      const feeFor = (goods: number) =>
-        input.provinceCode === undefined ? null : shippingFeeFor(config, input.provinceCode, goods)
-      const shippingFee = feeFor(subtotal - discount)
-      const shippingFeeWithoutVoucher = feeFor(subtotal)
+      const { shippingFee, total } = priceOrder(config, { subtotal, discount, provinceCode: input.provinceCode })
+      const withoutVoucher = priceOrder(config, { subtotal, discount: 0, provinceCode: input.provinceCode })
 
       const body: CheckoutQuote = {
         lines,
@@ -91,9 +88,9 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
         discount,
         freeShippingThreshold: config.freeShippingThreshold,
         shippingFee,
-        total: shippingFee === null ? null : subtotal - discount + shippingFee,
-        shippingFeeWithoutVoucher,
-        totalWithoutVoucher: shippingFeeWithoutVoucher === null ? null : subtotal + shippingFeeWithoutVoucher,
+        total,
+        shippingFeeWithoutVoucher: withoutVoucher.shippingFee,
+        totalWithoutVoucher: withoutVoucher.total,
         policies: policies.map(({ slug, title }) => ({ slug, title })),
       }
       res.json(body)
@@ -199,14 +196,17 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
                   customer: { email: address.email, phone: address.phone },
                   seenDiscount: input.discount,
                   withoutVoucher: {
-                    totalWithoutVoucher: subtotal + shippingFeeFor(config, address.provinceCode, subtotal),
+                    totalWithoutVoucher: priceOrder(config, {
+                      subtotal,
+                      discount: 0,
+                      provinceCode: address.provinceCode,
+                    }).total,
                   },
                   detailsOf: (voucher): CheckoutConflictDetails => ({ lines: [], voucher }),
                 })
           const discount = applied ? Number(applied.discount) : 0
           const lineDiscounts = new Map(applied?.lines.map((l) => [l.variantId, l.discount]))
-          const shippingFee = shippingFeeFor(config, address.provinceCode, subtotal - discount)
-          const total = subtotal - discount + shippingFee
+          const { shippingFee, total } = priceOrder(config, { subtotal, discount, provinceCode: address.provinceCode })
           const policies = await livePolicyVersions(tx, variants.values())
           const reservedUntil = new Date(Date.now() + RESERVATION_MINUTES * 60_000)
 
