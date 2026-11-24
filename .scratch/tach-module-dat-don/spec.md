@@ -180,3 +180,4 @@ priceOrder(
   - **B**, export `OrderKindPlan`: bị loại vì seam chỉ có hai giá trị cố định, nơi gọi không cần thay hành vi, và interface plan là phần dễ phải sửa nhất.
   - **C**, hai entry point: được chọn làm khung. Bỏ phần module tự `parse` và phần test gọi thẳng.
 - Sau spec này, `enforceRateLimits` có thể bỏ `res` theo cùng cách. Khi đó `createRemainderLink` cũng thoát khỏi Express.
+- Sửa khi triển khai (ticket 04): giới hạn theo IP chuyển vào module, đếm sau bước kiểm body và trước transaction, để giữ nguyên thứ tự "400 trước 429" của route cũ. `enforceRateLimits` vì vậy bỏ `res` ngay trong spec này. Mục Out of Scope về việc đó không còn đúng.

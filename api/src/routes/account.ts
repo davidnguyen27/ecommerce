@@ -64,7 +64,7 @@ export function accountRoutes(deps: CustomerAuthDeps) {
       if (!customer) throw signedOut()
       // Đã xác minh thì không gửi gì nữa.
       if (customer.emailVerifiedAt) return void res.status(204).end()
-      await enforceRateLimits(prisma, res, [{ limit: RATE_LIMITS.verificationEmailPerCustomer, subject: customer.id }])
+      await enforceRateLimits(prisma, [{ limit: RATE_LIMITS.verificationEmailPerCustomer, subject: customer.id }])
 
       await prisma.$transaction((tx) => sendVerificationEmail(tx, deps.emails, deps.siteUrl, customer))
       res.status(202).end()

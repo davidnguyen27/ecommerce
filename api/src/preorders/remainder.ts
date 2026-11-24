@@ -1,5 +1,5 @@
 import { ErrorCode, RESERVATION_MINUTES, type PayRemainderResult } from '@ecommerce/shared'
-import type { Request, Response } from 'express'
+import type { Request } from 'express'
 import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
 import { createOrderPaymentLink } from '../checkout/order-snapshot.ts'
 import type { Db } from '../db.ts'
@@ -22,13 +22,12 @@ const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, mess
  */
 export async function createRemainderLink(
   prisma: Db,
-  deps: { payments: PaymentGateway; siteUrl: string; req: Request; res: Response },
+  deps: { payments: PaymentGateway; siteUrl: string; req: Request },
   orderId: string,
   { issueToken = false }: { issueToken?: boolean } = {},
 ): Promise<PayRemainderResult> {
   await enforceRateLimits(
     prisma,
-    deps.res,
     [{ limit: RATE_LIMITS.payRemainderPerIp, subject: String(deps.req.ip) }],
     'Bạn đã tạo quá nhiều lần thanh toán, vui lòng thử lại sau',
   )

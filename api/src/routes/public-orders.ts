@@ -35,7 +35,7 @@ export function publicOrderRoutes({ prisma, storage, emails, siteUrl, payments, 
       // Đơn đặt trước đã về hàng: link trả phần còn lại. Người cầm link tra cứu trả được, như hủy đơn chưa thanh toán.
       .post('/:code/pay-remainder', async (req, res) => {
         const order = await findOrderByToken(prisma, String(req.params.code), tokenOf(req.query))
-        const body: PayRemainderResult = await createRemainderLink(prisma, { payments, siteUrl, req, res }, order.id)
+        const body: PayRemainderResult = await createRemainderLink(prisma, { payments, siteUrl, req }, order.id)
         res.set('Cache-Control', 'no-store').json(body)
       })
       .post('/:code/cancel', async (req, res) => {
