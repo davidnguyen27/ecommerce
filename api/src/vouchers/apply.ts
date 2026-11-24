@@ -5,7 +5,7 @@ import {
   type VoucherQuote,
   type VoucherReason,
 } from '@ecommerce/shared'
-import type { Request, Response } from 'express'
+import type { Request } from 'express'
 import type { DbClient } from '../db.ts'
 import type { Voucher } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
@@ -13,17 +13,17 @@ import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { computeDiscount, type DiscountLine, type DiscountRule } from './discount.ts'
 import { customerRedemptions, usedRedemptions, voucherStatus } from './vouchers.ts'
 
-/** Một dòng của đơn định đặt: biến thể, thương hiệu và danh mục theo snapshot đang xuất bản, giá và số lượng. */
+/** A line of the order being placed: variant, brand and category from the live snapshot, price, quantity. */
 export type VoucherLine = { variantId: string; brandId: string; categoryId: string; price: number; quantity: number }
 
 export type VoucherCheck =
   | { ok: true; voucher: Voucher; discount: bigint; lines: { variantId: string; discount: bigint }[] }
   | { ok: false; code: string; reason: VoucherReason; shortfall?: bigint }
 
-/** Mã khách gõ ở dạng lưu trong DB: bỏ khoảng trắng hai đầu, chữ hoa. */
+/** The typed code as stored: trimmed, uppercase. */
 export const normalizeCode = (code: string) => code.trim().toUpperCase()
 
-/** Danh mục và mọi tổ tiên của nó; cây danh mục nhỏ nên đọc cả bảng một lần. */
+/** A category and all its ancestors; the tree is small, so read it whole. */
 async function categoryPaths(db: DbClient, categoryIds: readonly string[]) {
   const all = await db.category.findMany({ select: { id: true, parentId: true } })
   const parent = new Map(all.map((c) => [c.id, c.parentId]))
@@ -37,12 +37,11 @@ async function categoryPaths(db: DbClient, categoryIds: readonly string[]) {
 }
 
 /**
- * Kiểm một mã cho một đơn định đặt và tính tiền giảm (GLOSSARY "Mã giảm giá", "Lượt dùng"); dùng chung cho báo giá và
- * tạo đơn. Thứ tự kiểm: tồn tại, tắt, chưa tới hạn, hết hạn, hình thức bán, tổng lượt, lượt mỗi khách (chỉ khi có email
- * hoặc số điện thoại), rồi tới tiền hàng và phạm vi.
- *
- * `lock` dùng trong transaction tạo đơn: khóa dòng mã `FOR UPDATE` (sau khi đã khóa biến thể), nên hai khách không cùng
- * lấy được lượt cuối, và nhân viên sửa mã (cũng khóa dòng này) không chen vào giữa lúc kiểm và lúc tạo đơn.
+ * Checks a voucher for an order and computes the discount (GLOSSARY "Mã giảm giá", "Lượt dùng"); shared by quote and
+ * placement. Order: exists, disabled, not started, expired, sale type, total uses, per-customer uses (with email or
+ * phone), then goods and scope.
+ * `lock` (placement only) locks the voucher row after the variants, so two customers cannot take the last use and a
+ * staff edit cannot slip in between check and order.
  */
 export async function checkVoucher(
   db: DbClient,
@@ -110,20 +109,15 @@ type VoucherInput = {
   customer: { email?: string | null; phone?: string | null }
 }
 
-/**
- * Báo giá kèm mã (đặt mua và đặt trước): tính một lần vào giới hạn chống dò mã theo IP (429 khi vượt), rồi kiểm mã và trả
- * kết quả như khách thấy. Không ghi gì ngoài bộ đếm tần suất.
- */
+/** Quote with a voucher: counts one hit against the per-IP guessing limit, then checks. Writes only the counter. */
 export async function quoteVoucher(
   db: DbClient,
   req: Request,
-  res: Response,
   code: string,
   input: VoucherInput,
 ): Promise<VoucherQuote> {
   await enforceRateLimits(
     db,
-    res,
     [{ limit: RATE_LIMITS.voucherCheckPerIp, subject: String(req.ip) }],
     'Bạn đã thử mã giảm giá quá nhiều lần, vui lòng thử lại sau',
   )
@@ -131,9 +125,8 @@ export async function quoteVoucher(
 }
 
 /**
- * Lúc tạo đơn: khóa dòng mã, kiểm lại toàn bộ và trả kết quả khi mã áp được với đúng tiền giảm khách đã thấy. Ngược lại
- * ném 409 kèm `details` do `detailsOf` dựng từ `VoucherConflict` (lý do, tiền giảm mới, các khoản khi không dùng mã).
- * Không có gì được ghi. Gọi sau khi đã khóa biến thể (và dòng suất của đợt), theo cùng thứ tự khóa ở mọi nơi.
+ * At placement: locks the voucher row and rechecks; returns when it applies with exactly the discount seen. Otherwise
+ * throws 409 with `details` from `detailsOf(VoucherConflict)`. Call after locking variants (and allocation rows).
  */
 export async function applyVoucherToOrder(
   tx: DbClient,
@@ -164,7 +157,7 @@ export async function applyVoucherToOrder(
   )
 }
 
-/** Kết quả kiểm mã như báo giá trả cho khách. */
+/** Check result as the quote returns it. */
 function toVoucherQuote(check: VoucherCheck): VoucherQuote {
   return check.ok
     ? {
@@ -181,7 +174,7 @@ function toVoucherQuote(check: VoucherCheck): VoucherQuote {
       }
 }
 
-/** Các cột chụp mã vào đơn (check `order_voucher_check`). */
+/** Voucher snapshot columns on the order (`order_voucher_check`). */
 export const voucherSnapshot = (voucher: Voucher, discount: bigint) => ({
   voucherId: voucher.id,
   voucherCode: voucher.code,

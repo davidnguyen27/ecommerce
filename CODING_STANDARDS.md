@@ -34,4 +34,4 @@ Reviewer đọc file này khi chạy `/code-review`. Chỉ ghi các judgement ca
 
 ## Comment
 
-- Comment tiếng Việt, nói lý do hoặc ràng buộc không nhìn thấy từ code, thường một dòng. Mật độ theo các file lân cận.
+- Comment tiếng Anh, ngắn, nói lý do hoặc ràng buộc không nhìn thấy từ code, thường một dòng. Mật độ theo các file lân cận. Thuật ngữ nghiệp vụ trích GLOSSARY giữ nguyên tiếng Việt (ví dụ GLOSSARY "Phần còn lại"). Code cũ còn comment tiếng Việt thì dịch khi sửa tới file đó, không dịch hàng loạt.

@@ -87,7 +87,7 @@ export function customerAuthRoutes(deps: CustomerAuthDeps) {
     })
     .post('/forgot-password', async (req, res) => {
       const email = normalizeEmail(parse(ForgotPasswordRequest, req.body).email)
-      await enforceRateLimits(prisma, res, [
+      await enforceRateLimits(prisma, [
         { limit: RATE_LIMITS.forgotPasswordPerEmail, subject: email },
         { limit: RATE_LIMITS.forgotPasswordPerIp, subject: String(req.ip) },
       ])

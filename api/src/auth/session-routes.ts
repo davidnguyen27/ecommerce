@@ -87,7 +87,7 @@ export function createSessions(options: SessionOptions) {
       clientOf(req)
       const { email, password } = parse(LoginRequest, req.body)
       // Đếm cả lần đăng nhập đúng, và đếm trước khi verify để kẻ dò mật khẩu không tốn thêm CPU của mình.
-      await enforceRateLimits(prisma, res, [
+      await enforceRateLimits(prisma, [
         { limit: RATE_LIMITS.loginPerEmail, subject: `${audience}:${normalizeEmail(email)}` },
         { limit: RATE_LIMITS.loginPerIp, subject: `${audience}:${String(req.ip)}` },
       ])
