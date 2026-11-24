@@ -198,27 +198,27 @@ finish() {
 # the whole file before the first prompt, so an edit mid-run can't break it.
 # ──────────────────────────────────────────────────────────────────────────
 
-# Hạ tầng cho dự án ecommerce: GitHub repo + Environments, SSH deploy vào VPS,
-# DNS Cloudflare, Cloudflare R2, Sentry, secret sinh tự động, khóa mã hóa backup.
+# Infrastructure for the ecommerce project: GitHub repo + Environments, SSH deploy to the VPS,
+# Cloudflare DNS, Cloudflare R2, Sentry, generated secrets, backup encryption key.
 #
-# Chạy từ gốc repo:  bash scripts/setup-infra.sh
-# Chạy lại được: giá trị không bí mật được nhớ trong .env.infra (gitignored).
+# Run from the repo root:  bash scripts/setup-infra.sh
+# Rerunnable: non-secret values are remembered in .env.infra (gitignored).
 #
-# Hợp đồng tên với CI (ticket 15 phải dùng đúng các tên này):
+# Name contract with CI (ticket 15 must use exactly these names):
 #   Repo secrets:   DEPLOY_SSH_KEY, SENTRY_AUTH_TOKEN
 #   Repo variables: DEPLOY_HOST, DEPLOY_USER, DEPLOY_KNOWN_HOSTS,
 #                   SENTRY_ORG, SENTRY_PROJECT_API, SENTRY_PROJECT_WEB,
 #                   SENTRY_DSN_API, SENTRY_DSN_WEB, R2_ACCOUNT_ID
-#   Environment "staging" và "production", mỗi cái có:
+#   Environments "staging" and "production", each with:
 #     secrets:   POSTGRES_PASSWORD, JWT_CUSTOMER_SECRET, JWT_STAFF_SECRET,
 #                R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
 #     variables: PUBLIC_DOMAIN, R2_PUBLIC_BUCKET, R2_PRIVATE_BUCKET, R2_PUBLIC_URL
-#   Chỉ "production" có thêm:
+#   Only "production" also has:
 #     secrets:   BACKUP_R2_ACCESS_KEY_ID, BACKUP_R2_SECRET_ACCESS_KEY
 #     variables: BACKUP_R2_BUCKET, BACKUP_AGE_RECIPIENT
 
-# set_env_secret ENV NAME VALUE / set_env_var ENV NAME VALUE: như set_secret /
-# set_var nhưng ghi vào một GitHub Environment.
+# set_env_secret ENV NAME VALUE / set_env_var ENV NAME VALUE: like set_secret /
+# set_var but writing to a GitHub Environment.
 set_env_secret() {
   local env="$1" name="$2" value="$3"
   if printf '%s' "$value" | gh secret set "$name" --env "$env" >/dev/null 2>&1; then
@@ -242,8 +242,8 @@ set_env_var() {
 
 R2_DASH="https://dash.cloudflare.com/?to=/:account/r2/overview"
 DEPLOY_KEY="$HOME/.ssh/ecommerce_deploy"
-# Chạy trên VPS: đọc public key từ stdin, thêm vào authorized_keys nếu chưa có.
-# shellcheck disable=SC2016  # biến được mở rộng ở phía VPS, không phải ở máy này
+# Runs on the VPS: reads a public key from stdin and adds it to authorized_keys if missing.
+# shellcheck disable=SC2016  # variables expand on the VPS side, not on this machine
 ADD_KEY_REMOTE='umask 077; mkdir -p ~/.ssh; key=$(cat); grep -qxF "$key" ~/.ssh/authorized_keys 2>/dev/null || printf "%s\n" "$key" >> ~/.ssh/authorized_keys'
 
 run_wizard() {
@@ -383,7 +383,7 @@ write_env R2_PUBLIC_URL_STAGING "$R2_PUBLIC_URL_STAGING"
 set_env_var production R2_PUBLIC_URL "$R2_PUBLIC_URL_PROD"
 set_env_var staging R2_PUBLIC_URL "$R2_PUBLIC_URL_STAGING"
 
-# ── 7, 8, 9: một R2 token cho mỗi phạm vi, quyền tối thiểu ───────────────
+# ── 7, 8, 9: one R2 token per scope, least privilege ─────────────────────
 local scope buckets
 for scope in staging production backups; do
   case $scope in

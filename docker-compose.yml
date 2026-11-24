@@ -1,10 +1,10 @@
-# Môi trường local: docker compose up --build, rồi mở http://localhost
-# Muốn xem được ảnh và chứng từ: đặt trong .env các biến S3 local ghi trong .env.example (COMPOSE_PROFILES=local).
+# Local environment: docker compose up --build, then open http://localhost
+# To view images and documents: set the local S3 vars from .env.example in .env (COMPOSE_PROFILES=local).
 x-database-url: &database-url postgresql://${POSTGRES_USER:-ecommerce}:${POSTGRES_PASSWORD:-ecommerce}@postgres:5432/${POSTGRES_DB:-ecommerce}
 
 services:
   postgres:
-    # Image chính thức đã kèm contrib (unaccent, pg_trgm); migration đầu tiên bật chúng.
+    # The official image ships contrib (unaccent, pg_trgm); the first migration enables them.
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ecommerce}
@@ -20,7 +20,7 @@ services:
       timeout: 3s
       retries: 30
 
-  # Migration chạy thành một bước riêng trước khi API khởi động.
+  # Migrations run as a separate step before the API starts.
   migrate:
     build: { context: ., dockerfile: api/Dockerfile }
     command: ['pnpm', 'migrate']
@@ -34,15 +34,15 @@ services:
     environment:
       DATABASE_URL: *database-url
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      # Giá trị mặc định chỉ dùng cho local; staging/production phải đặt khóa riêng.
+      # Defaults are for local only; staging/production must set their own keys.
       JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-khong-dung-cho-production}
-      # Gốc URL trong link gửi qua email.
+      # Base URL for links sent by email.
       SITE_URL: ${SITE_URL:-http://localhost:${HTTP_PORT:-80}}
-      # Local chỉ ghi email ra log; staging/production đặt MAIL_PROVIDER=resend kèm RESEND_API_KEY, MAIL_FROM.
+      # Local only logs emails; staging/production set MAIL_PROVIDER=resend with RESEND_API_KEY, MAIL_FROM.
       MAIL_PROVIDER: ${MAIL_PROVIDER:-log}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-}
-      # Local giữ file trong bộ nhớ; staging/production đặt STORAGE_PROVIDER=r2 kèm các biến R2_*, MEDIA_PUBLIC_URL.
+      # Local keeps files in memory; staging/production set STORAGE_PROVIDER=r2 with the R2_* vars and MEDIA_PUBLIC_URL.
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-memory}
       R2_ENDPOINT: ${R2_ENDPOINT:-}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
@@ -50,21 +50,20 @@ services:
       R2_PUBLIC_BUCKET: ${R2_PUBLIC_BUCKET:-}
       R2_PRIVATE_BUCKET: ${R2_PRIVATE_BUCKET:-}
       MEDIA_PUBLIC_URL: ${MEDIA_PUBLIC_URL:-}
-      # Đủ hai khóa VNPAY thì dùng VNPAY (VNPAY_ENV mặc định sandbox). Image chạy NODE_ENV=production nên thiếu khóa
-      # hay dùng sandbox thì API không khởi động, trừ khi đặt PAYMENT_SIMULATOR=allow (chỉ local và smoke; không bao
-      # giờ đặt ở production).
+      # Both VNPAY keys set means VNPAY (VNPAY_ENV defaults to sandbox). The image runs NODE_ENV=production, so missing or
+      # sandbox keys stop the API unless PAYMENT_SIMULATOR=allow is set (local and smoke only; never in production).
       VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
       VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
       VNPAY_ENV: ${VNPAY_ENV:-}
       VNPAY_SERVER_IP: ${VNPAY_SERVER_IP:-}
       PAYMENT_SIMULATOR: ${PAYMENT_SIMULATOR:-}
-      # Chatbot (ADR 0017): khóa gói miễn phí; để trống thì chatbot tự tắt. LLM_CHAIN trống là chuỗi mặc định.
+      # Chatbot (ADR 0017): free-tier keys; empty turns the chatbot off. Empty LLM_CHAIN is the default chain.
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       LLM_CHAIN: ${LLM_CHAIN:-}
     depends_on:
       migrate: { condition: service_completed_successfully }
-      # Chỉ có khi bật profile local; staging/production bỏ qua.
+      # Only with the local profile; staging/production skip it.
       s3-buckets: { condition: service_completed_successfully, required: false }
 
   web:
@@ -89,10 +88,10 @@ services:
       - api
       - web
 
-  # Chỉ local (COMPOSE_PROFILES=local): SeaweedFS làm lưu trữ tương thích S3 thay cho R2, để xem được ảnh và mở được chứng từ.
-  # Trình duyệt và API cùng gọi http://s3.localhost:9000: trình duyệt tự trỏ *.localhost về máy mình,
-  # trong mạng Docker thì alias dưới đây trỏ về container này. URL ký có hạn nhờ vậy dùng được ở cả hai phía.
-  # Quyền: khóa R2_ACCESS_KEY_ID ghi được mọi bucket; khách ẩn danh chỉ đọc được bucket public, như CDN.
+  # Local only (COMPOSE_PROFILES=local): SeaweedFS as S3-compatible storage instead of R2, to view images and documents.
+  # Browser and API both call http://s3.localhost:9000: browsers resolve *.localhost to the machine itself, and inside
+  # Docker the alias below points to this container, so signed URLs work on both sides.
+  # Access: the R2_ACCESS_KEY_ID key writes every bucket; anonymous users only read the public bucket, like a CDN.
   s3:
     image: chrislusf/seaweedfs:4.48
     profiles: [local]
@@ -119,8 +118,8 @@ services:
       timeout: 3s
       retries: 60
 
-  # Tạo bucket public và private. weed shell báo lỗi khi bucket đã có, nên bỏ qua lỗi tạo
-  # rồi kiểm tra cả hai bucket đều có trong danh sách.
+  # Create the public and private buckets. weed shell errors when a bucket exists, so ignore creation errors, then check
+  # both buckets are listed.
   s3-buckets:
     image: chrislusf/seaweedfs:4.48
     profiles: [local]

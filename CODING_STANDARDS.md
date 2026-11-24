@@ -34,4 +34,4 @@ Reviewer đọc file này khi chạy `/code-review`. Chỉ ghi các judgement ca
 
 ## Comment
 
-- Comment tiếng Anh, ngắn, nói lý do hoặc ràng buộc không nhìn thấy từ code, thường một dòng. Mật độ theo các file lân cận. Thuật ngữ nghiệp vụ trích GLOSSARY giữ nguyên tiếng Việt (ví dụ GLOSSARY "Phần còn lại"). Code cũ còn comment tiếng Việt thì dịch khi sửa tới file đó, không dịch hàng loạt.
+- Comment tiếng Anh, ngắn, nói lý do hoặc ràng buộc không nhìn thấy từ code, thường một dòng. Mật độ theo các file lân cận. Thuật ngữ nghiệp vụ trích GLOSSARY giữ nguyên tiếng Việt (ví dụ GLOSSARY "Phần còn lại"), cùng chữ khách thấy và dữ liệu mẫu trích trong comment. Cả repo đã chuyển sang comment tiếng Anh (2026-11-24); migration SQL cũ giữ nguyên vì Prisma kiểm checksum.
