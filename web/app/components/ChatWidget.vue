@@ -11,8 +11,8 @@ import {
 } from '@ecommerce/shared'
 import { MessageCircle, RotateCcw, Send, UserRound, X } from 'lucide-vue-next'
 
-// Khung chat với chatbot (spec M8 "Web"). Chỉ chạy ở trình duyệt (layout bọc trong <ClientOnly> và tải lazy), nên
-// HTML trang khách không đổi và lỗi của khung chat không làm hỏng trang.
+// Chatbot widget (spec M8 "Web"). Runs only in the browser (the layout wraps it in <ClientOnly> and lazy-loads it), so
+// customer page HTML is unchanged and widget errors cannot break the page.
 const route = useRoute()
 
 const open = ref(false)
@@ -22,11 +22,11 @@ const conversationId = ref<string | null>(null)
 const draft = ref('')
 const sending = ref(false)
 const error = ref<string | null>(null)
-/** Lý do lượt gần nhất không có trả lời; xóa khi lượt sau trả lời được. */
+/** Why the latest turn had no answer; cleared when a later turn answers. */
 const unavailable = ref<ChatUnavailableReason | Exclude<ChatTurnOutcome, 'answered'> | null>(null)
 const handoffSuggested = ref(false)
 const handoffOpen = ref(false)
-/** Đã đăng nhập thì yêu cầu gắn vào tài khoản, không hỏi tên và email. */
+/** Signed-in customers get the request on their account, without being asked name and email. */
 const signedIn = ref(false)
 const handoffForm = reactive({ name: '', email: '', message: '' })
 const handoffSending = ref(false)
@@ -40,7 +40,7 @@ async function openHandoff() {
   if (handoffOpen.value) signedIn.value = await session.signedIn()
 }
 
-/** Khách xác nhận chuyển nhân viên (spec M8 ticket 05): tạo yêu cầu hỗ trợ, gắn cuộc trò chuyện đang có. */
+/** The customer confirms the handoff (spec M8 ticket 05): creates a support request with the current conversation. */
 async function submitHandoff() {
   if (handoffSending.value) return
   handoffSending.value = true
@@ -80,7 +80,7 @@ function writeStorage(id: string | null) {
     if (id) localStorage.setItem(CHAT_STORAGE_KEY, id)
     else localStorage.removeItem(CHAT_STORAGE_KEY)
   } catch {
-    // Trình duyệt chặn lưu trữ: vẫn chat được trong trang này, chỉ không còn sau khi tải lại.
+    // The browser blocks storage: chat still works on this page, just not after a reload.
   }
 }
 
@@ -95,7 +95,7 @@ async function scrollToEnd() {
 }
 
 let loaded = false
-/** Lần mở đầu: đọc trạng thái và nạp lại cuộc đang dở (nếu còn dùng được). */
+/** First open: read the status and reload an unfinished conversation (if still usable). */
 async function load() {
   if (loaded) return
   loaded = true
@@ -163,7 +163,8 @@ async function send() {
       }),
     )
     if (turn.conversationId && turn.conversationId !== conversationId.value) {
-      // Cuộc mới (lần đầu, hay cuộc cũ đã im quá 24 giờ): tin cũ trên màn hình thuộc cuộc trước.
+      // A new conversation (first time, or the old one silent over 24 h): messages on screen belong to the previous
+      // one.
       if (conversationId.value) entries.value = [pending]
       conversationId.value = turn.conversationId
       writeStorage(turn.conversationId)
@@ -178,7 +179,7 @@ async function send() {
       unavailable.value = turn.outcome === 'answered' ? 'failed' : turn.outcome
     }
   } catch (err) {
-    // 429 (quá nhiều câu hỏi, cuộc đủ 30 câu) hay lỗi mạng: trả câu hỏi về ô nhập để khách gửi lại.
+    // 429 (too many questions, 30 per conversation) or a network error: put the question back in the input to resend.
     entries.value = entries.value.filter((entry) => entry.id !== pending.id)
     draft.value = content
     error.value = apiErrorMessage(err)
@@ -202,7 +203,7 @@ function onPanelKeydown(event: KeyboardEvent) {
 const availabilityLabel = (card: { inStock: boolean; preorder: boolean }) =>
   card.inStock ? 'Còn hàng' : card.preorder ? 'Nhận đặt trước' : 'Hết hàng'
 
-// Chuyển trang thì đóng khung chat trên điện thoại (khung chiếm cả màn hình), giữ mở trên máy tính.
+// Navigating closes the chat on phones (it fills the screen) and keeps it open on desktop.
 watch(
   () => route.fullPath,
   () => {
@@ -214,8 +215,8 @@ watch(
 <template>
   <div class="chat-widget">
     <!--
-      Bản demo trên Netlify có badge "Powered by Netlify" (iframe cố định ở góc phải dưới, cao 64px, z-index 2147483645)
-      đè lên góc đó. Nút đặt cao hơn badge; khung chat khi mở là hộp thoại nên nằm trên badge.
+      The Netlify demo has a "Powered by Netlify" badge (fixed iframe at the bottom right, 64px tall, z-index
+      2147483645) covering that corner. The button sits above it; the open chat is a dialog, so it covers the badge.
     -->
     <button
       v-if="!open"
@@ -276,7 +277,7 @@ watch(
             <span v-if="entry.failed" class="mt-1 block text-[11px] opacity-80">Chưa có trả lời</span>
           </div>
           <div v-else class="max-w-[92%] space-y-2">
-            <!-- renderMarkdown thoát mọi HTML và chặn link javascript: -->
+            <!-- renderMarkdown escapes all HTML and blocks javascript: links -->
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div
               class="prose-content rounded-lg bg-secondary px-3 py-2 text-sm"
@@ -318,7 +319,7 @@ watch(
       <div class="space-y-2 border-t border-border px-4 py-3">
         <div v-if="notice" class="rounded-md border border-border bg-secondary px-3 py-2 text-sm">
           {{ notice }}
-          <!-- Chân trang của layout khách liệt kê các trang chính sách (spec M8: kèm link trang chính sách). -->
+          <!-- The customer layout footer lists the policy pages (spec M8: with policy page links). -->
           <a href="#chinh-sach" class="link" @click="close">Xem các chính sách</a>
         </div>
         <p v-if="error" class="notice-error" role="alert">{{ error }}</p>

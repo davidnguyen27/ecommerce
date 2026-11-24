@@ -1,35 +1,38 @@
-// Mã giảm giá qua giao diện thật (M5). Hàng sẵn: chủ cửa hàng tạo mã ở trang quản trị; khách áp một mã khác, mã đó bị
-// tắt trước khi khách xác nhận nên đặt mua bị từ chối kèm hộp chọn; khách quay lại, áp mã mới, thấy tiền giảm và tổng mới,
-// trả qua cổng giả lập; trang đơn hiện tiền giảm, trang quản trị thấy đơn ở chi tiết mã và khi lọc theo mã.
-// Đặt trước: khách áp mã, tiền cọc và phần còn lại tính trên tiền hàng sau giảm, cổng đòi đúng tiền cọc đó.
+// Vouchers through the real UI (M5). In stock: the owner creates a voucher in admin; the customer applies another one,
+// which is disabled before confirming, so checkout is rejected with a choice box; the customer goes back, applies the
+// new voucher, sees the discount and new total, pays via the simulator; the order page shows the discount, and admin
+// finds the order in the voucher detail and when filtering by voucher.
+// Pre-order: the customer applies a voucher; deposit and remainder use goods after discount, and the gateway asks for
+// exactly that deposit.
 //
-// Spec này đặt 3 lần (2 đặt mua, 1 đặt trước); cùng hai spec kia là 5 lần, đúng giới hạn đặt mỗi IP mỗi giờ. Vì vậy
-// "Đặt không dùng mã" không chạy ở đây (thêm một lần đặt nữa), chỉ kiểm hộp chọn hiện ra; nhánh đó có test API.
+// This spec places 3 orders (2 checkouts, 1 pre-order); with the other two specs that is 5, exactly the per-IP hourly
+// limit. So "Đặt không dùng mã" is not run here (one more order); only the choice box is checked. That branch has API
+// tests.
 import { expect, test } from '@playwright/test'
 import type { AdminProductList, PreorderCampaignPage, PublicProduct, VoucherOrderPage } from '@ecommerce/shared'
 import { adminLogin } from '../support/admin-login.ts'
 import { AdminApi, BASE_URL, OWNER, PRICE, PRODUCT_PATH, PROVINCE_CODE, SHIPPING_FEE } from '../support/stack.ts'
 
 const runId = Date.now().toString().slice(-8)
-/** Mã khách dùng được (tạo qua form quản trị) và mã sẽ bị tắt giữa chừng (tạo qua API). */
+/** A usable voucher (created via the admin form) and one disabled midway (created via the API). */
 const CODE = `E2E${runId}`
 const DISABLED_CODE = `TAT${runId}`
-/** 10%, tối đa 500.000. */
+/** 10%, max 500,000. */
 const DISCOUNT = Math.min(500_000, Math.floor((PRICE * 0.1) / 1000) * 1000)
 
-/** Biến thể hết hàng của sản phẩm seed, dùng cho đặt trước như preorder.spec. */
+/** The seed product's out-of-stock variant, used for pre-orders like preorder.spec. */
 const PREORDER_SKU = 'AM90-TRANG-41'
 const DEPOSIT_PERCENT = 30
 
 const DAY = 24 * 60 * 60_000
-/** Thời điểm cho `<input type="datetime-local">` theo giờ Việt Nam (múi giờ của trình duyệt E2E). */
+/** A time for `<input type="datetime-local">` in Vietnam time (the E2E browser's time zone). */
 const vnLocal = (offsetMs: number) => new Date(Date.now() + offsetMs + 7 * 3_600_000).toISOString().slice(0, 16)
 
 async function fillContact(page: import('@playwright/test').Page, n: number) {
   await page.getByLabel('Họ tên người nhận').fill('Lê Văn Mã Giảm')
   await page.getByLabel('Số điện thoại').fill(`07${runId.slice(0, 7)}${n}`)
   await page.getByLabel('Email').fill(`ma-giam-${runId}-${n}@example.com`)
-  // Nhãn "Tỉnh/thành" cũng khớp ô phường/xã, nên chọn theo name.
+  // The "Tỉnh/thành" label also matches the ward field, so select by name.
   await page.locator('select[name=province]').selectOption(PROVINCE_CODE)
   const ward = page.locator('select[name=ward]')
   await expect(ward).toBeEnabled()
@@ -58,7 +61,7 @@ test('chủ cửa hàng tạo mã; khách áp mã, mã bị tắt lúc xác nh�
   })
   const disabled = await api.send<{ id: string }>('POST', '/api/admin/vouchers', voucherBody(DISABLED_CODE))
 
-  // 1. Chủ cửa hàng tạo mã ở trang quản trị.
+  // 1. The owner creates a voucher in admin.
   const ownerContext = await browser.newContext()
   const owner = await ownerContext.newPage()
   await adminLogin(owner, OWNER)
@@ -73,7 +76,7 @@ test('chủ cửa hàng tạo mã; khách áp mã, mã bị tắt lúc xác nh�
   const voucherId = owner.url().split('/').pop()!
   await expect(owner.getByRole('heading', { level: 1 })).toContainText(CODE)
 
-  // 2. Khách đặt 1 đôi, áp mã sẽ bị tắt: thấy tiền giảm và tổng mới.
+  // 2. The customer orders 1 pair and applies the voucher about to be disabled: sees the discount and new total.
   await page.goto(PRODUCT_PATH)
   await page.getByRole('button', { name: 'Thêm vào giỏ' }).click()
   await page.getByRole('link', { name: 'Giỏ hàng, 1 món', exact: true }).click()
@@ -84,7 +87,8 @@ test('chủ cửa hàng tạo mã; khách áp mã, mã bị tắt lúc xác nh�
   await expect(page.getByTestId('discount')).toContainText(vnd(DISCOUNT))
   await expect(page.getByTestId('total')).toHaveText(vnd(PRICE - DISCOUNT + SHIPPING_FEE))
 
-  // 3. Mã bị tắt trước khi khách xác nhận: đặt mua bị từ chối, khách thấy lý do và tổng khi không dùng mã.
+  // 3. The voucher is disabled before confirming: checkout is rejected; the customer sees the reason and the total
+  // without it.
   await api.send('POST', `/api/admin/vouchers/${disabled.id}/disable`)
   await page.getByRole('checkbox', { name: /chính sách bảo mật/ }).check()
   await page.getByRole('button', { name: 'Đặt mua và thanh toán' }).click()
@@ -95,7 +99,7 @@ test('chủ cửa hàng tạo mã; khách áp mã, mã bị tắt lúc xác nh�
   await conflict.getByRole('button', { name: 'Quay lại' }).click()
   await expect(conflict).toBeHidden()
 
-  // 4. Áp mã còn dùng được rồi đặt: cổng giả lập đòi đúng tổng sau giảm.
+  // 4. Apply a still-valid voucher and order: the simulator asks for exactly the discounted total.
   await applyCode(page, CODE)
   await expect(page.getByText(`Mã ${CODE} đã áp dụng`)).toBeVisible()
   await expect(page.getByTestId('total')).toHaveText(vnd(PRICE - DISCOUNT + SHIPPING_FEE))
@@ -104,7 +108,7 @@ test('chủ cửa hàng tạo mã; khách áp mã, mã bị tắt lúc xác nh�
   const code = new URL(page.url()).searchParams.get('orderCode')!
   await expect(page.getByTestId('simulator-amount')).toHaveText(vnd(PRICE - DISCOUNT + SHIPPING_FEE))
 
-  // 5. Giả lập đã thanh toán: trang đơn hiện tiền giảm.
+  // 5. Simulate payment: the order page shows the discount.
   await page.getByRole('button', { name: 'Giả lập đã thanh toán' }).click()
   await expect(page.getByRole('heading', { level: 1, name: `Đơn hàng #${code}` })).toBeVisible()
   await expect(page.getByTestId('order-discount')).toContainText(CODE)
@@ -114,7 +118,7 @@ test('chủ cửa hàng tạo mã; khách áp mã, mã bị tắt lúc xác nh�
   expect(order).toMatchObject({ paymentStatus: 'paid', voucherCode: CODE, discount: DISCOUNT })
   expect(order.voucher).toMatchObject({ id: voucherId, kind: 'percent', percent: 10 })
 
-  // 6. Trang quản trị: chi tiết mã liệt kê đơn, danh sách đơn lọc theo mã ra đúng đơn này.
+  // 6. Admin: the voucher detail lists the order, and the order list filtered by voucher finds exactly it.
   const used = await api.get<VoucherOrderPage>(`/api/admin/vouchers/${voucherId}/orders`)
   expect(used.items.map((o) => o.code)).toEqual([Number(code)])
   await owner.goto(`/admin/vouchers/${voucherId}`)
@@ -130,7 +134,7 @@ test('chủ cửa hàng tạo mã; khách áp mã, mã bị tắt lúc xác nh�
 test('khách đặt trước kèm mã: tiền cọc và phần còn lại tính trên tiền hàng sau giảm', async ({ page }) => {
   const api = await AdminApi.owner()
   const stock = await api.stockOf(PREORDER_SKU)
-  // Như preorder.spec: biến thể hết hàng sẵn, không còn đợt cũ đang mở, rồi mở một đợt mới.
+  // As in preorder.spec: the variant has no regular stock and no old open campaign, then open a new one.
   if (stock.onHand !== stock.reserved) {
     await api.send('POST', '/api/admin/stock/adjustments', {
       variantId: stock.variantId,
@@ -161,7 +165,7 @@ test('khách đặt trước kèm mã: tiền cọc và phần còn lại tính 
   })
   const price = product.variants.find((v) => v.sku === PREORDER_SKU)!.price
   const discount = Math.min(500_000, Math.floor((price * 0.1) / 1000) * 1000)
-  // Cọc 30% tiền hàng sau giảm, làm tròn lên 1.000; phần còn lại gồm phí giao.
+  // Deposit is 30% of goods after discount, rounded up to 1,000; the remainder includes shipping.
   const deposit = Math.ceil(((price - discount) * DEPOSIT_PERCENT) / 100 / 1000) * 1000
   const remaining = price - discount + SHIPPING_FEE - deposit
 
@@ -183,12 +187,12 @@ test('khách đặt trước kèm mã: tiền cọc và phần còn lại tính 
   expect(order).toMatchObject({ kind: 'preorder', voucherCode: CODE, discount })
   expect(order.preorder).toMatchObject({ depositAmount: deposit, remainingAmount: remaining })
 
-  // Không trả cọc: đơn đã cọc không hủy được (M6) và sẽ chặn preorder.spec chạy lại trên cùng stack. Đơn chờ cọc tự hết
-  // hạn; đóng đợt để biến thể về như trước.
+  // Do not pay the deposit: a deposited order cannot be cancelled (M6) and would block preorder.spec reruns on the same
+  // stack. A pending deposit expires on its own; close the campaign to reset the variant.
   await closeOpen()
 })
 
-/** Định dạng tiền như `formatVnd` của web: `3.530.000 ₫`. */
+/** Money formatted like the web's `formatVnd`: `3.530.000 ₫`. */
 function vnd(amount: number) {
   return `${new Intl.NumberFormat('vi-VN').format(amount)} ₫`
 }

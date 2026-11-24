@@ -5,24 +5,24 @@ import { suggestsSize } from './intent.ts'
 import { isLanguageReminder } from './prompt.ts'
 import { CHAT_TOOLS, runTool, type ToolDeps } from './tools.ts'
 
-/** Số vòng gọi công cụ tối đa mỗi lượt; sau đó gọi một lần không kèm công cụ để buộc trả lời (spec M8). */
+/** Max tool rounds per turn; then one call without tools forces an answer (spec M8). */
 export const MAX_TOOL_ROUNDS = 3
 
-/** Một lần gọi model trong lượt, để ghi `chat_usage_day`. */
+/** One model call in the turn, for `chat_usage_day`. */
 export type TurnCall = { attempts: LlmAttempt[]; usage: ModelUsage | null }
 
 export type TurnResult = {
   content: string
   model: string
-  /** Thẻ các sản phẩm đã tìm trong lượt, mỗi sản phẩm một lần, theo thứ tự tìm thấy. */
+  /** Cards of products found in the turn, each once, in order found. */
   cards: ProductCard[]
   handoffSummary: string | null
   calls: TurnCall[]
-  /** Công cụ đã gọi kèm tham số, theo thứ tự, để ghi log. */
+  /** Tools called with arguments, in order, for logging. */
   tools: { name: string; arguments: string }[]
 }
 
-/** Lượt không có câu trả lời. `calls` gồm cả các lần gọi đã thành công trước đó, để vẫn ghi đủ lượt gọi. */
+/** A turn without an answer. `calls` includes earlier successful calls, so usage is still recorded in full. */
 export class TurnFailedError extends Error {
   readonly reason: LlmUnavailableError['reason']
   readonly calls: TurnCall[]
@@ -37,7 +37,7 @@ export class TurnFailedError extends Error {
   }
 }
 
-/** Chạy một lượt: gọi model, chạy công cụ model yêu cầu, gửi kết quả lại, tới khi model trả lời bằng chữ. */
+/** Runs one turn: call the model, run requested tools, send results back, until the model answers in text. */
 export async function runTurn(llm: LlmClient, deps: ToolDeps, prompt: LlmMessage[]): Promise<TurnResult> {
   const messages = [...prompt]
   const reminder = isLanguageReminder(prompt.at(-1)) ? prompt.at(-1) : undefined
@@ -65,7 +65,7 @@ export async function runTurn(llm: LlmClient, deps: ToolDeps, prompt: LlmMessage
       return { content: answer.content, model: answer.model, cards: [...cards.values()], handoffSummary, calls, tools }
     }
 
-    // Chỉ giữ một lời nhắc ngôn ngữ, luôn ở cuối: nhiều system message xen giữa làm gpt-oss viết ra chữ vô nghĩa
+    // Keep one language reminder, always last: several system messages in between made gpt-oss write gibberish
     // (chatbot-check 2026-11-21).
     if (isLanguageReminder(messages.at(-1))) messages.pop()
     messages.push({ role: 'assistant', content: result.content, toolCalls: result.toolCalls })
@@ -76,19 +76,19 @@ export async function runTurn(llm: LlmClient, deps: ToolDeps, prompt: LlmMessage
       if (outcome.handoffSummary) handoffSummary = outcome.handoffSummary
       messages.push({ role: 'tool', toolCallId: call.id, content: JSON.stringify(outcome.output) })
     }
-    // Kết quả công cụ là tiếng Việt; lời nhắc đứng trước chúng thì khách hỏi tiếng Anh vẫn nhận câu trả lời tiếng Việt.
+    // Tool results are Vietnamese; a reminder placed before them got Vietnamese answers to English questions.
     if (reminder) messages.push(reminder)
   }
 }
 
-/** Viết lại khi model đoán size cho sản phẩm không có bảng size. Lời nhắc đặt sau câu trả lời cần viết lại. */
+/** Rewrite when the model guessed a size for a product without a size chart. The reminder goes after the answer. */
 const NO_SIZE_CHART_REWRITE =
   'The reply above suggests a size, but the product has no size chart. Rewrite it: say the product has no size chart and suggest no size, not even a usual one; keep every other fact, price and link; never mention field names such as sizeChart.'
 
 /**
- * Các sản phẩm model đã xem trong lượt (kết quả `get_product`, kể cả sản phẩm đang xem dựng sẵn) đều không có bảng size,
- * mà câu trả lời vẫn gợi ý size. Prompt đã cấm, nhưng gpt-oss vẫn đoán theo kiến thức chung khoảng 1/3 số lần
- * (chatbot-check 2026-11-21); spec M8: không có bảng size thì nói thẳng, không đoán.
+ * None of the products the model saw this turn (`get_product` results, the prebuilt viewed product included) has a
+ * size chart, yet the answer suggests a size. The prompt forbids it, but gpt-oss still guessed about 1/3 of the time
+ * (chatbot-check 2026-11-21); spec M8: without a size chart, say so and do not guess.
  */
 function guessesSizeWithoutChart(messages: readonly LlmMessage[], content: string) {
   const charts = messages.flatMap((message) => {
@@ -103,7 +103,7 @@ function guessesSizeWithoutChart(messages: readonly LlmMessage[], content: strin
   return charts.length > 0 && charts.every((chart) => chart === 'none') && suggestsSize(content)
 }
 
-/** Gọi model thêm một lần, không kèm công cụ, để viết lại câu trả lời. Lỗi thì giữ câu trả lời cũ. */
+/** One extra call without tools to rewrite the answer. On error the old answer is kept. */
 async function rewriteWithoutSize(
   llm: LlmClient,
   messages: readonly LlmMessage[],

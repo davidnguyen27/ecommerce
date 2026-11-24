@@ -16,8 +16,8 @@ const empty = (): RevenueFigures => ({
 })
 
 /**
- * Doanh thu của kỳ (ADR 0016): đơn đã giao theo ngày giao, hàng trả lại theo ngày hoàn xong, mất cọc của đơn đặt trước
- * theo ngày hủy. Ba nguồn tính riêng rồi ghép theo nhãn ngày/tháng.
+ * Period revenue (ADR 0016): delivered orders by delivery date, returns by refund completion date, forfeited pre-order
+ * deposits by cancel date. The three sources are computed apart, then merged by day/month label.
  */
 export async function revenueReport(db: DbClient, period: Period): Promise<RevenueReport> {
   const deliveredAt = Prisma.sql`e."created_at"`
@@ -31,14 +31,14 @@ export async function revenueReport(db: DbClient, period: Period): Promise<Reven
       FROM "order_event" e JOIN "order" o ON o."id" = e."order_id"
       WHERE ${deliveredInPeriod(period)}
       GROUP BY 1, 2`,
-    // Hàng trả lại gồm cả khoản tạo lại sau một khoản hoàn trả hàng thất bại (nguồn gốc `return`).
+    // Returns include refunds recreated after a failed return refund (origin `return`).
     db.$queryRaw<{ bucket: string; amount: bigint }[]>`
       ${REFUND_ROOTS}
       SELECT ${bucketOf(completedAt, period)} AS "bucket", sum(r."amount")::bigint AS "amount"
       FROM "refund" r JOIN "root" ON "root"."id" = r."id"
       WHERE "root"."origin" = 'return' AND r."status" = 'succeeded' AND ${inPeriod(completedAt, period)}
       GROUP BY 1`,
-    // Mất cọc: tiền đã nhận trừ mọi khoản hoàn chưa thất bại (kể cả đang hoàn) của đơn đặt trước đã hủy.
+    // Forfeited deposit: received minus every non-failed refund (refunding included) of a cancelled pre-order.
     db.$queryRaw<{ bucket: string; amount: bigint }[]>`
       SELECT ${bucketOf(cancelledAt, period)} AS "bucket", sum(f."kept")::bigint AS "amount"
       FROM (
@@ -78,9 +78,9 @@ type Sales = { quantity: number; gross: bigint }
 const figures = ({ quantity, gross }: Sales) => ({ quantity, gross: Number(gross) })
 
 /**
- * Doanh thu gộp theo nhóm hàng, thương hiệu và SKU, từ dòng đơn của các đơn đã giao trong kỳ (tiền dòng trừ phần giảm
- * của dòng). Nhóm hàng, thương hiệu, SKU và tên lấy theo hiện tại vì dòng đơn không chụp thương hiệu; hàng trả lại không
- * chia xuống đây (spec M7).
+ * Revenue by product type, brand and SKU, from lines of orders delivered in the period (line amount minus line
+ * discount). Type, brand, SKU and name are current values since lines do not snapshot the brand; returns are not
+ * split down here (spec M7).
  */
 async function salesBreakdown(db: DbClient, period: Period) {
   const lines = Prisma.sql`

@@ -7,13 +7,13 @@ export const PREORDER_SUPPLY_LABELS: Record<PreorderSupplyStatus, string> = {
   issue: 'Gặp sự cố',
 }
 
-/** Thuộc tính biến thể thành một dòng ngắn, ví dụ `Đen · 40`. */
+/** Variant attributes as one short line, e.g. `Đen · 40`. */
 export const variantLabel = (attributes: AttributeValues) =>
   Object.values(attributes)
     .map((v) => (Array.isArray(v) ? v.join(', ') : String(v)))
     .join(' · ')
 
-/** Thời điểm ISO thành giá trị cho `<input type="datetime-local">` theo giờ máy nhân viên. */
+/** ISO timestamp as an `<input type="datetime-local">` value in the staff machine's time. */
 export function toDateTimeLocal(iso: string) {
   const date = new Date(iso)
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)

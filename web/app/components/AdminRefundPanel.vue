@@ -2,9 +2,9 @@
 import { AdminOrder, type AdminRefund } from '@ecommerce/shared'
 
 /**
- * Khối hoàn tiền ở trang chi tiết đơn (ADR 0014): đã nhận, đã hoàn, đang hoàn, và từng khoản hoàn. Người có
- * `payment.refund` ghi chuyển khoản cho khoản chờ hoàn, chốt khoản cổng đang xử lý, tạo lại khoản thất bại. Thao tác
- * xong emit đơn mới do API trả.
+ * Refunds block on the order detail page (ADR 0014): received, refunded, refunding, and each refund. `payment.refund`
+ * holders record transfers for pending refunds, settle gateway-processing ones, recreate failed ones. Emits the new
+ * order the API returns.
  */
 defineProps<{ order: AdminOrder }>()
 const emit = defineEmits<{ update: [order: AdminOrder] }>()
@@ -33,7 +33,9 @@ async function act(refundId: string, action: 'manual' | 'vnpay' | 'settle' | 're
   }
 }
 
-/** Gửi lệnh hoàn tới cổng (VNPAY; local là cổng giả lập). Kết quả hiện ngay ở trạng thái và ghi chú của khoản. */
+/**
+ * Sends the refund command to the gateway (VNPAY; the simulator locally). The result shows at once in status and note.
+ */
 function viaGateway(refund: AdminRefund) {
   if (!confirm(`Gửi lệnh hoàn ${formatVnd(refund.amount)} qua VNPAY? Tiền sẽ trả về thẻ hay tài khoản khách đã dùng.`))
     return

@@ -33,7 +33,7 @@ const VoucherParams = z.object({ id: z.uuid() })
 
 const codeTaken = () => conflictField('code', 'Mã này đã tồn tại')
 
-/** Thương hiệu và danh mục của phạm vi phải tồn tại; lỗi theo từng phần tử để form chỉ đúng chỗ. */
+/** Scope brands and categories must exist; errors per element so the form points at the right spot. */
 async function checkScope(db: DbClient, scope: { brandIds?: string[]; categoryIds?: string[] }) {
   const fields: FieldError[] = []
   if (scope.brandIds?.length) {
@@ -53,10 +53,10 @@ async function checkScope(db: DbClient, scope: { brandIds?: string[]; categoryId
 
 const sorted = (ids: readonly string[]) => [...new Set(ids)].sort()
 
-/** Các trường sửa được của mã, ở dạng so sánh được: thời điểm ISO, danh sách đã sắp xếp. */
+/** A voucher's editable fields in comparable form: ISO timestamps, sorted lists. */
 type Draft = z.infer<typeof VoucherDraft>
 
-/** Bản sửa được của mã, lấy từ chính dạng response (`toVoucher`) để hai bên không chuyển đổi lệch nhau. */
+/** The editable part of a voucher, taken from the response shape (`toVoucher`) so both sides convert the same way. */
 function draftOf(row: Prisma.VoucherGetPayload<{ include: typeof VOUCHER_INCLUDE }>): Draft {
   const { brands, categories, ...v } = toVoucher(row, 0)
   return {
@@ -104,8 +104,8 @@ const columns = (draft: Partial<Draft>) => ({
 })
 
 /**
- * Mã giảm giá, mount tại `/vouchers`. Xem cần `voucher.manage` hoặc `order.view`; tạo, sửa, tắt cần `voucher.manage`.
- * Không có endpoint xóa: mã đã phát ra là lời hứa với khách, chỉ tắt được.
+ * Vouchers, mounted at `/vouchers`. Viewing needs `voucher.manage` or `order.view`; create, edit, disable need
+ * `voucher.manage`. No delete: an issued voucher is a promise to customers and can only be disabled.
  */
 export function adminVoucherRoutes(prisma: Db) {
   return (
@@ -144,7 +144,7 @@ export function adminVoucherRoutes(prisma: Db) {
         const body: Voucher = await loadVoucher(prisma, id)
         res.json(body)
       })
-      // Đơn đã dùng mã, kể cả đơn đã hủy (không chiếm lượt); mới nhất trước (ticket 06).
+      // Orders that used the voucher, cancelled ones too (they take no use); newest first (ticket 06).
       .get('/:id/orders', async (req, res) => {
         const { id } = parse(VoucherParams, req.params)
         const query = parse(PageQuery, req.query)
@@ -184,7 +184,7 @@ export function adminVoucherRoutes(prisma: Db) {
               data: {
                 code: input.code,
                 ...columns(normalize(input)),
-                // Trường bắt buộc, nhắc lại để Prisma thấy kiểu không thiếu.
+                // Required field, restated so Prisma sees the type is complete.
                 kind: input.kind,
                 startsAt: new Date(input.startsAt),
                 endsAt: new Date(input.endsAt),
@@ -212,7 +212,7 @@ export function adminVoucherRoutes(prisma: Db) {
         const input = normalize(parse(VoucherUpdate, req.body))
 
         await audited(prisma, req, async (tx, audit) => {
-          // Khóa mã: tạo đơn (ticket 03) cũng khóa dòng này, nên số lượt đã dùng không đổi giữa lúc kiểm và lúc ghi.
+          // Lock the voucher: placement (ticket 03) locks this row too, so uses cannot change between check and write.
           const [locked] = await tx.$queryRaw<{ id: string }[]>`
           SELECT "id" FROM "voucher" WHERE "id" = ${id}::uuid FOR UPDATE`
           if (!locked) throw notFound()
@@ -226,7 +226,7 @@ export function adminVoucherRoutes(prisma: Db) {
             Object.assign(before, { [key]: current[key] })
             Object.assign(after, { [key]: input[key] })
           }
-          // Không đổi gì thì không ghi gì, kể cả audit.
+          // Nothing changed: write nothing, audit included.
           if (Object.keys(after).length === 0) return
 
           if (row.disabledAt) throw new AppError(409, ErrorCode.CONFLICT, 'Mã đã tắt, không sửa được')
@@ -246,7 +246,7 @@ export function adminVoucherRoutes(prisma: Db) {
           if (after.totalLimit != null && after.totalLimit < used) {
             throw conflictField('totalLimit', `Đã dùng ${used} lượt, tổng lượt không thấp hơn được`)
           }
-          // Kiểm lại ràng buộc giữa các trường trên bản đã ghép, ví dụ đổi sang `percent` thì phải có mức tối đa.
+          // Recheck cross-field rules on the merged version, e.g. switching to `percent` requires a max discount.
           parse(VoucherDraft, { ...current, ...after })
           await checkScope(tx, { brandIds: after.brandIds, categoryIds: after.categoryIds })
 
@@ -272,7 +272,7 @@ export function adminVoucherRoutes(prisma: Db) {
           const [voucher] = await tx.$queryRaw<{ disabledAt: Date | null }[]>`
           SELECT "disabled_at" AS "disabledAt" FROM "voucher" WHERE "id" = ${id}::uuid FOR UPDATE`
           if (!voucher) throw notFound()
-          // Đã tắt thì không làm gì; không bật lại được.
+          // Already disabled: do nothing; it cannot be re-enabled.
           if (voucher.disabledAt) return
           const disabledAt = new Date()
           await tx.voucher.update({ where: { id }, data: { disabledAt } })

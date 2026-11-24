@@ -1,11 +1,11 @@
 import { CartLines, MAX_CART_LINES, MAX_QUANTITY_PER_VARIANT, type CartLine, type QuoteLine } from '@ecommerce/shared'
 
-/** Một dòng giỏ trong localStorage: biến thể, số lượng và giá khách thấy lúc thêm, để phát hiện đổi giá. */
+/** A cart line in localStorage: variant, quantity and the price seen when added, to detect price changes. */
 export type SavedCartLine = CartLine & { price: number }
 
 const isPrice = (value: unknown) => Number.isSafeInteger(value) && (value as number) >= 0
 
-/** Đọc giỏ đã lưu; thiếu, JSON hỏng hoặc sai dạng thì coi như giỏ rỗng. */
+/** Reads the saved cart; missing, broken JSON or wrong shape counts as empty. */
 export function readCart(raw: string | null): SavedCartLine[] {
   if (!raw) return []
   let value: unknown
@@ -21,10 +21,10 @@ export function readCart(raw: string | null): SavedCartLine[] {
     : []
 }
 
-/** `limit`: biến thể đã đủ số cái tối đa; `full`: giỏ đã đủ số dòng tối đa. */
+/** `limit`: the variant is at its max; `full`: the cart has the max number of lines. */
 export type AddToCartResult = { ok: true; lines: SavedCartLine[] } | { ok: false; reason: 'limit' | 'full' }
 
-/** Thêm một cái của biến thể; cùng biến thể thì cộng dồn và lấy giá vừa thấy. */
+/** Adds one unit of a variant; the same variant accumulates and takes the price just seen. */
 export function addToCart(
   lines: readonly SavedCartLine[],
   item: { variantId: string; price: number },
@@ -43,7 +43,7 @@ export function addToCart(
   }
 }
 
-/** Đổi số lượng một dòng, kẹp trong 1 tới số cái tối đa mỗi biến thể. */
+/** Changes a line's quantity, clamped between 1 and the per-variant max. */
 export function setQuantity(lines: readonly SavedCartLine[], variantId: string, quantity: number): SavedCartLine[] {
   const clamped = Math.min(MAX_QUANTITY_PER_VARIANT, Math.max(1, Math.trunc(quantity) || 1))
   return lines.map((line) => (line.variantId === variantId ? { ...line, quantity: clamped } : line))
@@ -52,7 +52,7 @@ export function setQuantity(lines: readonly SavedCartLine[], variantId: string, 
 export const removeLine = (lines: readonly SavedCartLine[], variantId: string) =>
   lines.filter((line) => line.variantId !== variantId)
 
-/** Tổng số cái trong giỏ, hiện ở biểu tượng giỏ. */
+/** Total units in the cart, shown on the cart icon. */
 export const cartCount = (lines: readonly SavedCartLine[]) => lines.reduce((sum, line) => sum + line.quantity, 0)
 
 type QuotedLine = Pick<QuoteLine, 'variantId' | 'price' | 'discontinued' | 'inStock'>
@@ -60,7 +60,7 @@ type QuotedLine = Pick<QuoteLine, 'variantId' | 'price' | 'discontinued' | 'inSt
 export type CartLineChange =
   { kind: 'price'; from: number; to: number } | { kind: 'discontinued' } | { kind: 'out_of_stock' }
 
-/** Thay đổi của từng dòng so với lúc khách thêm vào giỏ, theo variant id; dòng không đổi thì không có trong map. */
+/** Per-line changes since the customer added them, by variant id; unchanged lines are absent. */
 export function cartChanges(lines: readonly SavedCartLine[], quoted: QuotedLine[]): Map<string, CartLineChange> {
   const changes = new Map<string, CartLineChange>()
   const savedPrice = new Map(lines.map((line) => [line.variantId, line.price]))
@@ -74,7 +74,7 @@ export function cartChanges(lines: readonly SavedCartLine[], quoted: QuotedLine[
   return changes
 }
 
-/** Khách đồng ý giá hiện tại: giỏ lưu giá mới làm giá đã thấy. Dòng ngừng bán giữ giá cũ. */
+/** The customer accepts current prices: the cart stores them as seen. Discontinued lines keep the old price. */
 export function acceptQuotedPrices(lines: readonly SavedCartLine[], quoted: QuotedLine[]): SavedCartLine[] {
   const current = new Map(quoted.map((line) => [line.variantId, line.price]))
   return lines.map((line) => ({ ...line, price: current.get(line.variantId) ?? line.price }))

@@ -10,21 +10,22 @@ import { queueSupportEmail } from './emails.ts'
 import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest } from './support.ts'
 
 /**
- * Đổi hàng (GLOSSARY "Đổi hàng", ADR 0015): khách đổi sang biến thể khác của cùng sản phẩm, cùng giá, không tạo đơn mới.
- * Chấp nhận thì giữ hàng biến thể mới; kho nhận hàng cũ (hàm nhận hàng của trả hàng) rồi mới bàn giao biến thể mới (sổ
- * xuất bán trỏ về đơn và yêu cầu). Đóng yêu cầu trước khi giao thì nhả hàng đang giữ.
+ * Exchanges (GLOSSARY "Đổi hàng", ADR 0015): the customer swaps to another variant of the same product at the same
+ * price, without a new order. Acceptance reserves the new variant; the warehouse receives the old item (via the return
+ * receiving function) before handing over the new one (sale ledger pointing at order and request). Closing before
+ * handover releases the reservation.
  */
 
 /**
- * Khách gửi hàng cũ trong ngần này ngày sau khi đổi hàng được chấp nhận; quá hạn thì job gắn cờ cho nhân viên. Cửa hàng
- * chịu phí gửi nên 7 ngày là đủ, và không giữ hàng mới quá lâu (2026-11-18).
+ * Days the customer has to send the old item after an exchange is accepted; past that a job flags it for staff. The
+ * shop pays shipping, so 7 days is enough without holding the new item too long (2026-11-18).
  */
 export const EXCHANGE_SEND_DAYS = 7
 export const EXCHANGE_OVERDUE_MS = EXCHANGE_SEND_DAYS * 24 * 60 * 60_000
 
 /**
- * Biến thể khách đang giữ của từng dòng đơn: biến thể nhận được ở lần đổi gần nhất đã giao, không có thì biến thể gốc
- * của dòng. Trả hay đổi tiếp và nhận hàng về đều dùng biến thể này.
+ * The variant the customer holds per order line: the one received in the latest delivered exchange, else the line's
+ * original. Further returns, exchanges and receiving all use it.
  */
 export async function heldVariants(tx: DbClient, orderLines: readonly { id: string; variantId: string }[]) {
   const shipped = await tx.supportRequestLine.findMany({
@@ -37,7 +38,7 @@ export async function heldVariants(tx: DbClient, orderLines: readonly { id: stri
     orderBy: { request: { exchangeHandedOverAt: 'desc' } },
   })
   const held = new Map(orderLines.map((l) => [l.id, l.variantId]))
-  // Lần giao mới nhất đứng đầu: chỉ lấy lần đầu gặp của mỗi dòng.
+  // Newest delivery first: keep only the first hit per line.
   const seen = new Set<string>()
   for (const s of shipped) {
     if (seen.has(s.orderLineId)) continue
@@ -50,9 +51,9 @@ export async function heldVariants(tx: DbClient, orderLines: readonly { id: stri
 type ExchangeCheck = { orderLine: { price: bigint; sku: string }; productId: string; heldVariantId: string }
 
 /**
- * Biến thể `toVariantId` có đổi được cho dòng không (ADR 0015): có trong phiên bản đang xuất bản và đang bán, cùng sản
- * phẩm, giá hiện tại bằng giá của dòng, khác biến thể khách đang giữ, còn đủ hàng (tồn − đang giữ). Sai thì 409 kèm lý do
- * để khách chọn trả hàng.
+ * Whether `toVariantId` can replace the line (ADR 0015): live and on sale, same product, current price equals the
+ * line's price, differs from the held variant, enough stock (on-hand − reserved). Otherwise 409 with the reason, so the
+ * customer can choose a return instead.
  */
 export async function assertExchangeable(tx: DbClient, line: ExchangeCheck, toVariantId: string, quantity: number) {
   const target = (await cartVariants(tx, [toVariantId])).get(toVariantId)
@@ -72,12 +73,12 @@ export async function assertExchangeable(tx: DbClient, line: ExchangeCheck, toVa
   if (stock.onHand - stock.reserved < quantity) throw conflict(`${prefix}${stock.sku} không còn đủ hàng để đổi`)
 }
 
-/** Dòng của đơn kèm sản phẩm, để kiểm biến thể đổi sang. */
+/** Order lines with their product, to check the target variant. */
 export const ORDER_LINE_FOR_EXCHANGE = {
   select: { id: true, variantId: true, sku: true, price: true, variant: { select: { productId: true } } },
 } as const satisfies Prisma.OrderLineFindManyArgs
 
-/** Biến thể đổi được của từng dòng đơn đã giao, cho form đổi hàng của khách (không ghi gì). */
+/** Exchangeable variants per delivered order line, for the customer's exchange form (writes nothing). */
 export async function exchangeOptions(db: DbClient, orderId: string): Promise<ExchangeOptions> {
   const lines = await db.orderLine.findMany({
     where: { orderId },
@@ -111,12 +112,12 @@ export async function exchangeOptions(db: DbClient, orderId: string): Promise<Ex
           .map((value) => (Array.isArray(value) ? value.join(', ') : String(value)))
           .join(' · '),
       }))
-    // Đã đổi rồi thì khách đang giữ biến thể khác với SKU trên dòng đơn.
+    // After an exchange the customer holds a different variant than the line's SKU.
     const heldSku =
       heldId === line.variantId
         ? line.sku
         : (await db.productVariant.findUniqueOrThrow({ where: { id: heldId }, select: { sku: true } })).sku
-    // Đổi cả dòng: chỉ đổi được khi không có yêu cầu trả hay đổi nào khác đang chiếm dòng.
+    // Whole-line exchange: only when no other return or exchange request occupies the line.
     const holding = kept.get(line.id) ?? 0
     const exchangeable = available.get(line.id) === holding ? holding : 0
     result.push({ variantId: line.variantId, heldSku, returnable: exchangeable, options })
@@ -124,7 +125,7 @@ export async function exchangeOptions(db: DbClient, orderId: string): Promise<Ex
   return { lines: result }
 }
 
-/** Chấp nhận đổi hàng: kiểm lại từng dòng rồi giữ hàng biến thể mới; không đủ thì 409 và không giữ gì. */
+/** Accepts an exchange: rechecks each line, then reserves the new variants; shortage gives 409 and reserves nothing. */
 export async function reserveExchange(tx: DbClient, request: { id: string; lines: ExchangeRequestLine[] }) {
   for (const line of request.lines) {
     await assertExchangeable(
@@ -153,7 +154,7 @@ type ExchangeRequestLine = {
   orderLine: { price: bigint; sku: string; variant: { productId: string } }
 }
 
-/** Nhả hàng đang giữ cho yêu cầu đổi chưa giao (yêu cầu bị đóng). Gọi dưới khóa dòng yêu cầu. */
+/** Releases stock reserved for an undelivered exchange (request closed). Call under the request row lock. */
 export async function releaseExchange(tx: DbClient, requestId: string) {
   const lines = await tx.supportRequestLine.findMany({
     where: { requestId, reservedQuantity: { gt: 0 }, exchangeVariantId: { not: null } },
@@ -168,8 +169,9 @@ export async function releaseExchange(tx: DbClient, requestId: string) {
 }
 
 /**
- * Kho bàn giao biến thể đổi (`order.fulfill`): chỉ sau khi đã nhận hàng cũ, một lần. `changeStock` loại `sale` trừ tồn và
- * nhả số đang giữ, trỏ về đơn và yêu cầu; yêu cầu xong, khách nhận email kèm mã vận đơn. Trả mã yêu cầu.
+ * Warehouse hands over the exchange variant (`order.fulfill`): only after the old item arrived, once. `changeStock`
+ * kind `sale` deducts stock and releases the reservation, pointing at order and request; the request resolves and the
+ * customer gets an email with the tracking number. Returns the request code.
  */
 export async function shipExchange(
   tx: DbClient,
@@ -225,8 +227,8 @@ export async function shipExchange(
 }
 
 /**
- * Job hằng ngày: gắn cờ yêu cầu đổi đã chấp nhận quá `EXCHANGE_SEND_DAYS` ngày mà chưa nhận được hàng cũ. Không tự hủy, không nhả hàng:
- * nhân viên quyết (spec M6b). Trả số yêu cầu vừa gắn cờ.
+ * Daily job: flags accepted exchanges older than `EXCHANGE_SEND_DAYS` days with the old item not received. No
+ * auto-cancel, no release: staff decide (spec M6b). Returns the number flagged.
  */
 export async function flagOverdueExchanges(db: DbClient, now = new Date()) {
   const { count } = await db.supportRequest.updateMany({

@@ -28,33 +28,33 @@ import { publicOrderRoutes } from './routes/public-orders.ts'
 import { paymentRoutes } from './routes/payments.ts'
 import { healthRoutes } from './routes/health.ts'
 
-/** Mọi phụ thuộc bên ngoài đi vào app qua đây, để test thay bằng bản giả. */
+/** Every external dependency enters the app here, so tests can swap in fakes. */
 export type AppDeps = {
   prisma: Db
   logger: Logger
   storage: Storage
-  /** Email đi qua hàng đợi job; worker gửi bằng mailer. */
+  /** Email goes through the job queue; the worker sends it with the mailer. */
   emails: EmailQueue
-  /** Job hủy đơn khi hết hạn giữ hàng, xếp lúc đặt mua. */
+  /** Job that cancels an order when its reservation expires, queued at checkout. */
   orderExpiry: OrderExpiryQueue
-  /** Gốc URL của website, ví dụ `https://shop.vn`, để dựng link trong email. */
+  /** Website base URL, e.g. `https://shop.vn`, for links in emails. */
   siteUrl: string
-  /** Khóa ký JWT (HS256). */
+  /** JWT signing key (HS256). */
   jwtSecret: string
-  /** Cổng thanh toán: VNPAY, cổng giả lập khi chạy local, bản trong bộ nhớ khi test. */
+  /** Payment gateway: VNPAY, the simulator locally, in-memory in tests. */
   payments: PaymentGateway
-  /** `vnp_HashSecret` để kiểm chữ ký IPN; không có thì không mở route IPN. */
+  /** `vnp_HashSecret` for IPN signatures; without it the IPN route is not mounted. */
   vnpayHashSecret?: string
   /**
-   * Giá trị `trust proxy` của Express, để `req.ip` là IP khách (rate limit, audit, `vnp_IpAddr`). Mặc định tin proxy
-   * trong mạng riêng (Caddy trên VPS); bản deploy Netlify → Render đặt số tầng proxy (ADR 0011).
+   * Express `trust proxy`, so `req.ip` is the client IP (rate limits, audit, `vnp_IpAddr`). Defaults to trusting
+   * private-network proxies (Caddy on a VPS); the Netlify → Render deploy sets a hop count (ADR 0011).
    */
   trustProxy?: string | number
-  /** Model của chatbot (ADR 0017); không có là chưa đặt khóa nào, chatbot không trả lời. */
+  /** Chatbot model (ADR 0017); absent when no key is set, so the chatbot does not answer. */
   llm?: LlmClient
 }
 
-/** Đọc `TRUST_PROXY`: số là số tầng proxy, chuỗi khác là danh sách địa chỉ/từ khóa của Express, trống là mặc định. */
+/** Reads `TRUST_PROXY`: a number is a hop count, other text an Express address/keyword list, empty the default. */
 export function trustProxyFromEnv(value: string | undefined): string | number | undefined {
   const trimmed = value?.trim()
   if (!trimmed) return undefined
@@ -71,7 +71,7 @@ export function createApp(deps: AppDeps) {
   app.use(
     pinoHttp({
       logger: deps.logger,
-      // Mọi dòng log trong một request đều mang `reqId` ở cấp cao nhất.
+      // Every log line in a request carries `reqId` at the top level.
       quietReqLogger: true,
       genReqId(req, res) {
         const incoming = req.headers['x-request-id']
@@ -87,8 +87,8 @@ export function createApp(deps: AppDeps) {
 
   const secret = new TextEncoder().encode(deps.jwtSecret)
   const api = express.Router()
-  // Mặc định không cho cache: CDN đứng trước API (proxy Netlify, ADR 0011) có thể cache response có ETag, kể cả dữ
-  // liệu cá nhân. Route nào muốn cache thì tự đặt lại header.
+  // No caching by default: a CDN in front of the API (Netlify proxy, ADR 0011) may cache ETag responses, even personal
+  // data. Routes that want caching set the header themselves.
   api.use((_req, res, next) => {
     res.set('Cache-Control', 'no-store')
     next()

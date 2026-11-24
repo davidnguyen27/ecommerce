@@ -4,20 +4,20 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { DEPOSITED_PREORDER, remainingOf } from '../orders/orders.ts'
 import { REPORT_TIME_ZONE } from './period.ts'
 
-/** Khoản hoàn chưa xong sau số ngày này thì coi là treo (chờ chủ doanh nghiệp xác nhận). */
+/** Refunds unfinished after this many days count as stuck (pending owner confirmation). */
 export const STALE_REFUND_DAYS = 3
-/** Biến thể còn bán được không quá số cái này thì coi là sắp hết (chờ chủ doanh nghiệp xác nhận). */
+/** Variants with at most this many sellable units count as running low (pending owner confirmation). */
 export const LOW_STOCK_THRESHOLD = 2
-/** Số dòng đầu của mỗi mục; trang chủ chỉ cần thấy việc nào cần làm trước. */
+/** Rows per section; the dashboard only needs to show what to do first. */
 const LIMIT = 10
 
 const DAY = 24 * 60 * 60_000
 
-/** Ngày lịch hôm nay theo giờ Việt Nam, dạng mốc 00:00 UTC để so với cột `DATE`. */
+/** Today's Vietnam-time calendar day, as 00:00 UTC to compare with `DATE` columns. */
 const vnToday = (now: Date) =>
   new Date(`${new Intl.DateTimeFormat('en-CA', { timeZone: REPORT_TIME_ZONE }).format(now)}T00:00:00Z`)
 
-/** Bảng ngoại lệ (spec M7): sáu mục việc đang chờ quyết, tính tại `now`. */
+/** Exceptions board (spec M7): six sections of pending decisions, as of `now`. */
 export async function exceptionsReport(db: DbClient, now = new Date()): Promise<ExceptionsReport> {
   const staleBefore = new Date(now.getTime() - STALE_REFUND_DAYS * DAY)
   const openSupport = {
@@ -29,7 +29,7 @@ export async function exceptionsReport(db: DbClient, now = new Date()): Promise<
     createdAt: { lt: staleBefore },
   } satisfies Prisma.RefundWhereInput
   const overdue = { ...DEPOSITED_PREORDER, remainderOverdueAt: { not: null } } satisfies Prisma.OrderWhereInput
-  // Chỉ đơn đã cọc (đang xử lý): đơn chờ cọc chưa phải cam kết và sẽ tự hết hạn.
+  // Deposited (processing) orders only: pending deposits are no commitment yet and expire on their own.
   const late = {
     kind: 'preorder',
     status: 'processing',

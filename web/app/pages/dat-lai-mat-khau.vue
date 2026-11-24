@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { CUSTOMER_PASSWORD_MIN_LENGTH, type ResetPasswordRequest } from '@ecommerce/shared'
 
-// Token chỉ được dùng khi khách gửi form, không dùng lúc render, để mở link (kể cả do trình quét thư mở) không tiêu token.
+// The token is used only when the form is submitted, never on render, so opening the link (even by a mail scanner)
+// does not consume it.
 const route = useRoute()
 const token = typeof route.query.token === 'string' ? route.query.token : ''
 const password = ref('')
@@ -23,7 +24,7 @@ async function submit() {
   }
 }
 
-// Trang riêng của từng khách, không có nội dung để index.
+// Specific to each customer, nothing to index.
 useSeo({ title: 'Đặt lại mật khẩu', description: 'Đặt lại mật khẩu tài khoản khách hàng.', noindex: true })
 </script>
 

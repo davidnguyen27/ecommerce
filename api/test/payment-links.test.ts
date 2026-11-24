@@ -8,13 +8,13 @@ const TOTAL = 2_030_000
 const MINUTE = 60_000
 const inMinutes = (minutes: number) => new Date(Date.now() + minutes * MINUTE)
 
-/** Cổng trả lời truy vấn: link đã nhận một khoản. */
+/** The gateway answers a query: the link received one payment. */
 const paidInfo = (amount: number, reference: string): PaymentInfo => ({
   status: 'paid',
   transactions: [{ reference, amount, paidAt: new Date('2026-11-02T03:20:00Z') }],
 })
 
-/** Cửa hàng đã có một đơn AM-40 chờ thanh toán, tổng 2.030.000, có một link trả đủ mã `String(code)`. */
+/** A shop with one pending AM-40 order, total 2,030,000, with one full-payment link `String(code)`. */
 async function pendingOrder() {
   const app = await shop()
   const res = await app.checkout()
@@ -28,7 +28,7 @@ async function pendingOrder() {
     return detail.body.payments as { purpose: string; amount: number; reference: string; reconciliation: unknown }[]
   }
   const { id: orderId } = await app.prisma.order.findUniqueOrThrow({ where: { code }, select: { id: true } })
-  /** Thêm một link như M4 sẽ tạo (cọc, phần còn lại), dựng thẳng bằng SQL vì chưa có route nào tạo. */
+  /** Adds a link as M4 would (deposit, remainder), built with SQL since no route creates one yet. */
   const addLink = (purpose: 'deposit' | 'remainder', amount: number, gatewayReference: string) =>
     app.prisma.paymentLink.create({
       data: { orderId, purpose, amount, gatewayReference, expiresAt: inMinutes(15) },
@@ -50,7 +50,7 @@ describe('link thanh toán', () => {
       }),
     ])
     expect(placed.checkoutUrl).toBe(`https://pay.test/${code}`)
-    // Link được lưu với mã cổng trả: cổng báo tiền về theo mã đó thì giao dịch mang mục đích trả đủ.
+    // The link stores the gateway's reference: a payment reported with it gets the full-payment purpose.
     payments.payments.set(String(code), paidInfo(TOTAL, 'FT-LINK'))
     expect((await refresh()).body).toMatchObject({ paymentStatus: 'paid' })
     expect(await transactions()).toEqual([expect.objectContaining({ purpose: 'full', reference: 'FT-LINK' })])
@@ -58,7 +58,7 @@ describe('link thanh toán', () => {
 
   it('đơn có link dựng như migration chuyển sang (hạn 15 phút từ lúc đặt): refresh=1 vẫn ghi nhận, giao dịch là trả đủ', async () => {
     const { prisma, code, orderId, refresh, transactions, payments } = await pendingOrder()
-    // Đúng dạng bản ghi migration tạo từ "order"."gateway_reference" cũ.
+    // Exactly the shape the migration created from the old "order"."gateway_reference".
     await prisma.$executeRaw`DELETE FROM "payment_link" WHERE "order_id" = ${orderId}::uuid`
     await prisma.$executeRaw`
       INSERT INTO "payment_link" ("id", "order_id", "purpose", "amount", "gateway_reference", "created_at", "expires_at")
@@ -129,7 +129,7 @@ describe('link thanh toán', () => {
   it('hai link không mang cùng mã đơn bên cổng', async () => {
     const { code, addLink } = await pendingOrder()
 
-    // Ràng buộc unique của DB: chưa có route nào tạo được link trùng mã để chạm tới qua HTTP, nên thử bằng prisma.
+    // DB unique constraint: no route can create a duplicate link reference over HTTP yet, so try with prisma.
     await expect(addLink('deposit', 600_000, String(code))).rejects.toMatchObject({ code: 'P2002' })
   })
 
@@ -138,7 +138,7 @@ describe('link thanh toán', () => {
     payments.payments.set(String(code), paidInfo(TOTAL, 'FT-1'))
     await refresh()
 
-    // Trigger chặn sửa: API không có đường sửa giao dịch nào, nên thử bằng SQL trực tiếp (CODING_STANDARDS "Test").
+    // The no-edit trigger: the API has no way to edit transactions, so try with SQL directly (CODING_STANDARDS "Test").
     await expect(
       prisma.$executeRaw`UPDATE "payment_transaction" SET "purpose" = 'deposit' WHERE "reference" = 'FT-1'`,
     ).rejects.toThrow(/chỉ cho phép thêm mới/)

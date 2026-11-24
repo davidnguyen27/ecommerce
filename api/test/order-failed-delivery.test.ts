@@ -7,8 +7,8 @@ const AGAIN = { carrier: 'Viettel Post', trackingNumber: 'VTP999' }
 const TOTAL = 4_030_000
 
 /**
- * Cửa hàng có cổng giả lập (AM-40 còn 3 đôi). `failedOrder` đặt hai đôi AM-40, trả đủ, chuẩn bị, bàn giao (tồn còn 1)
- * rồi giao thất bại. Thao tác giao hàng bằng nhân viên kho.
+ * A shop with the simulator (AM-40 with 3 pairs). `failedOrder` orders two pairs of AM-40, pays, prepares, hands over
+ * (1 left) and fails delivery. Fulfillment actions use the warehouse clerk.
  */
 async function failedDelivery() {
   const app = await shop({ simulator: true })
@@ -60,7 +60,7 @@ describe('giao lại', () => {
       }),
     )
     expect(await audits()).toContain('order.redeliver')
-    // Đã bàn giao lại thì không giao lại lần nữa; giao được như thường.
+    // Already redelivered: no second redelivery; deliver as usual.
     expect((await post(code, 'redeliver', AGAIN)).status).toBe(409)
     expect((await post(code, 'deliver')).status).toBe(200)
   })
@@ -145,7 +145,7 @@ describe('sau khi hàng hoàn về', () => {
   it('giao lại từ kho mà không đủ hàng thì 409, đơn giữ nguyên', async () => {
     const { failedOrder, back, post, stock } = await failedDelivery()
     const code = await failedOrder()
-    expect((await back(code, 0, 2)).status).toBe(200) // mất cả hai đôi, tồn còn 1
+    expect((await back(code, 0, 2)).status).toBe(200) // both pairs lost, 1 left in stock
 
     const res = await post(code, 'restock-redeliver')
 

@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process'
 
 /**
- * Xóa mọi bộ đếm giới hạn tần suất của stack smoke (bảng `rate_limit_bucket`), bằng `psql` trong container Postgres của
- * project `ecommerce-smoke`. Mọi request E2E đi qua Caddy từ cùng một IP, mà một lượt E2E đặt mua nhiều hơn 5 lần mỗi
- * giờ cho phép; stack smoke dùng một lần nên xóa bộ đếm ở đây không ảnh hưởng gì. Không dùng cho stack nào khác.
+ * Clears every rate limit counter of the smoke stack (`rate_limit_bucket`) via `psql` in the `ecommerce-smoke` Postgres
+ * container. Every E2E request goes through Caddy from one IP, and an E2E run places more orders than the 5 per hour
+ * allowed; the smoke stack is disposable, so clearing counters here is harmless. Never use on any other stack.
  */
 export function resetRateLimits() {
   const project = process.env.E2E_COMPOSE_PROJECT ?? 'ecommerce-smoke'

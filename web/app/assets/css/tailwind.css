@@ -79,8 +79,8 @@
 }
 
 /*
- * Trang khách. Nhiều thẻ (h1, summary của menu) phải giữ HTML trần vì smoke test so khớp chuỗi,
- * nên kiểu chữ đặt theo vùng `.storefront` thay vì gắn class lên từng thẻ.
+ * Customer pages. Many tags (h1, the menu's summary) must stay bare HTML because the smoke test matches strings, so
+ * typography is set on the `.storefront` area instead of classes on each tag.
  */
 @layer components {
   .storefront {
@@ -98,7 +98,7 @@
     @apply text-lg font-semibold tracking-tight;
   }
 
-  /* Menu danh mục: một <details> dùng chung cho ngăn kéo trên điện thoại và bảng thả xuống trên máy tính. */
+  /* Category menu: one <details> shared by the phone drawer and the desktop dropdown. */
   .site-menu > summary {
     @apply inline-flex h-10 cursor-pointer list-none items-center gap-2 rounded-md px-3 text-sm font-medium hover:bg-secondary;
   }
@@ -117,7 +117,7 @@
     @apply bg-secondary;
   }
 
-  /* Nội dung soạn bằng Markdown (trang chính sách). */
+  /* Markdown-authored content (policy pages). */
   .prose-content {
     @apply max-w-none text-[15px] leading-7 text-foreground/90;
   }
@@ -161,7 +161,7 @@
     @apply bg-secondary font-semibold;
   }
 
-  /* Ô nhập và nút dùng chung cho form khách. */
+  /* Inputs and buttons shared by customer forms. */
   .field {
     @apply flex flex-col gap-1.5 text-sm font-medium;
   }

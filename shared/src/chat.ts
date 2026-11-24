@@ -2,18 +2,18 @@ import { z } from 'zod'
 import { PageQuery, pageOf } from './pagination.ts'
 import { ProductCard } from './products.ts'
 
-/** Tin của khách dài tối đa (spec M8, số tạm). */
+/** Max length of a customer message (spec M8, provisional). */
 export const CHAT_MESSAGE_MAX_LENGTH = 500
-/** Số tin của khách tối đa trong một cuộc trò chuyện (spec M8, số tạm). */
+/** Max customer messages per conversation (spec M8, provisional). */
 export const CHAT_MESSAGES_PER_CONVERSATION = 30
 
-/** Dòng hiện ở đầu khung chat (spec M8 "Web"); chính sách bảo mật có đoạn giải thích chi tiết. */
+/** Line shown at the top of the chat (spec M8 "Web"); the privacy policy explains in detail. */
 export const CHAT_PRIVACY_NOTICE =
   'Cuộc trò chuyện được lưu 90 ngày và xử lý bởi nhà cung cấp AI bên ngoài; đừng nhập thông tin nhạy cảm.'
 
 /**
- * Vì sao chatbot không trả lời được: owner tắt, máy chủ chưa có khóa model nào, hay mọi model đang hết lượt (ADR 0017).
- * `null` là đang trả lời được.
+ * Why the chatbot cannot answer: the owner turned it off, the server has no model key, or every model is out of quota
+ * (ADR 0017). `null` means it can answer.
  */
 export const ChatUnavailableReason = z.enum(['disabled', 'unconfigured', 'exhausted'])
 export type ChatUnavailableReason = z.infer<typeof ChatUnavailableReason>
@@ -26,16 +26,16 @@ export const ChatStatus = z.object({
 })
 export type ChatStatus = z.infer<typeof ChatStatus>
 
-/** Body của `POST /api/chat/messages`. */
+/** Body of `POST /api/chat/messages`. */
 export const ChatMessageRequest = z.object({
-  /** Không có, không thấy hay đã im quá 24 giờ thì mở cuộc mới. */
+  /** Missing, not found or silent over 24 h opens a new conversation. */
   conversationId: z.uuid().optional(),
   content: z
     .string({ error: 'Nhập câu hỏi' })
     .trim()
     .min(1, 'Nhập câu hỏi')
     .max(CHAT_MESSAGE_MAX_LENGTH, `Câu hỏi tối đa ${CHAT_MESSAGE_MAX_LENGTH} ký tự`),
-  /** Slug sản phẩm khách đang xem, để chatbot hiểu "cái này" (ticket 03). */
+  /** Slug of the product being viewed, so the chatbot understands "cái này" (ticket 03). */
   viewingProductSlug: z.string().max(200).optional(),
 })
 export type ChatMessageRequest = z.infer<typeof ChatMessageRequest>
@@ -43,39 +43,42 @@ export type ChatMessageRequest = z.infer<typeof ChatMessageRequest>
 export const ChatRole = z.enum(['customer', 'assistant'])
 export type ChatRole = z.infer<typeof ChatRole>
 
-/** Tin khách thấy lại khi mở khung chat. `failed`: tin của khách không có trả lời. */
+/** Messages shown again when the chat opens. `failed`: a customer message with no answer. */
 export const ChatMessageView = z.object({
   id: z.string(),
   role: ChatRole,
   content: z.string(),
   failed: z.boolean(),
-  /** Tin của chatbot: sản phẩm đã gợi ý, đủ để hiện link khi mở lại khung chat (giá, ảnh xem ở thẻ lúc trả lời). */
+  /**
+   * Chatbot message: suggested products, enough to show links on reopen (price and image are on the cards at answer
+   * time).
+   */
   products: z.array(z.object({ slug: z.string(), name: z.string() })),
   createdAt: z.string(),
 })
 export type ChatMessageView = z.infer<typeof ChatMessageView>
 
 /**
- * Kết quả một lượt: `answered` kèm câu trả lời; `exhausted` hay `failed` thì tin của khách đã lưu nhưng không có trả
- * lời; `disabled`, `unconfigured` thì tin không được lưu.
+ * A turn's result: `answered` with the answer; `exhausted` or `failed` means the customer message was stored without
+ * an answer; `disabled`, `unconfigured` means it was not stored.
  */
 export const ChatTurnOutcome = z.enum(['answered', 'exhausted', 'failed', 'disabled', 'unconfigured'])
 export type ChatTurnOutcome = z.infer<typeof ChatTurnOutcome>
 
-/** Trả về của `POST /api/chat/messages`. */
+/** Response of `POST /api/chat/messages`. */
 export const ChatTurnResponse = z.object({
-  /** Cuộc đang dùng; khác mã gửi lên khi vừa mở cuộc mới. `null` khi tin không được lưu. */
+  /** The conversation in use; differs from the sent id when a new one was opened. `null` when nothing was stored. */
   conversationId: z.string().nullable(),
   outcome: ChatTurnOutcome,
   reply: ChatMessageView.nullable(),
-  /** Thẻ của các sản phẩm chatbot đã tìm trong lượt này, dựng từ DB (giá, tình trạng đúng lúc trả lời). */
+  /** Cards of products the chatbot found this turn, built from the DB (price and status at answer time). */
   cards: z.array(ProductCard),
-  /** Chatbot đề nghị chuyển nhân viên: khung chat hiện nút xác nhận (ticket 05). */
+  /** The chatbot offers a handoff: the chat shows a confirm button (ticket 05). */
   handoffSuggested: z.boolean(),
 })
 export type ChatTurnResponse = z.infer<typeof ChatTurnResponse>
 
-/** `GET /api/chat/conversations/:id`. `active`: còn dùng tiếp được; hết thì tin tiếp theo mở cuộc mới. */
+/** `GET /api/chat/conversations/:id`. `active`: still usable; otherwise the next message opens a new one. */
 export const ChatConversationView = z.object({
   id: z.string(),
   active: z.boolean(),
@@ -83,7 +86,7 @@ export const ChatConversationView = z.object({
 })
 export type ChatConversationView = z.infer<typeof ChatConversationView>
 
-/** Cài đặt chatbot (`GET/PUT /api/admin/chatbot/settings`). */
+/** Chatbot settings (`GET/PUT /api/admin/chatbot/settings`). */
 export const ChatbotSettings = z.object({
   enabled: z.boolean(),
   responseTimeNote: z.string().trim().max(300, 'Tối đa 300 ký tự'),
@@ -91,48 +94,48 @@ export const ChatbotSettings = z.object({
 export type ChatbotSettings = z.infer<typeof ChatbotSettings>
 
 /**
- * Body của `POST /api/chat/handoff`: khách xác nhận chuyển nhân viên. Khách đã đăng nhập không cần tên, email; khách
- * vãng lai thì bắt buộc. Không có cuộc trò chuyện (chatbot đang tắt) thì phải có lời nhắn.
+ * Body of `POST /api/chat/handoff`: the customer confirms the handoff. Signed-in customers need no name or email;
+ * guests must give both. Without a conversation (chatbot off) a message is required.
  */
 export const ChatHandoffRequest = z.object({
   conversationId: z.uuid().optional(),
   name: z.string().trim().min(1, 'Nhập tên').max(100, 'Tên tối đa 100 ký tự').optional(),
-  // Cắt khoảng trắng và đổi chữ thường trước khi kiểm: giới hạn yêu cầu mở tính theo email (ticket 05).
+  // Trim and lowercase before validating: the open request limit counts by email (ticket 05).
   email: z.string().trim().toLowerCase().max(254).pipe(z.email('Email không hợp lệ')).optional(),
   message: z.string().trim().max(2000, 'Lời nhắn tối đa 2.000 ký tự').default(''),
 })
 export type ChatHandoffRequest = z.input<typeof ChatHandoffRequest>
 
-/** Trả về khi đã tạo yêu cầu: mã yêu cầu và câu thời gian phản hồi owner soạn (rỗng là không có). */
+/** Returned once the request exists: its code and the owner's response-time sentence (empty if none). */
 export const ChatHandoffResponse = z.object({
   requestCode: z.number(),
   responseTimeNote: z.string(),
-  /** Đường dẫn xem yêu cầu khi khách đã đăng nhập; khách vãng lai mở bằng link trong email. */
+  /** Path to the request for signed-in customers; guests open it via the emailed link. */
   link: z.string().nullable(),
 })
 export type ChatHandoffResponse = z.infer<typeof ChatHandoffResponse>
 
-/** Query của `GET /api/admin/chatbot/conversations`: ngày theo giờ Việt Nam, lọc theo tin cuối của cuộc. */
+/** Query of `GET /api/admin/chatbot/conversations`: Vietnam-time days, filtered by the conversation's last message. */
 export const AdminChatConversationQuery = PageQuery.extend({
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
-  /** `true`: chỉ cuộc đã chuyển nhân viên; `false`: chỉ cuộc chưa chuyển. */
+  /** `true`: only handed-off conversations; `false`: only those not handed off. */
   handedOff: z.stringbool().optional(),
-  /** `true`: chỉ cuộc có lượt không trả lời được (lỗi hay hết lượt). */
+  /** `true`: only conversations with an unanswered turn (error or out of quota). */
   failed: z.stringbool().optional(),
 })
 export type AdminChatConversationQuery = z.input<typeof AdminChatConversationQuery>
 
-/** Một dòng trong danh sách cuộc trò chuyện của owner. Không có IP. */
+/** A row in the owner's conversation list. No IP. */
 export const AdminChatConversationSummary = z.object({
   id: z.string(),
   createdAt: z.string(),
   lastMessageAt: z.string(),
   customerMessageCount: z.number(),
-  /** Câu hỏi đầu của khách, cắt ngắn. */
+  /** The customer's first question, truncated. */
   firstQuestion: z.string(),
   failedTurns: z.number(),
-  /** Mã yêu cầu hỗ trợ khi đã chuyển nhân viên. */
+  /** Support request code once handed off. */
   supportRequestCode: z.number().nullable(),
 })
 export type AdminChatConversationSummary = z.infer<typeof AdminChatConversationSummary>
@@ -140,7 +143,7 @@ export type AdminChatConversationSummary = z.infer<typeof AdminChatConversationS
 export const AdminChatConversationPage = pageOf(AdminChatConversationSummary)
 export type AdminChatConversationPage = z.infer<typeof AdminChatConversationPage>
 
-/** Chi tiết một cuộc cho owner: mỗi tin kèm model đã trả lời, phiên bản prompt và lỗi của lượt. */
+/** One conversation for the owner: each message with the answering model, prompt version and turn error. */
 export const AdminChatConversation = z.object({
   id: z.string(),
   createdAt: z.string(),
@@ -157,9 +160,9 @@ export const AdminChatConversation = z.object({
 })
 export type AdminChatConversation = z.infer<typeof AdminChatConversation>
 
-/** `GET /api/admin/chatbot/status`: các model của chuỗi (ADR 0017) và lúc hết bị đánh dấu đang hết lượt. */
+/** `GET /api/admin/chatbot/status`: the chain's models (ADR 0017) and when each exhausted mark expires. */
 export const ChatbotModelStatus = z.object({
-  /** `false`: máy chủ chưa đặt khóa model nào, chatbot không trả lời được dù bật. */
+  /** `false`: the server has no model key, so the chatbot cannot answer even when on. */
   configured: z.boolean(),
   models: z.array(z.object({ model: z.string(), exhaustedUntil: z.string().nullable() })),
 })

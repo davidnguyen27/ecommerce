@@ -2,9 +2,10 @@
 import { AdminSupportRequest, type FieldError } from '@ecommerce/shared'
 
 /**
- * Khối trả hàng hay đổi hàng ở trang yêu cầu (spec M6b ticket 04, 05): hạn đổi trả chụp lúc gửi, chấp nhận hay từ chối kèm lời nhắn cho
- * khách (`support.handle`), kho nhận hàng về theo từng dòng (`order.fulfill`), đề xuất hoàn (`support.handle`). Thao tác
- * xong emit yêu cầu mới do API trả. Đổi hàng: sau khi nhận hàng cũ, kho bàn giao biến thể mới kèm mã vận đơn.
+ * Return or exchange block on the request page (spec M6b tickets 04, 05): return window snapshotted at submit, accept
+ * or reject with a customer message (`support.handle`), per-line warehouse receiving (`order.fulfill`), refund proposal
+ * (`support.handle`). Emits the new request the API returns. Exchanges: after the old item arrives, the warehouse hands
+ * over the new variant with a tracking number.
  */
 const props = defineProps<{ request: AdminSupportRequest }>()
 const emit = defineEmits<{ update: [request: AdminSupportRequest] }>()
@@ -163,7 +164,7 @@ const proposeRefund = () =>
       </template>
     </p>
 
-    <!-- Bước 1: chấp nhận hay từ chối. -->
+    <!-- Step 1: accept or reject. -->
     <form v-if="!request.decision && !closed && canHandle" @submit.prevent>
       <div class="form-group">
         <label class="form-label" for="return-decision-message">
@@ -200,7 +201,7 @@ const proposeRefund = () =>
       </div>
     </form>
 
-    <!-- Bước 2: kho nhận hàng về. -->
+    <!-- Step 2: warehouse receiving. -->
     <form
       v-else-if="request.decision === 'accepted' && !request.receivedAt && !closed && canReceive"
       data-testid="return-receive"
@@ -251,7 +252,7 @@ const proposeRefund = () =>
       Chờ kho nhận hàng khách gửi về.
     </p>
 
-    <!-- Đổi hàng, bước 3: kho bàn giao biến thể mới. -->
+    <!-- Exchange, step 3: hand over the new variant. -->
     <p v-if="request.exchangeShipment" style="margin: 0; font-size: 13px" data-testid="admin-exchange-shipment">
       Đã gửi hàng đổi qua {{ request.exchangeShipment.carrier }}, mã vận đơn
       <strong>{{ request.exchangeShipment.trackingNumber }}</strong> ·
@@ -284,7 +285,7 @@ const proposeRefund = () =>
       </button>
     </form>
 
-    <!-- Trả hàng, bước 3: đề xuất hoàn. -->
+    <!-- Return, step 3: propose the refund. -->
     <form v-if="request.returnRefund && canHandle" data-testid="return-refund" @submit.prevent="proposeRefund">
       <p style="margin: 0 0 8px; font-size: 13px">
         Gợi ý hoàn <strong>{{ formatVnd(request.returnRefund.suggested) }}</strong> (đã trừ phần giảm của mã, không gồm

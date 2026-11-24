@@ -6,7 +6,7 @@ import { OWNER, login } from './support/staff.ts'
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
 
-// Job dọn không có endpoint; test gọi thẳng hàm job chạy, rồi kiểm hệ quả qua HTTP.
+// The cleanup job has no endpoint; tests call the job function directly, then check effects via HTTP.
 describe('dọn token và bộ đếm hết hạn', () => {
   it('token và bộ đếm còn hạn thì giữ nguyên: refresh và xác minh email vẫn dùng được', async () => {
     const { request, prisma, mailer } = await appReadyForSignUp()
@@ -49,7 +49,7 @@ describe('dọn token và bộ đếm hết hạn', () => {
     for (let i = 0; i < 10; i++) await tryLogin()
     expect((await tryLogin()).status).toBe(429)
 
-    // Cửa sổ dài nhất là 24 giờ (chuyển nhân viên từ chatbot, M8).
+    // The longest window is 24 hours (chatbot handoff, M8).
     await deleteExpiredRecords(prisma, new Date(Date.now() + 25 * HOUR))
 
     expect((await tryLogin()).status).toBe(401)

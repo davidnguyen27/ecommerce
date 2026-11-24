@@ -6,7 +6,7 @@ import { adjust } from './support/stock.ts'
 
 const SHIPMENT = { carrier: 'Giao Hàng Nhanh', trackingNumber: 'GHN1' }
 const DAY = 24 * 60 * 60_000
-/** Ngày lịch theo giờ Việt Nam, `days` ngày tính từ hôm nay. */
+/** Vietnam-time calendar day, `days` days from today. */
 const vnDate = (days = 0) => new Date(Date.now() + 7 * 60 * 60_000 + days * DAY).toISOString().slice(0, 10)
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
@@ -41,7 +41,7 @@ const download = async (request: Request, token: string, name: string, query: Re
   return { res, workbook }
 }
 
-/** Mọi giá trị ô trong file, để kiểm không lộ thông tin cá nhân của khách. */
+/** Every cell value in the file, to check no customer personal data leaks. */
 const allText = (workbook: ExcelJS.Workbook) => {
   const values: string[] = []
   workbook.eachSheet((sheet) => sheet.eachRow((row) => row.eachCell((cell) => values.push(String(cell.value)))))

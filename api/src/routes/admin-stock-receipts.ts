@@ -29,7 +29,7 @@ type ReceiptRow = Pick<StockReceiptRow, 'id' | 'supplierName' | 'receivedOn' | '
   createdBy: AuditActor
 }
 
-/** Phần đầu phiếu dùng chung cho danh sách và chi tiết; ngày hàng về lưu kiểu DATE, trả dạng `YYYY-MM-DD`. */
+/** Receipt header shared by list and detail; arrival date is a DATE, returned as `YYYY-MM-DD`. */
 const toReceiptHeader = (r: ReceiptRow) => ({
   id: r.id,
   supplierName: r.supplierName,
@@ -63,7 +63,7 @@ async function loadReceipt(prisma: Db, id: string): Promise<StockReceipt> {
   }
 }
 
-/** Id biến thể theo SKU của các dòng định nhập; SKU trùng hay không có thì 400 theo dòng. */
+/** Variant ids by SKU for the receipt lines; duplicate or unknown SKUs give 400 per line. */
 async function resolveLines(prisma: Db, lines: readonly { sku: string }[]) {
   const variants = await prisma.productVariant.findMany({
     where: { sku: { in: lines.map((l) => l.sku) } },
@@ -83,9 +83,8 @@ async function resolveLines(prisma: Db, lines: readonly { sku: string }[]) {
 }
 
 /**
- * Phiếu nhập kho, mount tại `/stock/receipts`. Xem cùng quyền với trang tồn; tạo phiếu và xem trước phần chia cho đơn
- * đặt trước cần `stock.adjust`.
- * Không có endpoint sửa hay xóa: nhập sai thì làm điều chỉnh.
+ * Stock receipts, mounted at `/stock/receipts`. Viewing has the stock page's permissions; creating and previewing
+ * pre-order allocation need `stock.adjust`. No edit or delete: mistakes are fixed with an adjustment.
  */
 export function adminStockReceiptRoutes(prisma: Db, mail: { emails: EmailQueue; siteUrl: string }) {
   return Router()
@@ -162,8 +161,8 @@ export function adminStockReceiptRoutes(prisma: Db, mail: { emails: EmailQueue; 
             path: `lines.${index}.quantity`,
           })),
         )
-        // Hàng về giữ ngay cho đơn đặt trước đã cọc đang chờ, trong cùng transaction: không lúc nào biến thành hàng sẵn
-        // để khách khác mua mất (ADR 0013). Biến thể đã bị `changeStock` khóa.
+        // Arrivals are reserved at once for waiting deposited pre-orders, in the same transaction: never regular stock
+        // that another customer could buy (ADR 0013). `changeStock` has locked the variants.
         const plans = await planArrivals(
           tx,
           input.lines.map((line) => ({ variantId: idOf.get(line.sku)!, quantity: line.quantity })),

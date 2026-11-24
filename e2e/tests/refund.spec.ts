@@ -1,7 +1,9 @@
-// Hủy đơn đã trả và hoàn tiền (M6a), bằng trình duyệt thật trên stack smoke với cổng giả lập:
-// 1. Khách mua và trả; nhân viên bán hàng hủy đơn, đề xuất hoàn đủ; kế toán ghi chuyển khoản; khách thấy "đã hoàn".
-// 2. Đơn đã bàn giao thì giao thất bại; kho nhận hàng hoàn về; bán hàng hủy; kế toán hoàn qua cổng (giả lập).
-// Mỗi luồng tự dọn: hàng giữ được nhả, hàng hoàn về nhập lại tồn, nên tồn của biến thể seed như trước khi chạy.
+// Paid order cancel and refund (M6a), in a real browser on the smoke stack with the simulator:
+// 1. A customer buys and pays; sales cancels, proposing a full refund; accounting records the transfer; the customer
+//    sees "đã hoàn".
+// 2. A handed-over order fails delivery; the warehouse receives it back; sales cancels; accounting refunds via the
+//    (simulated) gateway.
+// Each flow cleans up: reservations released, returned goods restocked, so the seed variant's stock is as before.
 import { expect, test, type Browser } from '@playwright/test'
 import type { AdminOrder } from '@ecommerce/shared'
 import { adminLogin } from '../support/admin-login.ts'
@@ -13,9 +15,9 @@ const TOTAL = PRICE + SHIPPING_FEE
 const runId = Date.now().toString().slice(-7)
 
 test.beforeAll(async () => {
-  // Hai luồng dưới đặt thêm hai đơn, vượt giới hạn 5 lần đặt mỗi IP mỗi giờ của cả lượt: xóa bộ đếm của stack smoke.
+  // The two flows below place two more orders, over the run's 5 per IP per hour: clear the smoke stack's counters.
   resetRateLimits()
-  // Mỗi luồng cần một cái bán được; các spec trước có thể đã bán bớt.
+  // Each flow needs one sellable unit; earlier specs may have sold some.
   const api = await AdminApi.owner()
   const stock = await api.stockOf(SKU)
   if (stock.onHand - stock.reserved < 1) {
@@ -29,7 +31,7 @@ test.beforeAll(async () => {
   }
 })
 
-/** Trang quản trị của một nhân viên trong phiên trình duyệt riêng, tự đồng ý mọi hộp `confirm`. */
+/** A staff member's admin page in a separate browser session, accepting every `confirm` dialog. */
 async function staffPage(browser: Browser, credentials: { email: string; password: string }, code: string) {
   const context = await browser.newContext()
   const page = await context.newPage()
@@ -40,7 +42,7 @@ async function staffPage(browser: Browser, credentials: { email: string; passwor
   return { page, close: () => context.close() }
 }
 
-/** Nhân viên bán hàng hủy đơn đã trả với lý do đã chọn và số hoàn mặc định (toàn bộ). */
+/** Sales cancels a paid order with the chosen cause and the default (full) refund. */
 async function cancelPaid(browser: Browser, code: string, cause: string) {
   const sales = await staffPage(browser, SALES, code)
   await sales.page.getByTestId('admin-order-cancel-paid').click()
@@ -69,15 +71,15 @@ test('hủy đơn đã trả, kế toán ghi chuyển khoản, khách thấy đ�
   const cancelled = await api.order(code)
   expect(statusOf(cancelled)).toEqual({ status: 'cancelled', paymentStatus: 'paid', fulfillmentStatus: 'not_prepared' })
   expect(cancelled).toMatchObject({ cancelCause: 'changed_mind', received: TOTAL, refunding: TOTAL })
-  // Hàng giữ cho đơn được nhả.
+  // The order's reservation is released.
   expect((await api.stockOf(SKU)).reserved).toBe(before.reserved)
 
-  // Khách thấy đơn đã hủy và khoản đang hoàn.
+  // The customer sees the order cancelled and the refund in progress.
   await page.goto(url)
   await expect(page.getByTestId('order-cancelled')).toContainText('theo yêu cầu của bạn')
   await expect(page.getByTestId('order-refund')).toContainText('Đang hoàn')
 
-  // Kế toán chuyển khoản ngoài hệ thống rồi ghi lại.
+  // Accounting pays by transfer outside the system, then records it.
   const accountant = await staffPage(browser, ACCOUNTANT, code)
   await accountant.page.getByLabel('Mã giao dịch ngân hàng').fill(`FT${runId}`)
   await accountant.page.getByTestId('refund-manual').click()
@@ -95,7 +97,7 @@ test('giao thất bại, nhận hàng hoàn về, hủy và hoàn qua cổng gi�
   const before = await api.stockOf(SKU)
   const { code, url } = await buyAndPay(page, 'hoan', '2')
 
-  // Kho chuẩn bị, bàn giao, rồi báo giao thất bại.
+  // The warehouse prepares, hands over, then reports a failed delivery.
   const warehouse = await staffPage(browser, WAREHOUSE, code)
   await warehouse.page.getByRole('button', { name: 'Bắt đầu chuẩn bị' }).click()
   await warehouse.page.getByLabel('Đơn vị vận chuyển').fill('Giao Hàng Nhanh')
@@ -106,7 +108,7 @@ test('giao thất bại, nhận hàng hoàn về, hủy và hoàn qua cổng gi�
   await warehouse.page.getByTestId('admin-order-delivery-failed').click()
   await expect(warehouse.page.getByTestId('admin-order-return-to-stock')).toBeVisible()
 
-  // Hàng hoàn về nguyên vẹn: nhập lại tồn cả dòng (mặc định của form), ghi sổ "Hàng hoàn về" trỏ về đơn.
+  // Goods back intact: restock the whole line (the form default), writing a "Hàng hoàn về" row pointing at the order.
   await warehouse.page.getByRole('button', { name: 'Ghi nhận hàng hoàn về' }).click()
   await expect(warehouse.page.getByTestId('admin-order-returned-lines')).toContainText('nhập lại 1')
   await warehouse.close()
@@ -126,7 +128,7 @@ test('giao thất bại, nhận hàng hoàn về, hủy và hoàn qua cổng gi�
   await cancelPaid(browser, code, 'Giao thất bại')
   expect(await api.order(code)).toMatchObject({ status: 'cancelled', cancelCause: 'delivery_failed' })
 
-  // Kế toán hoàn qua cổng: trên stack smoke là cổng giả lập; số tiền tròn nên giả lập báo đã hoàn.
+  // Accounting refunds via the gateway: the simulator on the smoke stack; a round amount makes it report refunded.
   const accountant = await staffPage(browser, ACCOUNTANT, code)
   await accountant.page.getByTestId('refund-gateway').click()
   await expect(accountant.page.getByTestId('admin-refund-status')).toHaveText('Đã hoàn')

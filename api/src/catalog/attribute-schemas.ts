@@ -15,15 +15,15 @@ export const ProductTypeParams = z.object({ productType: ProductType })
 
 const StoredDefinitions = z.array(AttributeDefinition)
 
-/** Schema thuộc tính hiện tại của một nhóm hàng; migration seed đủ năm nhóm hàng nên luôn có. */
+/** Current attribute schema of a product type; the seed migration covers all five types, so it always exists. */
 export async function loadAttributeSchema(db: DbClient, productType: ProductType) {
   const row = await db.attributeSchema.findUniqueOrThrow({ where: { productType } })
   return { productType, attributes: StoredDefinitions.parse(row.attributes), updatedAt: row.updatedAt }
 }
 
 /**
- * Như `loadAttributeSchema` nhưng khóa dòng schema tới hết transaction: người sửa schema dùng `FOR UPDATE`,
- * người ghi sản phẩm dùng `FOR SHARE`, để sản phẩm không lọt qua bước kiểm vi phạm khi schema đang đổi.
+ * Like `loadAttributeSchema`, but locks the schema row until the transaction ends: schema edits use `FOR UPDATE`,
+ * product writes `FOR SHARE`, so no product slips past the violation check while the schema changes.
  */
 export async function lockAttributeSchema(
   tx: Prisma.TransactionClient,
@@ -35,7 +35,7 @@ export async function lockAttributeSchema(
   return loadAttributeSchema(tx, productType)
 }
 
-/** Kiểm giá trị thuộc tính theo schema; sai thì ném lỗi 400 kèm lỗi theo từng trường. */
+/** Validates attribute values against the schema; throws 400 with per-field errors. */
 export function assertAttributes(
   definitions: readonly AttributeDefinition[],
   level: AttributeLevel,
@@ -48,10 +48,9 @@ export function assertAttributes(
 }
 
 /**
- * Sản phẩm (kể cả nháp, đã lưu trữ) có thuộc tính của chính nó hoặc của một biến thể không còn hợp lệ với schema mới.
- * Mọi lần đổi schema đều đi qua đây, nên thêm thuộc tính bắt buộc, xóa thuộc tính hay bớt giá trị enum đều bị chặn
- * khi có dữ liệu vi phạm.
- * Gọi khi đang giữ khóa `FOR UPDATE` trên dòng schema, nên không sản phẩm nào được ghi chen vào.
+ * Products (drafts and archived too) whose own or variant attributes no longer fit the new schema. Every schema change
+ * goes through here, so adding a required attribute, removing one or dropping enum values is blocked by existing data.
+ * Call while holding `FOR UPDATE` on the schema row, so no product write can slip in.
  */
 export async function findViolatingProducts(
   tx: Prisma.TransactionClient,

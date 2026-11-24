@@ -11,7 +11,7 @@ export type CommitmentWithEvidence = ProductCommitment & { type: CommitmentType;
 
 const ORDER = [{ type: { name: 'asc' } }, { createdAt: 'asc' }] as const
 
-/** Cam kết của một sản phẩm kèm loại và chứng từ, xếp theo tên loại. */
+/** A product's commitments with type and documents, sorted by type name. */
 export const commitmentsOf = (db: DbClient, productId: string) =>
   db.productCommitment.findMany({ where: { productId }, include: WITH_TYPE_AND_DOCUMENTS, orderBy: [...ORDER] })
 
@@ -28,15 +28,15 @@ export function toAdminCommitment(commitment: CommitmentWithEvidence): AdminComm
   }
 }
 
-/** Cam kết của sản phẩm theo thứ tự hiển thị, kèm loại; dùng khi dựng snapshot xuất bản. */
+/** A product's commitments in display order, with type; used to build the publish snapshot. */
 export const COMMITMENTS_WITH_TYPE = {
   include: { type: true },
   orderBy: [...ORDER],
 } satisfies Prisma.ProductCommitmentFindManyArgs
 
 /**
- * Cam kết có bằng chứng như khách thấy: loại và nội dung, không bao giờ kèm chứng từ.
- * Chép vào snapshot khi xuất bản; bảo hành chỉ xuất hiện ở đây, dưới dạng cam kết có `kind: 'warranty'` (ADR 0005).
+ * Evidenced commitments as customers see them: type and content, never documents. Copied into the snapshot on
+ * publish; warranty appears only here, as a commitment with `kind: 'warranty'` (ADR 0005).
  */
 export const toPublicCommitment = (c: ProductCommitment & { type: CommitmentType }): PublicCommitment => ({
   type: c.type.name,

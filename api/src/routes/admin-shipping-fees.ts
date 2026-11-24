@@ -7,7 +7,7 @@ import type { Db } from '../db.ts'
 import { parse } from '../http/validation.ts'
 import { readShippingFeeConfig } from '../shipping/shipping-fees.ts'
 
-/** Phí giao dùng quyền `price.edit` có sẵn: phí giao là một loại giá khách trả (spec "Phí giao"). */
+/** Shipping fees use the existing `price.edit`: a fee is a price the customer pays (spec "Phí giao"). */
 export function adminShippingFeeRoutes(prisma: Db) {
   return Router()
     .use(requirePermission('price.edit'))
@@ -22,7 +22,8 @@ export function adminShippingFeeRoutes(prisma: Db) {
         provinceFees: [...input.provinceFees].sort((a, b) => a.provinceCode.localeCompare(b.provinceCode)),
       }
       const body: ShippingFeeConfig = await audited(prisma, req, async (tx, audit) => {
-        // Hai lần sửa cùng lúc không trộn mức riêng của nhau, và `before` của audit là đúng bản bị thay.
+        // Two concurrent edits do not mix their per-province fees, and the audit's `before` is exactly what was
+        // replaced.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('shipping_fee'))`
         const before = await readShippingFeeConfig(tx)
         if (isDeepStrictEqual(before, after)) return before

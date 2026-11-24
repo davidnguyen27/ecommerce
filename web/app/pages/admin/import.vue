@@ -10,7 +10,7 @@ const busy = ref(false)
 const error = ref<string | null>(null)
 const notice = ref<string | null>(null)
 
-/** File mẫu sinh từ thương hiệu, danh mục và schema hiện tại; tải lại mỗi khi những thứ đó đổi. */
+/** Template built from current brands, categories and schemas; reload it whenever those change. */
 async function downloadTemplate() {
   error.value = null
   try {
@@ -54,7 +54,7 @@ async function runPreview() {
   }
 }
 
-// Xác nhận gửi lại chính file đó; API kiểm lại từ đầu và chỉ ghi khi cả file hợp lệ.
+// Confirm resends the same file; the API rechecks from scratch and writes only if the whole file is valid.
 async function commit() {
   if (!file.value) return
   busy.value = true
@@ -68,7 +68,7 @@ async function commit() {
     file.value = null
   } catch (err) {
     error.value = apiErrorMessage(err)
-    // Dữ liệu có thể đã đổi từ lúc xem trước: xem trước lại để hiện lỗi theo từng dòng.
+    // Data may have changed since the preview: preview again to show per-row errors.
     await runPreview()
   } finally {
     busy.value = false

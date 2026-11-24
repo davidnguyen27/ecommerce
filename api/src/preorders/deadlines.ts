@@ -4,22 +4,23 @@ import type { EmailQueue } from '../jobs/jobs.ts'
 import { dateVN, vnd, voucherLines } from '../orders/format.ts'
 import { DEPOSITED_PREORDER, issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../orders/orders.ts'
 
-/** Nhắc khi còn từ chừng này tới hạn trả phần còn lại trở xuống. */
+/** Remind when this much or less remains before the remaining-balance deadline. */
 export const REMINDER_WINDOW_MS = 2 * 24 * 60 * 60_000
 
 export type DeadlineDeps = { prisma: Db; emails: EmailQueue; siteUrl: string }
 
-/** Đơn đặt trước đã cọc, đã về hàng, chưa trả phần còn lại: còn đang trong hạn trả. */
+/** Deposited, arrived pre-orders with the remainder unpaid: still within the payment window. */
 const AWAITING_REMAINDER = {
   ...DEPOSITED_PREORDER,
   arrivedAt: { not: null },
 } as const satisfies Prisma.OrderWhereInput
 
 /**
- * Job mỗi giờ cho hạn trả phần còn lại (ticket 08): gửi email nhắc một lần cho đơn còn ≤ 2 ngày tới hạn, và gắn cờ quá
- * hạn cho đơn đã qua hạn. Quá hạn không hủy đơn, không nhả hàng, không mất cọc: khách vẫn trả được, nhân viên liên hệ
- * (M6 quyết định phần còn lại). Mỗi đơn xử lý trong transaction riêng, khóa đơn rồi kiểm lại điều kiện, nên chạy nhiều
- * lần hay chạy song song với khách đang trả tiền vẫn cho một kết quả. `now` để test chạy ở tương lai.
+ * Hourly job for the remaining-balance deadline (ticket 08): one reminder email for orders ≤ 2 days from the deadline,
+ * and an overdue flag for orders past it. Overdue does not cancel, release stock or forfeit the deposit: the customer
+ * can still pay and staff follow up (M6 decides the rest). Each order runs in its own transaction, locking the order
+ * and rechecking, so repeated or concurrent runs (even with a payment in flight) give one result. `now` lets tests run
+ * in the future.
  */
 export async function processRemainderDeadlines(deps: DeadlineDeps, now = new Date()) {
   const remindBefore = new Date(now.getTime() + REMINDER_WINDOW_MS)
@@ -69,7 +70,7 @@ export async function processRemainderDeadlines(deps: DeadlineDeps, now = new Da
   return { reminded, flagged }
 }
 
-/** Khóa đơn `FOR UPDATE` (cùng khóa với ghi nhận thanh toán) rồi đọc lại; `null` khi đơn không còn chờ phần còn lại. */
+/** Locks the order (same lock as payment recording) and rereads it; `null` when it no longer awaits the remainder. */
 async function lockAwaiting(tx: Prisma.TransactionClient, id: string) {
   await tx.$queryRaw`SELECT "id" FROM "order" WHERE "id" = ${id}::uuid FOR UPDATE`
   return tx.order.findFirst({
@@ -78,7 +79,7 @@ async function lockAwaiting(tx: Prisma.TransactionClient, id: string) {
   })
 }
 
-/** Email nhắc trả phần còn lại: số tiền, hạn trả, link trang đơn (token mới). Bản nháp chờ chủ doanh nghiệp duyệt. */
+/** Remaining-balance reminder: amount, deadline, order page link (new token). Draft awaiting owner approval. */
 async function queueReminderEmail(
   tx: DbClient,
   { emails, siteUrl }: Pick<DeadlineDeps, 'emails' | 'siteUrl'>,

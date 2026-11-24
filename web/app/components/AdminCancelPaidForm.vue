@@ -2,9 +2,9 @@
 import { AdminOrder, OrderCancelCause } from '@ecommerce/shared'
 
 /**
- * Hủy đơn đã nhận tiền (cần `order.cancel_paid`, spec M6a): chọn lý do, đề xuất số tiền hoàn (mặc định toàn bộ số còn
- * hoàn được). Hoàn ít hơn thì ghi chú bắt buộc; không nhập được hàng thì khóa ở mức hoàn đủ. Kế toán thực hiện hoàn ở
- * khối Hoàn tiền. Xong emit đơn mới do API trả.
+ * Cancel a paid order (needs `order.cancel_paid`, spec M6a): pick a cause, propose the refund (defaults to the full
+ * refundable amount). Less needs a note; supply failure locks it at the full amount. Accounting executes the refund in
+ * the Refunds block. Emits the new order the API returns.
  */
 const props = defineProps<{ order: AdminOrder }>()
 const emit = defineEmits<{ update: [order: AdminOrder]; close: [] }>()
@@ -14,7 +14,7 @@ const busy = ref(false)
 const error = ref<string | null>(null)
 const form = reactive({ cause: 'changed_mind' as OrderCancelCause, refundAmount: props.order.refundable, note: '' })
 
-// "Quá hạn trả phần còn lại" chỉ có ở đơn đặt trước; API từ chối lý do này cho đơn thường.
+// "Quá hạn trả phần còn lại" only exists for pre-orders; the API rejects it for regular orders.
 const causeLabels = computed(() =>
   Object.fromEntries(
     Object.entries(CANCEL_CAUSE_LABELS).filter(([cause]) => props.order.preorder || cause !== 'remainder_overdue'),

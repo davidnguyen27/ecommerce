@@ -10,9 +10,9 @@ import { SORT_ORDER, productNotFound, toAdminProduct, toAdminVariant, toNumber }
 const Values = z.record(z.string(), z.union([z.string(), z.array(z.string()), z.number(), z.boolean()]))
 
 /**
- * Mọi thứ khách thấy của một sản phẩm tại lần xuất bản. Endpoint công khai chỉ đọc từ đây
- * (CODING_STANDARDS "Snapshot đã xuất bản"), kể cả cam kết có bằng chứng; tên thương hiệu, danh mục,
- * tiêu đề trang chính sách và nhãn thuộc tính thì đọc từ chính chúng.
+ * Everything customers see of a product at publish time. Public endpoints read only this (CODING_STANDARDS
+ * "Snapshot đã xuất bản"), evidenced commitments included; brand and category names, policy page titles and attribute
+ * labels are read from their own tables.
  */
 export const ProductSnapshot = z.object({
   productType: ProductType,
@@ -27,7 +27,7 @@ export const ProductSnapshot = z.object({
   originStatement: z.string(),
   attributes: Values,
   groundShippingOnly: z.boolean(),
-  /** Chỉ biến thể đang bán, theo thứ tự hiển thị. */
+  /** Only variants on sale, in display order. */
   variants: z.array(
     z.object({
       id: z.string(),
@@ -37,15 +37,15 @@ export const ProductSnapshot = z.object({
       compareAtPrice: z.number().nullable(),
     }),
   ),
-  /** Theo thứ tự hiển thị; `variantIds` chỉ gồm biến thể đang bán, rỗng là ảnh chung. */
+  /** In display order; `variantIds` holds only variants on sale, empty means a shared image. */
   images: z.array(StoredImage.extend({ id: z.string(), alt: z.string(), variantIds: z.array(z.string()) })),
   policyPageIds: z.array(z.string()),
-  /** Cam kết có bằng chứng như khách thấy; phiên bản xuất bản trước khi có trường này coi như không có cam kết. */
+  /** Evidenced commitments as shown; versions published before this field existed have none. */
   commitments: z.array(PublicCommitment).default([]),
 })
 export type ProductSnapshot = z.infer<typeof ProductSnapshot>
 
-/** Bản đang soạn của sản phẩm, đủ để dựng snapshot. */
+/** The product's draft, enough to build a snapshot. */
 export async function loadDraft(db: DbClient, id: string) {
   const product = await db.product.findUnique({
     where: { id },
@@ -62,7 +62,7 @@ export async function loadDraft(db: DbClient, id: string) {
 }
 export type Draft = Awaited<ReturnType<typeof loadDraft>>
 
-/** Lý do chưa xuất bản được; rỗng là đủ điều kiện. */
+/** Reasons it cannot be published yet; empty means ready. */
 export function publishBlockers(draft: Draft): FieldError[] {
   const blockers: FieldError[] = []
   const active = draft.variants.filter((v) => v.status === 'active')
@@ -76,7 +76,7 @@ export function publishBlockers(draft: Draft): FieldError[] {
   return blockers
 }
 
-/** Snapshot dựng từ bản đang soạn; chỉ gọi khi `publishBlockers` rỗng (biến thể đang bán đều có giá). */
+/** Snapshot built from the draft; call only when `publishBlockers` is empty (every variant on sale has a price). */
 export function buildSnapshot(draft: Draft): ProductSnapshot {
   const active = draft.variants.filter((v) => v.status === 'active')
   const activeIds = new Set(active.map((v) => v.id))
@@ -103,7 +103,7 @@ export function buildSnapshot(draft: Draft): ProductSnapshot {
     images: draft.images.flatMap((image) => {
       const linked = image.variants.map((v) => v.variantId)
       const variantIds = linked.filter((id) => activeIds.has(id)).sort()
-      // Ảnh chỉ gắn với biến thể ngừng bán thì khách không cần thấy, và không được thành ảnh chung.
+      // Images tied only to discontinued variants are not shown and must not become shared images.
       if (linked.length > 0 && variantIds.length === 0) return []
       const { id, storageKey: key, contentType, width, height, widths, alt } = image
       return [{ id, key, contentType, width, height, widths, alt, variantIds }]
@@ -116,12 +116,12 @@ export function buildSnapshot(draft: Draft): ProductSnapshot {
 export const liveSnapshot = (draft: Draft) =>
   draft.liveVersion ? ProductSnapshot.parse(draft.liveVersion.snapshot) : null
 
-/** Biến thể có giá thấp nhất; cùng giá thì lấy biến thể đứng trước. */
+/** The cheapest variant; ties go to the earlier one. */
 export function cheapestVariant(snapshot: ProductSnapshot) {
   return snapshot.variants.reduce((min, v) => (v.price < min.price ? v : min))
 }
 
-/** Tạo phiên bản mới từ snapshot. Gọi dưới khóa dòng sản phẩm, để số phiên bản không bị hai request tranh nhau. */
+/** Creates a new version from the snapshot. Call under the product row lock so version numbers do not race. */
 export async function createVersion(
   tx: Prisma.TransactionClient,
   productId: string,
@@ -146,7 +146,7 @@ export async function createVersion(
   })
 }
 
-/** Phiên bản khách đang thấy kèm snapshot; sản phẩm chưa xuất bản thì null. */
+/** The version customers currently see, with its snapshot; null when unpublished. */
 export async function loadLiveVersion(db: DbClient, liveVersionId: string | null) {
   if (liveVersionId === null) return null
   const version = await db.productVersion.findUniqueOrThrow({ where: { id: liveVersionId } })
@@ -154,8 +154,8 @@ export async function loadLiveVersion(db: DbClient, liveVersionId: string | null
 }
 
 /**
- * Giá đổi có hiệu lực ngay với khách, không chờ xuất bản lại: phiên bản mới chép phiên bản đang xuất bản
- * và chỉ thay giá của biến thể đó, nên nội dung đang soạn không lộ ra. Gọi dưới khóa dòng sản phẩm.
+ * Price changes apply to customers at once, without republishing: the new version copies the live one and only swaps
+ * that variant's price, so draft content stays hidden. Call under the product row lock.
  */
 export async function publishPrice(
   tx: Prisma.TransactionClient,
@@ -175,7 +175,7 @@ export async function publishPrice(
   return version
 }
 
-/** Có thay đổi chưa xuất bản: snapshot dựng lại từ bản đang soạn khác phiên bản khách đang thấy. */
+/** Has unpublished changes: the draft's snapshot differs from the live version. */
 export function hasUnpublishedChanges(draft: Draft) {
   const live = liveSnapshot(draft)
   return live !== null && !isDeepStrictEqual(live, buildSnapshot(draft))
@@ -194,7 +194,7 @@ export function toAdminProductDetail(draft: Draft): AdminProductDetail {
   }
 }
 
-/** Ảnh trong phiên bản khách đang thấy; file của chúng phải còn trên storage dù bản đang soạn đã gỡ ảnh. */
+/** Images in the live version; their files must stay in storage even if the draft removed them. */
 export function liveImages(draft: Draft): StoredImage[] {
   return liveSnapshot(draft)?.images ?? []
 }

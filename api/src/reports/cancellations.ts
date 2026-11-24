@@ -20,9 +20,9 @@ const add = (target: KindCounts, kind: OrderKind, n: number) => {
 const ratio = (part: number, whole: number) => (whole === 0 ? null : part / whole)
 
 /**
- * Hủy đơn và hoàn tiền (spec M7). Đơn tạo trong kỳ chia làm đơn đã xác nhận (từng nhận tiền: có sự kiện `paid`,
- * `deposit_paid` hay `restored`) và đơn bỏ dở (hủy mà không có `cancelCause`, tức chưa nhận tiền). Tỷ lệ hủy chỉ
- * tính trên đơn đã xác nhận.
+ * Cancellations and refunds (spec M7). Orders created in the period split into confirmed (ever paid: a `paid`,
+ * `deposit_paid` or `restored` event) and abandoned (cancelled without `cancelCause`, i.e. never paid). The cancel rate
+ * uses confirmed orders only.
  */
 export async function cancellationReport(db: DbClient, period: Period): Promise<CancellationReport> {
   const [orders, refunds] = await Promise.all([

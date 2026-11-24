@@ -4,7 +4,7 @@ import { bearer, createStaff } from './support/staff.ts'
 
 type Shop = Awaited<ReturnType<typeof preorderShop>>
 
-/** Cửa hàng có sản phẩm Air Max đã xuất bản (AM-40, AM-41), và hàm mở/sửa/đóng đợt bằng tài khoản owner. */
+/** A shop with Air Max published (AM-40, AM-41), and helpers to open/edit/close campaigns as owner. */
 async function campaigns() {
   const app = await preorderShop()
   const { request, token, product, v40, v41 } = app
@@ -31,7 +31,7 @@ async function campaigns() {
     expect(res.status).toBe(200)
     return res.body.items as { action: string; before: unknown; after: unknown }[]
   }
-  /** Một đơn đặt trước chờ cọc thuộc đợt, 1 đôi AM-41 (hết hàng sẵn). */
+  /** A pending-deposit pre-order in the campaign, 1 pair of AM-41 (out of stock). */
   const orderIn = (campaignId: string) => app.placed(campaignId)
   return { ...app, base, create, update, close, get, audits, orderIn }
 }
@@ -80,7 +80,7 @@ describe('mở đợt đặt trước', () => {
     const duplicate = await app.create()
     expect(duplicate.status).toBe(409)
 
-    // Dựng một đợt đã quá hạn đóng: API không cho đặt hạn ở quá khứ.
+    // Build a campaign past its closing time: the API refuses deadlines in the past.
     await app.prisma.preorderCampaign.update({
       where: { id: first.id },
       data: { closesAt: new Date(Date.now() - 1000) },
@@ -239,7 +239,7 @@ describe('sửa và đóng đợt', () => {
       { path: 'variants', message: 'AM-41 đã có đơn, không bỏ khỏi đợt được' },
     ])
 
-    // Suất bằng đúng số đã đặt, và bỏ biến thể chưa có đơn, vẫn được.
+    // Allocation exactly equal to ordered, and dropping a variant without orders, still works.
     const ok = await app.update(campaign.id, { variants: [{ variantId: app.v41.id, allocation: 2 }] })
     expect(ok.status).toBe(200)
     expect(ok.body.variants).toEqual([expect.objectContaining({ sku: 'AM-41', allocation: 2, used: 2 })])
@@ -266,7 +266,7 @@ describe('sửa và đóng đợt', () => {
 
     expect((await app.update(campaign.id, { closesAt: inDays(60) })).status).toBe(409)
     expect((await app.close(campaign.id)).body.closedAt).toBe(closed.body.closedAt)
-    // Đợt đã đóng vẫn cập nhật được tiến độ nhập (hàng của các đơn đã cọc vẫn đang về).
+    // A closed campaign can still update supply progress (deposited orders' stock is still coming).
     expect((await app.update(campaign.id, { supplyStatus: 'in_transit' })).status).toBe(200)
     expect((await app.audits()).map((a) => a.action)).toEqual([
       'preorder.campaign.update',

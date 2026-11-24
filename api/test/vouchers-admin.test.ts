@@ -5,7 +5,7 @@ import { bearer, createStaff } from './support/staff.ts'
 const DAY = 24 * 60 * 60_000
 const at = (days: number) => new Date(Date.now() + days * DAY).toISOString()
 
-/** Cửa hàng của `shop()` (thương hiệu Nike, danh mục Sneaker), và hàm tạo/sửa/tắt mã bằng tài khoản owner. */
+/** `shop()` (brand Nike, category Sneaker), and helpers to create/edit/disable vouchers as owner. */
 async function vouchers() {
   const app = await shop()
   const { request, token } = app
@@ -37,7 +37,10 @@ async function vouchers() {
     expect(res.status).toBe(201)
     return res.body as { id: string; code: string; used: number; status: string }
   }
-  /** Khách thứ `n` (email, số điện thoại riêng) đặt 1 đôi AM-40 kèm mã, với tiền giảm như báo giá; đơn chờ thanh toán. */
+  /**
+   * Customer `n` (own email and phone) orders 1 pair of AM-40 with the voucher at the quoted discount; awaiting
+   * payment.
+   */
   const redeemed = async (voucher: { code: string }, n = 1) => {
     const lines = [{ variantId: app.v40.id, quantity: 1 }]
     const quote = await request.post('/api/checkout/quote').send({ lines, voucherCode: voucher.code })

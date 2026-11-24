@@ -19,7 +19,7 @@ export const HA_NOI = '01'
 /** Phường Ba Đình, Hà Nội. */
 export const BA_DINH = '00004'
 
-/** Thông tin nhận hàng hợp lệ ở Hà Nội. */
+/** Valid shipping info in Hà Nội. */
 export const ADDRESS = {
   recipientName: 'Nguyễn Văn An',
   phone: '0912345678',
@@ -30,8 +30,8 @@ export const ADDRESS = {
 }
 
 /**
- * Cửa hàng sẵn sàng nhận đơn: owner đã đăng nhập, phí giao mặc định 30.000, giày Air Max đã xuất bản kèm trang
- * chính sách đổi trả đã xuất bản, chính sách bảo mật phiên bản 1. AM-40 giá 2.000.000 còn 3 đôi, AM-41 giá 2.100.000 hết hàng.
+ * A shop ready for orders: signed-in owner, 30,000 default shipping, Air Max shoes published with a published returns
+ * policy page, privacy policy version 1. AM-40 at 2,000,000 with 3 pairs, AM-41 at 2,100,000 out of stock.
  */
 export async function shop(options?: Parameters<typeof appWithOwner>[0]) {
   const app = await appWithOwner(options)
@@ -86,7 +86,7 @@ export async function shop(options?: Parameters<typeof appWithOwner>[0]) {
   expect(fees.status).toBe(200)
   await publishPrivacyPolicy(request)
 
-  /** Khách vãng lai đặt mua AM-40 với giá khách đã thấy là giá hiện tại, đã đồng ý chính sách; `body` ghi đè từng phần. */
+  /** A guest checks out AM-40 at the current price as seen, with consent; `body` overrides parts. */
   const checkout = (body: Record<string, unknown> = {}) =>
     request.post('/api/checkout').send({
       lines: [{ variantId: v40.id, quantity: 1, price: 2_000_000 }],
@@ -95,7 +95,7 @@ export async function shop(options?: Parameters<typeof appWithOwner>[0]) {
       ...body,
     })
 
-  /** Đổi giá (có hiệu lực ngay với khách) hoặc trạng thái của một biến thể. */
+  /** Changes a variant's price (live for customers at once) or status. */
   const editVariant = (v: { id: string }, sku: string, size: string, change: Record<string, unknown>) =>
     request
       .put(`/api/admin/products/${product.id}/variants/${v.id}`)

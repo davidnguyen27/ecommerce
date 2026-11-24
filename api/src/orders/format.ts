@@ -1,19 +1,19 @@
-// Định dạng dùng chung cho response và email của đơn hàng, đặt trước.
+// Shared formatting for order and pre-order responses and emails.
 
 const VND = new Intl.NumberFormat('vi-VN')
 
-/** Ngày `YYYY-MM-DD` của một cột DATE (Prisma trả nửa đêm UTC), không qua múi giờ nào. */
+/** `YYYY-MM-DD` of a DATE column (Prisma returns UTC midnight), with no time zone conversion. */
 export const isoDay = (date: Date) => date.toISOString().slice(0, 10)
 
-/** Ngày lịch `YYYY-MM-DD` thành `30/10/2026`, như khách đọc trong email. */
+/** Calendar day `YYYY-MM-DD` as `30/10/2026`, as customers read it in emails. */
 export const dayVN = (day: string) => day.split('-').reverse().join('/')
 
-/** Thời điểm thành ngày theo giờ Việt Nam, `30/10/2026` (hạn trả phần còn lại). */
+/** A timestamp as a Vietnam-time day, `30/10/2026` (remaining-balance deadline). */
 export const dateVN = (date: Date) => date.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
 
-/** Tiền VND trong email và thông báo lỗi: `1.500.000 ₫`. */
+/** VND in emails and error messages: `1.500.000 ₫`. */
 export const vnd = (amount: bigint | number) => `${VND.format(amount)} ₫`
 
-/** Dòng mã giảm giá trong email tóm tắt đơn; không có gì khi đơn không dùng mã. */
+/** Voucher line in the order summary email; nothing when no voucher was used. */
 export const voucherLines = (order: { voucherCode: string | null; discount: bigint }) =>
   order.voucherCode ? [`Mã giảm giá ${order.voucherCode}: -${vnd(order.discount)}`] : []

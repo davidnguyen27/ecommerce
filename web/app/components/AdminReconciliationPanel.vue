@@ -2,9 +2,9 @@
 import { AdminOrder } from '@ecommerce/shared'
 
 /**
- * Khối đối soát ở trang chi tiết đơn: các khoản tiền bị gắn cờ cần đối soát, và ba thao tác (cần `payment.reconcile`):
- * khôi phục đơn đã hủy khi tiền về đủ, hoàn số tiền của mục (tạo khoản chờ hoàn ở khối Hoàn tiền), hoặc đóng mục vì đã
- * xử lý ngoài hệ thống. Thao tác xong emit đơn mới do API trả.
+ * Reconciliation block on the order detail page: flagged payments and three actions (need `payment.reconcile`):
+ * restore a cancelled order once paid in full, refund the item amount (creates a pending refund in the Refunds block),
+ * or close the item as handled outside the system. Emits the new order the API returns.
  */
 const props = defineProps<{ order: AdminOrder }>()
 const emit = defineEmits<{ update: [order: AdminOrder] }>()

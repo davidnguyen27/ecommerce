@@ -50,7 +50,7 @@ export default {
           DEFAULT: 'hsl(var(--highlight))',
           foreground: 'hsl(var(--highlight-foreground))',
         },
-        // Bảng màu Atelier Noir độc quyền
+        // Atelier Noir house palette
         atelier: {
           noir: '#0D0F12',
           ink: '#111318',

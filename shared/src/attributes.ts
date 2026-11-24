@@ -2,11 +2,11 @@ import { z } from 'zod'
 import { ProductType } from './catalog.ts'
 import type { FieldError } from './errors.ts'
 
-/** Cấp áp dụng: một giá trị chung cho cả sản phẩm, hay phân biệt các biến thể với nhau. */
+/** Scope: one value for the whole product, or distinguishing variants from each other. */
 export const AttributeLevel = z.enum(['product', 'variant'])
 export type AttributeLevel = z.infer<typeof AttributeLevel>
 
-/** Thuộc tính giới tính có ở mọi nhóm hàng với đúng ba giá trị này (ADR 0004). */
+/** The gender attribute exists on every product type with exactly these three values (ADR 0004). */
 export const GENDER_KEY = 'gioi_tinh'
 export const GENDER_UNISEX = 'Unisex'
 export const GENDER_OPTIONS = ['Nam', 'Nữ', GENDER_UNISEX] as const
@@ -17,7 +17,7 @@ const Options = z
   .refine((options) => new Set(options).size === options.length, 'Giá trị cho phép bị trùng')
 
 const Base = z.object({
-  /** Key ổn định, là tên trường trong JSONB thuộc tính của sản phẩm và biến thể. */
+  /** Stable key, the field name in the product and variant attribute JSONB. */
   key: z.string().regex(/^[a-z][a-z0-9_]{0,49}$/, 'Key chỉ gồm chữ thường không dấu, số và dấu gạch dưới'),
   label: z.string().trim().min(1).max(100),
   required: z.boolean(),
@@ -25,7 +25,7 @@ const Base = z.object({
   filterable: z.boolean(),
 })
 
-/** Một định nghĩa thuộc tính. Thứ tự hiển thị là thứ tự trong danh sách của schema. */
+/** One attribute definition. Display order is its order in the schema list. */
 export const AttributeDefinition = z.discriminatedUnion('type', [
   Base.extend({ type: z.literal('enum'), options: Options }),
   Base.extend({ type: z.literal('multi_enum'), options: Options }),
@@ -36,7 +36,7 @@ export const AttributeDefinition = z.discriminatedUnion('type', [
 export type AttributeDefinition = z.infer<typeof AttributeDefinition>
 export type AttributeType = AttributeDefinition['type']
 
-/** Danh sách định nghĩa: key không trùng, luôn có giới tính cấp sản phẩm đúng ba giá trị và dùng làm bộ lọc. */
+/** Definitions: unique keys, always a product-level gender with exactly three values, used as a filter. */
 export const AttributeDefinitions = z.array(AttributeDefinition).superRefine((attributes, ctx) => {
   const seen = new Set<string>()
   attributes.forEach(({ key }, index) => {
@@ -74,7 +74,7 @@ export type AdminAttributeSchema = z.infer<typeof AdminAttributeSchema>
 export const AdminAttributeSchemaList = z.object({ items: z.array(AdminAttributeSchema) })
 export type AdminAttributeSchemaList = z.infer<typeof AdminAttributeSchemaList>
 
-/** Giá trị thuộc tính đã kiểm, lưu dạng JSONB ở sản phẩm hoặc biến thể. */
+/** Validated attribute values, stored as JSONB on the product or variant. */
 export const AttributeValue = z.union([z.string(), z.array(z.string()), z.number(), z.boolean()])
 export type AttributeValue = z.infer<typeof AttributeValue>
 export const AttributeValues = z.record(z.string(), AttributeValue)
@@ -94,8 +94,8 @@ export type ValidateAttributesResponse = z.infer<typeof ValidateAttributesRespon
 export type AttributeCheck = { ok: true; values: AttributeValues } | { ok: false; fields: FieldError[] }
 
 /**
- * Kiểm giá trị thuộc tính của một cấp theo schema. Lỗi trả theo từng trường, đường dẫn `<path>.<key>`.
- * `null` coi như bỏ trống; giá trị trả về đã bỏ các trường trống và cắt khoảng trắng của text.
+ * Validates one level's attribute values against the schema. Errors per field, path `<path>.<key>`. `null` counts as
+ * empty; the returned values drop empty fields and trim text.
  */
 export function checkAttributes(
   definitions: readonly AttributeDefinition[],
@@ -126,7 +126,7 @@ export function checkAttributes(
   return fields.length ? { ok: false, fields } : { ok: true, values }
 }
 
-/** Lý do giá trị không hợp lệ, hoặc `null` khi hợp lệ. */
+/** Why the value is invalid, or `null` when valid. */
 function invalid(definition: AttributeDefinition, value: unknown): string | null {
   switch (definition.type) {
     case 'text':

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ExceptionsReport } from '@ecommerce/shared'
 
-// Bảng ngoại lệ (spec M7) cho người có `report.view`: việc đang chờ quyết, mỗi mục link tới màn xử lý.
+// Exceptions board (spec M7) for `report.view` holders: pending decisions, each linking to where it is handled.
 const session = useAdminSession()
 const canOpen = session.canOpen
 const report = ref<ExceptionsReport | null>(null)
@@ -18,7 +18,7 @@ onMounted(async () => {
 type Row = { key: string; to: string | null; title: string; detail: string }
 type Section = { key: string; title: string; hint: string; to: string | null; count: number; rows: Row[] }
 
-/** Link tới trang đơn khi người xem mở được trang đơn. */
+/** Link to the order page when the viewer can open it. */
 const orderLink = (code: number) => (canOpen('/admin/orders') ? `/admin/orders/${code}` : null)
 
 const sections = computed<Section[]>(() => {

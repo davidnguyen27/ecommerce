@@ -10,10 +10,10 @@ const categories = ref<AdminCategory[]>([])
 const error = ref<string | null>(null)
 const showCreatePanel = ref(false)
 const form = reactive({ name: '', slug: '', productType: 'footwear' as ProductType, parentId: null as string | null })
-/** Danh mục đang sửa, trước khi bấm lưu. */
+/** The category being edited, before saving. */
 const editing = ref<{ id: string; name: string; slug: string; parentId: string | null } | null>(null)
 
-/** Danh mục của từng nhóm hàng, xếp theo thứ tự duyệt cây kèm độ sâu để thụt lề. */
+/** Categories of each product type, in tree order with depth for indentation. */
 const tree = computed(() =>
   ProductType.options.map((productType) => {
     const rows: Row[] = []
@@ -31,7 +31,7 @@ const tree = computed(() =>
 
 const rowsOf = (productType: ProductType) => tree.value.find((root) => root.productType === productType)!.rows
 
-/** Cha hợp lệ cho danh mục `id`: cùng nhóm hàng, không phải chính nó hay nhánh con của nó. API vẫn kiểm lại. */
+/** Valid parents for category `id`: same type, not itself or its subtree. The API rechecks. */
 function parentOptions(productType: ProductType, id?: string) {
   const rows = rowsOf(productType)
   const start = rows.findIndex((row) => row.id === id)
@@ -42,14 +42,14 @@ function parentOptions(productType: ProductType, id?: string) {
 
 const indentSymbol = (depth: number) => (depth === 0 ? '' : '└── '.padStart(depth * 3 + 4, '　'))
 
-// Danh mục còn con thì API từ chối xóa; khóa nút sẵn để khỏi bấm vô ích.
+// The API refuses to delete categories with children; disable the button to avoid a useless click.
 const hasChildren = (id: string) => categories.value.some((category) => category.parentId === id)
 
 async function load() {
   categories.value = AdminCategoryList.parse(await session.adminFetch('/api/admin/categories')).items
 }
 
-/** Chạy một thao tác rồi tải lại danh sách; lỗi thì hiện thông báo từ API. */
+/** Runs an action, then reloads the list; on error shows the API message. */
 async function run(action: () => Promise<unknown>) {
   error.value = null
   try {
@@ -107,7 +107,7 @@ function remove(category: AdminCategory) {
   return run(() => session.adminFetch(`/api/admin/categories/${category.id}`, { method: 'DELETE' }))
 }
 
-// Đổi nhóm hàng thì cha đang chọn không còn hợp lệ.
+// Changing the product type invalidates the selected parent.
 watch(
   () => form.productType,
   () => (form.parentId = null),

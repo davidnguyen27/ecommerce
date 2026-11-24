@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-/** Slug dùng trong URL công khai. */
+/** Slug used in public URLs. */
 export const Slug = z
   .string()
   .max(100)

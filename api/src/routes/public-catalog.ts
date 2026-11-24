@@ -23,7 +23,7 @@ function toNode(category: VisibleCategory): CategoryNode {
   return { slug: category.slug, name: category.name, children: category.children.map(toNode) }
 }
 
-/** Khách duyệt cây danh mục; danh mục bị ẩn hoặc nằm dưới danh mục bị ẩn coi như không có. */
+/** Customers browse the category tree; hidden categories and everything under them count as missing. */
 export function publicCategoryRoutes(prisma: Db) {
   return Router()
     .get('/', async (_req, res) => {
@@ -49,7 +49,7 @@ export function publicCategoryRoutes(prisma: Db) {
     })
 }
 
-/** Schema thuộc tính của một nhóm hàng, để website hiển thị nhãn và bộ lọc. */
+/** A product type's attribute schema, for website labels and filters. */
 export function publicAttributeSchemaRoutes(prisma: Db) {
   return Router().get('/:productType', async (req, res) => {
     const { productType } = parse(ProductTypeParams, req.params)
@@ -59,7 +59,7 @@ export function publicAttributeSchemaRoutes(prisma: Db) {
   })
 }
 
-/** Khách duyệt thương hiệu; thương hiệu bị ẩn coi như không có. */
+/** Customers browse brands; hidden brands count as missing. */
 export function publicBrandRoutes(prisma: Db, storage: Storage) {
   return Router()
     .get('/', async (_req, res) => {

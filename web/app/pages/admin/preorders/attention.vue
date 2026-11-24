@@ -3,7 +3,7 @@ import { PreorderAttention } from '@ecommerce/shared'
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'order.view' })
 
-// Việc của nhân viên bán hàng với đơn đặt trước: liên hệ khách quá hạn trả phần còn lại, và khách của đợt gặp sự cố.
+// Sales follow-up on pre-orders: contact customers with an overdue remainder, and customers of troubled campaigns.
 const session = useAdminSession()
 const result = ref<PreorderAttention | null>(null)
 const error = ref<string | null>(null)

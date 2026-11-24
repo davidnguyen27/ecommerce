@@ -19,11 +19,11 @@ definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: ['catalo
 const route = useRoute()
 const id = String(route.params.id)
 const session = useAdminSession()
-// Quyền thật do API kiểm; ở đây chỉ để khóa những ô người dùng không sửa được.
+// The API enforces permissions; here they only lock fields the user cannot edit.
 const canEdit = session.can('catalog.edit')
 const canPrice = session.can('price.edit')
 const canViewDocuments = session.can('document.view')
-/** Chứng từ đã tải, để chọn làm bằng chứng cho cam kết. */
+/** Uploaded documents, to pick as commitment evidence. */
 const documents = ref<AdminProductDocument[]>([])
 
 const product = ref<AdminProductDetail | null>(null)
@@ -50,7 +50,7 @@ const fieldErrors = ref<TargetedFieldErrors>({ target: '', fields: [] })
 
 const productDefinitions = computed(() => definitions.value.filter((d) => d.level === 'product'))
 const variantDefinitions = computed(() => definitions.value.filter((d) => d.level === 'variant'))
-/** Biến thể đã lưu, để gắn ảnh: nhãn là SKU kèm tổ hợp thuộc tính. */
+/** Saved variants, for image links: label is the SKU with its attribute combination. */
 const imageVariants = computed(() =>
   (product.value?.variants ?? []).map((v) => ({
     id: v.id,
@@ -92,7 +92,7 @@ function show(detail: AdminProductDetail) {
   policyPageIds.value = [...detail.policyPageIds]
 }
 
-// Vòng đời và chính sách
+// Lifecycle and policies
 
 const policyPages = ref<PolicyPageOptionList['items']>([])
 const policyPageIds = ref<string[]>([])
@@ -123,7 +123,7 @@ async function load() {
 
 const errorAt = (path: string) => fieldErrorAt(fieldErrors.value, 'product', path)
 
-/** Chạy một thao tác lưu; lỗi theo trường gắn vào `target` để hiện cạnh đúng ô. */
+/** Runs a save; field errors go to `target` to show next to the right field. */
 async function run(target: string, action: () => Promise<unknown>, message: string) {
   error.value = null
   notice.value = null
@@ -147,7 +147,7 @@ function saveProduct() {
 }
 
 function variantBody({ sku, attributes, status, sortOrder, price, compareAtPrice }: VariantDraft) {
-  // Chỉ gửi giá khi có `price.edit`; bỏ qua thì API giữ nguyên giá.
+  // Send prices only with `price.edit`; omitted, the API keeps the price.
   return { sku, attributes, status, sortOrder, ...(canPrice && { price, compareAtPrice }) }
 }
 

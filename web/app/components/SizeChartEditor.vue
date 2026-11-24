@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { SizeChart } from '@ecommerce/shared'
 
-/** Bảng size của sản phẩm: thêm, bớt cột và hàng. Lưu cùng thông tin sản phẩm nên chỉ báo `save` lên trang. */
+/** The product's size chart: add and remove columns and rows. Saved with the product info, so it only emits `save`. */
 defineProps<{ disabled: boolean }>()
 const emit = defineEmits<{ save: [] }>()
 const chart = defineModel<SizeChart | null>({ required: true })

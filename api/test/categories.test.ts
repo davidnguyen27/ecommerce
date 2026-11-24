@@ -11,7 +11,7 @@ function editCategory(request: Request, token: string, id: string, changes: Reco
   return request.put(`/api/admin/categories/${id}`).set(bearer(token)).send(changes)
 }
 
-/** Owner đã đăng nhập, có sẵn Giày dép > Sneaker và Nước hoa > Nước hoa nam. */
+/** Signed-in owner, with Giày dép > Sneaker and Nước hoa > Nước hoa nam. */
 async function appWithCategories() {
   const { request } = await appWithOwner()
   const { accessToken: token } = await login(request, OWNER.email, OWNER.password)

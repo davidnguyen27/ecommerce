@@ -1,4 +1,4 @@
-# Build từ gốc repo: docker build -f api/Dockerfile .
+# Build from the repo root: docker build -f api/Dockerfile .
 FROM node:24-slim
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/* \
   && corepack enable

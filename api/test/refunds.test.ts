@@ -21,8 +21,9 @@ type Refund = {
 }
 
 /**
- * Cửa hàng có cổng giả lập, một kế toán, một nhân viên bán hàng và một nhân viên kho. Hoàn tiền ở ticket này chỉ sinh
- * ra từ đối soát: `cancelledThenPaid` dựng đơn khách tự hủy rồi tiền mới về (mỗi khoản một mục `paid_after_cancel`).
+ * A shop with the simulator, an accountant, a sales clerk and a warehouse clerk. Refunds in this ticket only come from
+ * reconciliation: `cancelledThenPaid` builds an order cancelled before money arrived (one `paid_after_cancel` per
+ * payment).
  */
 async function refunds() {
   const app = await shop({ simulator: true })
@@ -60,7 +61,7 @@ async function refunds() {
     (await detail(code)).payments.flatMap((p) => (p.reconciliation ? [p.reconciliation.id] : []))
   const refundItem = (id: string, as = accountant.accessToken) =>
     request.post(`/api/admin/reconciliation/${id}/refund`).set(bearer(as))
-  /** Đơn đã hủy có một khoản hoàn `pending` bằng toàn bộ tiền đã về. */
+  /** A cancelled order with one `pending` refund for all the money received. */
   const pendingRefund = async () => {
     const code = await cancelledThenPaid()
     const [item] = await itemIds(code)
@@ -75,7 +76,10 @@ async function refunds() {
     request.post(`/api/admin/refunds/${id}/settle`).set(bearer(as)).send(body)
   const retry = (id: string, body: Record<string, unknown>, as = accountant.accessToken) =>
     request.post(`/api/admin/refunds/${id}/retry`).set(bearer(as)).send(body)
-  /** Đưa khoản `pending` sang `processing` như cổng vừa nhận lệnh hoàn (ticket 06 mới gọi cổng thật). */
+  /**
+   * Moves a `pending` refund to `processing` as if the gateway just took the command (ticket 06 calls the real
+   * gateway).
+   */
   const markProcessing = async (orderId: string, refundId: string) => {
     const transaction = await app.prisma.paymentTransaction.findFirstOrThrow({ where: { orderId } })
     await app.prisma.refund.update({
@@ -180,7 +184,7 @@ describe('giải quyết đối soát bằng hoàn tiền', () => {
     const { cancelledThenPaid, itemIds, refundItem, detail, orderIdOf, prisma, accountant } = await refunds()
     const code = await cancelledThenPaid(TOTAL, TOTAL)
     const orderId = await orderIdOf(code)
-    // Một khoản hoàn khác đã chiếm một nửa số đã nhận: chỉ còn hoàn được một mục.
+    // Another refund already takes half the received amount: only one item can still be refunded.
     await prisma.refund.create({
       data: { orderId, amount: BigInt(TOTAL), origin: 'cancellation', createdById: accountant.id },
     })
@@ -197,7 +201,7 @@ describe('giải quyết đối soát bằng hoàn tiền', () => {
 
   it('đơn có khoản hoàn thì không khôi phục được', async () => {
     const { cancelledThenPaid, itemIds, refundItem, request, accountant } = await refunds()
-    // Hai khoản cộng lại bằng tổng đơn: không có khoản hoàn thì khôi phục được.
+    // The two payments add up to the order total: without refunds it can be restored.
     const code = await cancelledThenPaid(1_000_000, TOTAL - 1_000_000)
     const [first, second] = await itemIds(code)
     expect((await refundItem(first!)).status).toBe(200)
@@ -239,7 +243,7 @@ describe('hoàn tiền thủ công', () => {
     expect(mails[0]!.text).toContain('2.030.000')
     expect(mails[0]!.text).toContain('18/11/2026')
     expect(mails[0]!.text).toContain('/don-hang/')
-    // Email không lộ thông tin nội bộ.
+    // The email leaks no internal details.
     expect(mails[0]!.text).not.toContain('FT26321')
   })
 
@@ -280,7 +284,7 @@ describe('chốt khoản cổng đang xử lý và tạo lại', () => {
     const { pendingRefund, markProcessing, settle, retry, detail, audits, mailer } = await refunds()
     const { code, orderId, refundId } = await pendingRefund()
 
-    expect((await settle(refundId, { outcome: 'failed', note: 'x' })).status).toBe(409) // còn chờ, chưa qua cổng
+    expect((await settle(refundId, { outcome: 'failed', note: 'x' })).status).toBe(409) // pending, not via gateway
     await markProcessing(orderId, refundId)
     expect((await settle(refundId, { outcome: 'failed', note: '' })).status).toBe(400)
 
@@ -299,7 +303,7 @@ describe('chốt khoản cổng đang xử lý và tạo lại', () => {
     expect(fresh).toMatchObject({ origin: 'retry', status: 'pending', retryOfId: refundId, amount: TOTAL })
     expect(retried.body.refunds[0].retriedById).toBe(fresh.id)
     expect((await retry(refundId, { amount: TOTAL })).status).toBe(409)
-    expect((await retry(fresh.id, { amount: TOTAL })).status).toBe(409) // chưa thất bại
+    expect((await retry(fresh.id, { amount: TOTAL })).status).toBe(409) // not failed
 
     expect((await audits()).map((a) => a.action)).toEqual(expect.arrayContaining(['refund.settle', 'refund.retry']))
     expect((await detail(code)).history.map((h) => h.action)).toContain('refund_failed')
@@ -311,7 +315,7 @@ describe('danh sách đơn', () => {
   it('lọc "hoàn tiền chưa xong": có đơn chờ hoàn, hết khi đã hoàn', async () => {
     const { pendingRefund, cancelledThenPaid, manual, request, token } = await refunds()
     const { code, refundId } = await pendingRefund()
-    await cancelledThenPaid() // đơn cần đối soát nhưng chưa có khoản hoàn
+    await cancelledThenPaid() // needs reconciliation but has no refund yet
     const list = async () => {
       const res = await request
         .get('/api/admin/orders')

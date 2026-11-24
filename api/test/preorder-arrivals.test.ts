@@ -7,7 +7,7 @@ import { adjust } from './support/stock.ts'
 
 const DAY = 24 * 60 * 60_000
 
-/** Chờ thư có tiêu đề chứa `subject` qua hàng đợi job. */
+/** Waits for an email with `subject` in the title via the job queue. */
 async function mailsAbout(mailer: InMemoryMailer, subject: string, count = 1) {
   return vi.waitFor(
     () => {
@@ -27,8 +27,9 @@ type Preorder = {
 }
 
 /**
- * Đợt đặt trước AM-41 (giá 2.100.000, cọc 30%, trả phần còn lại trong 7 ngày, 20 suất). `deposited(n)` đặt trước `n`
- * đôi rồi trả cọc ngay, nên thứ tự gọi là thứ tự cọc. `receive(n)` ghi phiếu nhập `n` đôi AM-41.
+ * An AM-41 pre-order campaign (price 2,100,000, 30% deposit, remainder within 7 days, 20 allocation). `deposited(n)`
+ * pre-orders `n` pairs and pays the deposit at once, so call order is deposit order. `receive(n)` records a receipt of
+ * `n` pairs of AM-41.
  */
 async function arrivals() {
   const app = await preorderShop()
@@ -75,7 +76,7 @@ async function arrivals() {
   }
   const preorderOf = async (order: { view: () => ReturnType<typeof request.get> }) =>
     (await order.view()).body.preorder as Preorder
-  /** Tồn và số đang giữ của AM-41 ở trang Tồn kho. */
+  /** AM-41 on-hand and reserved on the Stock page. */
   const stock = async () => {
     const res = await request.get('/api/admin/stock').query({ q: 'AM-41' }).set(bearer(token))
     const item = (res.body.items as { sku: string; onHand: number; reserved: number }[]).find((i) => i.sku === 'AM-41')!
@@ -109,10 +110,10 @@ describe('hàng về chia cho đơn đặt trước', () => {
     expect(await app.preorderOf(a)).toMatchObject({ arrivedQuantity: 2, quantity: 2, arrivedAt: expect.any(String) })
     expect(await app.preorderOf(b)).toMatchObject({ arrivedQuantity: 2, quantity: 3, arrivedAt: null })
     expect(await app.preorderOf(c)).toMatchObject({ arrivedQuantity: 0, quantity: 1, arrivedAt: null })
-    // Hàng về giữ hết cho đơn đã cọc: không có hàng sẵn mới, khách khác vẫn chỉ đặt trước được.
+    // The arrival is all reserved for deposited orders: no new regular stock, others can still only pre-order.
     expect(await app.stock()).toEqual({ onHand: 4, reserved: 4 })
     expect(await app.availability()).toBe('preorder')
-    // Hạn trả phần còn lại: 7 ngày sau lúc về đủ.
+    // Remaining-balance deadline: 7 days after full arrival.
     const { arrivedAt, remainderDueAt } = await app.preorderOf(a)
     expect(Date.parse(remainderDueAt!) - Date.parse(arrivedAt!)).toBe(7 * DAY)
     expect(Date.parse(arrivedAt!)).toBeLessThanOrEqual(before)
@@ -135,7 +136,7 @@ describe('hàng về chia cho đơn đặt trước', () => {
 
     const [mail] = await mailsAbout(app.mailer, `Hàng đã về cho đơn đặt trước #${a.code}`)
     expect(mail!.to).toBe('khach1@example.com')
-    // Tổng 4.230.000 (gồm phí giao 30.000) trừ cọc 1.260.000.
+    // Total 4,230,000 (30,000 shipping included) minus 1,260,000 deposit.
     expect(mail!.text).toContain('2.970.000')
     expect(mail!.text).toMatch(/Hạn trả: \d{1,2}\/\d{1,2}\/\d{4}/)
     const link = /https:\/\/shop\.test\/don-hang\/(\d+)\?token=([\w-]+)/.exec(mail!.text)
@@ -196,7 +197,7 @@ describe('hàng về chia cho đơn đặt trước', () => {
     })
 
     expect(res.status).toBe(409)
-    // Đơn chờ cọc không giữ hàng nên không có trong danh sách.
+    // Pending-deposit orders hold no stock, so they are not listed.
     expect(res.body.error.details).toEqual({ reserved: 2, orderCodes: [a.code] })
   })
 

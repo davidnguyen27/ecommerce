@@ -1,4 +1,4 @@
-# Build từ gốc repo: docker build -f web/Dockerfile .
+# Build from the repo root: docker build -f web/Dockerfile .
 FROM node:24-slim AS build
 RUN corepack enable
 WORKDIR /repo

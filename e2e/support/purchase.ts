@@ -1,12 +1,12 @@
 import { expect, type Page } from '@playwright/test'
 import { AdminApi, PRODUCT_PATH, PROVINCE_CODE, SKU } from './stack.ts'
 
-/** Mỗi lượt chạy một số riêng, để số điện thoại và email của khách không trùng đơn đang chờ của lượt trước. */
+/** A unique number per run, so customer phone and email never collide with a previous run's pending orders. */
 const runId = Date.now().toString().slice(-7)
 
 /**
- * Khách vãng lai mua một cái biến thể seed qua giỏ và đặt mua, rồi bấm "Giả lập đã thanh toán". `tag` và `suffix`
- * (một chữ số) phân biệt khách giữa các spec. Trả mã đơn và link trang đơn.
+ * A guest buys one unit of the seed variant via cart and checkout, then presses "Giả lập đã thanh toán". `tag` and
+ * `suffix` (one digit) tell customers apart across specs. Returns the order code and order page link.
  */
 export async function buyAndPay(page: Page, tag: string, suffix: string) {
   await page.goto(PRODUCT_PATH)
@@ -31,7 +31,7 @@ export async function buyAndPay(page: Page, tag: string, suffix: string) {
   return { code, url: page.url() }
 }
 
-/** Bảo đảm biến thể seed còn ít nhất `count` cái bán được; các spec trước có thể đã bán bớt. */
+/** Ensures the seed variant has at least `count` sellable units; earlier specs may have sold some. */
 export async function ensureSellable(count: number, note: string) {
   const api = await AdminApi.owner()
   const stock = await api.stockOf(SKU)

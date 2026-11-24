@@ -4,13 +4,13 @@ import { PublicImage } from './products.ts'
 import { ProvinceCode } from './regions.ts'
 import { VoucherCodeInput, VoucherConflict, VoucherQuote } from './vouchers.ts'
 
-/** Số cái tối đa của một biến thể trong một đơn. */
+/** Max units of one variant per order. */
 export const MAX_QUANTITY_PER_VARIANT = 5
 
-/** Số dòng tối đa trong giỏ hàng. */
+/** Max lines in the cart. */
 export const MAX_CART_LINES = 50
 
-/** Một dòng giỏ hàng gửi lên server: biến thể và số lượng. */
+/** A cart line sent to the server: variant and quantity. */
 export const CartLine = z.object({
   variantId: z.uuid(),
   quantity: z
@@ -21,7 +21,7 @@ export const CartLine = z.object({
 })
 export type CartLine = z.infer<typeof CartLine>
 
-/** Danh sách dòng giỏ 1–`MAX_CART_LINES` dòng, mỗi biến thể một dòng (giỏ đã cộng dồn). */
+/** 1–`MAX_CART_LINES` cart lines, one per variant (the cart has merged them). */
 const linesOf = <T extends z.ZodType<{ variantId: string }>>(line: T) =>
   z
     .array(line)
@@ -37,12 +37,12 @@ const linesOf = <T extends z.ZodType<{ variantId: string }>>(line: T) =>
       })
     })
 
-/** Các dòng giỏ hàng gửi lên `quote`. */
+/** Cart lines sent to `quote`. */
 export const CartLines = linesOf(CartLine)
 
 /**
- * Email và số điện thoại khách đang nhập, gửi kèm báo giá có mã để kiểm lượt mỗi khách. Chưa nhập xong (sai định dạng)
- * thì coi như chưa có, không báo lỗi form.
+ * The email and phone being typed, sent with a voucher quote to check per-customer uses. Incomplete (malformed) values
+ * count as absent, without form errors.
  */
 export const QuoteContact = {
   email: z
@@ -57,8 +57,8 @@ export const QuoteContact = {
 }
 
 /**
- * Body của `POST /api/checkout/quote`. Thiếu `provinceCode` (trang giỏ hàng) thì không tính phí giao. `voucherCode` là
- * mã khách gõ ở trang đặt mua.
+ * Body of `POST /api/checkout/quote`. Without `provinceCode` (cart page) no shipping fee is computed. `voucherCode` is
+ * the code typed on the checkout page.
  */
 export const CheckoutQuoteRequest = z.object({
   lines: CartLines,
@@ -69,68 +69,68 @@ export const CheckoutQuoteRequest = z.object({
 export type CheckoutQuoteRequest = z.infer<typeof CheckoutQuoteRequest>
 
 /**
- * Một dòng như khách sẽ mua lúc này, đọc từ phiên bản đang xuất bản. `discontinued` là biến thể không còn bán:
- * ngừng bán, sản phẩm không còn xuất bản hoặc không tồn tại; khi đó các trường của biến thể là `null`.
+ * A line as the customer would buy it now, read from the live version. `discontinued` means not for sale anymore
+ * (discontinued, product unpublished or missing); the variant fields are then `null`.
  */
 export const QuoteLine = z.object({
   variantId: z.string(),
   quantity: z.number(),
-  /** `null` khi sản phẩm không còn xuất bản. */
+  /** `null` when the product is no longer published. */
   product: z.object({ slug: z.string(), name: z.string() }).nullable(),
   sku: z.string().nullable(),
   attributes: AttributeValues.nullable(),
-  /** Ảnh của biến thể, không có thì ảnh đầu tiên của sản phẩm. */
+  /** The variant's image, else the product's first. */
   image: PublicImage.nullable(),
-  /** Giá bán hiện tại. */
+  /** Current sale price. */
   price: z.number().nullable(),
   compareAtPrice: z.number().nullable(),
-  /** Giá × số lượng; `null` khi dòng không mua được. */
+  /** Price × quantity; `null` when the line cannot be bought. */
   lineTotal: z.number().nullable(),
   discontinued: z.boolean(),
-  /** Còn đủ hàng cho số lượng của dòng hay không, không bao giờ kèm số lượng (ADR 0006). */
+  /** Whether there is enough stock for the line's quantity, never with a count (ADR 0006). */
   inStock: z.boolean(),
 })
 export type QuoteLine = z.infer<typeof QuoteLine>
 
-/** Response của `POST /api/checkout/quote`; không ghi gì. */
+/** Response of `POST /api/checkout/quote`; writes nothing. */
 export const CheckoutQuote = z.object({
   lines: z.array(QuoteLine),
-  /** Có ít nhất một sản phẩm chỉ giao đường bộ: trang hiện lưu ý thời gian giao lâu hơn. */
+  /** At least one product ships by ground only: the page notes the longer delivery. */
   groundShippingOnly: z.boolean(),
-  /** Tổng tiền hàng của các dòng mua được (còn bán và còn hàng). */
+  /** Goods total of the buyable lines (on sale and in stock). */
   subtotal: z.number(),
-  /** Kết quả áp mã; `null` khi không gửi mã. */
+  /** Voucher result; `null` when no code was sent. */
   voucher: VoucherQuote.nullable(),
-  /** Tiền giảm của mã, 0 khi không có mã hoặc mã không áp được. */
+  /** Voucher discount, 0 without a code or when it does not apply. */
   discount: z.number(),
-  /** Ngưỡng so với tiền hàng sau giảm. */
+  /** Threshold compared with goods after discount. */
   freeShippingThreshold: z.number().nullable(),
-  /** `null` khi chưa chọn tỉnh/thành; 0 khi được miễn phí giao. Tính trên tiền hàng sau giảm. */
+  /** `null` before a province is picked; 0 with free shipping. Computed on goods after discount. */
   shippingFee: z.number().nullable(),
-  /** Tổng phải trả = tiền hàng − tiền giảm + phí giao; `null` khi chưa chọn tỉnh/thành. */
+  /** Total due = goods − discount + shipping; `null` before a province is picked. */
   total: z.number().nullable(),
-  /** Phí giao và tổng khi không dùng mã, để trang so sánh; bằng hai trường trên khi không có tiền giảm. */
+  /** Fee and total without the voucher, for comparison; equal to the two above when there is no discount. */
   shippingFeeWithoutVoucher: z.number().nullable(),
   totalWithoutVoucher: z.number().nullable(),
-  /** Chính sách đổi trả, bảo hành đang xuất bản của các sản phẩm còn bán trong giỏ, để trang đặt mua hiện link. */
+  /** Published returns and warranty policies of the products on sale in the cart, linked on the checkout page. */
   policies: z.array(z.object({ slug: z.string(), title: z.string() })),
 })
 export type CheckoutQuote = z.infer<typeof CheckoutQuote>
 
-/** Thời hạn giữ hàng của đơn chưa thanh toán, cũng là thời hạn của link thanh toán. Chờ chủ doanh nghiệp xác nhận. */
+/** How long an unpaid order holds stock, also the payment link's lifetime. Pending owner confirmation. */
 export const RESERVATION_MINUTES = 15
 
-/** Một dòng đặt mua: dòng giỏ kèm giá khách đã thấy, để server từ chối khi giá đã đổi. */
+/** A checkout line: a cart line with the price seen, so the server rejects changed prices. */
 export const CheckoutLine = CartLine.extend({ price: z.number().int().positive() })
 export type CheckoutLine = z.infer<typeof CheckoutLine>
 
-/** Số điện thoại Việt Nam 10 số bắt đầu bằng 0; nhận cả `+84`, dấu cách, chấm, gạch và lưu về dạng `0xxxxxxxxx`. */
+/** 10-digit Vietnamese phone starting with 0; accepts `+84`, spaces, dots, dashes and stores `0xxxxxxxxx`. */
 export const PhoneNumber = z
   .string()
   .transform((value) => value.replace(/[\s.-]/g, '').replace(/^\+84/, '0'))
   .pipe(z.string().regex(/^0\d{9}$/, 'Số điện thoại gồm 10 số, bắt đầu bằng 0'))
 
-/** Thông tin nhận hàng. Phường/xã được API kiểm thuộc đúng tỉnh/thành (danh mục ở `@ecommerce/shared/wards`). */
+/** Shipping info. The API checks the ward belongs to the province (list in `@ecommerce/shared/wards`). */
 export const ShippingAddress = z.object({
   recipientName: z.string().trim().min(1, 'Cần tên người nhận').max(200),
   phone: PhoneNumber,
@@ -144,17 +144,17 @@ export const ShippingAddress = z.object({
 })
 export type ShippingAddress = z.input<typeof ShippingAddress>
 
-/** `GET /api/account/shipping-address`: địa chỉ của lần đặt mua thành công gần nhất; `null` khi chưa đặt lần nào. */
+/** `GET /api/account/shipping-address`: address of the latest successful checkout; `null` if none yet. */
 export const LastShippingAddress = z.object({ address: ShippingAddress.nullable() })
 export type LastShippingAddress = z.infer<typeof LastShippingAddress>
 
-/** Mã số thuế: 10 số, hoặc 13 số có gạch nối trước 3 số cuối (chi nhánh), ví dụ `0101234567-001`. */
+/** Tax code: 10 digits, or 13 with a dash before the last 3 (branch), e.g. `0101234567-001`. */
 export const TaxCode = z
   .string()
   .trim()
   .regex(/^\d{10}(-\d{3})?$/, 'Mã số thuế gồm 10 số, hoặc 13 số dạng 0101234567-001')
 
-/** Thông tin xuất hóa đơn công ty; đã gửi thì cần đủ cả ba trường. */
+/** Company invoice info; when sent, all three fields are required. */
 export const InvoiceInfo = z.object({
   companyName: z.string().trim().min(1, 'Cần tên công ty').max(300),
   taxCode: TaxCode,
@@ -162,33 +162,33 @@ export const InvoiceInfo = z.object({
 })
 export type InvoiceInfo = z.infer<typeof InvoiceInfo>
 
-/** Body của `POST /api/checkout`. Kèm access token của khách thì đơn gắn với tài khoản. */
+/** Body of `POST /api/checkout`. A customer access token links the order to the account. */
 export const CheckoutRequest = z.object({
   lines: linesOf(CheckoutLine),
   address: ShippingAddress,
   note: z.string().trim().max(1000).default(''),
-  /** Ô "Tôi đồng ý với chính sách bảo mật": khách vãng lai phải tick; khách đã đăng nhập đã đồng ý lúc đăng ký. */
+  /** The "Tôi đồng ý với chính sách bảo mật" box: guests must tick it; signed-in customers agreed at sign-up. */
   acceptPrivacyPolicy: z.boolean().optional(),
-  /** Xuất hóa đơn công ty, không bắt buộc. */
+  /** Company invoice, optional. */
   invoice: InvoiceInfo.optional(),
-  /** Mã giảm giá và tiền giảm khách đã thấy; khác lúc đặt thì 409 với `details.voucher`. */
+  /** Voucher code and discount the customer saw; a difference at order time gives 409 with `details.voucher`. */
   voucherCode: VoucherCodeInput.optional(),
   discount: z.number().int().min(0).default(0),
 })
 export type CheckoutRequest = z.input<typeof CheckoutRequest>
 
-/** Vì sao một dòng không đặt được như khách đã thấy; cùng dạng với thay đổi dòng ở trang giỏ. */
+/** Why a line cannot be ordered as seen; same shape as cart line changes. */
 export const CheckoutLineChange = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('price'), from: z.number(), to: z.number() }),
   z.object({ kind: z.literal('discontinued') }),
-  /** Không còn đủ số lượng đã chọn; không bao giờ kèm số còn lại (ADR 0006). */
+  /** Not enough for the chosen quantity; never with the remaining count (ADR 0006). */
   z.object({ kind: z.literal('out_of_stock') }),
 ])
 export type CheckoutLineChange = z.infer<typeof CheckoutLineChange>
 
 /**
- * `error.details` của 409 khi đặt mua: thay đổi của từng dòng có vấn đề, hoặc (khi mọi dòng đều đúng) mã giảm giá không
- * còn như khách đã thấy. Không có gì được ghi.
+ * `error.details` of a checkout 409: changes per problem line, or (when every line is fine) the voucher no longer as
+ * seen. Nothing is written.
  */
 export const CheckoutConflictDetails = z.object({
   lines: z.array(z.object({ variantId: z.string(), change: CheckoutLineChange })),
@@ -196,13 +196,13 @@ export const CheckoutConflictDetails = z.object({
 })
 export type CheckoutConflictDetails = z.infer<typeof CheckoutConflictDetails>
 
-/** Response 201 của `POST /api/checkout`. `token` chỉ có trong response này; server chỉ lưu hash. */
+/** 201 response of `POST /api/checkout`. `token` appears only here; the server stores only its hash. */
 export const CheckoutResult = z.object({
   code: z.number(),
   token: z.string(),
-  /** Trang thanh toán của cổng (cổng giả lập khi chạy local). */
+  /** The gateway's payment page (the simulator locally). */
   checkoutUrl: z.string(),
-  /** Quá thời điểm này mà chưa thanh toán thì đơn bị hủy, hàng được nhả. */
+  /** Unpaid by this time, the order is cancelled and its stock released. */
   reservedUntil: z.string(),
 })
 export type CheckoutResult = z.infer<typeof CheckoutResult>

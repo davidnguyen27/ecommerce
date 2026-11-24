@@ -2,8 +2,9 @@
 import { SUPPORT_IMAGE_MAX_BYTES, SUPPORT_IMAGES_PER_MESSAGE } from '@ecommerce/shared'
 
 /**
- * Chọn tối đa 5 ảnh (jpeg, png, webp, ≤ 5 MB) gửi kèm một tin, có xem trước và bỏ từng ảnh (spec M6b). Chỉ kiểm sơ bộ ở
- * trình duyệt cho khách khỏi chờ; API kiểm lại nội dung thật. Dùng chung cho trang khách và trang quản trị.
+ * Picks up to 5 images (jpeg, png, webp, ≤ 5 MB) for a message, with previews and per-image removal (spec M6b). The
+ * browser only pre-checks so customers do not wait; the API checks the real content. Shared by customer and admin
+ * pages.
  */
 const files = defineModel<File[]>({ required: true })
 const props = defineProps<{ inputId: string; admin?: boolean }>()

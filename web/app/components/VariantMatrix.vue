@@ -3,12 +3,12 @@ import { VariantStatus, type AttributeDefinition } from '@ecommerce/shared'
 import type { TargetedFieldErrors, VariantDraft } from '~/utils/productDraft'
 
 /**
- * Bảng biến thể đang soạn, dòng cuối là dòng thêm mới. Mỗi dòng lưu riêng nên chỉ báo `save` lên trang.
- * Tồn chỉ đọc ở đây, đổi ở trang Kho.
+ * Table of draft variants, the last row adds a new one. Each row saves on its own, so it only emits `save`. Stock is
+ * read-only here; change it on the Stock page.
  */
 const props = defineProps<{
   definitions: AttributeDefinition[]
-  /** Tồn theo id biến thể đã lưu, theo lần tải gần nhất. */
+  /** Stock by saved variant id, from the latest load. */
   onHand: ReadonlyMap<string, number>
   errors: TargetedFieldErrors
   canEdit: boolean
@@ -20,7 +20,7 @@ const newVariant = defineModel<VariantDraft>('newVariant', { required: true })
 
 const errorAt = (variant: VariantDraft, path: string) => fieldErrorAt(props.errors, variant.id, path)
 
-/** Ô giá: chuỗi rỗng là chưa đặt giá. */
+/** Price field: an empty string means no price yet. */
 function setPrice(variant: VariantDraft, field: 'price' | 'compareAtPrice', raw: string) {
   variant[field] = raw.trim() === '' ? null : Number(raw)
 }

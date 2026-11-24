@@ -2,8 +2,8 @@
 import type { VoucherQuote } from '@ecommerce/shared'
 
 /**
- * Ô nhập mã giảm giá ở trang đặt mua và đặt trước. Trang giữ mã đang áp (`code`) và gửi kèm báo giá; ô này chỉ nhận mã
- * khách gõ và hiện kết quả báo giá trả về.
+ * Voucher field on the checkout and pre-order pages. The page holds the applied code (`code`) and sends it with the
+ * quote; this field only takes the typed code and shows the quote's result.
  */
 const props = defineProps<{ code: string | null; result: VoucherQuote | null; busy?: boolean }>()
 const emit = defineEmits<{ apply: [code: string]; remove: [] }>()
@@ -29,7 +29,7 @@ watch(
       </span>
       <button type="button" class="link" @click="emit('remove')">Gỡ mã</button>
     </div>
-    <!-- Không dùng <form>: ô này nằm trong form đặt mua. Enter áp mã thay vì gửi đơn. -->
+    <!-- No <form>: this sits inside the checkout form. Enter applies the code instead of placing the order. -->
     <div v-else class="flex gap-2">
       <label class="sr-only" for="voucher-code">Mã giảm giá</label>
       <input

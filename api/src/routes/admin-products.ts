@@ -32,13 +32,13 @@ import { parse } from '../http/validation.ts'
 
 const VariantParams = z.object({ id: z.uuid(), variantId: z.uuid() })
 
-/** Slug là unique constraint duy nhất của sản phẩm ngoài khóa chính. */
+/** Slug is the product's only unique constraint besides the primary key. */
 const slugTaken = () => conflictField('slug', 'Slug này đã có sản phẩm khác dùng')
 const skuTaken = () => conflictField('sku', 'SKU này đã có biến thể khác dùng')
 
 /**
- * Sản phẩm và biến thể. Xem cần `catalog.edit` hoặc `price.edit` (người chỉ sửa giá cũng phải thấy biến thể);
- * soạn sản phẩm, biến thể cần `catalog.edit`; đổi giá cần `price.edit`.
+ * Products and variants. Viewing needs `catalog.edit` or `price.edit` (price-only editors must see variants); editing
+ * products and variants needs `catalog.edit`; changing prices `price.edit`.
  */
 export function adminProductRoutes(prisma: Db) {
   return (
@@ -69,7 +69,7 @@ export function adminProductRoutes(prisma: Db) {
         }
         res.json(body)
       })
-      // Khai báo trước `/:id`. Tiêu đề là bản đang soạn: đây là màn hình nhân viên, không phải khách.
+      // Before `/:id`. Titles are the draft: this is a staff screen, not the customer's.
       .get('/policy-pages', async (_req, res) => {
         const pages = await prisma.contentPage.findMany({
           where: { kind: 'policy' },
@@ -117,7 +117,7 @@ export function adminProductRoutes(prisma: Db) {
           const before = await lockProduct(tx, id)
           if (input.categoryId !== before.categoryId) {
             const category = await lockCategory(tx, input.categoryId)
-            // Đổi nhóm hàng sẽ làm sai thuộc tính của mọi biến thể, nên nhóm hàng cố định từ lúc tạo.
+            // Changing the product type would break every variant's attributes, so it is fixed at creation.
             if (category.productType !== before.productType) {
               throw conflictField('categoryId', 'Chỉ chuyển được sang danh mục cùng nhóm hàng')
             }
@@ -151,7 +151,7 @@ export function adminProductRoutes(prisma: Db) {
         const created = await audited(prisma, req, (tx, audit) => createVariant(tx, audit, req, id, input))
         res.status(201).json(created)
       })
-      // Người chỉ có `price.edit` cũng dùng route này để đổi giá, gửi kèm các trường khác không đổi.
+      // Price-only editors also use this route to change prices, sending the other fields unchanged.
       .put('/:id/variants/:variantId', requirePermission('catalog.edit', 'price.edit'), async (req, res) => {
         const { id, variantId } = parse(VariantParams, req.params)
         const input = parse(VariantRequest, req.body)
@@ -166,7 +166,7 @@ type LockedProduct = Awaited<ReturnType<typeof lockProduct>>
 type VariantFields = Pick<ProductVariant, 'sku' | 'status' | 'sortOrder'> & { attributes: AttributeValues }
 type VariantPrice = { price: number | null; compareAtPrice: number | null }
 
-/** Tạo biến thể (route đã yêu cầu `catalog.edit`); gửi kèm giá cần thêm `price.edit` và ghi audit `price.change`. */
+/** Creates a variant (the route requires `catalog.edit`); a price also needs `price.edit` and writes `price.change`. */
 async function createVariant(
   tx: Prisma.TransactionClient,
   audit: Audit,
@@ -179,7 +179,7 @@ async function createVariant(
   const price = { price: input.price ?? null, compareAtPrice: input.compareAtPrice ?? null }
   const priced = price.price !== null || price.compareAtPrice !== null
   if (priced && !hasPermission(req, 'price.edit')) throw forbidden()
-  // Biến thể mới chưa có trên website: phiên bản đang xuất bản không có nó.
+  // A new variant is not on the website yet: the published version lacks it.
   await assertVariant(tx, product, others, null, fields, price, false)
 
   const created = await tx.productVariant
@@ -190,9 +190,9 @@ async function createVariant(
 }
 
 /**
- * Sửa biến thể. Đổi SKU, thuộc tính, trạng thái, thứ tự cần `catalog.edit`; gửi kèm giá khác giá hiện tại cần
- * `price.edit`, mỗi lần đổi giá ghi một bản audit `price.change` riêng, và biến thể đang có trên website thì
- * giá mới lên website ngay qua một phiên bản xuất bản mới.
+ * Updates a variant. SKU, attributes, status and order need `catalog.edit`; a price different from the current one
+ * needs `price.edit`, writes its own `price.change` audit, and for variants on the website goes live at once via a new
+ * published version.
  */
 async function updateVariant(
   tx: Prisma.TransactionClient,
@@ -258,7 +258,7 @@ async function updateVariant(
   return toAdminVariant(after)
 }
 
-/** Trường không phải giá sau khi áp `input` lên `before` (null khi tạo); thuộc tính kiểm theo schema dưới khóa. */
+/** Non-price fields after applying `input` to `before` (null on create); attributes are checked under the lock. */
 async function resolveFields(
   tx: Prisma.TransactionClient,
   product: LockedProduct,
@@ -276,7 +276,7 @@ async function resolveFields(
   return { others, fields }
 }
 
-/** Ràng buộc nghiệp vụ của biến thể sắp lưu; `onWebsite` là biến thể có trong phiên bản khách đang thấy. */
+/** Business rules of the variant about to be saved; `onWebsite` means it is in the version customers see. */
 async function assertVariant(
   tx: Prisma.TransactionClient,
   product: LockedProduct,
@@ -292,7 +292,8 @@ async function assertVariant(
   if (others.some((v) => isDeepStrictEqual(v.attributes, fields.attributes))) {
     throw conflictField('attributes', 'Sản phẩm đã có biến thể với tổ hợp thuộc tính này')
   }
-  // Tổ hợp đã kiểm dưới khóa sản phẩm; unique còn lại khi ghi chỉ có thể là SKU vừa được sản phẩm khác dùng.
+  // Combinations were checked under the product lock; the only unique left to hit is a SKU just taken by another
+  // product.
   if (fields.sku !== before?.sku && (await tx.productVariant.findUnique({ where: { sku: fields.sku } }))) {
     throw skuTaken()
   }
@@ -309,7 +310,7 @@ async function assertVariant(
   }
 }
 
-/** Danh mục sản phẩm được gắn vào, giữ khóa tới hết transaction để không bị xóa giữa chừng; không có thì 400. */
+/** The product's category, locked until the transaction ends so it is not deleted midway; missing gives 400. */
 async function lockCategory(tx: Prisma.TransactionClient, categoryId: string) {
   await tx.$executeRaw`SELECT 1 FROM "category" WHERE "id" = ${categoryId}::uuid FOR KEY SHARE`
   const category = await tx.category.findUnique({ where: { id: categoryId } })

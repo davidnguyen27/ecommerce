@@ -17,8 +17,8 @@ const conflict = (message: string, details?: Record<string, unknown>) =>
   new AppError(409, ErrorCode.CONFLICT, message, undefined, details)
 
 /**
- * Khóa đơn của mục cần đối soát `FOR UPDATE` (cùng khóa với ghi nhận thanh toán và hủy đơn), rồi đọc lại mục dưới khóa.
- * Mục lạ hay đã đóng thì ném lỗi.
+ * Locks the reconciliation item's order (same lock as payment and cancel), then rereads the item under the lock.
+ * Unknown or closed items throw.
  */
 async function lockOpenItem(tx: DbClient, itemId: string) {
   if (!UUID.test(itemId)) throw notFound()
@@ -31,12 +31,12 @@ async function lockOpenItem(tx: DbClient, itemId: string) {
 }
 
 /**
- * Khôi phục đơn đã hủy khi tiền về đủ: chỉ khi đơn đang `cancelled`, tổng đã nhận bằng đúng tổng phải trả và giữ lại được
- * đủ hàng. Đơn thành `processing` + `paid` như thanh toán bình thường, xếp email "đã nhận thanh toán". Tổng đã nhận khớp
- * tổng đơn nghĩa là mọi khoản của đơn đều đã tính vào, nên mọi mục còn mở của đơn cùng được đóng là `restored`.
- * Đơn có mục đã đóng "ngoài hệ thống" (có thể đã hoàn tiền tay) thì không khôi phục.
- * Đơn đặt trước thì so tiền cọc thay cho tổng phải trả, lấy lại suất thay cho giữ hàng, và thành `deposit_paid` kèm
- * email "đã nhận cọc".
+ * Restores a cancelled order once paid in full: only when `cancelled`, total received equals the amount due, and the
+ * stock can be reserved again. The order becomes `processing` + `paid` as for a normal payment, with the "payment
+ * received" email. Received matching the total means every payment is accounted for, so all its open items close as
+ * `restored`. Orders with an item closed "outside the system" (maybe refunded by hand) are not restored.
+ * Pre-orders compare against the deposit, take back allocation instead of reserving stock, and become `deposit_paid`
+ * with the "deposit received" email.
  */
 export async function restoreOrder(
   tx: DbClient,
@@ -51,8 +51,8 @@ export async function restoreOrder(
     include: { lines: { orderBy: { position: 'asc' } } },
   })
   if (order.status !== 'cancelled') throw conflict('Chỉ khôi phục được đơn đã hủy')
-  // Nhân viên đã hủy đơn lúc đã nhận tiền (M6a): quyết định hủy, mất cọc hay hoàn là có chủ đích, không đảo ngược bằng
-  // một khoản tiền về muộn. Khoản đó giải quyết bằng hoàn tiền hoặc ngoài hệ thống.
+  // Staff cancelled a paid order (M6a): cancel, forfeit or refund was deliberate, not reversed by late money. That
+  // money is handled by refund or outside the system.
   if (order.cancelCause) throw conflict('Đơn bị nhân viên hủy sau khi đã nhận tiền, không khôi phục được')
   const handledExternally = await tx.reconciliationItem.count({
     where: { orderId: order.id, resolution: 'handled_externally' },
@@ -60,10 +60,10 @@ export async function restoreOrder(
   if (handledExternally > 0) {
     throw conflict('Đơn có khoản tiền đã xử lý ngoài hệ thống, không khôi phục được')
   }
-  // Tiền đã (hoặc đang) trả lại cho khách thì đơn không còn đủ tiền để chạy tiếp.
+  // Money returned (or being returned) to the customer leaves the order short.
   const refunds = await tx.refund.count({ where: { orderId: order.id, status: { not: 'failed' } } })
   if (refunds > 0) throw conflict('Đơn có khoản hoàn tiền, không khôi phục được')
-  // Đơn đặt trước khôi phục về đã cọc bằng các khoản cọc; đơn hàng sẵn về đã trả đủ bằng các khoản trả đủ.
+  // Pre-orders restore to deposited from deposit payments; in-stock orders to paid from full payments.
   const preorder = order.kind === 'preorder'
   const due = preorder ? order.depositAmount! : order.total
   const { _sum } = await tx.paymentTransaction.aggregate({
@@ -101,7 +101,8 @@ export async function restoreOrder(
     data: {
       status: 'processing',
       paymentStatus,
-      // Thứ tự chia hàng tính từ lúc khôi phục: đơn không chen lên trước những người cọc trong lúc nó đã bị hủy.
+      // Allocation order counts from the restore: the order does not jump ahead of those who deposited while it was
+      // cancelled.
       ...(preorder && { depositPaidAt: new Date() }),
       cancelReason: null,
       cancelledAt: null,
@@ -144,8 +145,8 @@ export async function restoreOrder(
 }
 
 /**
- * Khôi phục giữ nguyên phần giảm đã chụp và không kiểm lại mã (spec M5): khách đã trả đúng số tiền ghi trên đơn. Khi vì
- * thế mà số lượt đã dùng (đã tính đơn vừa khôi phục) vượt tổng lượt của mã, trả thông tin để ghi vào sự kiện và audit.
+ * Restore keeps the snapshotted discount and does not recheck the voucher (spec M5): the customer paid what the order
+ * says. If uses (counting this order) then exceed the voucher's total, returns details for the event and audit.
  */
 async function voucherOverLimitOf(tx: DbClient, order: { voucherId: string | null; voucherCode: string | null }) {
   if (!order.voucherId) return null
@@ -159,9 +160,9 @@ async function voucherOverLimitOf(tx: DbClient, order: { voucherId: string | nul
 }
 
 /**
- * Đơn đặt trước đã hủy lấy lại suất của mình trong đợt, kể cả khi đợt đã đóng: khóa dòng suất `FOR UPDATE` như lúc đặt
- * trước, số đã dùng (không tính chính đơn này vì nó đang hủy) cộng số lượng của đơn không vượt suất. Không giữ hàng:
- * hàng đặt trước chỉ được giữ khi về kho (ADR 0013).
+ * A cancelled pre-order takes back its allocation, even if the campaign closed: locks the allocation row as at
+ * pre-order time; used (excluding this cancelled order) plus its quantity must fit. No stock reservation: pre-order
+ * stock is only reserved on arrival (ADR 0013).
  */
 async function retakeAllocation(tx: DbClient, order: { preorderCampaignId: string | null; lines: OrderLine[] }) {
   const campaignId = order.preorderCampaignId!
@@ -176,8 +177,8 @@ async function retakeAllocation(tx: DbClient, order: { preorderCampaignId: strin
 }
 
 /**
- * Giải quyết bằng hoàn tiền: tạo một khoản hoàn `pending` (`origin = reconciliation`) bằng số tiền của mục rồi đóng mục
- * `refunded`. Không đổi trạng thái đơn. Số tiền vượt số còn hoàn được thì 409 (`createRefund`). Trả mã đơn.
+ * Resolves by refund: creates a `pending` refund (`origin = reconciliation`) for the item amount, then closes the item
+ * as `refunded`. Order status is unchanged. Over the refundable amount gives 409 (`createRefund`). Returns the code.
  */
 export async function refundReconciliationItem(tx: DbClient, audit: Audit, itemId: string, staffId: string) {
   const item = await lockOpenItem(tx, itemId)
@@ -210,7 +211,7 @@ export async function refundReconciliationItem(tx: DbClient, audit: Audit, itemI
   return order.code
 }
 
-/** "Đã xử lý ngoài hệ thống" (hoàn tiền tay…): đóng mục với ghi chú, không đổi trạng thái đơn. */
+/** "Handled outside the system" (manual refund…): closes the item with a note, order status unchanged. */
 export async function resolveExternally(tx: DbClient, audit: Audit, itemId: string, staffId: string, note: string) {
   const item = await lockOpenItem(tx, itemId)
   await tx.reconciliationItem.update({

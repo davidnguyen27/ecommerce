@@ -23,8 +23,8 @@ fi
 TOTAL_STAGES=0
 
 _STAGE_INDEX=0
-# Chạy tiếp từ stage N (`bash scripts/deploy-demo.sh N`): các stage trước chỉ nạp giá trị đã lưu trong ENV_FILE,
-# không in, không hỏi, không mở trình duyệt.
+# Resume from stage N (`bash scripts/deploy-demo.sh N`): earlier stages only load values saved in ENV_FILE, without
+# printing, asking or opening the browser.
 _FROM=1
 _skipping() { (( _STAGE_INDEX > 0 && _STAGE_INDEX < _FROM )); }
 ENV_FILE="${ENV_FILE:-.env}"
@@ -160,7 +160,7 @@ ask_secret_match() {
       return 0
     fi
     warn "Đã nhận ${#value} ký tự nhưng sai dạng ($hint). Dán lại một lần."
-    # Bỏ giá trị cũ khỏi file để Enter không giữ lại giá trị sai.
+    # Drop the old value from the file so Enter does not keep a wrong one.
     if [[ -f "$ENV_FILE" ]]; then grep -v "^${key}=" "$ENV_FILE" > "$ENV_FILE.tmp" || true; cat "$ENV_FILE.tmp" > "$ENV_FILE"; rm -f "$ENV_FILE.tmp"; fi
   done
 }
@@ -231,9 +231,9 @@ finish() {
 
 run_wizard() {
 
-# Triển khai bản demo: web Netlify, API Render, DB Neon, ảnh Cloudflare R2 (ADR 0011, docs/deploy.md).
-# Chạy từ gốc repo: bash scripts/deploy-demo.sh. Giá trị ghi vào .env.deploy (đã gitignore), chạy lại thì Enter giữ giá trị cũ.
-# Tên mục trong dashboard các dịch vụ có thể đổi theo thời gian: nếu không thấy đúng tên, tìm mục tương tự.
+# Deploys the demo: web on Netlify, API on Render, DB on Neon, images on Cloudflare R2 (ADR 0011, docs/deploy.md).
+# Run from the repo root: bash scripts/deploy-demo.sh. Values go to .env.deploy (gitignored); on reruns Enter keeps them.
+# Dashboard item names may change over time: if a name is not found, look for a similar item.
 ENV_FILE=".env.deploy"
 DEFAULT_API_URL="https://atelier-demo-api.onrender.com"
 

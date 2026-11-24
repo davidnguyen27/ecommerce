@@ -30,7 +30,7 @@ import { exchangeOptions } from '../support/exchanges.ts'
 
 type Deps = Pick<AppDeps, 'prisma' | 'emails' | 'siteUrl' | 'storage'>
 
-/** Khách được xem những yêu cầu nào, và yêu cầu mới gắn vào đâu. */
+/** Which requests the customer may see, and where new requests attach. */
 type Scope = {
   where: Prisma.SupportRequestWhereInput
   owner: (input: { orderCode?: number }) => Promise<Pick<NewSupportRequest, 'order' | 'customer'>>
@@ -38,15 +38,15 @@ type Scope = {
 
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy yêu cầu')
 
-/** Mã yêu cầu từ URL; chuỗi không phải mã là 404, như mã không có yêu cầu nào. */
+/** Request code from the URL; a non-code string is 404, like a code with no request. */
 function parseRequestCode(code: string) {
   if (!/^\d{1,9}$/.test(code)) throw notFound()
   return Number(code)
 }
 
 /**
- * Yêu cầu hỗ trợ như khách thấy (spec M6b). Hai đường dùng chung một bộ route, chỉ khác `scope`: tài khoản khách thấy
- * yêu cầu của mình; người cầm link tra cứu đơn thấy yêu cầu của đơn đó. Yêu cầu của người khác là 404 như mã lạ.
+ * Support requests as customers see them (spec M6b). Two paths share one route set, differing only by `scope`: the
+ * customer account sees its own requests; an order lookup link holder sees that order's. Others' requests are 404.
  */
 function customerSupportRoutes({ prisma, emails, siteUrl, storage }: Deps, scopeOf: (req: Request) => Promise<Scope>) {
   const mail = { emails, siteUrl }
@@ -87,7 +87,7 @@ function customerSupportRoutes({ prisma, emails, siteUrl, storage }: Deps, scope
         const body: PublicSupportRequest = await toPublicSupport(storage, request)
         res.status(201).set('Cache-Control', 'no-store').json(body)
       })
-      // Biến thể đổi được của từng dòng đơn, cho form đổi hàng. Tài khoản khách chọn đơn bằng `?orderCode=`.
+      // Exchangeable variants per order line, for the exchange form. Accounts pick the order with `?orderCode=`.
       .get('/exchange-options', async (req, res) => {
         const scope = await scopeOf(req)
         const orderCode =
@@ -115,7 +115,8 @@ function customerSupportRoutes({ prisma, emails, siteUrl, storage }: Deps, scope
         const body: PublicSupportRequest = await toPublicSupport(storage, request)
         res.set('Cache-Control', 'no-store').json(body)
       })
-      // Ảnh gắn vào tin của khách: gửi tin trước, rồi tải từng ảnh vào tin đó (spec M6b ticket 02).
+      // Images attach to the customer's message: send the message first, then upload each image to it (spec M6b ticket
+      // 02).
       .post('/:requestCode/messages/:messageId/attachments', receiveSupportImage, async (req, res) => {
         const { where } = await scopeOf(req)
         const scoped = { ...where, code: parseRequestCode(String(req.params.requestCode)) }
@@ -136,12 +137,12 @@ function customerSupportRoutes({ prisma, emails, siteUrl, storage }: Deps, scope
   )
 }
 
-/** `/api/account/support-requests`: yêu cầu của khách đang đăng nhập; gắn được vào đơn của chính khách. */
+/** `/api/account/support-requests`: the signed-in customer's requests; may attach to their own orders. */
 export function accountSupportRoutes(deps: Deps) {
   return customerSupportRoutes(deps, async (req) => {
     const customerId = authSubject(req)
     return {
-      // Kể cả yêu cầu gửi qua link tra cứu khi đơn còn vãng lai, sau đó đơn mới gắn vào tài khoản.
+      // Including requests sent via a lookup link while the order was a guest order, later linked to the account.
       where: { OR: [{ customerId }, { order: { customerId } }] },
       owner: async ({ orderCode }) => {
         if (orderCode !== undefined) {
@@ -164,7 +165,7 @@ export function accountSupportRoutes(deps: Deps) {
   })
 }
 
-/** `/api/orders/:code/support-requests?token=…`: yêu cầu của đơn, cho người cầm link tra cứu (như xem đơn ở M3). */
+/** `/api/orders/:code/support-requests?token=…`: the order's requests, for lookup link holders (like viewing in M3). */
 export function orderSupportRoutes(deps: Deps) {
   return customerSupportRoutes(deps, async (req) => {
     const token = typeof req.query.token === 'string' ? req.query.token : undefined
@@ -178,8 +179,8 @@ export function orderSupportRoutes(deps: Deps) {
 }
 
 /**
- * `/api/support-requests?token=…`: yêu cầu của khách vãng lai không có đơn (chatbot chuyển nhân viên, M8), mở bằng token
- * trong email. Mỗi token chỉ thấy đúng yêu cầu của nó; không tạo yêu cầu mới qua đường này.
+ * `/api/support-requests?token=…`: requests of guests without an order (chatbot handoff, M8), opened with the emailed
+ * token. Each token sees only its own request; no new requests through this path.
  */
 export function contactSupportRoutes(deps: Deps) {
   return customerSupportRoutes(deps, async (req) => {

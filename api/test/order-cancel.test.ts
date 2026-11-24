@@ -8,7 +8,7 @@ import { bearer, createStaff } from './support/staff.ts'
 const MINUTE = 60_000
 const inMinutes = (minutes: number) => new Date(Date.now() + minutes * MINUTE)
 
-/** Cửa hàng đã có một đơn AM-40 chờ thanh toán (giữ 1 đôi trên 3). */
+/** A shop with one pending AM-40 order (1 of 3 pairs reserved). */
 async function pendingOrder(options?: Parameters<typeof shop>[0]) {
   const app = await shop(options)
   const res = await app.checkout()
@@ -19,9 +19,9 @@ async function pendingOrder(options?: Parameters<typeof shop>[0]) {
     const stock = await app.request.get('/api/admin/stock').query({ q: 'AM-40' }).set(bearer(app.token))
     return (stock.body.items as { reserved: number }[])[0]!.reserved
   }
-  // Job hết hạn không có endpoint: test gọi thẳng hàm job chạy với `now` ở tương lai, rồi kiểm qua HTTP.
+  // The expiry job has no endpoint: tests call it with a future `now`, then check via HTTP.
   const expire = (now: Date) => expireOverdueOrders(app.expireDeps, now)
-  /** Sự kiện "cancelled" trong lịch sử đơn ở trang quản trị. */
+  /** "cancelled" events in the admin order history. */
   const cancelEvents = async (orderCode = code) => {
     const res = await app.request.get(`/api/admin/orders/${orderCode}`).set(bearer(app.token))
     expect(res.status).toBe(200)
@@ -35,7 +35,7 @@ describe('hết hạn giữ hàng', () => {
     const { code, prisma } = await pendingOrder()
     const { id, reservedUntil } = await prisma.order.findUniqueOrThrow({ where: { code } })
 
-    // Job chạy sau 15 phút, ngoài thời gian của test: kiểm hàng đợi pg-boss bằng SQL.
+    // The job runs after 15 minutes, beyond the test: check the pg-boss queue with SQL.
     const jobs = await prisma.$queryRaw<{ data: unknown; startAfter: Date }[]>`
       SELECT "data", "start_after" AS "startAfter" FROM "pgboss"."job" WHERE "name" = 'expire-order'`
     expect(jobs).toEqual([{ data: { orderId: id }, startAfter: reservedUntil }])
@@ -62,7 +62,7 @@ describe('hết hạn giữ hàng', () => {
 
   it('chạy lại thì không đổi gì: không nhả thêm hàng, không hủy link lần nữa, không thêm sự kiện', async () => {
     const { code, order, reserved, expire, payments, checkout, cancelEvents } = await pendingOrder()
-    // Một đơn khác còn giữ hàng: nhả hai lần thì số giữ của đơn này sẽ sai.
+    // Another order still holds stock: a double release would break this order's reserved count.
     expect((await checkout()).status).toBe(201)
     await expire(inMinutes(16))
     const before = (await order()).body
@@ -91,7 +91,7 @@ describe('hết hạn giữ hàng', () => {
     expect((await order()).body).toMatchObject({ status: 'cancelled', cancelReason: 'expired' })
     const paidView = await request.get(`/api/orders/${paid.body.code}`).query({ token: paid.body.token })
     expect(paidView.body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
-    // Đơn đã trả vẫn giữ hàng tới khi bàn giao: chỉ phần của đơn hết hạn được nhả.
+    // A paid order keeps its reservation until handover: only the expired order's share is released.
     expect(await reserved()).toBe(1)
   })
 
@@ -230,7 +230,7 @@ describe('khách hủy đơn chưa thanh toán', () => {
   })
 
   it('trong tài khoản: hủy được đơn của mình, đơn của người khác là 404', async () => {
-    // Đơn vãng lai của `pendingOrder` đứng cạnh đơn đặt khi đăng nhập.
+    // `pendingOrder`'s guest order sits next to the order placed while signed in.
     const { code: guestCode, request, prisma, checkout, reserved, cancelEvents } = await pendingOrder()
     const mine = (await register(request)).body.accessToken as string
     const other = (await register(request, { email: 'nguoi-khac@example.com' })).body.accessToken as string

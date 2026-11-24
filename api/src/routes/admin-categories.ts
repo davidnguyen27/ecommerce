@@ -24,7 +24,7 @@ const slugTaken = () =>
     { path: 'slug', message: 'Slug đã được dùng' },
   ])
 
-/** Quản lý cây danh mục; mọi route cần `catalog.edit`. */
+/** Category tree management; every route needs `catalog.edit`. */
 export function adminCategoryRoutes(prisma: Db) {
   return Router()
     .use(requirePermission('catalog.edit'))
@@ -81,16 +81,16 @@ export function adminCategoryRoutes(prisma: Db) {
     .delete('/:id', async (req, res) => {
       const { id } = parse(CategoryParams, req.params)
       await audited(prisma, req, async (tx, audit) => {
-        // Cùng khóa với tạo và đổi cha, để không có danh mục con nào được gắn vào giữa lúc kiểm và lúc xóa.
+        // Same lock as create and reparent, so no child is attached between the check and the delete.
         await lockTree(tx)
-        // Khóa dòng danh mục: sản phẩm đang được gắn vào nó (khóa `FOR KEY SHARE`) thì chờ nhau, không lọt qua bước đếm.
+        // Lock the category row: products being attached to it (`FOR KEY SHARE`) wait, so none slips past the count.
         await tx.$executeRaw`SELECT 1 FROM "category" WHERE "id" = ${id}::uuid FOR UPDATE`
         const before = await tx.category.findUnique({ where: { id } })
         if (!before) throw categoryNotFound()
         if (await tx.category.count({ where: { parentId: id } })) {
           throw new AppError(409, ErrorCode.CONFLICT, 'Danh mục còn danh mục con nên không xóa được; hãy ẩn nó')
         }
-        // Phiên bản đã xuất bản (kể cả phiên bản cũ) cũng tham chiếu danh mục, và không sửa được.
+        // Published versions (old ones too) also reference the category and cannot be edited.
         if (
           (await tx.product.count({ where: { categoryId: id } })) ||
           (await tx.productVersion.count({ where: { categoryId: id } }))
@@ -113,7 +113,9 @@ const CategoryParams = z.object({ id: z.uuid() })
 
 const categoryNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy danh mục')
 
-/** Sửa một danh mục kèm audit trước/sau. `change` trả `null` khi không có gì đổi: khi đó không ghi gì. */
+/**
+ * Updates a category with before/after audit. `change` returns `null` when nothing changes: then nothing is written.
+ */
 async function updateCategory(
   prisma: Db,
   req: Request,

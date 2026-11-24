@@ -18,13 +18,13 @@ const image = (width = 40, height = 30, format: 'jpeg' | 'png' | 'webp' = 'png')
     .toFormat(format)
     .toBuffer()
 
-/** File trong storage của test theo URL ký (`memory://private/<key>?expires=…`). */
+/** The file in test storage for a signed URL (`memory://private/<key>?expires=…`). */
 const stored = (storage: InMemoryStorage, url: string) =>
   storage.objects.get(`private/${url.slice('memory://private/'.length).split('?')[0]}`)
 
 /**
- * Một đơn vãng lai có một yêu cầu hỗ trợ; `attach(messageId, file)` tải ảnh vào tin qua link tra cứu đơn,
- * `staffAttach` qua trang quản trị bằng nhân viên bán hàng.
+ * A guest order with one support request; `attach(messageId, file)` uploads an image to a message via the order lookup
+ * link, `staffAttach` via the admin page as the sales clerk.
  */
 async function withRequest() {
   const app = await shop()
@@ -184,7 +184,7 @@ describe('giới hạn mỗi yêu cầu', () => {
   it('đủ 20 ảnh trong yêu cầu thì ảnh tiếp theo bị từ chối', async () => {
     const { attach, firstMessage, prisma, view } = await withRequest()
     const request = await prisma.supportRequest.findUniqueOrThrow({ where: { code: view.code } })
-    // 20 ảnh rải trên 4 tin (mỗi tin tối đa 5), dựng thẳng bằng prisma cho nhanh.
+    // 20 images over 4 messages (5 each at most), built with prisma for speed.
     for (let m = 0; m < 4; m++) {
       const message = await prisma.supportMessage.create({
         data: { requestId: request.id, author: 'customer', body: `Tin ${m}` },

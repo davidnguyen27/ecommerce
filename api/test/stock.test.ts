@@ -182,8 +182,8 @@ describe('đồng thời', () => {
   })
 
   it('hai lần giảm song song mà cộng lại vượt tồn thì chỉ một lần được ghi, tồn không âm', async () => {
-    // Qua API, lần giảm nào cũng kèm expectedOnHand nên không chạm tới chốt tồn âm; đơn hàng (M3) sẽ giảm không kèm số
-    // này, nên test gọi thẳng changeStock để giữ bất biến đó.
+    // Through the API every decrease sends expectedOnHand, so it never reaches the negative-stock guard; orders (M3)
+    // will decrease without it, so the test calls changeStock directly to hold that invariant.
     const { request, token, prisma, v40 } = await warehouse()
     await adjust(request, token, { variantId: v40.id, reason: 'stocktake', countedQuantity: 3, expectedOnHand: 0 })
     const { id: actorId } = await prisma.staff.findUniqueOrThrow({ where: { email: OWNER.email } })

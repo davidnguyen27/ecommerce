@@ -1,25 +1,28 @@
 import { z } from 'zod'
 import { ProvinceCode } from './regions.ts'
 
-/** Số tiền VND, số nguyên không âm. */
+/** VND amount, non-negative integer. */
 const Vnd = z.number().int().min(0).max(1_000_000_000)
 
 export const ProvinceShippingFee = z.object({ provinceCode: ProvinceCode, fee: Vnd })
 export type ProvinceShippingFee = z.infer<typeof ProvinceShippingFee>
 
 /**
- * Cấu hình phí giao như trang quản trị đọc. `defaultFee` là `null` khi chưa cấu hình: lúc đó cửa hàng chưa nhận đơn.
- * `provinceFees` theo mã tỉnh/thành tăng dần.
+ * Shipping config as the admin page reads it. `defaultFee` is `null` when unset: the shop then takes no orders.
+ * `provinceFees` sorted by province code.
  */
 export const ShippingFeeConfig = z.object({
   defaultFee: Vnd.nullable(),
-  /** Tổng tiền hàng từ mức này trở lên thì phí giao bằng 0; `null` là không có miễn phí giao. */
+  /** Goods total at or above this ships free; `null` means no free shipping. */
   freeShippingThreshold: Vnd.nullable(),
   provinceFees: z.array(ProvinceShippingFee),
 })
 export type ShippingFeeConfig = z.infer<typeof ShippingFeeConfig>
 
-/** Body của `PUT /api/admin/shipping-fees`: thay cả cấu hình; mức mặc định bắt buộc, mỗi tỉnh/thành tối đa một mức riêng. */
+/**
+ * Body of `PUT /api/admin/shipping-fees`: replaces the whole config; default fee required, at most one fee per
+ * province.
+ */
 export const ShippingFeeConfigRequest = z.object({
   defaultFee: Vnd,
   freeShippingThreshold: Vnd.nullable(),
@@ -39,8 +42,8 @@ export const ShippingFeeConfigRequest = z.object({
 export type ShippingFeeConfigRequest = z.infer<typeof ShippingFeeConfigRequest>
 
 /**
- * Phí giao của một đơn: mức riêng của tỉnh/thành thắng mức mặc định; tổng tiền hàng từ ngưỡng miễn phí trở lên thì 0.
- * Chỉ gọi khi đã có mức mặc định.
+ * An order's shipping fee: the province fee beats the default; goods at or above the free threshold give 0. Call only
+ * once a default fee exists.
  */
 export function shippingFeeFor(
   config: { defaultFee: number; freeShippingThreshold: number | null; provinceFees: readonly ProvinceShippingFee[] },

@@ -1,10 +1,10 @@
 import { PREORDER_POLICY_SLUG, PRIVACY_POLICY_SLUG } from '@ecommerce/shared'
 import type { DbClient } from '../db.ts'
 
-/** `include` lấy phiên bản mới nhất của trang. */
+/** `include` for the page's latest version. */
 export const LATEST_VERSION = { orderBy: { version: 'desc' }, take: 1 } as const
 
-/** Trang kèm phiên bản mới nhất (nếu đã xuất bản), đủ để biết trạng thái. */
+/** A page with its latest version (if published), enough to know its status. */
 export function findPageWithLatest(db: DbClient, id: string) {
   return db.contentPage.findUnique({ where: { id }, include: { versions: LATEST_VERSION } })
 }
@@ -14,8 +14,8 @@ export function listPagesWithLatest(db: DbClient) {
 }
 
 /**
- * Phiên bản đang xuất bản của trang theo slug, hoặc `null` khi trang chưa xuất bản hay không có.
- * Module khác dùng hàm này để lưu tham chiếu tới đúng phiên bản khách đã thấy, ví dụ lời đồng ý chính sách bảo mật.
+ * The published version of the page by slug, or `null` when unpublished or missing. Other modules use it to store a
+ * reference to the exact version the customer saw, e.g. privacy policy consent.
  */
 export function findPublishedVersion(db: DbClient, slug: string) {
   return db.contentPageVersion.findFirst({
@@ -25,19 +25,19 @@ export function findPublishedVersion(db: DbClient, slug: string) {
   })
 }
 
-/** Phiên bản hiện hành của chính sách bảo mật; lời đồng ý của khách lưu id phiên bản này. */
+/** Current privacy policy version; customer consent stores this version's id. */
 export async function findCurrentPrivacyPolicy(db: DbClient) {
   const version = await findPublishedVersion(db, PRIVACY_POLICY_SLUG)
   return version?.page.kind === 'policy' ? version : null
 }
 
-/** Phiên bản hiện hành của chính sách đặt trước; đơn đặt trước lưu id phiên bản này cùng các chính sách khác. */
+/** Current pre-order policy version; pre-orders store its id along with the other policies. */
 export async function findCurrentPreorderPolicy(db: DbClient) {
   const version = await findPublishedVersion(db, PREORDER_POLICY_SLUG)
   return version?.page.kind === 'policy' ? version : null
 }
 
-/** Các trang đã xuất bản, mỗi trang kèm phiên bản đang xuất bản. */
+/** Published pages, each with its published version. */
 export async function listPublishedPages(db: DbClient) {
   const pages = await db.contentPage.findMany({
     where: { versions: { some: {} } },

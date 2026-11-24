@@ -19,7 +19,7 @@ const formErrors = ref<FieldError[]>([])
 const isSaving = ref(false)
 const errorAt = (path: string) => formErrors.value.find((f) => f.path === path)?.message
 
-// Tỉnh/thành sắp theo tên để dễ tìm trong danh sách chọn.
+// Provinces sorted by name to find them easily in the picker.
 const provinceOptions = [...PROVINCES].sort((a, b) => a.name.localeCompare(b.name, 'vi'))
 const usedCodes = computed(() => new Set(form.value.provinceFees.map((f) => f.provinceCode)))
 

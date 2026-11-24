@@ -25,7 +25,7 @@ type ProductSpec = {
   status?: 'published' | 'draft' | 'archived'
 }
 
-/** Owner đã đăng nhập; thương hiệu Nike, Chanel; danh mục Sneaker > Chạy bộ (giày dép) và Nước hoa nữ (nước hoa). */
+/** Signed-in owner; brands Nike, Chanel; categories Sneaker > Chạy bộ (footwear) and Nước hoa nữ (fragrance). */
 async function shop() {
   const app = await appWithOwner()
   const { accessToken: token } = await login(app.request, OWNER.email, OWNER.password)
@@ -57,7 +57,9 @@ async function shop() {
     ).id,
   }
 
-  /** Tạo sản phẩm qua API admin, đủ biến thể và ảnh, rồi đưa về trạng thái cần (mặc định xuất bản). */
+  /**
+   * Creates a product via the admin API with variants and image, then sets the wanted status (published by default).
+   */
   async function add(spec: ProductSpec) {
     const product = await post(app.request, token, '/api/admin/products', {
       brandId: brands[(spec.brand ?? 'nike') as keyof typeof brands],

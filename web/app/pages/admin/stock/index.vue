@@ -62,7 +62,7 @@ function goTo(page: number) {
 const lastPage = computed(() => Math.max(1, Math.ceil((result.value?.total ?? 0) / PAGE_SIZE)))
 const attributesText = (item: StockItem) => Object.values(item.attributes).flat().join(' · ')
 
-// Điều chỉnh: form giữ tồn lúc mở, để API từ chối khi tồn đã đổi trong lúc nhân viên đang đếm.
+// Adjustment: the form keeps the on-hand value at open, so the API rejects it if stock changed while counting.
 
 type AdjustmentForm = {
   item: StockItem
@@ -89,7 +89,7 @@ const AMOUNT_MIN = { count: 0, decrease: 1, signed: undefined } as const
 
 const inputMode = computed(() => ADJUSTMENT_INPUT[form.value?.reason ?? 'stocktake'].mode)
 
-/** Tồn sau khi lưu, để nhân viên thấy trước kết quả; `null` khi chưa nhập số. */
+/** Stock after saving, so staff see the result first; `null` before a number is entered. */
 const preview = computed(() => {
   const f = form.value
   if (!f || f.amount === null || Number.isNaN(f.amount)) return null
@@ -116,7 +116,7 @@ async function saveAdjustment() {
   } catch (err) {
     formErrors.value = apiFieldErrors(err)
     error.value = apiErrorMessage(err)
-    // Tồn đã đổi: form nhận số tồn mới và xóa số đã nhập, để nhân viên đếm lại thay vì gửi lại số cũ.
+    // Stock changed: the form takes the new on-hand value and clears the entry, so staff recount instead of resending.
     const onHand = apiErrorDetails(err)?.onHand
     if (typeof onHand === 'number') {
       f.expectedOnHand = onHand

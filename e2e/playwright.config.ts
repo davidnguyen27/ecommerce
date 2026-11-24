@@ -1,21 +1,21 @@
-// E2E bằng trình duyệt thật trên stack của `pnpm smoke --keep` (http://localhost:8081), cổng thanh toán giả lập.
-// Chạy: pnpm smoke --keep && pnpm e2e; xong thì `docker compose -p ecommerce-smoke down -v`.
-// Trình duyệt: Chromium của Playwright (`pnpm --filter @ecommerce/e2e exec playwright install chromium`).
-// Máy đã có Edge thì chạy được không cần tải: E2E_CHANNEL=msedge pnpm e2e.
-// Một lượt đặt 7 lần (mua hàng 1, đặt trước 1, mã giảm giá 3, hoàn tiền 2), quá giới hạn 5 lần đặt mỗi IP mỗi giờ:
-// global-setup và spec hoàn tiền xóa bộ đếm của stack smoke (support/rate-limit.ts, cần Docker CLI), nên chạy lại trên
-// cùng stack được. Đăng nhập giới hạn 10 lần mỗi email trong 15 phút.
+// Real-browser E2E on the `pnpm smoke --keep` stack (http://localhost:8081), with the payment simulator.
+// Run: pnpm smoke --keep && pnpm e2e; then `docker compose -p ecommerce-smoke down -v`.
+// Browser: Playwright's Chromium (`pnpm --filter @ecommerce/e2e exec playwright install chromium`).
+// With Edge installed, no download is needed: E2E_CHANNEL=msedge pnpm e2e.
+// One run places 7 orders (purchase 1, pre-order 1, voucher 3, refund 2), over the 5 per IP per hour limit:
+// global-setup and the refund spec clear the smoke stack's counters (support/rate-limit.ts, needs the Docker CLI), so
+// reruns on the same stack work. Sign-in is limited to 10 per email per 15 minutes.
 import { defineConfig, devices } from '@playwright/test'
 import { BASE_URL } from './support/stack.ts'
 
 export default defineConfig({
   testDir: './tests',
   globalSetup: './support/global-setup.ts',
-  // Các kịch bản dùng chung một stack và một biến thể còn ít hàng, nên chạy tuần tự.
+  // Scenarios share one stack and a low-stock variant, so they run serially.
   workers: 1,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  // Không retry, như các job CI khác: E2E đỏ là có lỗi cần xem trace.
+  // No retries, like the other CI jobs: a red E2E is a bug to inspect via the trace.
   retries: 0,
   timeout: 60_000,
   expect: { timeout: 10_000 },

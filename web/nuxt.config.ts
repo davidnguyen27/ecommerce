@@ -1,5 +1,5 @@
-// Cache ngắn ở server Nuxt cho trang khách đọc nhiều; xuất bản hoặc lưu trữ hiện ra chậm nhất sau chừng này giây.
-// Khóa cache gồm cả query (`?sku=`, bộ lọc); trang lỗi không được cache.
+// Short Nuxt server cache for heavily read customer pages; publishes or archives show within this many seconds.
+// The cache key includes the query (`?sku=`, filters); error pages are not cached.
 const SHORT_CACHE = { swr: 60 }
 
 export default defineNuxtConfig({
@@ -32,11 +32,11 @@ export default defineNuxtConfig({
     ],
   },
   runtimeConfig: {
-    // Địa chỉ API mà server Nuxt gọi khi render SSR (trong mạng nội bộ Docker).
-    // Ghi đè bằng NUXT_API_BASE.
+    // API address the Nuxt server calls during SSR (inside the Docker network).
+    // Override with NUXT_API_BASE.
     apiBase: 'http://localhost:3001',
     public: {
-      // Gốc URL công khai của website, cho canonical, Open Graph, sitemap. Ghi đè bằng NUXT_PUBLIC_SITE_URL.
+      // Public website base URL, for canonical, Open Graph, sitemap. Override with NUXT_PUBLIC_SITE_URL.
       siteUrl: 'http://localhost',
     },
   },

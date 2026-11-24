@@ -28,7 +28,7 @@ function toAdmin({ productType, attributes, updatedAt }: LoadedSchema): AdminAtt
   return { productType, attributes, updatedAt: updatedAt.toISOString() }
 }
 
-/** Xem và sửa schema thuộc tính của nhóm hàng; mọi route cần `catalog.edit`. */
+/** View and edit product type attribute schemas; every route needs `catalog.edit`. */
 export function adminAttributeSchemaRoutes(prisma: Db) {
   return Router()
     .use(requirePermission('catalog.edit'))

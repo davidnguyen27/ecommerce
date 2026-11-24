@@ -1,4 +1,4 @@
-// Tạo owner đầu tiên lúc cài đặt. Chạy lại với cùng email thì không tạo thêm và không đổi mật khẩu.
+// Creates the first owner at install. Rerunning with the same email creates nothing and keeps the password.
 // OWNER_EMAIL=... OWNER_PASSWORD=... OWNER_NAME=... pnpm seed:owner
 import { z } from 'zod'
 import { seedOwner } from '../auth/staff.ts'

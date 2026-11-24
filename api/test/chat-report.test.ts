@@ -27,7 +27,7 @@ describe('báo cáo chatbot', () => {
       (await request.get('/api/admin/reports/chatbot').query(query).set(bearer(accountant.accessToken))).status,
     ).toBe(403)
     expect((await report(query)).status).toBe(200)
-    // Các báo cáo M7 vẫn chỉ cần report.view.
+    // M7 reports still only need report.view.
     expect(
       (await request.get('/api/admin/reports/revenue').query(query).set(bearer(accountant.accessToken))).status,
     ).toBe(200)
@@ -79,7 +79,7 @@ describe('báo cáo chatbot', () => {
   it('cuộc mở lúc 23:30 giờ Việt Nam thuộc đúng ngày đó; kỳ không có cuộc thì tỷ lệ chuyển là null', async () => {
     const { request, prisma, report } = await reportApp(new ScriptedLlm())
     const id = (await request.post('/api/chat/messages').send({ content: 'Có túi đen không?' })).body.conversationId
-    // Không có API đổi thời điểm: dời cuộc và các tin về 23:30 giờ VN ngày 1/11 (16:30 UTC).
+    // No API changes timestamps: move the conversation and messages to 23:30 Vietnam time on 1/11 (16:30 UTC).
     const at = new Date('2026-11-01T16:30:00Z')
     await prisma.chatConversation.update({ where: { id }, data: { createdAt: at, lastMessageAt: at } })
     await prisma.chatMessage.updateMany({ where: { conversationId: id }, data: { createdAt: at } })

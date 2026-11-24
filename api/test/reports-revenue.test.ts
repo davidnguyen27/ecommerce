@@ -8,7 +8,7 @@ import { adjust } from './support/stock.ts'
 
 const SHIPMENT = { carrier: 'Giao Hàng Nhanh', trackingNumber: 'GHN1' }
 const DAY = 24 * 60 * 60_000
-/** Ngày lịch theo giờ Việt Nam, `days` ngày tính từ hôm nay. */
+/** Vietnam-time calendar day, `days` days from today. */
 const vnDate = (days = 0) => new Date(Date.now() + 7 * 60 * 60_000 + days * DAY).toISOString().slice(0, 10)
 
 type Figures = {
@@ -48,8 +48,8 @@ const revenue = async (request: Request, token: string, query: Record<string, st
 }
 
 /**
- * Cửa hàng có cổng giả lập (AM-40 giá 2.000.000, còn 3 đôi; phí giao 30.000). `delivered` đặt đơn vãng lai, trả đủ,
- * chuẩn bị, bàn giao, đã giao. `today()` là báo cáo của riêng hôm nay.
+ * A shop with the simulator (AM-40 at 2,000,000, 3 pairs; 30,000 shipping). `delivered` places a guest order, pays,
+ * prepares, hands over, delivers. `today()` is the report for today only.
  */
 async function revenueShop() {
   const app = await shop({ simulator: true })
@@ -88,7 +88,9 @@ async function revenueShop() {
   return { ...app, step, paidOrder, handedOver, delivered, support, report, today }
 }
 
-/** Đơn 2 đôi đã giao; khách trả 1 đôi, kho nhập lại tồn, nhân viên đề xuất hoàn 2.000.000 (đang chờ). */
+/**
+ * A delivered 2-pair order; the customer returns 1 pair, it is restocked, staff propose a 2,000,000 refund (pending).
+ */
 async function proposeReturnRefund(app: Awaited<ReturnType<typeof revenueShop>>) {
   const placed = await app.delivered(2)
   const asked = await app.request
@@ -109,7 +111,7 @@ async function proposeReturnRefund(app: Awaited<ReturnType<typeof revenueShop>>)
   return { refundId: proposed.body.refunds[0].id as string, orderCode: placed.code }
 }
 
-/** Kế toán ghi đã chuyển khoản cho một khoản hoàn: khoản hoàn xong lúc này. */
+/** Accounting records the transfer for a refund: it completes now. */
 async function executeManual(app: Awaited<ReturnType<typeof revenueShop>>, refundId: string) {
   const res = await app.request
     .post(`/api/admin/refunds/${refundId}/manual`)
@@ -245,12 +247,12 @@ describe('báo cáo doanh thu', () => {
 
     await executeManual(app, refundId)
     expect(await app.today()).toMatchObject({ gross: 4_000_000, returns: 2_000_000, net: 2_000_000 })
-    // Hàng trả lại không chia xuống nhóm hàng hay SKU.
+    // Returns are not split down to product type or SKU.
     const breakdown = await app.report({ from: vnDate(), to: vnDate() })
     expect(breakdown.byProductType).toEqual([{ productType: 'footwear', quantity: 2, gross: 4_000_000 }])
     expect(breakdown.topSkus).toEqual([expect.objectContaining({ sku: 'AM-40', quantity: 2, gross: 4_000_000 })])
 
-    // Hoàn xong hôm qua: hôm qua có hàng trả lại mà không có đơn giao, hôm nay chỉ còn doanh thu gộp.
+    // Refund completed yesterday: yesterday has returns without deliveries, today only gross revenue.
     await app.prisma.refund.update({ where: { id: refundId }, data: { completedAt: new Date(Date.now() - DAY) } })
     const twoDays = await app.report({ from: vnDate(-1), to: vnDate() })
     expect(twoDays.rows.map((r) => [r.gross, r.returns, r.net])).toEqual([
@@ -262,7 +264,7 @@ describe('báo cáo doanh thu', () => {
   it('khoản hoàn trả hàng tạo lại sau khi thất bại vẫn là hàng trả lại; khoản thất bại không trừ', async () => {
     const app = await revenueShop()
     const { refundId, orderCode } = await proposeReturnRefund(app)
-    // Dựng trạng thái: cổng báo hoàn thất bại.
+    // Set up the state: the gateway reports a failed refund.
     const transaction = await app.prisma.paymentTransaction.findFirstOrThrow({ where: { order: { code: orderCode } } })
     const owner = await app.prisma.staff.findFirstOrThrow()
     await app.prisma.refund.update({
@@ -332,7 +334,7 @@ describe('báo cáo doanh thu', () => {
   })
 })
 
-/** Thêm vào cửa hàng một nước hoa Dior đã xuất bản: SAUVAGE-60 giá 2.750.000, còn 5 chai. */
+/** Adds a published Dior fragrance to the shop: SAUVAGE-60 at 2,750,000, 5 bottles. */
 async function addPerfume(app: Awaited<ReturnType<typeof revenueShop>>) {
   const { request, token, policy } = app
   const created = async (path: string, body: Record<string, unknown>) => {

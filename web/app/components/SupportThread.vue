@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PublicSupportRequest } from '@ecommerce/shared'
 
-/** Một yêu cầu hỗ trợ như khách thấy: chuỗi tin, trạng thái, ô trả lời (spec M6b). Gửi tin xong emit yêu cầu mới. */
+/** A support request as customers see it: thread, status, reply box (spec M6b). Emits the new request after sending. */
 const props = defineProps<{ request: PublicSupportRequest; client: SupportClient }>()
 const emit = defineEmits<{ update: [request: PublicSupportRequest] }>()
 
@@ -18,7 +18,7 @@ async function send() {
     const said = await props.client.say(props.request.code, message.value)
     emit('update', said)
     message.value = ''
-    // Ảnh gắn vào tin vừa gửi: tin cuối cùng là của khách.
+    // Images attach to the message just sent: the last message is the customer's.
     const own = said.messages.at(-1)!.id
     const uploaded = await attachAll((file) => props.client.attach(said.code, own, file), images.value)
     images.value = []
