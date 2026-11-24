@@ -11,32 +11,32 @@ import { InMemoryStorage } from '../../src/adapters/storage.ts'
 import { Jobs } from '../../src/jobs/jobs.ts'
 import { InMemoryPaymentGateway, SimulatorPaymentGateway, type PaymentGateway } from '../../src/payments/gateway.ts'
 
-/** Gốc URL website trong link của email gửi ra từ test. */
+/** Website base URL in links of emails sent from tests. */
 export const SITE_URL = 'https://shop.test'
 
-/** `vnp_HashSecret` của test (không phải khóa thật hay khóa sandbox); test tự ký IPN bằng khóa này. */
+/** The test `vnp_HashSecret` (not a real or sandbox key); tests sign IPNs with it. */
 export const VNPAY_HASH_SECRET = 'test-vnpay-hash-secret'
 
 type Options = {
-  /** Ghi đè URL DB, ví dụ để giả lập mất kết nối. */
+  /** Overrides the DB URL, e.g. to simulate a lost connection. */
   databaseUrl?: string
-  /** Dùng cổng giả lập như khi chạy local thay cho bản trong bộ nhớ (`payments` khi đó không được app dùng). */
+  /** Use the simulator as when running locally instead of the in-memory one (`payments` is then unused by the app). */
   simulator?: boolean
-  /** Cổng thanh toán khác cho app dùng, ví dụ VNPAY trên HTTP giả (`payments` khi đó không được app dùng). */
+  /** Another payment gateway for the app, e.g. VNPAY over fake HTTP (`payments` is then unused by the app). */
   gateway?: PaymentGateway
-  /** `trust proxy` như `TRUST_PROXY` của bản deploy (ADR 0011); không đặt thì giữ mặc định của app. */
+  /** `trust proxy` like the deploy's `TRUST_PROXY` (ADR 0011); unset keeps the app default. */
   trustProxy?: string | number
-  /** Model của chatbot, thường là `ScriptedLlm`; không đặt thì như máy chủ chưa có khóa. */
+  /** The chatbot model, usually `ScriptedLlm`; unset means the server has no key. */
   llm?: LlmClient
 }
 
 /**
- * Dựng app in-process trên một DB sạch clone từ template.
- * Storage và mailer là bản giả trong bộ nhớ; log JSON được giữ lại để đọc.
+ * Builds the in-process app on a clean DB cloned from the template. Storage and mailer are in-memory fakes; JSON logs
+ * are kept for reading.
  */
 export async function createTestApp(options: Options = {}) {
   const databaseUrl = options.databaseUrl ?? (await createCleanDatabase())
-  // Pool nhỏ: các file test chạy song song trên một container, mỗi test một app.
+  // Small pool: test files run in parallel on one container, one app per test.
   const prisma = createPrisma(databaseUrl, { maxConnections: 3 })
 
   const lines: string[] = []
@@ -52,8 +52,8 @@ export async function createTestApp(options: Options = {}) {
   const mailer = new InMemoryMailer()
   const storage = new InMemoryStorage()
   const jwtSecret = randomBytes(32).toString('base64url')
-  // Hàng đợi job thật trên DB của test; worker gửi thư vào mailer giả.
-  // DB bị ghi đè là DB giả lập hỏng, nên không khởi động worker trên đó.
+  // A real job queue on the test DB; the worker sends mail to the fake mailer.
+  // An overridden DB is a deliberately broken one, so no worker starts on it.
   const payments = new InMemoryPaymentGateway()
   const gateway = options.gateway ?? (options.simulator ? new SimulatorPaymentGateway(SITE_URL) : payments)
   const jobs = new Jobs({
@@ -88,17 +88,17 @@ export async function createTestApp(options: Options = {}) {
 
   return {
     request: supertest(app),
-    /** Chỉ để dựng dữ liệu ban đầu; hành vi thì kiểm tra qua HTTP. */
+    /** Only for setting up initial data; behavior is checked over HTTP. */
     prisma,
-    /** Để test tự ký token sai audience hoặc đã hết hạn. */
+    /** Lets tests sign tokens with the wrong audience or already expired. */
     jwtSecret,
     mailer,
     storage,
-    /** Cổng thanh toán giả: link đã tạo, đã hủy, trạng thái truy vấn, lỗi khi tạo link. */
+    /** The fake payment gateway: created and cancelled links, query status, link creation errors. */
     payments,
-    /** Logger của app, để test gọi thẳng hàm job. */
+    /** The app logger, for tests calling job functions directly. */
     logger,
-    /** Phụ thuộc của hàm hết hạn, để test gọi thẳng job với `now` tương lai. */
+    /** Dependencies of the expiry function, for tests calling the job with a future `now`. */
     expireDeps: { prisma, payments: gateway, logger, emails: jobs, siteUrl: SITE_URL },
     logs: () => lines.map((line) => JSON.parse(line) as Record<string, unknown>),
   }

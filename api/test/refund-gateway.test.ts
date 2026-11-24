@@ -8,8 +8,8 @@ const TOTAL = 2_030_000
 type Refund = { id: string; amount: number; status: string; method: string | null; note: string | null }
 
 /**
- * Cửa hàng có cổng giả trong bộ nhớ (không bật cổng giả lập) (`payments.refundResults` xếp kết quả lệnh hoàn). `cancelled(refundAmount)` dựng
- * một đơn hàng sẵn đã trả đủ rồi bị hủy, có một khoản chờ hoàn.
+ * A shop with the in-memory gateway (simulator off; `payments.refundResults` queues refund results).
+ * `cancelled(refundAmount)` builds a paid in-stock order that was cancelled, with one pending refund.
  */
 async function gatewayRefunds() {
   const app = await shop()
@@ -20,7 +20,7 @@ async function gatewayRefunds() {
     const placed = await checkout()
     expect(placed.status).toBe(201)
     const { code, token: lookup } = placed.body as { code: number; token: string }
-    // Cổng trong bộ nhớ báo đã trả qua truy vấn, như giao dịch thật về qua cổng.
+    // The in-memory gateway reports payment via query, as a real gateway transaction would arrive.
     app.payments.payments.set(String(code), paid([TOTAL, `FT-${code}`]))
     const view = await request.get(`/api/orders/${code}`).query({ token: lookup, refresh: '1' })
     expect(view.body.paymentStatus).toBe('paid')
@@ -197,7 +197,7 @@ describe('kết quả cổng đến muộn', () => {
     const { code, refundId } = await cancelled()
     const asAccountant = (path: string, body: Record<string, unknown>) =>
       request.post(`/api/admin/refunds/${refundId}/${path}`).set(bearer(accountant.accessToken)).send(body)
-    // Trong lúc cổng chưa trả lời: kế toán chốt thất bại rồi tạo lại khoản mới.
+    // While the gateway has not answered: accounting settles it as failed, then recreates a new refund.
     payments.beforeRefundResult = async () => {
       expect((await asAccountant('settle', { outcome: 'failed', note: 'Cổng báo lỗi trên merchant' })).status).toBe(200)
       expect((await asAccountant('retry', { amount: TOTAL })).status).toBe(200)

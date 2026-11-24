@@ -6,7 +6,7 @@ import { adjust } from './support/stock.ts'
 
 const SHIPMENT = { carrier: 'Giao Hàng Nhanh', trackingNumber: 'GHN1' }
 const DAY = 24 * 60 * 60_000
-/** Ngày lịch theo giờ Việt Nam, `days` ngày tính từ hôm nay. */
+/** Vietnam-time calendar day, `days` days from today. */
 const vnDate = (days = 0) => new Date(Date.now() + 7 * 60 * 60_000 + days * DAY).toISOString().slice(0, 10)
 
 type Figures = {
@@ -28,8 +28,8 @@ type Report = {
 }
 
 /**
- * Cửa hàng có cổng giả lập; AM-40 đã có một dòng kiểm kê +3 (từ `shop()`), được dời về 3 ngày trước để thành tồn đầu
- * của kỳ hôm nay. AM-41 chưa có dòng sổ nào.
+ * A shop with the simulator; AM-40 has one stocktake row of +3 (from `shop()`), moved back 3 days to become today's
+ * opening stock. AM-41 has no ledger rows.
  */
 async function stockShop() {
   const app = await shop({ simulator: true })
@@ -78,7 +78,7 @@ describe('báo cáo xuất nhập tồn', () => {
         .status,
     ).toBe(201)
 
-    // Bán 2 đôi, rồi khách trả 1 đôi và kho nhập lại tồn.
+    // Sell 2 pairs, then the customer returns 1 and it is restocked.
     const placed = await app.checkout({ lines: [{ variantId: v40.id, quantity: 2, price: 2_000_000 }] })
     const { code, token: orderToken } = placed.body as { code: number; token: string }
     await request.post('/api/payments/simulator/paid').send({ orderCode: code, amount: 4_030_000 })
@@ -125,7 +125,7 @@ describe('báo cáo xuất nhập tồn', () => {
   it('tồn đầu kỳ (lúc bắt đầu dùng hệ thống) tính vào cột nhập', async () => {
     const app = await stockShop()
     const { v41 } = app
-    // Dòng sổ `opening` chỉ sinh ra khi import Excel; dựng thẳng dòng sổ và tồn để không phải dựng cả file import.
+    // `opening` rows only come from Excel import; build the row and stock directly instead of a whole import file.
     const owner = await app.prisma.staff.findFirstOrThrow()
     await app.prisma.$transaction([
       app.prisma.stockMovement.create({

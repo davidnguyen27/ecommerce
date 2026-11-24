@@ -12,11 +12,11 @@ import {
 import { shop } from './support/shop.ts'
 import { signedIpn } from './support/vnpay.ts'
 
-// Khóa giả của test, không phải khóa sandbox hay khóa thật.
+// Fake test key, not a sandbox or real key.
 const KEYS = { tmnCode: 'TESTTMN1', hashSecret: 'test-secret', env: 'sandbox' as const }
 const PAY_URL = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
 const API_URL = 'https://sandbox.vnpayment.vn/merchant_webapi/api/transaction'
-/** 2026-11-02 10:00:00 giờ Việt Nam. */
+/** 2026-11-02 10:00:00 Vietnam time. */
 const NOW = new Date('2026-11-02T03:00:00Z')
 const REF = '100123T20261102100000'
 
@@ -24,7 +24,7 @@ const sha512 = (text: string, key: string) => createHmac('sha512', key).update(t
 
 type Call = { url: string; method: string; contentType: string | null; body: Record<string, string> }
 
-/** HTTP giả thay cho API giao dịch VNPAY: ghi lại request (JSON), trả lần lượt các response đã xếp. */
+/** Fake HTTP for the VNPAY transaction API: records requests (JSON), returns queued responses in order. */
 function fakeVnpay(options: { now?: () => Date; env?: 'sandbox' | 'production' }, ...responses: (Response | Error)[]) {
   const calls: Call[] = []
   const fetch: typeof globalThis.fetch = async (input, init) => {
@@ -47,12 +47,15 @@ function fakeVnpay(options: { now?: () => Date; env?: 'sandbox' | 'production' }
     now: options.now ?? (() => NOW),
     requestId: () => 'req-1',
   })
-  /** Xếp thêm response sau khi đã tạo cổng. */
+  /** Queues more responses after the gateway is created. */
   const respond = (...more: (Response | Error)[]) => void responses.push(...more)
   return { calls, gateway, respond }
 }
 
-/** Response truy vấn như VNPAY trả, ký theo chuỗi `|` của tài liệu (tính độc lập với code đang test). */
+/**
+ * A query response as VNPAY returns it, signed per the docs' `|` string (computed independently of the code under
+ * test).
+ */
 function queryResponse(fields: Record<string, string>, secret = KEYS.hashSecret) {
   const body: Record<string, string> = {
     vnp_ResponseId: 'resp-1',
@@ -104,7 +107,7 @@ const LINK = {
 
 describe('định dạng của VNPAY', () => {
   it('ngày giờ yyyyMMddHHmmss theo giờ Việt Nam, cả sát nửa đêm, đọc ngược lại được', () => {
-    // 23:59:59 ngày 02/11 giờ Việt Nam là 16:59:59 UTC; 00:00 ngày 03/11 giờ Việt Nam là 17:00 UTC ngày 02/11.
+    // 23:59:59 on 02/11 Vietnam time is 16:59:59 UTC; 00:00 on 03/11 Vietnam time is 17:00 UTC on 02/11.
     expect(vnDateTime(new Date('2026-11-02T16:59:59Z'))).toBe('20261102235959')
     expect(vnDateTime(new Date('2026-11-02T17:00:00Z'))).toBe('20261103000000')
     expect(parseVnDateTime('20261103000000')).toEqual(new Date('2026-11-02T17:00:00Z'))
@@ -162,14 +165,15 @@ describe('cổng VNPAY: link thanh toán', () => {
       vnp_ExpireDate: '20261102101500',
       vnp_SecureHash: expect.stringMatching(/^[0-9a-f]{128}$/),
     })
-    // Chữ ký tính độc lập theo tài liệu: các tham số trừ chữ ký, sắp theo tên, encode kiểu PHP (khoảng trắng là +).
+    // Signature computed independently per the docs: params except the signature, sorted by name, PHP-style encoding
+    // (space as +).
     const { vnp_SecureHash, ...rest } = params
     const data = Object.keys(rest)
       .sort()
       .map((key) => `${key}=${encodeURIComponent(rest[key]!).replace(/%20/g, '+')}`)
       .join('&')
     expect(vnp_SecureHash).toBe(sha512(data, KEYS.hashSecret))
-    // Query của URL chính là chuỗi đã ký.
+    // The URL query is exactly the signed string.
     expect(link.checkoutUrl).toContain(`?${data}&vnp_SecureHash=`)
   })
 
@@ -266,7 +270,7 @@ describe('đặt mua qua cổng VNPAY', () => {
     const created = parseVnDateTime(url.searchParams.get('vnp_CreateDate')!)!
     const expires = parseVnDateTime(url.searchParams.get('vnp_ExpireDate')!)!
     expect(expires.getTime() - created.getTime()).toBeGreaterThanOrEqual(14 * 60_000)
-    // Không gửi email hay số điện thoại khách cho cổng.
+    // No customer email or phone goes to the gateway.
     expect(res.body.checkoutUrl).not.toMatch(/example\.com|0912345678/i)
   })
 

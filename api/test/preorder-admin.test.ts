@@ -7,8 +7,8 @@ import { bearer, createStaff } from './support/staff.ts'
 const DAY = 24 * 60 * 60_000
 
 /**
- * Một đợt AM-41 (20 suất) có: A 2 đôi đã cọc và đã về hàng, B 1 đôi đã cọc chờ hàng, P 1 đôi chờ cọc, C 1 đôi đã hủy; và
- * một đơn hàng sẵn AM-40.
+ * An AM-41 campaign (20 allocation) with: A 2 pairs deposited and arrived, B 1 pair deposited awaiting stock, P 1 pair
+ * awaiting deposit, C 1 pair cancelled; plus an in-stock AM-40 order.
  */
 async function adminView() {
   const app = await preorderShop()
@@ -124,7 +124,7 @@ describe('đặt trước cần xử lý', () => {
           recipientName: 'Nguyễn Văn An',
           phone: '0930000001',
           productName: 'Air Max',
-          // 2 đôi: tổng 4.230.000 (gồm phí giao 30.000) trừ cọc 1.260.000.
+          // 2 pairs: total 4,230,000 (30,000 shipping included) minus 1,260,000 deposit.
           remainingAmount: 2_970_000,
           remainderDueAt: expect.any(String),
           remainderOverdueAt: expect.any(String),

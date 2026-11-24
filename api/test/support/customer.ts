@@ -5,7 +5,7 @@ import { OWNER, appWithOwner, bearer, login, type Request } from './staff.ts'
 
 export const CUSTOMER = { email: 'khach@example.com', password: 'mat-khau-cua-khach' }
 
-/** Owner tạo và xuất bản chính sách bảo mật; trả số phiên bản vừa xuất bản. */
+/** The owner creates and publishes the privacy policy; returns the published version number. */
 export async function publishPrivacyPolicy(request: Request, body = 'Chúng tôi chỉ dùng email để giao dịch.') {
   const owner = await login(request, OWNER.email, OWNER.password)
   const pages = await request.get('/api/admin/pages').set(bearer(owner.accessToken))
@@ -28,7 +28,7 @@ export async function publishPrivacyPolicy(request: Request, body = 'Chúng tôi
   return published.body.version as number
 }
 
-/** App sạch, đã có owner và chính sách bảo mật phiên bản 1. */
+/** A clean app with an owner and privacy policy version 1. */
 export async function appReadyForSignUp() {
   const app = await appWithOwner()
   await publishPrivacyPolicy(app.request)
@@ -42,14 +42,14 @@ export function register(request: Request, body: Record<string, unknown> = {}) {
     .send({ ...CUSTOMER, acceptPrivacyPolicy: true, ...body })
 }
 
-/** Đăng nhập khách kênh mobile; trả response để test tự kiểm status. */
+/** Customer sign-in on the mobile channel; returns the response so tests check the status. */
 export function customerLogin(request: Request, email: string, password: string) {
   return request.post('/api/auth/login').set('X-Client', 'mobile').send({ email, password })
 }
 
 /**
- * Chờ thư thứ `nth` gửi tới `to` có link tới trang `path` của website (qua hàng đợi job),
- * rồi lấy token trong link.
+ * Waits for the `nth` email to `to` with a link to website page `path` (via the job queue), then takes the token from
+ * the link.
  */
 export async function tokenFromMail(mailer: InMemoryMailer, path: string, to = CUSTOMER.email, nth = 0) {
   const pattern = new RegExp(`https://shop\\.test${path}\\?token=([\\w-]+)`)

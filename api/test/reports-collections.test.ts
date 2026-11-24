@@ -6,7 +6,7 @@ import { bearer, createStaff, type Request } from './support/staff.ts'
 
 const SHIPMENT = { carrier: 'Giao Hàng Nhanh', trackingNumber: 'GHN1' }
 const DAY = 24 * 60 * 60_000
-/** Ngày lịch theo giờ Việt Nam, `days` ngày tính từ hôm nay. */
+/** Vietnam-time calendar day, `days` days from today. */
 const vnDate = (days = 0) => new Date(Date.now() + 7 * 60 * 60_000 + days * DAY).toISOString().slice(0, 10)
 
 type Figures = {
@@ -47,8 +47,9 @@ const collections = async (request: Request, token: string, query = { from: vnDa
 }
 
 /**
- * Đơn đặt trước 1 đôi AM-41 đã cọc 630.000 (`depositedPreorder`), cổng trong bộ nhớ. `standardPaid` đặt 1 đôi AM-40 và
- * cổng báo trả đủ 2.030.000. `cancelPaid` hủy đơn đã nhận tiền với số hoàn đề xuất; `executeManual` ghi chuyển khoản.
+ * A pre-order of 1 pair of AM-41 with a 630,000 deposit (`depositedPreorder`), in-memory gateway. `standardPaid` orders
+ * 1 pair of AM-40 and the gateway reports 2,030,000 in full. `cancelPaid` cancels a paid order with the proposed
+ * refund; `executeManual` records a transfer.
  */
 async function collectionsShop() {
   const app = await depositedPreorder()
@@ -146,7 +147,7 @@ describe('báo cáo tiền thu', () => {
     const app = await collectionsShop()
     const standard = await app.standardPaid()
     const refundId = (await app.cancelPaid(standard.code, 2_030_000))!
-    // Dựng trạng thái: cổng báo hoàn thất bại.
+    // Set up the state: the gateway reports a failed refund.
     const transaction = await app.prisma.paymentTransaction.findFirstOrThrow({
       where: { order: { code: standard.code } },
     })
@@ -191,7 +192,8 @@ describe('báo cáo tiền thu', () => {
       outstanding: { count: 2, amount: 2 * REMAINING },
     })
 
-    // Hủy đơn thứ hai, hoàn đủ cọc nhưng chưa chuyển: đơn hủy không còn tính, khoản hoàn hiện ở "đang hoàn".
+    // Cancel the second order with a full deposit refund not yet transferred: it no longer counts, the refund shows as
+    // refunding.
     await app.cancelPaid(other.code, DEPOSIT)
     expect(await snapshot()).toEqual({
       depositsHeld: { count: 1, amount: DEPOSIT },

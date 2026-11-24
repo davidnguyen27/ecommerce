@@ -1,5 +1,5 @@
-// Hàm tính giảm là logic thuần nhiều nhánh, không có đường HTTP riêng: test gọi thẳng hàm (CODING_STANDARDS, ngoại lệ).
-// Hành vi qua báo giá và tạo đơn được test ở ticket 03 và 04.
+// The discount function is pure logic with many branches and no HTTP path of its own: tests call it directly
+// (CODING_STANDARDS exception). Behavior through quote and placement is tested in tickets 03 and 04.
 import { describe, expect, it } from 'vitest'
 import { computeDiscount, type DiscountLine, type DiscountRule } from '../src/vouchers/discount.ts'
 
@@ -41,7 +41,7 @@ describe('mức giảm', () => {
   })
 
   it('giảm theo tỷ lệ, làm tròn xuống tới 1.000 VND', () => {
-    // 7% của 1.234.567 = 86.419,69 → 86.000
+    // 7% of 1,234,567 = 86,419.69 → 86,000
     const result = computeDiscount([line('a', 1_234_567)], percent(7, 10_000_000))
     expect(result.ok && result.discount).toBe(86_000n)
   })
@@ -62,7 +62,7 @@ describe('mức giảm', () => {
   })
 
   it('trần 50% làm tròn xuống tới 1.000 VND', () => {
-    // 50% của 1.001.999 = 500.999,5 → 500.000
+    // 50% of 1,001,999 = 500,999.5 → 500,000
     const result = computeDiscount([line('a', 1_001_999)], fixed(900_000))
     expect(result.ok && result.discount).toBe(500_000n)
   })
@@ -85,7 +85,8 @@ describe('đơn tối thiểu', () => {
   })
 
   it('chỉ tính tiền hàng của các dòng thuộc phạm vi', () => {
-    // Nike 3.000.000 thuộc phạm vi, Dior 2.000.000 không: tối thiểu 3.500.000 thì chưa đạt dù tổng đơn 5.000.000.
+    // Nike 3,000,000 is in scope, Dior 2,000,000 is not: a 3,500,000 minimum is not met although the order is
+    // 5,000,000.
     const lines = [line('nike', 3_000_000), line('dior', 2_000_000, 1, 'dior', ['nuoc-hoa'])]
     const result = computeDiscount(lines, fixed(100_000, { minSubtotal: 3_500_000n, brandIds: ['nike'] }))
     expect(result).toEqual({ ok: false, reason: 'below_minimum', shortfall: 500_000n })
@@ -136,16 +137,16 @@ describe('phạm vi', () => {
 
 describe('tiền giảm bằng 0', () => {
   it('làm tròn xuống 1.000 ra 0 thì mã không áp dụng, để đơn không chiếm lượt mà không được giảm', () => {
-    // 10% của 5.000 = 500 → 0.
+    // 10% of 5,000 = 500 → 0.
     expect(computeDiscount([line('a', 5_000)], percent(10, 500_000))).toEqual({ ok: false, reason: 'not_applicable' })
-    // Trần 50% của 1.500 = 750 → 0.
+    // 50% cap of 1,500 = 750 → 0.
     expect(computeDiscount([line('a', 1_500)], fixed(1_000))).toEqual({ ok: false, reason: 'not_applicable' })
   })
 })
 
 describe('chia xuống dòng đơn', () => {
   it('chia theo tỷ lệ tiền hàng, phần lẻ vào dòng có tiền hàng lớn nhất', () => {
-    // 100.000 chia 1:1:1 → 33.333 mỗi dòng, lẻ 1 đồng vào dòng lớn nhất (dòng b).
+    // 100,000 split 1:1:1 → 33,333 per line, the 1 dong remainder goes to the largest line (line b).
     const lines = [line('a', 1_000_000), line('b', 1_000_001), line('c', 999_999)]
     const result = computeDiscount(lines, fixed(100_000))
     expect(result.ok && result.lines).toEqual([
@@ -161,7 +162,7 @@ describe('chia xuống dòng đơn', () => {
   })
 
   it('tổng tiền giảm các dòng luôn bằng tiền giảm của đơn', () => {
-    // Sinh ngẫu nhiên có hạt giống cố định để lỗi lặp lại được.
+    // Random generation with a fixed seed so failures are reproducible.
     let seed = 42
     const random = (n: number) => {
       seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31

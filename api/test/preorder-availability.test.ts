@@ -7,25 +7,25 @@ import { adjust } from './support/stock.ts'
 type Availability = { sku: string; inStock: boolean; availability: string; preorder: unknown }
 
 /**
- * Cửa hàng có Air Max đã xuất bản: AM-40 còn 3 đôi, AM-41 hết hàng. `open` mở đợt đặt trước (mặc định cả hai biến
- * thể), cọc 30%, giao 10–20/12/2026.
+ * A shop with Air Max published: AM-40 with 3 pairs, AM-41 out of stock. `open` opens a pre-order campaign (both
+ * variants by default), 30% deposit, delivery 10–20/12/2026.
  */
 async function preorderShop() {
   const app = await baseShop()
   const { request, token, v40 } = app
-  /** Biến thể như khách thấy ở trang sản phẩm, theo SKU. */
+  /** Variants as customers see them on the product page, by SKU. */
   const variants = async () => {
     const res = await request.get('/api/products/air-max')
     expect(res.status).toBe(200)
     return Object.fromEntries((res.body.variants as Availability[]).map((v) => [v.sku, v]))
   }
-  /** Thẻ Air Max ở danh sách sản phẩm. */
+  /** The Air Max card in the product list. */
   const card = async () => {
     const res = await request.get('/api/products')
     expect(res.status).toBe(200)
     return (res.body.items as { slug: string; inStock: boolean; preorder: boolean }[]).find((c) => c.slug === 'air-max')
   }
-  /** Đưa tồn AM-40 về `count` đôi bằng một lần kiểm kê. */
+  /** Sets AM-40 stock to `count` pairs with one stocktake. */
   const countV40 = async (count: number, expected = 3) => {
     const res = await adjust(request, token, {
       variantId: v40.id,
@@ -53,7 +53,7 @@ describe('khách thấy đang nhận đặt trước', () => {
         preorder: { campaignId, depositPercent: 30, deliveryFrom: '2026-12-10', deliveryTo: '2026-12-20' },
       }),
     )
-    // Không lộ số suất hay số đã đặt.
+    // No allocation or ordered counts leak.
     expect(JSON.stringify(v41)).not.toMatch(/allocation|used/)
   })
 
@@ -91,7 +91,7 @@ describe('khách thấy đang nhận đặt trước', () => {
 
     const second = await app.open()
     expect((await app.variants())['AM-41']).toMatchObject({ availability: 'preorder' })
-    // Dựng một đợt đã quá hạn đóng: API không cho đặt hạn ở quá khứ.
+    // Build a campaign past its closing time: the API refuses deadlines in the past.
     await app.prisma.preorderCampaign.update({ where: { id: second }, data: { closesAt: new Date(Date.now() - 1000) } })
     expect((await app.variants())['AM-41']).toMatchObject({ availability: 'out_of_stock' })
   })
@@ -101,7 +101,7 @@ describe('khách thấy đang nhận đặt trước', () => {
     await app.open()
     expect((await app.editVariant(app.v41, 'AM-41', '41', { status: 'discontinued' })).status).toBe(200)
 
-    // Phiên bản đang xuất bản có thể vẫn liệt kê biến thể này; dù vậy nó không bao giờ là đặt trước.
+    // The published version may still list this variant; even so it is never pre-order.
     expect((await app.variants())['AM-41']?.availability ?? 'absent').not.toBe('preorder')
   })
 
@@ -133,7 +133,7 @@ describe('thẻ sản phẩm', () => {
   it('sắp xếp còn hàng trước không coi hàng đặt trước là còn hàng', async () => {
     const app = await preorderShop()
     const { request, token, brand, category } = app
-    // Sản phẩm thứ hai, còn hàng, xuất bản sau Air Max nên mặc định đứng trước; cho Air Max xuất bản lại sau cùng.
+    // A second product, in stock, published after Air Max so it comes first by default; republish Air Max last.
     const other = await request
       .post('/api/admin/products')
       .set(bearer(token))
@@ -180,7 +180,7 @@ describe('thẻ sản phẩm', () => {
         (c) => c.slug,
       )
 
-    // Air Max đắt hơn nhưng chỉ đặt trước được: vẫn xếp sau Pegasus còn hàng.
+    // Air Max is pricier but only pre-orderable: still sorted after the in-stock Pegasus.
     expect(await slugs()).toEqual(['pegasus', 'air-max'])
   })
 })

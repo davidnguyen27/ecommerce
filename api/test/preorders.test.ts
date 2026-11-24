@@ -8,17 +8,17 @@ import { adjust } from './support/stock.ts'
 const MINUTE = 60_000
 const inMinutes = (minutes: number) => new Date(Date.now() + minutes * MINUTE)
 
-/** Cửa hàng có đợt đang mở: AM-40 10 suất, AM-41 5 suất, cọc 30%. */
+/** A shop with an open campaign: AM-40 10 allocation, AM-41 5, 30% deposit. */
 async function withCampaign(options?: Parameters<typeof preorderShop>[0]) {
   const app = await preorderShop(options)
   const campaignId = await app.open()
-  /** Số đã dùng của AM-41 trong đợt, đọc ở trang quản trị. */
+  /** AM-41 used allocation in the campaign, read from the admin page. */
   const usedV41 = async () => {
     const res = await app.request.get(`/api/admin/preorder-campaigns/${campaignId}`).set(bearer(app.token))
     expect(res.status).toBe(200)
     return (res.body.variants as { sku: string; used: number }[]).find((v) => v.sku === 'AM-41')!.used
   }
-  /** Số đang giữ của AM-41 ở trang Tồn kho. */
+  /** AM-41 reserved count on the Stock page. */
   const reservedV41 = async () => {
     const res = await app.request.get('/api/admin/stock').query({ q: 'AM-41' }).set(bearer(app.token))
     return (res.body.items as { sku: string; reserved: number }[]).find((i) => i.sku === 'AM-41')!.reserved
@@ -78,7 +78,7 @@ describe('báo giá đặt trước', () => {
 describe('đặt trước', () => {
   it('tạo đơn đặt trước chờ cọc và link cọc làm tròn lên 1.000; không giữ hàng, chỉ chiếm suất', async () => {
     const app = await withCampaign()
-    // Giá lẻ để tiền cọc phải làm tròn: 30% của 2.100.500 là 630.150, làm tròn lên 631.000.
+    // An odd price so the deposit must round: 30% of 2,100,500 is 630,150, rounded up to 631,000.
     expect((await app.editVariant(app.v41, 'AM-41', '41', { price: 2_100_500 })).status).toBe(200)
 
     const res = await app.preorder(app.campaignId, { price: 2_100_500 })
@@ -107,7 +107,7 @@ describe('đặt trước', () => {
       },
       lines: [expect.objectContaining({ sku: 'AM-41', quantity: 1, price: 2_100_500 })],
     })
-    // Đơn lưu phiên bản chính sách đặt trước cùng chính sách đổi trả của sản phẩm.
+    // The order stores the pre-order policy version along with the product's returns policy.
     expect(order.body.policies.map((p: { slug: string }) => p.slug)).toEqual(['chinh-sach-dat-truoc', 'doi-tra'])
     expect(await app.usedV41()).toBe(1)
     expect(await app.reservedV41()).toBe(0)
@@ -221,7 +221,7 @@ describe('đặt trước', () => {
 
   it('email đã có 3 đơn chờ thanh toán thì đặt trước thứ tư 429 kèm Retry-After, như đặt mua', async () => {
     const app = await withCampaign()
-    // Mỗi lần một IP khác, để chỉ giới hạn theo email có tác dụng.
+    // A different IP each time, so only the email limit applies.
     const place = (i: number) =>
       app
         .preorder(app.campaignId, { address: { ...ADDRESS, phone: `091000000${i}` } })
@@ -244,7 +244,7 @@ describe('hết hạn và hủy đơn chờ cọc', () => {
     const { code, token } = await app.placed(app.campaignId, { quantity: 2 })
     expect(await app.usedV41()).toBe(2)
 
-    // Job hết hạn không có endpoint: test gọi thẳng hàm job chạy với `now` ở tương lai, rồi kiểm qua HTTP.
+    // The expiry job has no endpoint: tests call it with a future `now`, then check via HTTP.
     expect(await expireOverdueOrders(app.expireDeps, inMinutes(16))).toBe(1)
 
     expect((await app.request.get(`/api/orders/${code}`).query({ token })).body).toMatchObject({

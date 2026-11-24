@@ -7,8 +7,8 @@ const DAY = 24 * 60 * 60_000
 const inDays = (days: number) => new Date(Date.now() + days * DAY)
 
 /**
- * Đơn đặt trước đã cọc và đã về hàng: hạn trả phần còn lại là 7 ngày sau lúc về. Job không có endpoint: test gọi thẳng
- * hàm job với `now` ở tương lai, rồi kiểm qua HTTP.
+ * Deposited, arrived pre-orders: the remainder is due 7 days after arrival. The job has no endpoint: tests call it
+ * with a future `now`, then check via HTTP.
  */
 async function arrivedPreorder() {
   const app = await depositedPreorder()
@@ -19,7 +19,7 @@ async function arrivedPreorder() {
     return (res.body.history as { action: string }[]).map((h) => h.action)
   }
   const reminders = () => app.mailer.sent.filter((m) => m.subject.includes(`Nhắc trả phần còn lại`))
-  /** Chờ hàng đợi thư chạy hết, để đếm thư không bị thiếu. */
+  /** Waits for the mail queue to drain, so email counts are complete. */
   const settleMail = () => new Promise((resolve) => setTimeout(resolve, 500))
   return { ...app, run, history, reminders, settleMail }
 }
@@ -28,7 +28,7 @@ describe('nhắc trả phần còn lại', () => {
   it('job chạy mỗi giờ', async () => {
     const { prisma } = await depositedPreorder()
 
-    // Lịch nằm trong pg-boss, không có endpoint: kiểm bằng SQL.
+    // The schedule lives in pg-boss with no endpoint: check with SQL.
     const schedules = await prisma.$queryRaw<{ cron: string }[]>`
       SELECT "cron" FROM "pgboss"."schedule" WHERE "name" = 'remainder-deadlines'`
     expect(schedules).toEqual([{ cron: '0 * * * *' }])

@@ -7,7 +7,7 @@ async function post(request: Request, token: string, path: string, body: Record<
   return res.body as { id: string }
 }
 
-/** Owner đã đăng nhập, có sản phẩm nháp Air Max 90 với hai biến thể AM90-40 và AM90-41, tồn đều bằng 0. */
+/** Signed-in owner, with a draft Air Max 90 having variants AM90-40 and AM90-41, both at 0 stock. */
 export async function warehouse() {
   const app = await appWithOwner()
   const { accessToken: token } = await login(app.request, OWNER.email, OWNER.password)

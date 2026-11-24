@@ -7,12 +7,12 @@ import { adjust } from './support/stock.ts'
 const SHIPMENT = { carrier: 'Giao Hàng Nhanh', trackingNumber: 'GHN1' }
 const BACK = { carrier: 'Viettel Post', trackingNumber: 'VTP9' }
 const DAY = 24 * 60 * 60_000
-/** Ngày lịch theo giờ Việt Nam, `days` ngày tính từ hôm nay. */
+/** Vietnam-time calendar day, `days` days from today. */
 const vnDate = (days = 0) => new Date(Date.now() + 7 * 60 * 60_000 + days * DAY).toISOString().slice(0, 10)
 
 /**
- * Cửa hàng có cổng giả lập (AM-40 giá 2.000.000, còn 3 đôi). `delivered(n)` đặt n đôi, trả đủ, giao xong; `ask` gửi
- * yêu cầu qua link đơn; `admin` thao tác yêu cầu bằng tài khoản owner.
+ * A shop with the simulator (AM-40 at 2,000,000, 3 pairs). `delivered(n)` orders n pairs, pays, delivers; `ask` sends
+ * a request via the order link; `admin` acts on requests as the owner.
  */
 async function returnsShop() {
   const app = await shop({ simulator: true })
@@ -149,7 +149,7 @@ describe('báo cáo đổi trả và bảo hành', () => {
       { outcome: 'in_progress', count: 1 },
     ])
     expect(report.warrantyTotal).toBe(3)
-    // Bảo hành không phải trả hàng: tỷ lệ trả bằng 0 trên 3 đôi đã giao.
+    // Warranty is not a return: the return rate is 0 over the 3 delivered pairs.
     expect(report.returnRate).toEqual([{ productType: 'footwear', returned: 0, delivered: 3, rate: 0 }])
   })
 })

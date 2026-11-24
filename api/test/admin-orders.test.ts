@@ -3,11 +3,11 @@ import { CUSTOMER, register } from './support/customer.ts'
 import { ADDRESS, shop } from './support/shop.ts'
 import { bearer, createStaff } from './support/staff.ts'
 
-/** Cửa hàng có cổng giả lập, kèm hàm đặt đơn và trả tiền đủ qua cổng giả lập. */
+/** A shop with the simulator, plus helpers to place an order and pay it in full via the simulator. */
 async function orders() {
   const app = await shop({ simulator: true })
   const { request, token, checkout } = app
-  /** Đặt một đơn AM-40; `address` ghi đè từng phần thông tin nhận hàng. */
+  /** Places an AM-40 order; `address` overrides parts of the shipping info. */
   const place = async (address: Partial<typeof ADDRESS> = {}) => {
     const res = await checkout({ address: { ...ADDRESS, ...address } })
     expect(res.status).toBe(201)
@@ -92,7 +92,7 @@ describe('chi tiết đơn ở trang quản trị', () => {
     const warehouse = await createStaff(request, token, ['warehouse'], 'kho@example.com')
     const { code } = await place()
     expect((await request.post(`/api/admin/orders/${code}/cancel`).set(bearer(warehouse.accessToken))).status).toBe(200)
-    // Tiền về sau khi đơn đã hủy: hệ thống ghi giao dịch và gắn cờ cần đối soát.
+    // Money arriving after cancel: the system records the transaction and flags it for reconciliation.
     await request.post('/api/payments/simulator/paid').send({ orderCode: code, amount: 2_030_000 })
 
     const res = await request.get(`/api/admin/orders/${code}`).set(bearer(token))
@@ -115,7 +115,7 @@ describe('chi tiết đơn ở trang quản trị', () => {
   it('thiếu order.view thì 403', async () => {
     const { place, request, token, prisma } = await orders()
     const staff = await createStaff(request, token, ['sales'], 'khong-quyen@example.com')
-    // Mọi vai trò hiện có đều có order.view; nhân viên chưa được gán vai trò nào thì không có.
+    // Every current role has order.view; staff without a role do not.
     await prisma.staff.update({ where: { id: staff.id }, data: { roles: [] } })
     const { code } = await place()
 
@@ -128,7 +128,7 @@ describe('chi tiết đơn ở trang quản trị', () => {
   it('khách đã đăng nhập hiện bằng email tài khoản', async () => {
     const { request, token, checkout, prisma } = await orders()
     const accessToken = (await register(request)).body.accessToken as string
-    // Không có API quản trị khách hàng: lấy id khách bằng prisma để so.
+    // There is no customer admin API: read the customer id with prisma to compare.
     const customer = await prisma.customer.findUniqueOrThrow({ where: { email: CUSTOMER.email } })
     const placed = await checkout({ acceptPrivacyPolicy: undefined }).set(bearer(accessToken))
     expect(placed.status).toBe(201)

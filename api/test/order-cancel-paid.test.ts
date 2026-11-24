@@ -7,8 +7,8 @@ const SHIPMENT = { carrier: 'Giao Hàng Nhanh', trackingNumber: 'GHN123456' }
 const DAY = 24 * 60 * 60_000
 
 /**
- * Cửa hàng có cổng giả lập, một nhân viên bán hàng, một nhân viên kho và một kế toán. `paidOrder` đặt một đôi AM-40
- * (2.000.000 + phí giao 30.000) và trả đủ.
+ * A shop with the simulator, a sales clerk, a warehouse clerk and an accountant. `paidOrder` orders one pair of AM-40
+ * (2,000,000 + 30,000 shipping) and pays in full.
  */
 async function cancelPaid() {
   const app = await shop({ simulator: true })
@@ -64,7 +64,7 @@ describe('hủy đơn hàng sẵn đã trả', () => {
     expect(res.body).toMatchObject({
       code,
       status: 'cancelled',
-      paymentStatus: 'paid', // trạng thái thanh toán giữ nguyên (ADR 0014)
+      paymentStatus: 'paid', // payment status unchanged (ADR 0014)
       cancelReason: 'staff',
       cancelCause: 'changed_mind',
       cancelNote: null,
@@ -109,7 +109,7 @@ describe('hủy đơn hàng sẵn đã trả', () => {
     expect((await cancel(handedOver.code, { cause: 'other', refundAmount: TOTAL })).status).toBe(409)
 
     expect((await post(handedOver.code, 'delivery-failed')).status).toBe(200)
-    // Giao thất bại thì phải nhận hàng hoàn về trước (ticket 05).
+    // A failed delivery must be returned to stock first (ticket 05).
     expect((await cancel(handedOver.code, { cause: 'delivery_failed', refundAmount: TOTAL })).status).toBe(409)
 
     const delivered = await paidOrder()
@@ -140,7 +140,8 @@ describe('hủy đơn hàng sẵn đã trả', () => {
     expect(noNote.status).toBe(400)
     expect(noNote.body.error.fields).toEqual([expect.objectContaining({ path: 'note' })])
     expect((await cancel(code, { cause: 'supply_failed', refundAmount: 0, note: 'x' })).status).toBe(400)
-    // Đơn thường không có phần còn lại phải trả (đi luồng demo 2026-11-23: khách đọc "vì đã quá hạn trả phần còn lại").
+    // Regular orders have no remaining balance (demo walkthrough 2026-11-23: the customer read "vì đã quá hạn trả phần
+    // còn lại").
     const overdue = await cancel(code, { cause: 'remainder_overdue', refundAmount: TOTAL })
     expect(overdue.status).toBe(400)
     expect(overdue.body.error.fields).toEqual([expect.objectContaining({ path: 'cause' })])
@@ -205,7 +206,7 @@ describe('hủy đơn hàng sẵn đã trả', () => {
     expect(voucher.status).toBe(201)
     const withVoucher = { voucherCode: 'tet2027', discount: 200_000 }
     const { code } = await paidOrder(withVoucher, TOTAL - 200_000)
-    expect((await checkout(withVoucher)).status).toBe(409) // hết lượt
+    expect((await checkout(withVoucher)).status).toBe(409) // used up
 
     expect((await cancel(code, { cause: 'changed_mind', refundAmount: TOTAL - 200_000 })).status).toBe(200)
 

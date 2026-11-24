@@ -68,7 +68,7 @@ describe('khách đăng ký', () => {
   })
 })
 
-/** Chờ thư xác minh gửi tới `to` qua hàng đợi job, rồi lấy token từ link trong thư. */
+/** Waits for the verification email to `to` via the job queue, then takes the token from its link. */
 function verificationToken(mailer: InMemoryMailer, to = CUSTOMER.email, nth = 0) {
   return tokenFromMail(mailer, '/xac-minh-email', to, nth)
 }
@@ -144,7 +144,7 @@ describe('xác minh email', () => {
 
 const REFRESH_COOKIE = 'customer_refresh'
 
-/** Set-Cookie của refresh token khách. */
+/** Set-Cookie of the customer refresh token. */
 function refreshSetCookie(res: Response): string {
   const header = res.headers['set-cookie'] as unknown as string[] | undefined
   const cookie = header?.find((c) => c.startsWith(`${REFRESH_COOKIE}=`))
@@ -152,7 +152,7 @@ function refreshSetCookie(res: Response): string {
   return cookie
 }
 
-/** Giá trị gửi lại trong header `Cookie`, như trình duyệt làm. */
+/** The value sent back in the `Cookie` header, as browsers do. */
 const refreshCookie = (res: Response) => refreshSetCookie(res).split(';')[0]!
 
 function refreshMobile(request: Request, refreshToken: string) {

@@ -4,8 +4,9 @@ import { ADDRESS } from './support/shop.ts'
 import { bearer, createStaff } from './support/staff.ts'
 
 /**
- * Đợt đặt trước AM-41 (giá 2.100.000, cọc 30% = 630.000 một đôi, 20 suất). `deposited(n)` đặt trước `n` đôi rồi trả cọc
- * ngay, nên thứ tự gọi là thứ tự cọc. `receive(n)` ghi phiếu nhập `n` đôi AM-41. `cancel` hủy bằng nhân viên bán hàng.
+ * An AM-41 pre-order campaign (price 2,100,000, 30% deposit = 630,000 per pair, 20 allocation). `deposited(n)`
+ * pre-orders `n` pairs and pays the deposit at once, so call order is deposit order. `receive(n)` records a receipt of
+ * `n` pairs of AM-41. `cancel` cancels as the sales clerk.
  */
 async function preorderCancel() {
   const app = await preorderShop()

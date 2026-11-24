@@ -9,7 +9,7 @@ async function post(request: Request, token: string, path: string, body: Record<
   return res.body as { id: string }
 }
 
-/** Owner đã đăng nhập, có sẵn sản phẩm nháp Air Max 90 với hai biến thể Đen 40 và Trắng 40. */
+/** Signed-in owner, with a draft Air Max 90 having two variants, Đen 40 and Trắng 40. */
 async function sneakerWithVariants() {
   const app = await appWithOwner()
   const { accessToken: token } = await login(app.request, OWNER.email, OWNER.password)
@@ -47,7 +47,7 @@ function upload(request: Request, token: string, productId: string, file: Buffer
   return req.attach('file', file, filename)
 }
 
-/** File mà URL công khai trỏ tới, đọc từ storage giả. */
+/** The file a public URL points to, read from the fake storage. */
 function publicObject(storage: InMemoryStorage, url: string) {
   expect(url.startsWith('memory://public/')).toBe(true)
   return storage.objects.get(`public/${url.slice('memory://public/'.length)}`)
@@ -191,7 +191,7 @@ function auditOf(request: Request, token: string, entityType: string) {
     .then((res) => res.body.items as { action: string; entityId: string; before: unknown; after: unknown }[])
 }
 
-/** Sản phẩm thứ hai cùng thương hiệu, danh mục với Air Max 90. */
+/** A second product with the same brand and category as Air Max 90. */
 async function secondProduct(request: Request, token: string, productId: string) {
   const first = await request.get(`/api/admin/products/${productId}`).set(bearer(token))
   return post(request, token, '/api/admin/products', {

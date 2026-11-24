@@ -4,7 +4,7 @@ import { OWNER, bearer, createStaff } from './support/staff.ts'
 
 const SHIPMENT = { carrier: 'Giao Hàng Nhanh', trackingNumber: 'GHN123456' }
 
-/** Cửa hàng có cổng giả lập; `paidOrder` đặt hai đôi AM-40 và trả đủ tiền. */
+/** A shop with the simulator; `paidOrder` orders two pairs of AM-40 and pays in full. */
 async function fulfillment() {
   const app = await shop({ simulator: true })
   const { request, token, checkout, v40 } = app
@@ -92,7 +92,7 @@ describe('chuẩn bị và bàn giao vận chuyển', () => {
 
   it('đơn chưa trả tiền hay đã hủy thì không chuẩn bị được; mã lạ 404', async () => {
     const { place, prepare, request, token } = await fulfillment()
-    // Đặt và hủy trước để còn đủ hàng cho đơn chưa trả (mỗi đơn hai đôi, tồn ba đôi).
+    // Place and cancel first so there is stock for the unpaid order (two pairs each, three in stock).
     const cancelled = await place()
     await request.post(`/api/admin/orders/${cancelled}/cancel`).set(bearer(token))
     const unpaid = await place()

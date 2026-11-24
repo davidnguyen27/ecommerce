@@ -13,7 +13,7 @@ const photo = (background = '#a33') =>
     .jpeg()
     .toBuffer()
 
-/** Owner đã đăng nhập, sản phẩm Air Max 90 có biến thể AM90-DEN-40, AM90-TRANG-41 và một ảnh chung có sẵn. */
+/** Signed-in owner, product Air Max 90 with variants AM90-DEN-40, AM90-TRANG-41 and an existing shared image. */
 async function catalog() {
   const app = await appWithOwner()
   const { accessToken: token } = await login(app.request, OWNER.email, OWNER.password)
