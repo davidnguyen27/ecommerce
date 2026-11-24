@@ -12,8 +12,8 @@ import {
 } from '@ecommerce/shared'
 import { Truck } from 'lucide-vue-next'
 
-// Đặt trước một biến thể, không qua giỏ hàng (ADR 0012). Thông tin nhận hàng là dữ liệu cá nhân: trang chỉ có khung
-// khi SSR, báo giá và form nạp sau khi mount.
+// Pre-order of one variant, outside the cart (ADR 0012). Shipping info is personal data: SSR renders only the frame,
+// the quote and form load after mount.
 const route = useRoute()
 const variantId = String(route.params.variantId)
 const quantity = ref(1)
@@ -24,7 +24,7 @@ const acceptPreorderPolicy = ref(false)
 const { form, invoice, invoiceOpen, acceptPrivacyPolicy, session, signedIn, wards, contactPayload, revealErrors } =
   useShippingForm()
 
-/** Thay đổi server báo khi đặt (409); báo giá đã được tải lại theo giá trị mới. */
+/** Changes the server reported at order time (409); the quote was reloaded with the new values. */
 const change = ref<PreorderChange | null>(null)
 const { voucherCode, voucherConflict, applyVoucher, removeVoucher } = useVoucherCode(
   () => refreshQuote(),
@@ -33,7 +33,7 @@ const { voucherCode, voucherConflict, applyVoucher, removeVoucher } = useVoucher
 
 let latest = 0
 async function refreshQuote() {
-  // Đổi số lượng hay tỉnh/thành liên tiếp: chỉ nhận báo giá của lần gọi cuối.
+  // Rapid quantity or province changes: only accept the quote of the last call.
   const call = ++latest
   try {
     const { provinceCode, email, phone } = form.value
@@ -41,7 +41,7 @@ async function refreshQuote() {
       variantId,
       quantity: quantity.value,
       ...(provinceCode && { provinceCode }),
-      // Email, số điện thoại để kiểm lượt mỗi khách; chưa nhập xong thì server bỏ qua.
+      // Email and phone for per-customer voucher uses; incomplete values are ignored by the server.
       ...(voucherCode.value && { voucherCode: voucherCode.value, email, phone }),
     }
     const result = PreorderQuote.parse(await $fetch('/api/preorders/quote', { method: 'POST', body }))
@@ -61,7 +61,7 @@ watch(
   },
 )
 
-/** Đặt tiếp không dùng mã sau khi mã không còn dùng được lúc đặt. */
+/** Continue without the voucher after it stopped applying at order time. */
 async function submitWithoutVoucher() {
   await removeVoucher()
   if (canSubmit.value) await submit()
@@ -76,7 +76,7 @@ const CHANGE_TEXT: Record<PreorderChange['kind'], string> = {
   discontinued: 'Sản phẩm không còn bán.',
 }
 const problem = computed(() => change.value ?? quote.value?.problem ?? null)
-/** Đổi giá, mức cọc hay đợt thì báo giá mới đã có số mới: khách xem lại rồi đặt lại được. */
+/** A price, deposit or campaign change already shows in the new quote: the customer reviews and orders again. */
 const blocking = computed(() => problem.value && !['price', 'deposit', 'campaign'].includes(problem.value.kind))
 
 const submitting = ref(false)
@@ -106,7 +106,7 @@ async function submit() {
       campaignId: current.offer.campaignId,
       price: current.price,
       depositPercent: current.offer.depositPercent,
-      // Chỉ gửi mã đang áp được, kèm tiền giảm khách đã thấy.
+      // Send only an applicable voucher, with the discount the customer saw.
       ...(current.voucher?.applied && { voucherCode: current.voucher.code, discount: current.voucher.discount }),
       ...contactPayload(),
       ...(!signedIn.value && { acceptPrivacyPolicy: acceptPrivacyPolicy.value }),
@@ -116,12 +116,12 @@ async function submit() {
     rememberOrderToken(result.code, result.token)
     window.location.assign(result.checkoutUrl)
   } catch (err) {
-    // Phiên đăng nhập hết hạn giữa chừng: đặt như khách vãng lai, cần tick đồng ý.
+    // The session expired midway: order as a guest, which needs the consent tick.
     if (isUnauthorized(err)) signedIn.value = false
     const details = PreorderConflictDetails.safeParse(apiErrorDetails(err))
     if (details.success) {
       await refreshQuote()
-      // Mã không còn như khách đã thấy: không tự bỏ mã, khách tự chọn.
+      // The voucher is no longer as seen: do not drop it silently, let the customer choose.
       if ('voucher' in details.data) voucherConflict.value = details.data.voucher
       else change.value = details.data.change
     }

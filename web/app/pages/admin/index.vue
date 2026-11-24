@@ -16,10 +16,10 @@ const canCatalog = session.can('catalog.edit')
 const canPrice = session.can('price.edit')
 const canAudit = session.can('audit.view')
 const canSeeProducts = canCatalog || canPrice
-// Bảng ngoại lệ (M7) thuộc mục Báo cáo; người không có quyền không thấy khối và không gọi API.
+// The exceptions board (M7) belongs to Reports; without permission the block is hidden and the API not called.
 const canReports = session.canOpen('/admin/reports')
 
-// Lối tắt và số đếm lấy quyền từ menu nên chỉ hiện trang người dùng mở được.
+// Shortcuts and counts take permissions from the menu, so only openable pages show.
 const canOpen = session.canOpen
 
 const SHORTCUTS = [
@@ -30,7 +30,8 @@ const SHORTCUTS = [
 ]
 const shortcuts = SHORTCUTS.filter((shortcut) => canOpen(shortcut.to))
 
-// Mặc định của hai danh sách là hàng chờ soạn và mục còn mở, nên số đếm là `total` với `pageSize` 1 và link không cần query.
+// Both lists default to the packing queue and open items, so counts are `total` with `pageSize` 1 and links need no
+// query.
 const ORDER_COUNTS = [
   {
     to: '/admin/orders',
@@ -56,7 +57,7 @@ const ORDER_COUNTS = [
     load: async () =>
       PreorderAttention.parse(await session.adminFetch('/api/admin/preorder-campaigns/attention')).total,
   },
-  // Hai số của yêu cầu hỗ trợ (spec M6b): link mang bộ lọc, quyền kiểm theo trang gốc (`gate`).
+  // Two support request counts (spec M6b): links carry the filter, permission checked against the base page (`gate`).
   {
     to: '/admin/support?unassigned=true',
     gate: '/admin/support',

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ChatbotReport, ReportQuery } from '@ecommerce/shared'
 
-// Báo cáo chatbot (spec M8). Trang riêng, không nằm trong trang Báo cáo của M7: trang đó đòi `report.view`, còn báo cáo
-// này chỉ cần `chatbot.manage`. Kỳ đọc từ query string như các báo cáo khác, nên link chia sẻ được.
+// Chatbot report (spec M8). A separate page, not in the M7 Reports page: that one needs `report.view`, this only
+// `chatbot.manage`. The period is read from the query string like other reports, so links can be shared.
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'chatbot.manage' })
 
 const session = useAdminSession()

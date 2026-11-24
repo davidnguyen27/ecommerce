@@ -4,9 +4,9 @@ import { AdminOrder, type OrderHistoryEntry } from '@ecommerce/shared'
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'order.view' })
 
 /*
- * Trang chi tiết đơn. Mỗi phần xử lý đơn là một panel đọc `order`; thao tác đổi trạng thái gọi API rồi `setOrder` bằng
- * `AdminOrder` mà API trả về. Ticket sau thêm panel vào cột phải (xử lý giao hàng) hay
- * cột trái (đối soát), không cần sửa các phần có sẵn.
+ * Order detail page. Each fulfillment section is a panel reading `order`; status actions call the API then `setOrder`
+ * with the returned `AdminOrder`. Later tickets add panels to the right column (fulfillment) or the left
+ * (reconciliation) without touching existing parts.
  */
 
 const session = useAdminSession()
@@ -18,7 +18,7 @@ const notice = ref<string | null>(null)
 const busy = ref(false)
 
 const canFulfill = computed(() => session.can('order.fulfill'))
-// Hủy đơn đã nhận tiền (M6a): đơn đang xử lý, đã trả đủ hoặc đã cọc, chưa bàn giao hoặc hàng giao thất bại đã hoàn về.
+// Cancel a paid order (M6a): processing, paid or deposited, not handed over, or a failed delivery already returned.
 const canCancelPaid = computed(() => {
   const o = order.value
   return (
@@ -56,7 +56,7 @@ async function cancelOrder() {
     notice.value = 'Đã hủy đơn'
   } catch (err) {
     error.value = apiErrorMessage(err)
-    // Ví dụ đơn vừa được trả tiền: nạp lại để thấy trạng thái mới.
+    // E.g. the order was just paid: reload to see the new status.
     await load()
   } finally {
     busy.value = false
@@ -70,7 +70,7 @@ function actorText(entry: OrderHistoryEntry) {
   return 'Hệ thống'
 }
 
-/** Chi tiết ngắn cho các sự kiện có dữ liệu đáng xem. */
+/** Short details for events with data worth showing. */
 function historyDetail(entry: OrderHistoryEntry) {
   const data = (entry.data ?? {}) as {
     reason?: string
@@ -82,7 +82,7 @@ function historyDetail(entry: OrderHistoryEntry) {
     trackingNumber?: string
     voucherOverLimit?: { code: string; used: number; totalLimit: number }
   }
-  // Khôi phục giữ phần giảm dù mã đã hết lượt (spec M5): báo để chủ doanh nghiệp thấy.
+  // Restoring keeps the discount even when the voucher is used up (spec M5): show it to the owner.
   if (entry.action === 'restored' && data.voucherOverLimit) {
     const { code, used, totalLimit } = data.voucherOverLimit
     return `Mã ${code} vượt tổng lượt: đã dùng ${used}/${totalLimit}`
@@ -449,7 +449,7 @@ await load()
       </div>
     </div>
 
-    <!-- Phiếu soạn hàng: chỉ hiện khi in. -->
+    <!-- Packing slip: shown only when printing. -->
     <section v-if="order" class="admin-print-only" data-testid="pick-slip">
       <h1 style="font-size: 20px; margin: 0 0 4px">Phiếu soạn hàng · Đơn #{{ order.code }}</h1>
       <p style="margin: 0 0 12px; font-size: 13px">Đặt lúc {{ formatDateTime(order.createdAt) }}</p>

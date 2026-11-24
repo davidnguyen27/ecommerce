@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { PayRemainderResult, PublicOrder, canRequestCancel } from '@ecommerce/shared'
 
-// Đơn trong tài khoản: phiên khách chỉ có ở trình duyệt nên đơn nạp sau khi mount, HTML từ server không có gì của đơn.
+// Account order: the customer session exists only in the browser, so the order loads after mount; server HTML has none
+// of it.
 const route = useRoute()
 const code = computed(() => String(route.params.code))
 const session = useCustomerSession()
@@ -20,7 +21,7 @@ async function load() {
 }
 onMounted(load)
 
-// Khách hủy đơn chưa thanh toán của chính mình; lỗi (ví dụ đơn vừa được thanh toán) thì nạp lại để thấy trạng thái mới.
+// The customer cancels their own unpaid order; on error (e.g. just paid) reload to see the new status.
 const cancelling = ref(false)
 const cancelError = ref<string | null>(null)
 async function cancel() {
@@ -36,7 +37,7 @@ async function cancel() {
   }
 }
 
-// Trả phần còn lại của đơn đặt trước: API cấp kèm token tra cứu để trang kết quả mở được đơn khi cổng đưa khách về.
+// Pay a pre-order's remainder: the API also issues a lookup token so the result page can open the order on return.
 const payingRemainder = ref(false)
 async function payRemainder() {
   payingRemainder.value = true

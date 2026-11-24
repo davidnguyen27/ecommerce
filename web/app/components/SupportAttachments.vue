@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { SupportAttachmentView } from '@ecommerce/shared'
 
-/** Ảnh đính kèm một tin: ảnh nhỏ, bấm để mở ảnh lớn ở tab mới. URL ký sống 5 phút, tải lại trang thì có URL mới. */
+/**
+ * A message's attachments: thumbnails that open full size in a new tab. Signed URLs live 5 minutes; reload for new
+ * ones.
+ */
 defineProps<{ attachments: SupportAttachmentView[] }>()
 </script>
 

@@ -4,8 +4,8 @@ import { ReturnWindowList, type ReturnWindowItem } from '@ecommerce/shared'
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'content.edit' })
 
 /**
- * Hạn đổi trả theo nhóm hàng (GLOSSARY): số ngày tính từ lúc giao. Chỉ để cảnh báo nhân viên khi khách gửi yêu cầu trả
- * hay đổi đã quá hạn; không chặn khách. Để trống là không cảnh báo nhóm đó.
+ * Return windows per product type (GLOSSARY "Hạn đổi trả"): days from delivery. Only warns staff when a return or
+ * exchange arrives late; never blocks customers. Empty means no warning for that type.
  */
 const session = useAdminSession()
 const rows = ref<{ productType: ReturnWindowItem['productType']; days: string }[]>([])

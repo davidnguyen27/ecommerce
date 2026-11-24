@@ -2,7 +2,7 @@
 import { CheckoutQuote, MAX_QUANTITY_PER_VARIANT, type CheckoutQuoteRequest } from '@ecommerce/shared'
 import { Trash2, Truck } from 'lucide-vue-next'
 
-// Giỏ chỉ có ở localStorage nên trang này báo giá sau khi mount, không qua SSR.
+// The cart is only in localStorage, so this page quotes after mount, not during SSR.
 const cart = useCart()
 const quote = ref<CheckoutQuote | null>(null)
 const error = ref<string | null>(null)
@@ -14,7 +14,7 @@ async function refreshQuote() {
     quote.value = null
     return
   }
-  // Đổi số lượng liên tiếp: chỉ nhận báo giá của lần gọi cuối.
+  // Rapid quantity changes: only accept the quote of the last call.
   const call = ++latest
   try {
     const body: CheckoutQuoteRequest = { lines }

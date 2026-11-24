@@ -1,8 +1,8 @@
 const STORAGE_KEY = 'cart'
 
 /**
- * Giỏ hàng chỉ nằm ở localStorage (spec "Giỏ hàng"), server không biết. Giỏ nạp sau khi mount, nên lúc SSR và lúc
- * hydrate giỏ đều rỗng và `ready` là false; phần nào phụ thuộc giỏ chỉ hiện khi `ready`.
+ * The cart lives only in localStorage (spec "Giỏ hàng"); the server never knows it. It loads after mount, so during SSR
+ * and hydration the cart is empty and `ready` is false; anything depending on the cart shows only when `ready`.
  */
 export function useCart() {
   const lines = useState<SavedCartLine[]>('cart', () => [])
@@ -12,7 +12,7 @@ export function useCart() {
     if (ready.value) return
     lines.value = readCart(readStorage())
     ready.value = true
-    // Giỏ đổi ở tab khác thì tab này cập nhật theo.
+    // A cart change in another tab updates this one.
     window.addEventListener('storage', (event) => {
       if (event.key === STORAGE_KEY) lines.value = readCart(event.newValue)
     })
@@ -24,11 +24,11 @@ export function useCart() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
     } catch {
-      // Hết chỗ hoặc trình duyệt chặn: giỏ vẫn dùng được trong trang này, chỉ không còn sau khi tải lại.
+      // Out of space or blocked by the browser: the cart still works on this page, just not after a reload.
     }
   }
 
-  /** Thêm một cái của biến thể; trả lý do khi không thêm được. */
+  /** Adds one unit of a variant; returns the reason when it cannot. */
   function add(item: { variantId: string; price: number }) {
     const result = addToCart(lines.value, item)
     if (result.ok) save(result.lines)
@@ -44,7 +44,7 @@ export function useCart() {
     setQuantity: (variantId: string, quantity: number) => save(setQuantity(lines.value, variantId, quantity)),
     remove: (variantId: string) => save(removeLine(lines.value, variantId)),
     acceptPrices: (quoted: Parameters<typeof acceptQuotedPrices>[1]) => save(acceptQuotedPrices(lines.value, quoted)),
-    /** Bỏ hết, sau khi đặt mua thành công. */
+    /** Empties the cart, after a successful checkout. */
     clear: () => save([]),
   }
 }

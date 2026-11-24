@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { NuxtError } from '#app'
 
-// Trang lỗi của Nuxt không đi qua app.vue; bọc layout mặc định để trang lỗi cũng có chân trang pháp lý.
+// Nuxt's error page bypasses app.vue; wrap it in the default layout so it also has the legal footer.
 const props = defineProps<{ error: NuxtError }>()
 const notFound = computed(() => props.error.statusCode === 404)
 </script>

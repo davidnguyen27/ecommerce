@@ -4,7 +4,7 @@ import { CollectionsReport } from '@ecommerce/shared'
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'report.view' })
 
 const session = useAdminSession()
-// Ô "Cần đối soát" chỉ là link khi người xem mở được trang đối soát.
+// The "Cần đối soát" figure is a link only when the viewer can open the reconciliation page.
 const reconciliationCard = session.canOpen('/admin/reconciliation') ? resolveComponent('NuxtLink') : 'div'
 const period = useReportPeriod()
 const report = ref<CollectionsReport | null>(null)

@@ -8,14 +8,14 @@ const brands = ref<AdminBrand[]>([])
 const error = ref<string | null>(null)
 const showCreatePanel = ref(false)
 const form = reactive({ name: '', slug: '', description: '' })
-/** Thương hiệu đang sửa, trước khi bấm lưu. */
+/** The brand being edited, before saving. */
 const editing = ref<(typeof form & { id: string }) | null>(null)
 
 async function load() {
   brands.value = AdminBrandList.parse(await session.adminFetch('/api/admin/brands')).items
 }
 
-/** Chạy một thao tác rồi tải lại danh sách; lỗi thì hiện thông báo từ API. */
+/** Runs an action, then reloads the list; on error shows the API message. */
 async function run(action: () => Promise<unknown>) {
   error.value = null
   try {

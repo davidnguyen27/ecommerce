@@ -7,19 +7,19 @@ import {
 } from '@ecommerce/shared'
 
 /**
- * Gọi API yêu cầu hỗ trợ của khách theo một trong hai đường (spec M6b): tài khoản đang đăng nhập, hoặc link tra cứu đơn
- * có token. Component chỉ làm việc với client này nên dùng chung được cho cả hai trang.
+ * Calls the customer support request API through one of two paths (spec M6b): the signed-in account, or an order
+ * lookup link with a token. Components only use this client, so they work on both pages.
  */
 export type SupportClient = {
   list: () => Promise<PublicSupportSummary[]>
   create: (body: CreateSupportRequest) => Promise<PublicSupportRequest>
   get: (code: number) => Promise<PublicSupportRequest>
   say: (code: number, message: string) => Promise<PublicSupportRequest>
-  /** Tải một ảnh vào tin `messageId` của chính khách (gửi tin trước, rồi tải ảnh). */
+  /** Uploads an image to the customer's own message `messageId` (send the message first, then upload). */
   attach: (code: number, messageId: string, file: File) => Promise<PublicSupportRequest>
-  /** Biến thể đổi được của từng dòng đơn (form đổi hàng). Tài khoản khách cần `orderCode`. */
+  /** Exchangeable variants per order line (exchange form). Accounts need `orderCode`. */
   exchangeOptions: (orderCode?: number) => Promise<ExchangeOptions>
-  /** Đường dẫn trang chi tiết một yêu cầu. */
+  /** Path of a request's detail page. */
   linkTo: (code: number) => string
 }
 
@@ -52,14 +52,15 @@ function clientOf(base: string, call: Fetch, linkTo: (code: number) => string): 
   }
 }
 
-/** Yêu cầu của khách đang đăng nhập; `accountFetch` gắn token phiên. */
+/** Requests of the signed-in customer; `accountFetch` adds the session token. */
 export function accountSupportClient(accountFetch: Fetch) {
   return clientOf('/api/account/support-requests', accountFetch, (code) => `/tai-khoan/yeu-cau/${code}`)
 }
 
-/** Yêu cầu của một đơn qua link tra cứu: mọi lời gọi kèm token của đơn. */
+/** Requests of one order via a lookup link: every call carries the order token. */
 export function guestSupportClient(orderCode: number, token: string) {
-  // Ép về kiểu hàm thường: kiểu route của `$fetch` quá sâu với đường dẫn ghép chuỗi (TypeScript báo tràn đệ quy).
+  // Cast to a plain function type: `$fetch`'s route typing goes too deep with concatenated paths (TypeScript recursion
+  // limit).
   const request = $fetch as unknown as (url: string, options: Record<string, unknown>) => Promise<unknown>
   const call: Fetch = (path, options) => request(path, { ...options, query: { token } })
   return clientOf(
@@ -69,14 +70,14 @@ export function guestSupportClient(orderCode: number, token: string) {
   )
 }
 
-/** Yêu cầu không gắn đơn (chatbot chuyển nhân viên, M8) qua link email: mọi lời gọi kèm token của yêu cầu. */
+/** Requests without an order (chatbot handoff, M8) via the email link: every call carries the request token. */
 export function contactSupportClient(token: string) {
   const request = $fetch as unknown as (url: string, options: Record<string, unknown>) => Promise<unknown>
   const call: Fetch = (path, options) => request(path, { ...options, query: { token } })
   return clientOf('/api/support-requests', call, (code) => `/yeu-cau/${code}?token=${encodeURIComponent(token)}`)
 }
 
-/** Tải lần lượt `files` vào một tin; trả yêu cầu mới nhất và lỗi đầu tiên (nếu có) để báo cho người gửi. */
+/** Uploads `files` to a message one by one; returns the latest request and the first error (if any) to report. */
 export async function attachAll<T>(
   attach: (file: File) => Promise<T>,
   files: readonly File[],

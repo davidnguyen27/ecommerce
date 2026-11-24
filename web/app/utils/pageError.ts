@@ -1,4 +1,7 @@
-/** Lỗi khi tải dữ liệu trang khách: API trả 404 thì trang 404; lỗi khác là 502 để không bị coi là trang không tồn tại. */
+/**
+ * Error loading customer page data: an API 404 is a 404 page; anything else is 502, so it is not taken for a missing
+ * page.
+ */
 export function throwPageError(error: unknown, subject: string): never {
   const notFound = (error as { statusCode?: number }).statusCode === 404
   throw createError({

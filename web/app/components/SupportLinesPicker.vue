@@ -8,9 +8,9 @@ import type {
 } from '@ecommerce/shared'
 
 /**
- * Chọn dòng của đơn đã giao cho yêu cầu trả (dòng, số lượng, lý do), đổi (dòng, số lượng, biến thể đổi sang) hay bảo
- * hành (một dòng, số lượng). Dùng ở form của khách và trang nhân viên tạo hộ (`admin`: kiểu của trang quản trị).
- * `v-model` là các dòng gửi lên API; rỗng là chưa chọn được gì. API kiểm lại mọi điều kiện.
+ * Picks lines of a delivered order for a return (line, quantity, reason), exchange (line, quantity, target variant) or
+ * warranty (one line, quantity). Used in the customer form and the staff create-on-behalf page (`admin`: admin
+ * styling). `v-model` is the lines sent to the API; empty means nothing valid is picked. The API rechecks everything.
  */
 type Kind = 'return' | 'exchange' | 'warranty'
 type PickedLines = ReturnLineInput[] | ExchangeLineInput[] | WarrantyLineInput[]
@@ -18,7 +18,7 @@ type PickedLines = ReturnLineInput[] | ExchangeLineInput[] | WarrantyLineInput[]
 const props = defineProps<{
   kind: Kind
   lines: readonly { variantId: string; sku: string; productName: string; quantity: number }[]
-  /** Biến thể đổi được của từng dòng; chỉ gọi khi chọn đổi hàng. */
+  /** Exchangeable variants per line; fetched only when exchange is chosen. */
   loadExchangeOptions: () => Promise<ExchangeOptions>
   admin?: boolean
 }>()
@@ -114,7 +114,7 @@ watchEffect(() => {
           {{ productName(line.variantId) }} <span :class="muted">{{ line.heldSku }}</span>
         </label>
         <template v-if="swaps[line.variantId]!.chosen">
-          <!-- Đổi hàng đổi cả dòng: số lượng là mọi cái khách đang giữ của dòng. -->
+          <!-- Exchanges take the whole line: the quantity is everything the customer holds of it. -->
           <span>× {{ line.returnable }}</span>
           <select
             v-model="swaps[line.variantId]!.toVariantId"

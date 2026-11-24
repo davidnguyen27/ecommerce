@@ -1,19 +1,19 @@
 /* ==========================================================================
    ATELIER COMMERCE — ADMIN BACKOFFICE DESIGN SYSTEM
-   Phong cách: Atelier Curatorial Backoffice
-   Chuẩn mực: frontend-design (sắc sảo 1px, tabular figures, độ tương phản cao)
+   Style: Atelier Curatorial Backoffice
+   Standard: frontend-design (crisp 1px lines, tabular figures, high contrast)
    ========================================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
 
 :root {
-  /* Nền & Bề mặt (Luminous Gallery Backdrop) */
+  /* Backgrounds & surfaces (Luminous Gallery Backdrop) */
   --adm-bg: #f8f9fa;
   --adm-surface: #ffffff;
   --adm-surface-subtle: #f2f4f7;
   --adm-surface-active: #e9ecef;
 
-  /* Văn bản & Đường nét (Architectural Ink) */
+  /* Text & lines (Architectural Ink) */
   --adm-ink: #111318;
   --adm-ink-subtle: #343a46;
   --adm-muted: #606877;
@@ -21,7 +21,7 @@
   --adm-border-subtle: #eef0f4;
   --adm-border-focus: #111318;
 
-  /* Điểm nhấn & Trạng thái chuyên biệt (Jeweled Indicators) */
+  /* Accents & special states (Jeweled Indicators) */
   --adm-dark: #12151b;
   --adm-dark-hover: #222630;
 
@@ -41,7 +41,7 @@
   --adm-danger-bg: #fef2f2;
   --adm-danger-border: #fecaca;
 
-  /* Thanh bên (Sidebar Navigation) */
+  /* Sidebar navigation */
   --adm-sidebar-bg: #0d0f12;
   --adm-sidebar-border: #1c2028;
   --adm-sidebar-text: #8e96a4;
@@ -376,7 +376,7 @@
 /* ==========================================================================
    BUTTONS
    ========================================================================== */
-/* `.btn-primary` của website (Tailwind) cũng khớp nút admin; đặt lại chiều cao nó áp vào. */
+/* The website's `.btn-primary` (Tailwind) also matches admin buttons; reset the height it applies. */
 .admin-shell .btn {
   height: auto;
   display: inline-flex;
@@ -732,7 +732,8 @@
 
 /* ==========================================================================
    PRINT
-   Trang chỉ in một phần (ví dụ phiếu soạn hàng): phần in đặt `.admin-print-only`, phần màn hình đặt `.admin-no-print`.
+   Pages printing only a part (e.g. the packing slip): put `.admin-print-only` on the printed part and
+   `.admin-no-print` on the screen-only part.
    ========================================================================== */
 .admin-print-only {
   display: none;

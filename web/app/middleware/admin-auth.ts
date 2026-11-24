@@ -1,6 +1,6 @@
 /**
- * Trang quản trị cần phiên nhân viên; chưa có access token thì thử refresh trước khi đẩy về trang đăng nhập.
- * Trang khai báo `permission` trong `definePageMeta` thì thiếu quyền sẽ bị đưa về trang chính.
+ * Admin pages need a staff session; without an access token, try a refresh before sending to sign-in. Pages declaring
+ * `permission` in `definePageMeta` send users without it to the admin home.
  */
 export default defineNuxtRouteMiddleware(async (to) => {
   const session = useAdminSession()

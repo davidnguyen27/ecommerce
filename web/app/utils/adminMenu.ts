@@ -35,7 +35,7 @@ export type AdminMenuItem = {
 }
 export type AdminMenuGroup = { title: string; items: AdminMenuItem[] }
 
-// Quyền của từng trang khai báo một chỗ để menu và lối tắt ở bảng điều khiển không lệch nhau.
+// Each page's permissions are declared once, so the menu and dashboard shortcuts never disagree.
 export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
   {
     title: 'Tổng quan',
@@ -109,7 +109,7 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
   },
 ]
 
-/** Trang không có trong menu nhưng có link từ trang khác; quyền khai ở đây như mục menu. */
+/** Pages not in the menu but linked from others; permissions declared here like menu items. */
 const ADMIN_SUBPAGES: Pick<AdminMenuItem, 'to' | 'permission'>[] = [
   { to: '/admin/support/new', permission: 'support.handle' },
   { to: '/admin/chatbot/conversations', permission: 'chatbot.manage' },
@@ -117,7 +117,7 @@ const ADMIN_SUBPAGES: Pick<AdminMenuItem, 'to' | 'permission'>[] = [
 ]
 
 export const ADMIN_MENU_ITEMS = ADMIN_MENU_GROUPS.flatMap((group) => group.items)
-/** Quyền của mọi trang quản trị có link (menu và trang con), cho `canOpen`. */
+/** Permissions of every linked admin page (menu and subpages), for `canOpen`. */
 export const ADMIN_PAGE_PERMISSIONS: Pick<AdminMenuItem, 'to' | 'permission'>[] = [
   ...ADMIN_MENU_ITEMS,
   ...ADMIN_SUBPAGES,

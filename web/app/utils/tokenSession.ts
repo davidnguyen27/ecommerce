@@ -5,15 +5,15 @@ type FetchOptions = NonNullable<Parameters<typeof $fetch>[1]>
 const WEB_CLIENT = { 'X-Client': 'web' }
 
 /**
- * Phiên của một miền xác thực (ADR 0001) ở trình duyệt: access token chỉ nằm trong bộ nhớ, refresh token nằm trong
- * cookie httpOnly mà `authBase/refresh` đổi lấy access token mới. Gọi ở phạm vi module nên trạng thái dùng chung;
- * chỉ được ghi trong handler chạy ở trình duyệt, vì trên server nó dùng chung cho mọi request.
+ * Browser session of one auth domain (ADR 0001): the access token lives only in memory, the refresh token in an
+ * httpOnly cookie that `authBase/refresh` exchanges for a new access token. Called at module scope, so state is shared;
+ * only write it in handlers running in the browser, since on the server it is shared by every request.
  */
 export function createTokenSession(authBase: string) {
   const accessToken = ref<string | null>(null)
   let refreshing: Promise<boolean> | null = null
 
-  /** Đổi cookie refresh lấy access token mới. Nhiều lời gọi cùng lúc chỉ refresh một lần. */
+  /** Exchanges the refresh cookie for a new access token. Concurrent calls refresh once. */
   function refresh(): Promise<boolean> {
     refreshing ??= $fetch(`${authBase}/refresh`, { method: 'POST', headers: WEB_CLIENT })
       .then((body) => {
@@ -30,12 +30,12 @@ export function createTokenSession(authBase: string) {
     return refreshing
   }
 
-  /** Gửi tới `authBase/path` (đăng nhập, đăng ký) và giữ access token trả về. */
+  /** Posts to `authBase/path` (sign-in, sign-up) and keeps the returned access token. */
   async function start(path: string, body: Record<string, unknown>) {
     accept(await $fetch(`${authBase}${path}`, { method: 'POST', headers: WEB_CLIENT, body }))
   }
 
-  /** Giữ access token từ một response cấp phiên mới (ví dụ sau khi đổi mật khẩu). */
+  /** Keeps the access token from a response that opens a new session (e.g. after a password change). */
   function accept(body: unknown) {
     accessToken.value = AuthTokens.parse(body).accessToken
   }
@@ -45,7 +45,7 @@ export function createTokenSession(authBase: string) {
     accessToken.value = null
   }
 
-  /** Gọi API kèm access token; gặp 401 thì refresh rồi thử lại một lần, refresh không được thì ném lỗi 401. */
+  /** Calls the API with the access token; on 401 refreshes and retries once, and throws 401 if refresh fails. */
   async function authorizedFetch(path: string, options: FetchOptions = {}): Promise<unknown> {
     const send = () =>
       $fetch(path, { ...options, headers: { ...options.headers, Authorization: `Bearer ${accessToken.value}` } })

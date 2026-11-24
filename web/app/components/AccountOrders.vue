@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { AccountOrderPage } from '@ecommerce/shared'
 
-/** Mục "Đơn hàng của tôi" trong trang tài khoản: lịch sử mua, mới nhất trước, có phân trang. */
+/** The "Đơn hàng của tôi" section of the account page: purchase history, newest first, paginated. */
 const session = useCustomerSession()
 const page = ref(1)
 const result = ref<AccountOrderPage | null>(null)

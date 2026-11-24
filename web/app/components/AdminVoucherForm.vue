@@ -13,8 +13,8 @@ import {
 } from '@ecommerce/shared'
 
 /**
- * Form tạo hoặc sửa mã giảm giá. Khi mã đã có lượt dùng thì chỉ mô tả, thời điểm kết thúc và tổng lượt còn sửa được;
- * server vẫn kiểm lại. Thương hiệu và danh mục đọc từ trang quản trị danh mục (cần `catalog.edit`, owner và sales có).
+ * Form to create or edit a voucher. Once used, only description, end time and total uses can change; the server
+ * rechecks. Brands and categories come from the catalog admin (needs `catalog.edit`, which owner and sales have).
  */
 const props = defineProps<{
   voucher?: Voucher | null
@@ -53,7 +53,7 @@ const form = reactive({
 const brands = ref<AdminBrand[]>([])
 const categories = ref<AdminCategory[]>([])
 const loadError = ref<string | null>(null)
-// Không chờ ở setup: form nằm trong `v-if` của trang chi tiết, component async sẽ không hiện cho tới khi tải xong.
+// Do not await in setup: the form sits in the detail page's `v-if`, and an async component would not show until loaded.
 onMounted(async () => {
   try {
     const [brandList, categoryList] = await Promise.all([
@@ -71,14 +71,14 @@ onMounted(async () => {
 
 const errorAt = (path: string) => props.errors?.find((f) => f.path === path || f.path.startsWith(`${path}.`))?.message
 
-/** Ô số để trống thành `null`. */
+/** Empty number fields become `null`. */
 const numberOrNull = (value: number | string | null) => (value === '' || value === null ? null : Number(value))
 
 function submit() {
   const editable = {
     description: form.description,
     totalLimit: numberOrNull(form.totalLimit),
-    // Ô giờ chỉ tới phút: không động vào thì không gửi, để server không coi là đổi thời hạn.
+    // The time field only goes to the minute: if untouched, do not send it, so the server does not see a change.
     ...(form.endsAt !== initialEndsAt && { endsAt: new Date(form.endsAt).toISOString() }),
   }
   if (locked.value) return emit('submit', editable)

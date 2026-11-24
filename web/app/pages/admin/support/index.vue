@@ -9,7 +9,7 @@ const session = useAdminSession()
 const route = useRoute()
 const result = ref<AdminSupportPage | null>(null)
 const error = ref<string | null>(null)
-// Bảng điều khiển mở trang với `?unassigned=true` hay `?status=awaiting_staff`.
+// The dashboard opens this page with `?unassigned=true` or `?status=awaiting_staff`.
 const filters = reactive({
   status: (typeof route.query.status === 'string' ? route.query.status : 'open') as NonNullable<
     AdminSupportQuery['status']

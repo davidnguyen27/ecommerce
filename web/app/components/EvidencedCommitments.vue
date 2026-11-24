@@ -3,9 +3,9 @@ import type { PublicCommitment } from '@ecommerce/shared'
 import { ShieldCheck } from 'lucide-vue-next'
 
 /**
- * Cam kết có bằng chứng trên trang chi tiết sản phẩm, đặt tách khỏi thông tin nguồn gốc công bố để khách biết
- * mức độ tin cậy. Dữ liệu là phần `commitments` của `GET /api/products/:slug`.
- * Không có cam kết thì không hiện gì, nên không bao giờ hiện bảo hành không căn cứ.
+ * Evidenced commitments on the product page, separate from the origin statement so customers know how much to trust
+ * each. Data is the `commitments` part of `GET /api/products/:slug`. Without commitments nothing shows, so an
+ * unfounded warranty never appears.
  */
 defineProps<{ commitments: PublicCommitment[] }>()
 </script>

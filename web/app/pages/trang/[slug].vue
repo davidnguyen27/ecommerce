@@ -25,7 +25,7 @@ useSeo({
   <main v-if="data" class="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-16">
     <h1>{{ data.title }}</h1>
     <p class="mt-3 text-sm text-muted-foreground">Phiên bản {{ data.version }}, cập nhật {{ publishedOn }}</p>
-    <!-- renderMarkdown đã thoát HTML trong nội dung -->
+    <!-- renderMarkdown already escaped HTML in the content -->
     <article class="prose-content mt-10 border-t border-border pt-10" v-html="html" />
   </main>
 </template>
