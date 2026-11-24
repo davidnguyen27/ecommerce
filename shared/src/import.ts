@@ -1,9 +1,9 @@
 import { z } from 'zod'
 
-/** Số dòng biến thể tối đa trong một file import, để cả file được kiểm và ghi trong một transaction. */
+/** Max variant rows per import file, so the whole file is checked and written in one transaction. */
 export const IMPORT_MAX_ROWS = 2000
 
-/** Một lỗi hoặc cảnh báo của file import. `row` là số dòng trong Excel; `column` là tiêu đề cột. */
+/** An import error or warning. `row` is the Excel row number; `column` the column header. */
 export const ImportIssue = z.object({
   sheet: z.string(),
   row: z.number().nullable(),
@@ -12,17 +12,17 @@ export const ImportIssue = z.object({
 })
 export type ImportIssue = z.infer<typeof ImportIssue>
 
-/** Kết quả xem trước: những gì sẽ được tạo nếu xác nhận. Còn lỗi thì xác nhận sẽ không ghi gì. */
+/** Preview: what confirming would create. With errors left, confirming writes nothing. */
 export const ImportPreview = z.object({
   products: z.number(),
   variants: z.number(),
-  /** Số biến thể (mới tạo hoặc đã có) sẽ được ghi tồn đầu kỳ. */
+  /** Number of variants (new or existing) that get opening stock. */
   openingStocks: z.number(),
   errors: z.array(ImportIssue),
   warnings: z.array(ImportIssue),
 })
 export type ImportPreview = z.infer<typeof ImportPreview>
 
-/** Kết quả xác nhận: số sản phẩm (nháp) và biến thể đã tạo, số biến thể đã ghi tồn đầu kỳ. */
+/** Confirm result: draft products and variants created, variants given opening stock. */
 export const ImportResult = z.object({ products: z.number(), variants: z.number(), openingStocks: z.number() })
 export type ImportResult = z.infer<typeof ImportResult>

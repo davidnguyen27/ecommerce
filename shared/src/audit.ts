@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { PageQuery, pageOf } from './pagination.ts'
 
-/** Query string của `GET /api/admin/audit`. Khoảng thời gian tính `from <= createdAt < to`. */
+/** Query string of `GET /api/admin/audit`. The range is `from <= createdAt < to`. */
 export const AuditQuery = z.object({
   actorId: z.uuid().optional(),
   entityType: z.string().min(1).optional(),
@@ -14,7 +14,7 @@ export type AuditQuery = z.infer<typeof AuditQuery>
 export const AuditActor = z.object({ id: z.string(), name: z.string(), email: z.string() })
 export type AuditActor = z.infer<typeof AuditActor>
 
-/** Những nhân viên đã có ít nhất một bản ghi audit. */
+/** Staff with at least one audit entry. */
 export const AuditActors = z.object({ items: z.array(AuditActor) })
 export type AuditActors = z.infer<typeof AuditActors>
 
