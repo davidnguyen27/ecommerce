@@ -157,7 +157,7 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
       const body = await prisma.$transaction(
         async (tx): Promise<CheckoutResult> => {
           const config = await requireShippingFeeConfig(tx)
-          await enforcePendingOrderLimit(tx, res, address)
+          await enforcePendingOrderLimit(tx, address)
           const privacyPolicy = customerId ? null : await findCurrentPrivacyPolicy(tx)
           if (!customerId && !privacyPolicy) {
             throw new AppError(

@@ -119,7 +119,7 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
       const body = await prisma.$transaction(
         async (tx): Promise<CheckoutResult> => {
           const config = await requireShippingFeeConfig(tx)
-          await enforcePendingOrderLimit(tx, res, address)
+          await enforcePendingOrderLimit(tx, address)
           // Khách vãng lai đồng ý với phiên bản hiện hành, đọc trong cùng transaction như lúc đăng ký.
           const privacyPolicy = customerId ? null : await findCurrentPrivacyPolicy(tx)
           if (!customerId && !privacyPolicy) {
