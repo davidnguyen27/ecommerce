@@ -1,33 +1,27 @@
 import {
-  CheckoutRequest,
   ErrorCode,
   RESERVATION_MINUTES,
   provinceName,
-  type CheckoutConflictDetails,
-  PreorderRequest,
+  type CheckoutRequest,
   type CheckoutResult,
-  type PreorderChange,
-  type PreorderConflictDetails,
-  type VoucherConflict,
+  type PreorderRequest,
 } from '@ecommerce/shared'
 import { wardName } from '@ecommerce/shared/wards'
 import type { Logger } from 'pino'
 import type { z } from 'zod'
 import type { AppDeps } from '../app.ts'
 import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
-import { cartVariants, type CartVariant } from '../checkout/live-variants.ts'
-import { createOrderPaymentLink, livePolicyVersions, storedImageOf } from '../checkout/order-snapshot.ts'
+import { createOrderPaymentLink, livePolicyVersions } from '../checkout/order-snapshot.ts'
 import { enforcePendingOrderLimit } from '../checkout/pending-orders.ts'
-import { findCurrentPreorderPolicy, findCurrentPrivacyPolicy } from '../content/pages.ts'
-import type { Prisma } from '../generated/prisma/client.ts'
-import type { PaymentPurpose } from '../generated/prisma/client.ts'
+import { findCurrentPrivacyPolicy } from '../content/pages.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
-import { checkPreorder } from '../preorders/check.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
-import { reserveStock } from '../stock/stock.ts'
-import { applyVoucherToOrder, voucherSnapshot, type VoucherLine } from '../vouchers/apply.ts'
+import { applyVoucherToOrder, voucherSnapshot } from '../vouchers/apply.ts'
+import { datMua } from './dat-mua.ts'
+import { datTruoc } from './dat-truoc.ts'
 import { recordOrderEvent } from './orders.ts'
+import type { Plan, PlacementInput } from './placement-plan.ts'
 import { priceOrder } from './price-order.ts'
 
 export type PlacementDeps = Pick<AppDeps, 'prisma' | 'payments' | 'siteUrl' | 'orderExpiry'>
@@ -41,53 +35,6 @@ export type Placer = {
   /** Log lỗi cổng trước khi ném 502. */
   log: Logger
 }
-
-type Tx = Prisma.TransactionClient
-
-/** Dòng đơn trước khi chia tiền giảm. */
-type LineDraft = Omit<Prisma.OrderLineUncheckedCreateWithoutOrderInput, 'discount'>
-
-/** Phần của một loại đơn mà pipeline cần sau khi plan đã khóa và kiểm. */
-type Claim = {
-  lines: LineDraft[]
-  /** Các dòng như mã giảm giá thấy (thương hiệu, danh mục lấy từ snapshot). */
-  voucherLines: VoucherLine[]
-  subtotal: number
-  /** Biến thể để chụp phiên bản chính sách của sản phẩm. */
-  variants: Iterable<CartVariant>
-  /** Mức cọc của đợt; không có với đơn hàng sẵn. */
-  depositPercent?: number
-  /** `details` của 409 khi mã giảm giá không còn như khách đã thấy. */
-  voucherConflictDetails: (voucher: VoucherConflict) => Record<string, unknown>
-  /** Phần riêng của loại đơn, tính khi đã có số tiền. */
-  settle: (amounts: { total: number; depositAmount: number | null }) => {
-    /** Cột riêng của loại đơn trên `order`. */
-    orderColumns: Partial<Prisma.OrderUncheckedCreateInput>
-    /** Phiên bản chính sách riêng của loại đơn, thêm vào chính sách của sản phẩm. */
-    extraPolicyVersionIds: string[]
-    eventData: Prisma.InputJsonObject
-    payment: { purpose: PaymentPurpose; amount: number; description: (code: number) => string }
-  }
-}
-
-/** Phần riêng của một loại đơn. Nội bộ module: nơi gọi chọn loại đơn bằng entry point. */
-type Plan<Input> = {
-  /** Động từ trong thông điệp lỗi: "đặt mua", "đặt trước". */
-  verb: string
-  saleType: 'standard' | 'preorder'
-  /** Thông điệp 429 khi quá giới hạn đặt theo IP. */
-  tooManyAttempts: string
-  /** Kiểm thêm trước khi đụng DB (bước 1). */
-  checkInput?: (input: Input) => void
-  /** Bước 4–5: đọc chính sách riêng, khóa dòng biến thể hay dòng suất, kiểm và dựng dòng đơn. Lỗi thì ném 409. */
-  claim: (tx: Tx, input: Input) => Promise<Claim>
-}
-
-/** Phần chung của body đặt mua và đặt trước, sau khi parse. */
-type PlacementInput = Pick<
-  z.output<typeof CheckoutRequest>,
-  'address' | 'invoice' | 'note' | 'acceptPrivacyPolicy' | 'voucherCode' | 'discount'
->
 
 /**
  * Tạo đơn (GLOSSARY "Đặt mua", "Đặt trước"). Mỗi entry point tạo một đơn chờ thanh toán trong một transaction và trả
@@ -254,186 +201,4 @@ async function place<Input extends PlacementInput>(
     // Gọi cổng thanh toán nằm trong transaction nên cần lâu hơn mặc định 5 giây.
     { timeout: 30_000, maxWait: 10_000 },
   )
-}
-
-/**
- * Đặt mua: mọi dòng giỏ phải còn bán, đúng giá khách thấy và đủ hàng. Gom mọi dòng sai trong một lần, theo thứ tự dòng
- * khách gửi; vẫn giữ hàng các dòng đúng để báo đủ các dòng thiếu hàng (lỗi thì rollback nên không giữ gì).
- */
-const datMua: Plan<z.output<typeof CheckoutRequest>> = {
-  verb: 'đặt mua',
-  saleType: 'standard',
-  tooManyAttempts: 'Bạn đã đặt mua quá nhiều lần, vui lòng thử lại sau',
-  async claim(tx, input) {
-    const variants = await cartVariants(
-      tx,
-      input.lines.map((l) => l.variantId),
-    )
-    const problems: CheckoutConflictDetails['lines'] = []
-    for (const line of input.lines) {
-      const variant = variants.get(line.variantId)?.variant
-      if (!variant) problems.push({ variantId: line.variantId, change: { kind: 'discontinued' } })
-      else if (variant.price !== line.price) {
-        problems.push({ variantId: line.variantId, change: { kind: 'price', from: line.price, to: variant.price } })
-      }
-    }
-    const reserved = await reserveStock(
-      tx,
-      input.lines.filter((line) => !problems.some((p) => p.variantId === line.variantId)),
-    )
-    if (!reserved.ok) {
-      for (const variantId of reserved.shortVariantIds) problems.push({ variantId, change: { kind: 'out_of_stock' } })
-    }
-    if (problems.length > 0) {
-      const order = new Map(input.lines.map((line, index) => [line.variantId, index]))
-      const details: CheckoutConflictDetails = {
-        lines: problems.sort((a, b) => order.get(a.variantId)! - order.get(b.variantId)!),
-      }
-      throw new AppError(
-        409,
-        ErrorCode.CONFLICT,
-        'Giỏ hàng đã thay đổi, hãy xem lại trước khi đặt mua',
-        undefined,
-        details,
-      )
-    }
-
-    // Tới đây mọi dòng đều có biến thể đang bán trong snapshot đang xuất bản, và đã được giữ đủ số lượng.
-    const lines = input.lines.map((line, position) => {
-      const found = variants.get(line.variantId)!
-      const variant = found.variant!
-      return {
-        position,
-        variantId: variant.id,
-        sku: variant.sku,
-        productName: found.snapshot!.name,
-        attributes: variant.attributes,
-        image: storedImageOf(found) ?? undefined,
-        price: variant.price,
-        quantity: line.quantity,
-        reservedQuantity: line.quantity,
-        brandId: found.snapshot!.brandId,
-        categoryId: found.snapshot!.categoryId,
-      }
-    })
-    return {
-      lines: lines.map(({ brandId: _b, categoryId: _c, ...line }) => line),
-      voucherLines: lines.map(({ variantId, brandId, categoryId, price, quantity }) => ({
-        variantId,
-        brandId,
-        categoryId,
-        price,
-        quantity,
-      })),
-      subtotal: lines.reduce((sum, line) => sum + line.price * line.quantity, 0),
-      variants: [...variants.values()],
-      voucherConflictDetails: (voucher): CheckoutConflictDetails => ({ lines: [], voucher }),
-      settle: ({ total }) => ({
-        orderColumns: {},
-        extraPolicyVersionIds: [],
-        eventData: {},
-        payment: { purpose: 'full', amount: total, description: (code) => `Thanh toán đơn hàng #${code}` },
-      }),
-    }
-  },
-}
-
-const preorderConflict = (change: PreorderChange) => {
-  const messages: Record<PreorderChange['kind'], string> = {
-    in_stock: 'Sản phẩm đã có hàng sẵn, bạn có thể mua ngay',
-    price: 'Giá đã thay đổi, hãy xem lại trước khi đặt trước',
-    deposit: 'Mức cọc đã thay đổi, hãy xem lại trước khi đặt trước',
-    campaign: 'Đợt đặt trước đã thay đổi hoặc đã đóng',
-    sold_out: 'Không còn đủ suất đặt trước cho số lượng này',
-    discontinued: 'Sản phẩm không còn bán',
-  }
-  const details: PreorderConflictDetails = { change }
-  return new AppError(409, ErrorCode.CONFLICT, messages[change.kind], undefined, details)
-}
-
-/**
- * Đặt trước một biến thể, không qua giỏ hàng (ADR 0012): mỗi đơn một dòng, trả cọc trước. Đơn chờ cọc chiếm suất của
- * đợt, không giữ hàng (ADR 0013); hết hạn hay hủy thì suất tự trống ra. Dừng ở thay đổi đầu tiên khách cần xem lại.
- */
-const datTruoc: Plan<z.output<typeof PreorderRequest>> = {
-  verb: 'đặt trước',
-  saleType: 'preorder',
-  tooManyAttempts: 'Bạn đã đặt quá nhiều lần, vui lòng thử lại sau',
-  checkInput(input) {
-    if (input.acceptPreorderPolicy !== true) {
-      throw invalidField('acceptPreorderPolicy', 'Cần đồng ý với chính sách đặt trước')
-    }
-  },
-  async claim(tx, input) {
-    const preorderPolicy = await findCurrentPreorderPolicy(tx)
-    if (!preorderPolicy) {
-      throw new AppError(
-        503,
-        ErrorCode.SERVICE_UNAVAILABLE,
-        'Chưa thể đặt trước vì chính sách đặt trước chưa được công bố',
-      )
-    }
-
-    const { found, campaign, problem } = await checkPreorder(tx, input.variantId, input.quantity, { lock: true })
-    const variant = found.variant
-    if (problem === 'discontinued' || !variant) throw preorderConflict({ kind: 'discontinued' })
-    if (problem === 'in_stock') throw preorderConflict({ kind: 'in_stock' })
-    // Đợt khách thấy đã đóng hay đã thay bằng đợt khác: lời hẹn giao có thể khác, khách phải xem lại.
-    if (!campaign || campaign.id !== input.campaignId) throw preorderConflict({ kind: 'campaign' })
-    if (variant.price !== input.price) {
-      throw preorderConflict({ kind: 'price', from: input.price, to: variant.price })
-    }
-    if (campaign.depositPercent !== input.depositPercent) {
-      throw preorderConflict({ kind: 'deposit', from: input.depositPercent, to: campaign.depositPercent })
-    }
-    if (problem === 'sold_out') throw preorderConflict({ kind: 'sold_out' })
-
-    const snapshot = found.snapshot!
-    return {
-      // Đơn một dòng nên dòng nhận cả phần giảm; không giữ hàng.
-      lines: [
-        {
-          position: 0,
-          variantId: variant.id,
-          sku: variant.sku,
-          productName: snapshot.name,
-          attributes: variant.attributes,
-          image: storedImageOf(found) ?? undefined,
-          price: variant.price,
-          quantity: input.quantity,
-        },
-      ],
-      voucherLines: [
-        {
-          variantId: variant.id,
-          brandId: snapshot.brandId,
-          categoryId: snapshot.categoryId,
-          price: variant.price,
-          quantity: input.quantity,
-        },
-      ],
-      subtotal: variant.price * input.quantity,
-      variants: [found],
-      depositPercent: campaign.depositPercent,
-      voucherConflictDetails: (voucher): PreorderConflictDetails => ({ voucher }),
-      settle: ({ depositAmount }) => ({
-        orderColumns: {
-          kind: 'preorder',
-          preorderCampaignId: campaign.id,
-          depositPercent: campaign.depositPercent,
-          depositAmount: depositAmount!,
-          deliveryFrom: campaign.deliveryFrom,
-          deliveryTo: campaign.deliveryTo,
-          remainderDays: campaign.remainderDays,
-        },
-        extraPolicyVersionIds: [preorderPolicy.id],
-        eventData: { depositAmount: depositAmount!, campaignId: campaign.id },
-        payment: {
-          purpose: 'deposit',
-          amount: depositAmount!,
-          description: (code) => `Đặt cọc đơn hàng #${code}`,
-        },
-      }),
-    }
-  },
 }

@@ -1,6 +1,6 @@
 # Spec: Tách module đặt đơn
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Nguồn: buổi rà soát `api/src` bằng `/codebase-design` ngày 2026-11-24 (ứng viên #1), rồi thiết kế interface theo kiểu "design it twice" với ba phương án: interface tối thiểu, linh hoạt tối đa, tối ưu cho nơi gọi phổ biến. Spec này chọn phương án kết hợp được đề xuất ở cuối buổi. Đây là refactor: không đổi hành vi, không đổi contract API, không có migration, không có ADR mới. Quyết định liên quan: ADR 0007 (giữ hàng), ADR 0009 (ghi nhận tiền về), ADR 0012 và 0013 (đặt trước), ADR 0015 (đổi hàng không tạo đơn mới).
 
