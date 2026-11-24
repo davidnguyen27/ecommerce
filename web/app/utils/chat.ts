@@ -1,29 +1,29 @@
 import type { ChatMessageView, ChatTurnOutcome, ChatUnavailableReason, ProductCard } from '@ecommerce/shared'
 
-/** Khóa localStorage giữ mã cuộc trò chuyện, để cuộc còn khi chuyển trang hay tải lại (spec M8). */
+/** localStorage key holding the conversation id, so it survives navigation and reloads (spec M8). */
 export const CHAT_STORAGE_KEY = 'chat-conversation'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-/** Mã cuộc trò chuyện đã lưu; giá trị lạ coi như chưa có. */
+/** The saved conversation id; odd values count as none. */
 export function readConversationId(raw: string | null): string | null {
   return raw && UUID.test(raw) ? raw : null
 }
 
-/** Trang đặt mua, đặt trước và thanh toán không có khung chat (spec M8), để không che nút đặt mua. */
+/** Checkout, pre-order and payment pages have no chat widget (spec M8), so it never covers the order button. */
 const HIDDEN_PATHS = [/^\/dat-mua\/?$/, /^\/dat-truoc\//, /^\/thanh-toan-gia-lap\/?$/, /^\/admin(\/|$)/]
 
 export function chatHiddenOn(path: string): boolean {
   return HIDDEN_PATHS.some((pattern) => pattern.test(path))
 }
 
-/** Slug sản phẩm khi khách đang ở trang sản phẩm, để chatbot hiểu "cái này". */
+/** The product slug when on a product page, so the chatbot understands "cái này". */
 export function viewingProductSlug(path: string): string | undefined {
   const match = /^\/san-pham\/([^/?#]+)\/?$/.exec(path)
   return match ? decodeURIComponent(match[1]!) : undefined
 }
 
-/** Lý do chatbot không trả lời, như khách đọc. */
+/** Why the chatbot does not answer, as customers read it. */
 export function unavailableText(reason: ChatUnavailableReason | Exclude<ChatTurnOutcome, 'answered'>): string {
   switch (reason) {
     case 'exhausted':
@@ -35,7 +35,7 @@ export function unavailableText(reason: ChatUnavailableReason | Exclude<ChatTurn
   }
 }
 
-/** Một tin trong khung chat. Thẻ sản phẩm đầy đủ chỉ có ở lượt vừa trả lời; mở lại thì chỉ còn link theo tên. */
+/** A chat message. Full product cards exist only for the latest answer; on reopen only name links remain. */
 export type ChatEntry = ChatMessageView & { cards: ProductCard[] }
 
 export function toEntries(messages: readonly ChatMessageView[]): ChatEntry[] {
@@ -43,8 +43,8 @@ export function toEntries(messages: readonly ChatMessageView[]): ChatEntry[] {
 }
 
 /**
- * Tin của khách hiện ngay khi gửi, trước khi có trả lời; mã tạm được thay bằng tin thật nếu cần. Câu hỏi đã cắt
- * khoảng trắng như API lưu.
+ * The customer's message shows as soon as it is sent, before the answer; the temporary id is replaced by the real
+ * message if needed. The question is trimmed as the API stores it.
  */
 export function pendingCustomerEntry(content: string, now = new Date()): ChatEntry {
   return {
@@ -59,8 +59,8 @@ export function pendingCustomerEntry(content: string, now = new Date()): ChatEnt
 }
 
 /**
- * Đường dẫn trang sản phẩm, trang chính sách mà chatbot viết trơn ("/san-pham/air-max-90") thành link markdown, vì
- * markdown-it không tự tạo link cho đường dẫn tương đối. Đường dẫn đã nằm trong link markdown thì giữ nguyên.
+ * Turns bare product and policy paths the chatbot writes ("/san-pham/air-max-90") into markdown links, since
+ * markdown-it does not autolink relative paths. Paths already inside a markdown link stay as they are.
  */
 export function linkifyShopPaths(text: string): string {
   return text.replace(/(?<![([/\w])\/(?:san-pham|trang)\/[a-z0-9-]+(?![\w\]])/g, (path) => `[${path}](${path})`)

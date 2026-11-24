@@ -33,7 +33,7 @@ import { orderNotFound, parseOrderCode } from '../orders/orders.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 import { PAYMENT_LINK_REFERENCES } from '../payments/record-payment.ts'
 
-/** Ô tìm kiếm: mã đơn đúng bằng, số điện thoại (nhận cả `+84`, dấu cách, chấm, gạch) hoặc email chứa chuỗi đã gõ. */
+/** Search box: exact order code, phone (accepts `+84`, spaces, dots, dashes) or email containing the text. */
 function searchWhere(q: string): Prisma.OrderWhereInput {
   const or: Prisma.OrderWhereInput[] = [{ email: { contains: q.toLowerCase() } }]
   const digits = q.replace(/[\s.-]/g, '').replace(/^\+?84(?=\d{9}$)/, '0')
@@ -42,7 +42,7 @@ function searchWhere(q: string): Prisma.OrderWhereInput {
   return { OR: or }
 }
 
-/** Đơn hàng ở trang quản trị: xem cần `order.view`, xử lý đơn cần `order.fulfill`. */
+/** Admin orders: viewing needs `order.view`, fulfillment `order.fulfill`. */
 export function adminOrderRoutes(prisma: Db, storage: Storage, payments: PaymentGateway, mail: FulfillmentMail) {
   const findOrder = async (code: string) => {
     const order = await prisma.order.findUnique({
@@ -53,7 +53,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
     return order
   }
 
-  /** Route chuyển trạng thái giao hàng: chạy trong `audited()`, ghi bản audit hàm trả về, trả lại chi tiết đơn. */
+  /** Fulfillment transition route: runs in `audited()`, writes the returned audit entry, returns the order detail. */
   const transition =
     (
       run: (tx: Prisma.TransactionClient, orderId: string, staffId: string, req: Request) => Promise<FulfillmentAudit>,
@@ -78,7 +78,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
         ...(query.fulfillmentStatus !== 'all' && { fulfillmentStatus: query.fulfillmentStatus }),
         ...(query.kind !== 'all' && { kind: query.kind }),
         ...(query.campaignId && { preorderCampaignId: query.campaignId }),
-        // Quá hạn trả phần còn lại: cờ còn đó nghĩa là chưa trả đủ (trả đủ thì xóa cờ, ticket 08).
+        // Remaining balance overdue: the flag means not fully paid yet (paying clears it, ticket 08).
         ...(query.remainderOverdue !== undefined && {
           remainderOverdueAt: query.remainderOverdue ? { not: null } : null,
         }),
@@ -91,7 +91,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
         prisma.order.findMany({
           where,
           include: { lines: { select: { quantity: true } } },
-          // Mã đơn tăng theo thời điểm đặt, nên sắp theo mã là sắp theo lúc đặt mà vẫn ổn định.
+          // Order codes grow with order time, so sorting by code sorts by time and stays stable.
           orderBy: { code: direction },
           ...pageWindow(query),
         }),
@@ -126,7 +126,8 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       const code = String(req.params.code)
       const order = await findOrder(code)
 
-      // Khách gọi điện báo thôi: nhân viên hủy hộ, cùng hàm với hết hạn và khách tự hủy, audit trong cùng transaction.
+      // The customer called to cancel: staff cancel for them, with the same function as expiry and self-cancel, audited
+      // in the same transaction.
       const outcome = await audited(prisma, req, async (tx, audit) => {
         const result = await cancelInTransaction(tx, order.id, { reason: 'staff', staffId: currentStaff(req).id })
         if (result === 'cancelled') {
@@ -142,7 +143,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       })
       assertCancellable(outcome)
       if (outcome === 'cancelled') await cancelPaymentLinks({ payments, logger: req.log }, order)
-      // Đơn đã hủy từ trước cũng trả đơn hiện tại, không ghi gì.
+      // Already cancelled: return the current order and write nothing.
       const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, code)
       res.json(body)
     })
@@ -152,8 +153,9 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       const order = await findOrder(code)
       const staffId = currentStaff(req).id
       await audited(prisma, req, (tx, audit) => cancelPaidOrder(tx, mail, audit, order.id, staffId, input))
-      // Đơn đặt trước có thể còn link trả phần còn lại: hủy sau khi commit như hủy đơn chưa trả; tiền về sau đó thành
-      // cần đối soát. Link đã trả xong của đơn hàng sẵn hủy cũng không sao: lỗi chỉ được log.
+      // Pre-orders may still have a remaining-balance link: cancel it after commit, as for unpaid cancels; money
+      // arriving later needs reconciliation. Cancelling an in-stock order's already-paid link is harmless: errors are
+      // only logged.
       await cancelPaymentLinks({ payments, logger: req.log }, order)
       const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, code)
       res.json(body)

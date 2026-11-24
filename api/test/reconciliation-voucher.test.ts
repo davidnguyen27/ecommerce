@@ -15,8 +15,9 @@ const paidInfo = (amount: number, reference: string): PaymentInfo => ({
 const customer = (n: number) => ({ ...ADDRESS, email: `khach${n}@example.com`, phone: `091000000${n}` })
 
 /**
- * Cửa hàng (AM-40 hàng sẵn 2.000.000, AM-41 đặt trước 2.100.000 cọc 30%) có mã `TET2027` giảm 10% với `totalLimit`
- * lượt. `cancelledThenPaid` dựng đơn có mã, khách tự hủy rồi tiền mới về đúng số sau giảm: cần đối soát.
+ * A shop (AM-40 in stock at 2,000,000, AM-41 pre-order at 2,100,000 with 30% deposit) with voucher `TET2027` at 10%
+ * and `totalLimit` uses. `cancelledThenPaid` builds an order with the voucher that the customer cancels before the
+ * exact discounted amount arrives: reconciliation needed.
  */
 async function voucherReconciliation(totalLimit: number) {
   const app = await preorderShop()
@@ -38,13 +39,13 @@ async function voucherReconciliation(totalLimit: number) {
     })
   expect(created.status).toBe(201)
 
-  /** Khách `n` đặt 1 đôi AM-40 kèm mã: tiền giảm 200.000, tổng 1.830.000. */
+  /** Customer `n` orders 1 pair of AM-40 with the voucher: 200,000 off, total 1,830,000. */
   const standard = async (n: number) => {
     const res = await app.checkout({ address: customer(n), voucherCode: 'TET2027', discount: 200_000 })
     expect(res.status).toBe(201)
     return { ...(res.body as { code: number; token: string }), kind: 'full', amount: 1_830_000 }
   }
-  /** Khách `n` đặt trước 1 đôi AM-41 kèm mã: tiền giảm 210.000, cọc 567.000. */
+  /** Customer `n` pre-orders 1 pair of AM-41 with the voucher: 210,000 off, deposit 567,000. */
   const preorder = async (n: number) => {
     const res = await app.preorder(campaignId, { address: customer(n), voucherCode: 'TET2027', discount: 210_000 })
     expect(res.status).toBe(201)
@@ -54,7 +55,7 @@ async function voucherReconciliation(totalLimit: number) {
     request.get(`/api/orders/${placed.code}`).query({ token: placed.token })
   const cancelledThenPaid = async (placed: { code: number; token: string; kind: string; amount: number }) => {
     expect((await request.post(`/api/orders/${placed.code}/cancel`).query({ token: placed.token })).status).toBe(200)
-    // Mã đơn bên cổng: đơn hàng sẵn là mã đơn, link cọc là `<mã>-deposit-1` (cổng giả trong bộ nhớ).
+    // Gateway reference: an in-stock order uses its code, a deposit link `<code>-deposit-1` (in-memory fake gateway).
     const reference = placed.kind === 'full' ? String(placed.code) : `${placed.code}-deposit-1`
     app.payments.payments.set(reference, paidInfo(placed.amount, `FT-${placed.code}`))
     await view({ ...placed }).query({ refresh: '1' })
@@ -85,7 +86,7 @@ describe('khôi phục đơn có mã giảm giá', () => {
     const app = await voucherReconciliation(1)
     const first = await app.standard(1)
     await app.cancelledThenPaid(first)
-    // Lượt trống ra khi đơn bị hủy, khách khác dùng mất.
+    // The use freed up when the order was cancelled, and another customer took it.
     await app.standard(2)
 
     const res = await app.restore(first.code)

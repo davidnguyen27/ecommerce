@@ -8,11 +8,11 @@ import { PreorderOffer, ProductStatus, PublicImage, VariantStatus } from './prod
 import { ProvinceCode } from './regions.ts'
 import { VoucherCodeInput, VoucherConflict, VoucherQuote } from './vouchers.ts'
 
-/** Trạng thái nhập hàng của đợt; "đã về kho" tính theo từng đơn, không nằm ở đây. */
+/** Campaign supply status; "arrived" is tracked per order, not here. */
 export const PreorderSupplyStatus = z.enum(['not_ordered', 'ordered', 'in_transit', 'issue'])
 export type PreorderSupplyStatus = z.infer<typeof PreorderSupplyStatus>
 
-/** Một biến thể nhận đặt trong đợt và số suất của nó. */
+/** A variant open in the campaign and its allocation. */
 export const PreorderCampaignVariantInput = z.object({
   variantId: z.uuid(),
   allocation: z.number().int().min(1, 'Số suất ít nhất là 1').max(100_000),
@@ -33,18 +33,18 @@ const Variants = z
   })
 
 const CampaignFields = z.object({
-  /** Phần trăm tiền hàng khách cọc. */
+  /** Percentage of goods the customer deposits. */
   depositPercent: z.number().int().min(10, 'Mức cọc từ 10%').max(100, 'Mức cọc tối đa 100%'),
-  /** Thời gian giao dự kiến, `YYYY-MM-DD`. */
+  /** Expected delivery, `YYYY-MM-DD`. */
   deliveryFrom: z.iso.date(),
   deliveryTo: z.iso.date(),
-  /** Hạn đóng nhận đặt, ISO 8601; phải ở tương lai khi tạo hoặc khi đổi. */
+  /** Closing time for pre-orders, ISO 8601; must be in the future when created or changed. */
   closesAt: z.iso.datetime({ offset: true }),
-  /** Số ngày khách được trả phần còn lại từ lúc hàng về. */
+  /** Days the customer has to pay the remainder after arrival. */
   remainderDays: z.number().int().min(1, 'Ít nhất 1 ngày').max(90),
   supplyStatus: PreorderSupplyStatus,
   supplyNote: z.string().trim().max(2000),
-  /** Toàn bộ biến thể của đợt sau khi lưu: thêm biến thể mới, sửa suất, bỏ biến thể chưa có đơn. */
+  /** All campaign variants after saving: add new ones, change allocations, drop variants without orders. */
   variants: Variants,
 })
 
@@ -54,7 +54,7 @@ const deliveryOrder = (value: { deliveryFrom?: string; deliveryTo?: string }, ct
   }
 }
 
-/** Mở một đợt đặt trước cho một sản phẩm. */
+/** Opens a pre-order campaign for one product. */
 export const PreorderCampaignCreate = CampaignFields.extend({
   productId: z.uuid(),
   remainderDays: CampaignFields.shape.remainderDays.default(7),
@@ -64,8 +64,9 @@ export const PreorderCampaignCreate = CampaignFields.extend({
 export type PreorderCampaignCreate = z.input<typeof PreorderCampaignCreate>
 
 /**
- * Sửa đợt: chỉ gửi các trường muốn đổi. Khi đợt đã có đơn thì mức cọc và số ngày trả phần còn lại bị khóa, suất không
- * thấp hơn số đã dùng, và không bỏ được biến thể đã có đơn. Đợt đã đóng thì không đổi được hạn đóng.
+ * Edits a campaign: send only the fields to change. Once it has orders, deposit percent and remainder days are locked,
+ * allocations cannot go below used, and variants with orders cannot be dropped. A closed campaign's closing time is
+ * fixed.
  */
 export const PreorderCampaignUpdate = CampaignFields.partial().superRefine(deliveryOrder)
 export type PreorderCampaignUpdate = z.input<typeof PreorderCampaignUpdate>
@@ -86,17 +87,17 @@ const CampaignHeader = z.object({
   remainderDays: z.number(),
   supplyStatus: PreorderSupplyStatus,
   supplyNote: z.string(),
-  /** Có khi nhân viên đóng tay. */
+  /** Present when staff closed it by hand. */
   closedAt: z.string().nullable(),
-  /** Đang nhận đặt: chưa đóng tay và chưa tới hạn đóng. */
+  /** Taking pre-orders: not closed by hand and not past its closing time. */
   isOpen: z.boolean(),
   createdAt: z.string(),
   createdBy: AuditActor,
 })
 
 /**
- * Một biến thể của đợt: suất và số đã dùng (tổng số lượng của đơn đặt trước chưa hủy), trong đó số đã cọc (gồm cả đã trả
- * đủ) và số đang chờ cọc; số đã về là số cái đã được giữ từ hàng nhập về cho các đơn đó.
+ * A campaign variant: allocation and used (total quantity of uncancelled pre-orders), of which deposited (fully paid
+ * included) and awaiting deposit; arrived is units reserved from received stock for those orders.
  */
 export const PreorderCampaignVariant = z.object({
   variantId: z.string(),
@@ -111,7 +112,7 @@ export const PreorderCampaignVariant = z.object({
 })
 export type PreorderCampaignVariant = z.infer<typeof PreorderCampaignVariant>
 
-/** Một đơn chưa hủy của đợt, ở chi tiết đợt; xếp theo lúc cọc (đơn chờ cọc sau cùng). */
+/** An uncancelled order of the campaign, in the campaign detail; by deposit time (pending deposits last). */
 export const PreorderCampaignOrder = z.object({
   code: z.number(),
   recipientName: z.string(),
@@ -134,8 +135,8 @@ export const PreorderCampaign = CampaignHeader.extend({
 export type PreorderCampaign = z.infer<typeof PreorderCampaign>
 
 /**
- * `GET /api/admin/preorder-campaigns/attention` (ticket 10): đơn đặt trước quá hạn trả phần còn lại, và đợt đang gặp sự
- * cố nhập hàng mà còn đơn đã cọc chưa trả đủ. `total` là tổng số mục, cho số đếm ở bảng điều khiển.
+ * `GET /api/admin/preorder-campaigns/attention` (ticket 10): pre-orders with an overdue remainder, and campaigns with a
+ * supply problem that still have deposited orders not fully paid. `total` counts all items, for the dashboard badge.
  */
 export const PreorderAttention = z.object({
   overdueOrders: z.array(
@@ -154,7 +155,7 @@ export const PreorderAttention = z.object({
       id: z.string(),
       productName: z.string(),
       supplyNote: z.string(),
-      /** Đơn đã cọc mà chưa trả đủ (chờ hàng về hay chờ phần còn lại). */
+      /** Deposited orders not fully paid (awaiting stock or the remainder). */
       depositedOrders: z.number(),
     }),
   ),
@@ -167,16 +168,16 @@ export const PreorderCampaignPage = pageOf(
 )
 export type PreorderCampaignPage = z.infer<typeof PreorderCampaignPage>
 
-// Khách đặt trước (ADR 0012): không qua giỏ hàng, mỗi đơn một biến thể.
+// Pre-order checkout (ADR 0012): outside the cart, one variant per order.
 
 /**
- * Tiền cọc của đơn đặt trước: phần trăm của đợt trên tiền hàng sau giảm giá (spec M5), làm tròn lên 1.000 VND, không
- * vượt số đó. API và trang đặt trước dùng chung để khách thấy đúng số sẽ trả.
+ * Pre-order deposit: the campaign percentage of goods after discount (spec M5), rounded up to 1,000 VND, capped at
+ * that amount. Shared by the API and the pre-order page so customers see exactly what they pay.
  */
 export const depositFor = (subtotal: number, percent: number) =>
   Math.min(subtotal, Math.ceil((subtotal * percent) / 100 / 1000) * 1000)
 
-/** Body của `POST /api/preorders/quote`. Thiếu `provinceCode` thì chưa tính phí giao. */
+/** Body of `POST /api/preorders/quote`. Without `provinceCode` no shipping fee is computed. */
 export const PreorderQuoteRequest = z.object({
   variantId: z.uuid(),
   quantity: CartLine.shape.quantity,
@@ -187,46 +188,46 @@ export const PreorderQuoteRequest = z.object({
 export type PreorderQuoteRequest = z.infer<typeof PreorderQuoteRequest>
 
 /**
- * Báo giá đặt trước như khách sẽ đặt lúc này; không ghi gì. `offer` là đợt đang mở của biến thể (`null` khi không có),
- * `problem` là lý do chưa đặt được với số lượng này (`null` khi đặt được). Các khoản tiền phụ thuộc phí giao là `null`
- * khi chưa chọn tỉnh/thành.
+ * Pre-order quote as the customer would order now; writes nothing. `offer` is the variant's open campaign (`null` if
+ * none), `problem` why this quantity cannot be ordered (`null` if it can). Amounts depending on shipping are `null`
+ * before a province is picked.
  */
 export const PreorderQuote = z.object({
   variantId: z.string(),
   quantity: z.number(),
-  /** `null` khi biến thể không còn bán (ngừng bán, sản phẩm không còn xuất bản, không tồn tại). */
+  /** `null` when the variant is no longer for sale (discontinued, unpublished, missing). */
   product: z.object({ slug: z.string(), name: z.string() }).nullable(),
   sku: z.string().nullable(),
   attributes: AttributeValues.nullable(),
   image: PublicImage.nullable(),
   price: z.number().nullable(),
   offer: PreorderOffer.extend({ remainderDays: z.number() }).nullable(),
-  /** Chỉ `in_stock`, `campaign`, `sold_out`, `discontinued`: giá và mức cọc là của chính báo giá này. */
+  /** Only `in_stock`, `campaign`, `sold_out`, `discontinued`: price and deposit come from this quote itself. */
   problem: z.lazy(() => PreorderChange).nullable(),
   subtotal: z.number().nullable(),
-  /** Kết quả áp mã; `null` khi không gửi mã. */
+  /** Voucher result; `null` when no code was sent. */
   voucher: VoucherQuote.nullable(),
-  /** Tiền giảm của mã, 0 khi không có mã hoặc mã không áp được. Cọc, phí giao và tổng đều tính sau giảm. */
+  /** Voucher discount, 0 without a code or when it does not apply. Deposit, shipping and total are after discount. */
   discount: z.number(),
   depositAmount: z.number().nullable(),
   shippingFee: z.number().nullable(),
   total: z.number().nullable(),
-  /** Tổng phải trả trừ tiền cọc, gồm phí giao. */
+  /** Total due minus deposit, shipping included. */
   remainingAmount: z.number().nullable(),
-  /** Các khoản khi không dùng mã, để trang so sánh; bằng các trường trên khi không có tiền giảm. */
+  /** Amounts without the voucher, for comparison; equal to the fields above when there is no discount. */
   depositAmountWithoutVoucher: z.number().nullable(),
   totalWithoutVoucher: z.number().nullable(),
-  /** Chính sách đặt trước đang xuất bản; `null` khi chưa có, lúc đó chưa đặt trước được. */
+  /** The published pre-order policy; `null` if none, in which case pre-ordering is not possible. */
   preorderPolicy: z.object({ slug: z.string(), title: z.string() }).nullable(),
-  /** Chính sách đổi trả, bảo hành đang xuất bản của sản phẩm. */
+  /** The product's published returns and warranty policies. */
   policies: z.array(z.object({ slug: z.string(), title: z.string() })),
   groundShippingOnly: z.boolean(),
 })
 export type PreorderQuote = z.infer<typeof PreorderQuote>
 
 /**
- * Body của `POST /api/preorders`. `campaignId`, `price` và `depositPercent` là thứ khách đã thấy: khác hiện tại thì 409.
- * Kèm access token của khách thì đơn gắn với tài khoản.
+ * Body of `POST /api/preorders`. `campaignId`, `price` and `depositPercent` are what the customer saw: any difference
+ * gives 409. A customer access token links the order to the account.
  */
 export const PreorderRequest = z.object({
   variantId: z.uuid(),
@@ -236,36 +237,36 @@ export const PreorderRequest = z.object({
   depositPercent: z.number().int().min(10).max(100),
   address: ShippingAddress,
   note: z.string().trim().max(1000).default(''),
-  /** Khách vãng lai phải tick, như đặt mua. */
+  /** Guests must tick it, as at checkout. */
   acceptPrivacyPolicy: z.boolean().optional(),
-  /** Mọi khách phải tick: đã đọc điều kiện cọc, hủy/hoàn và hạn trả phần còn lại. */
+  /** Every customer must tick it: has read the deposit, cancel/refund and remainder deadline terms. */
   acceptPreorderPolicy: z.boolean().optional(),
   invoice: InvoiceInfo.optional(),
-  /** Mã giảm giá và tiền giảm khách đã thấy; khác lúc đặt thì 409 với `details.voucher`. */
+  /** Voucher code and discount the customer saw; a difference at order time gives 409 with `details.voucher`. */
   voucherCode: VoucherCodeInput.optional(),
   discount: z.number().int().min(0).default(0),
 })
 export type PreorderRequest = z.input<typeof PreorderRequest>
 
-/** Vì sao không đặt trước được như khách đã thấy. Không bao giờ kèm số suất còn lại (ADR 0006). */
+/** Why the pre-order cannot be placed as seen. Never includes remaining allocation (ADR 0006). */
 export const PreorderChange = z.discriminatedUnion('kind', [
-  /** Đã có hàng sẵn: mua ngay thay vì đặt trước. */
+  /** In stock now: buy instead of pre-ordering. */
   z.object({ kind: z.literal('in_stock') }),
   z.object({ kind: z.literal('price'), from: z.number(), to: z.number() }),
   z.object({ kind: z.literal('deposit'), from: z.number(), to: z.number() }),
-  /** Đợt khách thấy đã đóng hoặc đã thay bằng đợt khác (thời gian giao có thể khác). */
+  /** The campaign seen has closed or been replaced (delivery may differ). */
   z.object({ kind: z.literal('campaign') }),
-  /** Không còn đủ suất cho số lượng đã chọn. */
+  /** Not enough allocation left for the chosen quantity. */
   z.object({ kind: z.literal('sold_out') }),
-  /** Biến thể ngừng bán hoặc sản phẩm không còn xuất bản. */
+  /** The variant is discontinued or the product unpublished. */
   z.object({ kind: z.literal('discontinued') }),
 ])
 export type PreorderChange = z.infer<typeof PreorderChange>
 
 /**
- * Response của `POST /api/orders/:code/pay-remainder` và `/api/account/orders/:code/pay-remainder`: link trả phần còn
- * lại (mới mỗi lần) và hạn của nó. `token` là token tra cứu cấp thêm cho khách vào từ tài khoản, để trang kết quả mở
- * được đơn khi cổng đưa khách về; `null` khi khách đã có token.
+ * Response of `POST /api/orders/:code/pay-remainder` and `/api/account/orders/:code/pay-remainder`: a new
+ * remaining-balance link and its expiry. `token` is a lookup token issued for customers coming from the account, so
+ * the result page can open the order when the gateway sends them back; `null` when they already have one.
  */
 export const PayRemainderResult = z.object({
   checkoutUrl: z.string(),
@@ -275,8 +276,8 @@ export const PayRemainderResult = z.object({
 export type PayRemainderResult = z.infer<typeof PayRemainderResult>
 
 /**
- * `error.details` của 409 khi đặt trước: thay đổi của biến thể, đợt hay giá (`change`), hoặc (khi những thứ đó đều đúng)
- * mã giảm giá không còn như khách đã thấy (`voucher`). Không có gì được ghi.
+ * `error.details` of a pre-order 409: a change to the variant, campaign or price (`change`), or (when all of those
+ * hold) the voucher no longer as seen (`voucher`). Nothing is written.
  */
 export const PreorderConflictDetails = z.union([
   z.object({ change: PreorderChange }),
@@ -285,8 +286,9 @@ export const PreorderConflictDetails = z.union([
 export type PreorderConflictDetails = z.infer<typeof PreorderConflictDetails>
 
 /**
- * Đợt không nhập được hàng (M6a): các đơn đã cọc chưa có hàng về sẽ bị hủy, mỗi đơn hoàn đủ số còn hoàn được. Trả về
- * bởi `GET /api/admin/preorder-campaigns/:id/cancel-unsupplied` để hộp xác nhận hiện số đơn và tổng tiền sẽ hoàn.
+ * A campaign that cannot be supplied (M6a): deposited orders without arrived stock will be cancelled, each refunded in
+ * full. Returned by `GET /api/admin/preorder-campaigns/:id/cancel-unsupplied` so the confirm dialog shows the order
+ * count and total refund.
  */
 export const UnsuppliedPreview = z.object({
   orders: z.array(z.object({ code: z.number(), recipientName: z.string(), refundAmount: z.number() })),
@@ -294,7 +296,7 @@ export const UnsuppliedPreview = z.object({
 })
 export type UnsuppliedPreview = z.infer<typeof UnsuppliedPreview>
 
-/** Body của `POST /api/admin/preorder-campaigns/:id/cancel-unsupplied`: ghi chú bắt buộc (nhà cung cấp báo gì). */
+/** Body of `POST /api/admin/preorder-campaigns/:id/cancel-unsupplied`: a required note (what the supplier said). */
 export const CancelUnsuppliedRequest = z.object({
   note: z
     .string({ error: 'Nhập ghi chú: nhà cung cấp báo gì' })
@@ -304,7 +306,7 @@ export const CancelUnsuppliedRequest = z.object({
 })
 export type CancelUnsuppliedRequest = z.input<typeof CancelUnsuppliedRequest>
 
-/** Kết quả hủy hàng loạt: mã các đơn vừa hủy và đợt sau khi đóng. */
+/** Bulk cancel result: cancelled order codes and the closed campaign. */
 export const CancelUnsuppliedResult = z.object({
   cancelledOrderCodes: z.array(z.number()),
   campaign: PreorderCampaign,

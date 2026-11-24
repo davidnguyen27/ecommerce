@@ -1,6 +1,6 @@
 import { StaffProfile, type Permission } from '@ecommerce/shared'
 
-// `/admin/**` chỉ chạy ở trình duyệt nên giữ phiên trong biến module là đủ.
+// `/admin/**` runs only in the browser, so a module variable is enough to hold the session.
 const tokens = createTokenSession('/api/admin/auth')
 const profile = ref<StaffProfile | null>(null)
 
@@ -15,7 +15,7 @@ async function logout() {
   await navigateTo('/admin/login')
 }
 
-/** Gọi `/api/admin/*` kèm access token; hết phiên thì về trang đăng nhập. */
+/** Calls `/api/admin/*` with the access token; an expired session goes to the sign-in page. */
 async function adminFetch(path: string, options?: Parameters<typeof tokens.authorizedFetch>[1]): Promise<unknown> {
   try {
     return await tokens.authorizedFetch(path, options)
@@ -25,21 +25,21 @@ async function adminFetch(path: string, options?: Parameters<typeof tokens.autho
   }
 }
 
-/** Nạp lại nhân viên đang đăng nhập kèm quyền, để menu theo kịp khi role vừa bị đổi. */
+/** Reloads the signed-in staff member and permissions, so the menu follows a role change. */
 async function loadProfile(): Promise<StaffProfile> {
   profile.value = StaffProfile.parse(await adminFetch('/api/admin/me'))
   return profile.value
 }
 
-/** Có quyền này, hoặc khi truyền danh sách thì có ít nhất một quyền trong đó. */
+/** Has this permission, or with a list, at least one of them. */
 function can(permission: Permission | readonly Permission[]): boolean {
   const anyOf: readonly Permission[] = typeof permission === 'string' ? [permission] : permission
   return anyOf.some((p) => profile.value?.permissions.includes(p) ?? false)
 }
 
 /**
- * Mở được trang `to` của menu quản trị không: link, nút hay số liệu thuộc trang khác chỉ hiện khi mở được trang đó.
- * Quyền lấy từ `ADMIN_PAGE_PERMISSIONS` (menu và trang con), không khai lại tại chỗ (CODING_STANDARDS "Web").
+ * Whether admin page `to` can be opened: links, buttons or figures for another page show only when it can be opened.
+ * Permissions come from `ADMIN_PAGE_PERMISSIONS` (menu and subpages), never restated locally (CODING_STANDARDS "Web").
  */
 function canOpen(to: string): boolean {
   const permission = ADMIN_PAGE_PERMISSIONS.find((item) => item.to === to)?.permission

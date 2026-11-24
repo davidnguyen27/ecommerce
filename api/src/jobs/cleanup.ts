@@ -5,8 +5,8 @@ import { RATE_LIMITS } from '../http/rate-limit.ts'
 const LONGEST_RATE_LIMIT_WINDOW_MS = Math.max(...Object.values(RATE_LIMITS).map((limit) => limit.windowMs))
 
 /**
- * Xóa token và bộ đếm giới hạn tần suất đã hết hạn, và cuộc trò chuyện chatbot quá 90 ngày (spec M8). Hàng đã hết hạn không còn được đọc
- * (refresh token kế thừa hạn của cả family, nên xóa không làm hỏng việc phát hiện dùng lại).
+ * Deletes expired tokens and rate-limit counters, and chatbot conversations older than 90 days (spec M8). Expired rows
+ * are never read again (refresh tokens inherit the family expiry, so deleting does not break reuse detection).
  */
 export async function deleteExpiredRecords(db: DbClient, now = new Date()) {
   const [refreshTokens, customerTokens, rateLimitBuckets, chatConversations] = await Promise.all([

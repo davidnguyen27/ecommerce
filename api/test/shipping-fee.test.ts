@@ -14,7 +14,7 @@ const photo = () =>
     .jpeg()
     .toBuffer()
 
-/** Owner đã đăng nhập, có giày Air Max đã xuất bản: AM-40 giá 2.000.000 còn 3 đôi, AM-41 giá 2.100.000 hết hàng. */
+/** Signed-in owner, with Air Max shoes published: AM-40 at 2,000,000 with 3 pairs, AM-41 at 2,100,000 out of stock. */
 async function shop({ groundShippingOnly = false } = {}) {
   const app = await appWithOwner()
   const { accessToken: token } = await login(app.request, OWNER.email, OWNER.password)
@@ -127,7 +127,7 @@ describe('báo giá: phí giao', () => {
     const { quote, configure, v40 } = await shop()
     await configure({ defaultFee: 30_000, freeShippingThreshold: null, provinceFees: [] })
 
-    // 02 là Hà Giang cũ, đã nhập vào Tuyên Quang từ 01/07/2025.
+    // 02 is the former Hà Giang, merged into Tuyên Quang from 01/07/2025.
     const res = await quote({ lines: [{ variantId: v40.id, quantity: 1 }], provinceCode: '02' })
 
     expect(res.status).toBe(400)

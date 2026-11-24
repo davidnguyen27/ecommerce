@@ -7,12 +7,12 @@ import { AppError } from '../http/errors.ts'
 
 export const ProductParams = z.object({ id: z.uuid() })
 
-/** Thứ tự hiển thị của biến thể và ảnh. */
+/** Display order of variants and images. */
 export const SORT_ORDER = [{ sortOrder: 'asc' }, { createdAt: 'asc' }] as const
 
 export const productNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy sản phẩm')
 
-/** Sản phẩm kèm biến thể theo thứ tự hiển thị; không có thì 404. */
+/** A product with variants in display order; 404 if missing. */
 export async function loadProduct(db: DbClient, id: string) {
   const product = await db.product.findUnique({
     where: { id },
@@ -23,15 +23,15 @@ export async function loadProduct(db: DbClient, id: string) {
 }
 
 /**
- * Khóa dòng sản phẩm tới hết transaction, để thao tác trên biến thể của cùng sản phẩm xếp hàng:
- * bất biến trải trên nhiều biến thể (còn biến thể đang bán, tổ hợp không trùng) không bị hai request cùng lọt qua.
+ * Locks the product row until the transaction ends, so operations on its variants queue up: invariants spanning
+ * variants (one still on sale, no duplicate combinations) cannot be passed by two requests at once.
  */
 export async function lockProduct(tx: Prisma.TransactionClient, id: string) {
   await tx.$executeRaw`SELECT 1 FROM "product" WHERE "id" = ${id}::uuid FOR UPDATE`
   return loadProduct(tx, id)
 }
 
-/** Giá lưu BIGINT; số VND vẫn nằm trong khoảng số nguyên an toàn của JS. */
+/** Prices are BIGINT; VND amounts stay within JS safe integers. */
 export const toNumber = (value: bigint | null | undefined) => (value == null ? null : Number(value))
 
 export function toAdminVariant(variant: ProductVariant): AdminVariant {
@@ -55,7 +55,7 @@ export function toAdminProduct(product: Product & { variants: ProductVariant[] }
   }
 }
 
-/** Trường nghiệp vụ của sản phẩm, cũng là phần ghi vào audit. */
+/** Business fields of a product, also what the audit records. */
 export function productAuditFields(product: Product) {
   return {
     productType: product.productType,
@@ -74,13 +74,13 @@ export function productAuditFields(product: Product) {
   }
 }
 
-/** Trường nghiệp vụ của biến thể ghi vào audit, trừ giá: đổi giá có bản audit `price.change` riêng. */
+/** Variant business fields recorded in audit, except price: price changes get their own `price.change` entry. */
 export function variantAuditFields(variant: ProductVariant) {
   const { sku, attributes, status, sortOrder } = toAdminVariant(variant)
   return { productId: variant.productId, sku, attributes, status, sortOrder }
 }
 
-/** Audit khi tạo biến thể; có điền giá thì kèm `price.change` từ giá trống, để lịch sử giá có điểm bắt đầu. */
+/** Audit on variant creation; a set price adds `price.change` from empty, so price history has a starting point. */
 export function variantCreatedAudits(variant: ProductVariant): AuditEntry[] {
   const entries: AuditEntry[] = [
     {
@@ -102,7 +102,7 @@ export function variantCreatedAudits(variant: ProductVariant): AuditEntry[] {
   return entries
 }
 
-/** Giá của biến thể ghi vào audit `price.change`. */
+/** Variant price recorded in the `price.change` audit. */
 export function priceAuditFields(variant: Pick<ProductVariant, 'productId' | 'sku' | 'price' | 'compareAtPrice'>) {
   return {
     productId: variant.productId,

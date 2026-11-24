@@ -74,7 +74,7 @@ describe('đặt mua', () => {
 
   it('báo giá báo dòng không đủ hàng theo số lượng khách muốn mua, không lộ số tồn', async () => {
     const { request, checkout, v40 } = await shop()
-    // Tồn 3, giữ 1 cho đơn khác: còn bán được 2.
+    // Stock 3, 1 reserved for another order: 2 sellable.
     expect((await checkout()).status).toBe(201)
     const quote = (quantity: number) =>
       request.post('/api/checkout/quote').send({ lines: [{ variantId: v40.id, quantity }] })
@@ -99,7 +99,7 @@ describe('đặt mua', () => {
 })
 
 describe('đặt mua bị từ chối', () => {
-  /** Không có đơn nào được tạo và không giữ hàng nào: số đang giữ vẫn 0, cổng chưa tạo link nào. */
+  /** No order created and nothing reserved: reserved stays 0 and the gateway created no link. */
   async function expectNothingWritten(app: Awaited<ReturnType<typeof shop>>) {
     const stock = await app.request.get('/api/admin/stock').set(bearer(app.token))
     expect(stock.body.items.map((i: { reserved: number }) => i.reserved)).toEqual([0, 0])
@@ -341,7 +341,7 @@ describe('lịch sử đơn', () => {
     expect(detail.body.history).toEqual([
       expect.objectContaining({ action: 'created', actor: { type: 'customer', id: null, email: null } }),
     ])
-    // Không có API nào sửa lịch sử đơn; thử thẳng bằng SQL để chắc trigger chặn.
+    // No API edits order history; try with SQL directly to confirm the trigger blocks it.
     await expect(prisma.$executeRaw`UPDATE "order_event" SET "kind" = 'x'`).rejects.toThrow(/chỉ cho phép thêm mới/)
     await expect(prisma.$executeRaw`DELETE FROM "order_event"`).rejects.toThrow(/chỉ cho phép thêm mới/)
     await expect(prisma.$executeRaw`TRUNCATE "order_event" CASCADE`).rejects.toThrow(/chỉ cho phép thêm mới/)

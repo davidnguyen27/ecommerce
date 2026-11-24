@@ -8,7 +8,7 @@ import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
 import { findCustomerOrder, toPublicOrder } from '../orders/orders.ts'
 
-/** Đơn hàng của khách đang đăng nhập (đơn có `customer_id` là khách); đã đi qua `requireAuth` audience customer. */
+/** Orders of the signed-in customer (`customer_id` is theirs); behind `requireAuth` for the customer audience. */
 export function accountOrderRoutes({
   prisma,
   storage,
@@ -52,7 +52,7 @@ export function accountOrderRoutes({
         const body: PublicOrder = toPublicOrder(storage, order)
         res.set('Cache-Control', 'no-store').json(body)
       })
-      // Trả phần còn lại của đơn đặt trước của chính mình; cấp kèm token tra cứu cho trang kết quả thanh toán.
+      // Pay the remaining balance of your own pre-order; also issues a lookup token for the payment result page.
       .post('/:code/pay-remainder', async (req, res) => {
         const order = await findCustomerOrder(prisma, String(req.params.code), authSubject(req))
         const body: PayRemainderResult = await createRemainderLink(prisma, { payments, siteUrl, req }, order.id, {
@@ -60,7 +60,7 @@ export function accountOrderRoutes({
         })
         res.set('Cache-Control', 'no-store').json(body)
       })
-      // Khách hủy đơn chưa thanh toán của chính mình; đơn người khác hay mã lạ đều là 404.
+      // The customer cancels their own unpaid order; someone else's order or an unknown code is 404.
       .post('/:code/cancel', async (req, res) => {
         const customerId = authSubject(req)
         const code = String(req.params.code)

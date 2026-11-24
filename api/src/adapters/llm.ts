@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-// Gọi model chat qua chuẩn chat completions kiểu OpenAI, đi lần lượt qua một chuỗi model miễn phí (ADR 0017).
-// Không dùng parameter properties hay enum: `scripts/chatbot-check.ts` import file này chạy thẳng bằng node.
+// Chat model calls via OpenAI-style chat completions, walking a chain of free models (ADR 0017).
+// No parameter properties or enums: `scripts/chatbot-check.ts` imports this file under plain node.
 
 export type LlmToolCall = { id: string; name: string; arguments: string }
 
@@ -18,15 +18,15 @@ export type LlmResult = {
   content: string
   toolCalls: LlmToolCall[]
   usage: { input: number; output: number }
-  /** Model đã trả lời, dạng `nhà cung cấp:model`. */
+  /** The model that answered, as `provider:model`. */
   model: string
-  /** Mọi model đã thử hay bỏ qua trong lần gọi này, kể cả model trả lời ở cuối, để ghi báo cáo. */
+  /** Every model tried or skipped in this call, including the one that answered, for reporting. */
   attempts: LlmAttempt[]
 }
 
-/** Một lần gọi model thất bại trên cả chuỗi. Mỗi model đã thử hay bỏ qua có trong `attempts`, để ghi báo cáo. */
+/** A call that failed on the whole chain. `attempts` lists every model tried or skipped, for reporting. */
 export class LlmUnavailableError extends Error {
-  /** `exhausted`: mọi model đang hết hạn mức; `failed`: có model lỗi khác 429. */
+  /** `exhausted`: every model is out of quota; `failed`: some model failed with a non-429 error. */
   readonly reason: 'exhausted' | 'failed'
   readonly attempts: LlmAttempt[]
 
@@ -44,13 +44,13 @@ export type LlmModelStatus = { model: string; exhaustedUntil: Date | null }
 
 export interface LlmClient {
   complete(request: LlmRequest): Promise<LlmResult>
-  /** Từng model của chuỗi và lúc hết bị đánh dấu đang hết (nếu có). */
+  /** Each model in the chain and when its exhausted mark expires, if any. */
   status(): LlmModelStatus[]
 }
 
 const PROVIDERS = {
   groq: { baseUrl: 'https://api.groq.com/openai/v1', keyEnv: 'GROQ_API_KEY', timeoutMs: 20_000 },
-  // Model miễn phí của OpenRouter chậm (bản thử: 2–14 giây mỗi tin).
+  // OpenRouter free models are slow (trial: 2–14 s per message).
   openrouter: { baseUrl: 'https://openrouter.ai/api/v1', keyEnv: 'OPENROUTER_API_KEY', timeoutMs: 30_000 },
 } as const
 
@@ -59,7 +59,7 @@ type ProviderName = keyof typeof PROVIDERS
 export const DEFAULT_LLM_CHAIN =
   'groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,openrouter:nvidia/nemotron-3-ultra-550b-a55b:free'
 
-/** 429 không kèm `retry-after` (OpenRouter khi nhà cung cấp gốc hết hạn mức chung): bỏ qua model trong chừng này. */
+/** 429 without `retry-after` (OpenRouter when the upstream shared quota runs out): skip the model this long. */
 const DEFAULT_RETRY_AFTER_MS = 60_000
 const MAX_OUTPUT_TOKENS = 1024
 
@@ -116,9 +116,9 @@ function requestBody(endpoint: LlmEndpoint, request: LlmRequest) {
   return {
     model: endpoint.model,
     max_tokens: MAX_OUTPUT_TOKENS,
-    // gpt-oss suy luận dài nếu để mặc định (ADR 0017). Mức `low` tiết kiệm hơn nhưng có ngữ cảnh làm model viết ra chữ
-    // vô nghĩa ("**Michael … Sorry… Oops…"): đang xem túi Coach, hỏi "có túi nào rẻ hơn không?", 5/5 lần với `low`,
-    // 0/5 với `medium` (đi luồng demo 2026-11-23). `temperature` thấp không chữa được.
+    // gpt-oss reasons at length by default (ADR 0017). `low` is cheaper but some contexts make it write gibberish
+    // ("**Michael … Sorry… Oops…"): viewing a Coach bag, asking for a cheaper one, 5/5 with `low`, 0/5 with `medium`
+    // (demo walkthrough 2026-11-23). A low `temperature` does not fix it.
     ...(endpoint.model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'medium' } : {}),
     messages: request.messages.map(toWireMessage),
     ...(request.tools?.length
@@ -130,7 +130,7 @@ function requestBody(endpoint: LlmEndpoint, request: LlmRequest) {
   }
 }
 
-/** `retry-after` tính bằng giây; dạng khác hay thiếu thì dùng mặc định. */
+/** `retry-after` in seconds; other or missing values use the default. */
 function retryAfterMs(header: string | null) {
   const seconds = Number(header)
   return header && Number.isFinite(seconds) && seconds >= 0 ? Math.ceil(seconds * 1000) : DEFAULT_RETRY_AFTER_MS
@@ -139,9 +139,9 @@ function retryAfterMs(header: string | null) {
 type Fetch = typeof fetch
 
 /**
- * Chuỗi model: gọi model đầu chưa bị đánh dấu đang hết; 429, 5xx, quá thời gian chờ hay trả lời hỏng thì gọi ngay model
- * kế tiếp. Model trả 429 bị bỏ qua tới hết `retry-after`. Trạng thái đó chỉ nằm trong bộ nhớ process: khởi động lại thì
- * gọi thử lại từ đầu, tốn một lần 429.
+ * Model chain: calls the first model not marked exhausted; on 429, 5xx, timeout or a broken reply, moves straight to
+ * the next. A 429 model is skipped until `retry-after`. That state lives in process memory only: a restart retries
+ * from the top at the cost of one 429.
  */
 export class LlmChain implements LlmClient {
   readonly endpoints: readonly LlmEndpoint[]
@@ -207,12 +207,12 @@ export class LlmChain implements LlmClient {
     if (res.status === 429) {
       return { kind: 'rate_limited', retryAfterMs: retryAfterMs(res.headers.get('retry-after')), detail: '429' }
     }
-    // Lỗi khác (5xx, model bị gỡ khỏi gói miễn phí, 400) cũng chuyển sang model sau, nhưng không đánh dấu đang hết.
+    // Other errors (5xx, model dropped from the free tier, 400) also move on, without marking the model exhausted.
     if (!res.ok) return { kind: 'error', detail: `${res.status}: ${(await res.text()).slice(0, 300)}` }
     const parsed = ChatResponse.safeParse(await res.json().catch(() => null))
     if (!parsed.success) return { kind: 'error', detail: 'Trả lời không đúng định dạng' }
     const message = parsed.data.choices[0]!.message
-    // Không gửi công cụ (lần gọi buộc trả lời) mà model vẫn gọi công cụ thì bỏ các lời gọi đó: không ai chạy chúng.
+    // No tools were sent (forced answer) but the model called some anyway: drop the calls, nobody runs them.
     const toolCalls = request.tools?.length
       ? (message.tool_calls ?? []).map((call) => ({
           id: call.id,
@@ -239,9 +239,8 @@ function nameOf(endpoint: LlmEndpoint) {
 }
 
 /**
- * Đọc `LLM_CHAIN` (mặc định `DEFAULT_LLM_CHAIN`): danh sách `nhà cung cấp:model` ngăn bằng dấu phẩy. Model của nhà
- * cung cấp thiếu khóa bị bỏ khỏi chuỗi; khóa để trống coi như chưa đặt. Không còn model nào thì trả `[]`: chatbot coi
- * như tắt. Nhà cung cấp lạ là cấu hình sai, nên ném.
+ * Reads `LLM_CHAIN` (default `DEFAULT_LLM_CHAIN`): comma-separated `provider:model`. Models whose provider has no key
+ * are dropped; an empty key counts as unset. No models left gives `[]` (chatbot off). An unknown provider throws.
  */
 export function llmEndpointsFromEnv(env: NodeJS.ProcessEnv): LlmEndpoint[] {
   const chain = env.LLM_CHAIN?.trim() || DEFAULT_LLM_CHAIN
@@ -265,8 +264,8 @@ export function llmEndpointsFromEnv(env: NodeJS.ProcessEnv): LlmEndpoint[] {
 }
 
 /**
- * Model giả cho test và E2E: trả lần lượt các kết quả xếp sẵn; hết kịch bản thì lặp lại tin cuối của khách. Phần tử là
- * `Error` thì ném lỗi đó.
+ * Fake model for tests and E2E: returns scripted results in order, then echoes the customer's last message. An
+ * `Error` entry is thrown.
  */
 export class ScriptedLlm implements LlmClient {
   readonly requests: LlmRequest[] = []
@@ -302,9 +301,9 @@ export class ScriptedLlm implements LlmClient {
 const DEMO_SEARCH_ID = 'demo-search'
 
 /**
- * Model giả cho E2E và chạy thử không cần khóa (`LLM_CHAIN=fake`): chưa tìm kể từ tin cuối của khách thì tìm sản phẩm
- * bằng đúng câu đó (nên hỏi bằng tên sản phẩm, ví dụ "Air Max"); đã tìm thì trả lời bằng tên các sản phẩm tìm được.
- * Kết quả công cụ khác (sản phẩm đang xem mà API dựng sẵn) không tính. Không gọi mạng, luôn như nhau.
+ * Fake model for E2E and keyless runs (`LLM_CHAIN=fake`): if nothing was searched since the customer's last message,
+ * searches products with that exact text (so ask by product name, e.g. "Air Max"); otherwise answers with the names
+ * found. Other tool results (the prebuilt viewed product) do not count. No network, deterministic.
  */
 export class DemoLlm implements LlmClient {
   status(): LlmModelStatus[] {
@@ -338,8 +337,8 @@ export class DemoLlm implements LlmClient {
 }
 
 /**
- * Chọn model cho chatbot: `LLM_CHAIN=fake` dùng `DemoLlm` (E2E, không gọi mạng); còn lại dùng `LlmChain` theo khóa
- * đã đặt. Không có khóa nào thì `undefined`: chatbot không trả lời được.
+ * Picks the chatbot model: `LLM_CHAIN=fake` uses `DemoLlm` (E2E, no network); otherwise `LlmChain` from the keys set.
+ * No keys gives `undefined`: the chatbot cannot answer.
  */
 export function llmFromEnv(env: NodeJS.ProcessEnv): LlmClient | undefined {
   if (env.LLM_CHAIN?.trim() === 'fake') return new DemoLlm()

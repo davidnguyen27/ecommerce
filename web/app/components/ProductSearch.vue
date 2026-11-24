@@ -3,11 +3,11 @@ import { ATTRIBUTE_FILTER_PREFIX, ProductSearchResult, type AttributeFacet, type
 import { SlidersHorizontal, X } from 'lucide-vue-next'
 
 /**
- * Danh sách sản phẩm có tìm kiếm, bộ lọc, sắp xếp và phân trang. Mọi lựa chọn nằm trên URL để chia sẻ được;
- * bộ lọc là form GET nên vẫn dùng được khi chưa có JavaScript.
+ * Product list with search, filters, sorting and pagination. Every choice lives in the URL so it can be shared; the
+ * filters are a GET form, so they work without JavaScript.
  */
 const props = defineProps<{
-  /** Cố định theo trang đang mở, không nằm trên query. */
+  /** Fixed by the current page, not in the query. */
   category?: string
   brand?: string
   empty: string
@@ -27,7 +27,7 @@ const values = (name: string) =>
   [route.query[name]].flat().filter((v): v is string => typeof v === 'string' && v !== '')
 const first = (name: string) => values(name)[0] ?? ''
 
-/** Tham số lọc đang có trên URL (không gồm trang). */
+/** Filter params currently in the URL (page excluded). */
 const filters = computed(() => {
   const query: Record<string, string[]> = {}
   for (const name of Object.keys(route.query)) {
@@ -64,7 +64,7 @@ const clearLink = computed(() => ({ query: { q: first('q') || undefined, sort: f
 
 const open = ref(false)
 
-/** Có JavaScript thì đổi URL tại chỗ thay vì tải lại trang; về trang 1 vì kết quả đã khác. */
+/** With JavaScript, update the URL in place instead of reloading; back to page 1 since the results changed. */
 function apply(event: Event) {
   const query: Record<string, string[]> = {}
   for (const [name, value] of new FormData(event.target as HTMLFormElement)) {
@@ -103,7 +103,7 @@ function apply(event: Event) {
               <SlidersHorizontal class="h-4 w-4" aria-hidden="true" />
               Bộ lọc{{ activeCount ? ` (${activeCount})` : '' }}
             </summary>
-            <!-- Ngăn kéo trượt ra từ cạnh phải, vừa màn hình điện thoại; phần còn lại phủ tối. -->
+            <!-- Drawer sliding in from the right, phone-screen wide; the rest is dimmed. -->
             <form
               method="get"
               :action="route.path"
@@ -174,7 +174,7 @@ function apply(event: Event) {
                       {{ valueLabel(facet, option.value) }}
                       <span class="ml-auto tabular-nums text-muted-foreground">{{ option.count }}</span>
                     </label>
-                    <!-- Giá trị đang chọn mà không còn sản phẩm vẫn hiện, để bỏ chọn được. -->
+                    <!-- Selected values with no products left still show, so they can be unselected. -->
                     <template v-for="value in values(ATTRIBUTE_FILTER_PREFIX + facet.key)" :key="`chon-${value}`">
                       <label
                         v-if="!facet.values.some((option) => option.value === value)"

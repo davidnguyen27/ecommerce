@@ -8,9 +8,9 @@ import {
 } from '@ecommerce/shared'
 import { ExternalLink, FileText, Trash2, Upload } from 'lucide-vue-next'
 
-/** Chứng từ nguồn hàng private của một sản phẩm: tải lên, mở qua URL ký có hạn, xóa. Cần `document.view`. */
+/** A product's private supplier documents: upload, open via an expiring signed URL, delete. Needs `document.view`. */
 const props = defineProps<{ productId: string }>()
-/** Trang cha dùng danh sách này để chọn chứng từ làm bằng chứng cho cam kết. */
+/** The parent page uses this list to pick documents as commitment evidence. */
 const documents = defineModel<AdminProductDocument[]>({ required: true })
 
 const session = useAdminSession()
@@ -50,7 +50,7 @@ async function upload(event: Event) {
   error.value = skipped.length > 0 ? `Không tải được: ${skipped.join(', ')}` : null
 }
 
-/** Mỗi lần mở là một lần cấp URL ký mới, được ghi audit. */
+/** Each open issues a new signed URL, which is audited. */
 function open(document: AdminProductDocument) {
   const tab = window.open('', '_blank')
   return attempt(async () => {

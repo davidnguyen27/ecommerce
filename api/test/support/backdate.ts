@@ -6,9 +6,9 @@ const APPEND_ONLY = {
 } as const
 
 /**
- * Dời thời điểm ghi của các dòng thuộc đơn `orderCode` ở một bảng chỉ ghi thêm (sự kiện `kind`, hay mọi giao dịch).
- * Báo cáo nhóm theo ngày giao hay ngày nhận tiền, mà các dòng này chỉ ghi được "bây giờ" và trigger chặn UPDATE. Vì vậy
- * test tạm tắt trigger trên DB riêng của nó, chỉ trong một transaction.
+ * Moves back the write time of rows for order `orderCode` in an append-only table (`kind` events, or every
+ * transaction). Reports group by delivery or payment date, but these rows can only be written "now" and a trigger
+ * blocks UPDATE, so the test briefly disables the trigger on its own DB, in one transaction.
  */
 export async function backdate(
   prisma: Db,
@@ -31,7 +31,10 @@ export async function backdate(
   ])
 }
 
-/** Dời mọi dòng sổ xuất nhập hiện có của một biến thể về `at`, để chúng nằm trước kỳ báo cáo (sổ cũng chỉ ghi thêm). */
+/**
+ * Moves every existing ledger row of a variant to `at`, so they fall before the report period (the ledger is
+ * append-only too).
+ */
 export async function backdateStock(prisma: Db, variantId: string, at: Date) {
   await prisma.$transaction([
     prisma.$executeRawUnsafe(`ALTER TABLE "stock_movement" DISABLE TRIGGER "stock_movement_no_update_delete"`),

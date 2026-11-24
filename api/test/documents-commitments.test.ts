@@ -8,7 +8,7 @@ async function post(request: Request, token: string, path: string, body: Record<
   return res.body as { id: string }
 }
 
-/** Owner đã đăng nhập, có sẵn sản phẩm nháp Air Max 90 (slug `air-max-90`). */
+/** Signed-in owner, with a draft product Air Max 90 (slug `air-max-90`). */
 async function sneaker() {
   const app = await appWithOwner()
   const { accessToken: token } = await login(app.request, OWNER.email, OWNER.password)
@@ -256,7 +256,7 @@ function createCommitment(request: Request, token: string, productId: string, bo
   return request.post(`/api/admin/products/${productId}/commitments`).set(bearer(token)).send(body)
 }
 
-/** Sản phẩm có hóa đơn nhập và cam kết "Bảo hành chính hãng" dựa trên hóa đơn đó. */
+/** A product with a purchase invoice and a "Bảo hành chính hãng" commitment based on it. */
 async function sneakerWithWarranty() {
   const app = await sneaker()
   const invoice = await documentOf(app.request, app.token, app.product.id)
@@ -270,7 +270,7 @@ async function sneakerWithWarranty() {
   return { ...app, invoice, warranty, commitment: res.body as { id: string } }
 }
 
-/** Xuất bản qua API: thêm một biến thể có giá và một ảnh cho đủ điều kiện. */
+/** Publishes via the API: adds a priced variant and an image to qualify. */
 async function publish(app: { request: Request; token: string }, id: string) {
   await post(app.request, app.token, `/api/admin/products/${id}/variants`, {
     sku: 'AM90-DEN-40',

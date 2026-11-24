@@ -1,16 +1,16 @@
 <script setup lang="ts">
-// Trang của cổng thanh toán giả lập (API chạy không có khóa VNPAY): link thanh toán mang mã đơn, số tiền, hạn và
-// trang quay về trong query. Không có tiền thật nào đi qua đây.
+// The payment simulator page (the API runs without VNPAY keys): the payment link carries order code, amount, expiry
+// and return page in the query. No real money passes through here.
 const route = useRoute()
 const param = (name: string) => (typeof route.query[name] === 'string' ? route.query[name] : '')
 
 const orderCode = computed(() => param('orderCode'))
-// Mã link: cho giao dịch giả lập mang đúng mục đích (trả đủ, cọc, phần còn lại).
+// Link ref: gives the simulated transaction the right purpose (full, deposit, remainder).
 const gatewayReference = computed(() => param('ref') || undefined)
 const amount = computed(() => Number(param('amount')))
 const expiresAt = computed(() => (Number.isNaN(Date.parse(param('expiresAt'))) ? null : param('expiresAt')))
 
-// Chỉ quay về trang trên chính website, để link giả lập không thành chỗ chuyển hướng sang trang lạ.
+// Only return to pages on this website, so simulator links cannot become an open redirect.
 const returnPath = computed(() => {
   const raw = param('returnUrl')
   if (!raw || !import.meta.client) return null
@@ -22,7 +22,8 @@ const returnPath = computed(() => {
   }
 })
 
-// Số tiền "chuyển": mặc định đúng tổng đơn; sửa để thử trường hợp lệch tiền (đơn vào danh sách cần đối soát).
+// The "transferred" amount: defaults to the order total; change it to test a mismatch (the order goes to
+// reconciliation).
 const paidAmount = ref<number | null>(null)
 watchEffect(() => {
   if (paidAmount.value === null && Number.isFinite(amount.value) && amount.value > 0) paidAmount.value = amount.value
@@ -36,7 +37,8 @@ async function simulatePaid() {
   busy.value = true
   error.value = null
   try {
-    // API chỉ có khi server dùng cổng giả lập; ghi nhận qua cùng hàm với webhook, nguồn `simulator`.
+    // Exists only when the server uses the simulator; recorded through the same function as the webhook, source
+    // `simulator`.
     await $fetch('/api/payments/simulator/paid', {
       method: 'POST',
       body: { orderCode: Number(orderCode.value), amount: paidAmount.value, gatewayReference: gatewayReference.value },
@@ -54,7 +56,7 @@ async function simulateExpired() {
   busy.value = true
   error.value = null
   try {
-    // Cùng hàm với job hết hạn, chỉ không chờ hết 15 phút.
+    // The same function as the expiry job, without waiting 15 minutes.
     await $fetch('/api/payments/simulator/expired', { method: 'POST', body: { orderCode: Number(orderCode.value) } })
     expired.value = true
     if (returnPath.value) await navigateTo(returnPath.value)

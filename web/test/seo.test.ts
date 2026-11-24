@@ -15,7 +15,7 @@ const variant = (sku: string, availability: VariantAvailability) => ({
   preorder: availability === 'preorder' ? offer : null,
 })
 
-/** Sản phẩm tối thiểu cho JSON-LD: chỉ các trường `productJsonLd` đọc. */
+/** Minimal product for JSON-LD: only the fields `productJsonLd` reads. */
 const product = (...availabilities: VariantAvailability[]) =>
   ({
     name: 'Air Max',

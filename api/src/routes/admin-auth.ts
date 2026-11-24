@@ -4,7 +4,7 @@ import type { Db } from '../db.ts'
 
 const STAFF_SESSION_TTL_MS = 12 * 60 * 60 * 1000
 
-/** Đăng nhập, refresh, đăng xuất của nhân viên, gắn tại `mountPath`. Không đòi access token. */
+/** Staff sign-in, refresh and sign-out, mounted at `mountPath`. No access token required. */
 export function adminAuthRoutes(prisma: Db, secret: Uint8Array, mountPath: string) {
   return createSessions({
     prisma,

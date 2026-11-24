@@ -6,7 +6,7 @@ const { apiBase } = useRuntimeConfig()
 const route = useRoute()
 const cart = useCart()
 
-/** Lọc Nam hoặc Nữ thì API gồm cả sản phẩm Unisex. */
+/** Filtering Nam or Nữ makes the API include Unisex products. */
 const GENDERS = ['Nam', 'Nữ'] as const
 const genderQuery = (gender: string) => ({ [ATTRIBUTE_FILTER_PREFIX + GENDER_KEY]: gender })
 const activeGender = computed(() => route.path === '/tim-kiem' && route.query[ATTRIBUTE_FILTER_PREFIX + GENDER_KEY])
@@ -16,7 +16,7 @@ function search(event: Event) {
   return navigateTo({ path: '/tim-kiem', query: q ? { q } : {} })
 }
 
-// Chân trang có trên mọi trang khách; lỗi API thì chỉ thiếu chân trang, trang vẫn hiện.
+// The footer is on every customer page; on an API error only the footer is missing, the page still shows.
 const { data } = await useAsyncData('site-footer', async () => {
   const [legal, pages] = await Promise.all([
     $fetch('/api/legal-info', { baseURL: apiBase }),
@@ -25,7 +25,7 @@ const { data } = await useAsyncData('site-footer', async () => {
   return { legal: LegalInfo.parse(legal), pages: PublishedPageList.parse(pages).items }
 })
 
-// Menu tách khỏi chân trang để lỗi của bên này không làm mất bên kia.
+// The menu is fetched apart from the footer so an error in one does not lose the other.
 const { data: menu } = await useAsyncData('site-menu', async () => {
   const tree = CategoryTree.parse(await $fetch('/api/categories', { baseURL: apiBase }))
   return tree.items.filter((root) => root.children.length)
@@ -36,7 +36,8 @@ const issuedOn = computed(() => {
   return date ? formatDateOnly(date) : ''
 })
 
-// Menu là <details> để mở được khi chưa có JavaScript; có JavaScript thì tự đóng khi chuyển trang, bấm ra ngoài hoặc Esc.
+// The menu is a <details> so it opens without JavaScript; with JavaScript it closes on navigation, outside click or
+// Esc.
 const menuEl = ref<HTMLDetailsElement>()
 const closeMenu = () => menuEl.value?.removeAttribute('open')
 watch(() => route.fullPath, closeMenu)
@@ -67,10 +68,10 @@ onBeforeUnmount(() => {
       >Bỏ qua tới nội dung</a
     >
 
-    <!-- Không dùng backdrop-filter ở đây: nó biến header thành khung chứa của ngăn kéo `fixed` bên trong. -->
+    <!-- No backdrop-filter here: it would make the header the containing block of the `fixed` drawer inside. -->
     <header class="sticky top-0 z-40 border-b border-border bg-background">
       <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-2 gap-y-3 px-4 py-3 sm:px-6 lg:gap-x-4">
-        <!-- <details> mở được menu trên điện thoại mà không cần chờ JavaScript -->
+        <!-- <details> opens the phone menu without waiting for JavaScript -->
         <details ref="menuEl" class="site-menu relative -ml-2 lg:order-2 lg:ml-0">
           <summary>Danh mục</summary>
           <div
@@ -126,7 +127,7 @@ onBeforeUnmount(() => {
           </span>
         </NuxtLink>
 
-        <!-- Giới tính là bộ lọc, không phải nhánh danh mục (ADR 0004). -->
+        <!-- Gender is a filter, not a category branch (ADR 0004). -->
         <nav aria-label="Giới tính" class="hidden items-center gap-1 text-sm font-medium lg:order-3 lg:flex">
           <NuxtLink
             v-for="gender in GENDERS"
@@ -144,7 +145,7 @@ onBeforeUnmount(() => {
           >
         </nav>
 
-        <!-- Form GET tìm được cả khi chưa có JavaScript; có JavaScript thì chuyển trang tại chỗ. -->
+        <!-- A GET form searches even without JavaScript; with JavaScript it navigates in place. -->
         <form
           action="/tim-kiem"
           method="get"
@@ -167,7 +168,7 @@ onBeforeUnmount(() => {
           />
         </form>
 
-        <!-- Server không biết khách đã đăng nhập chưa; trang tài khoản tự chuyển sang đăng nhập khi cần. -->
+        <!-- The server does not know who is signed in; the account page redirects to sign-in when needed. -->
         <NuxtLink
           to="/tai-khoan"
           class="inline-flex h-10 items-center gap-2 rounded-md px-2.5 text-sm font-medium transition-colors hover:bg-secondary lg:order-5"
@@ -177,7 +178,7 @@ onBeforeUnmount(() => {
           <span class="sr-only sm:hidden">Tài khoản</span>
         </NuxtLink>
 
-        <!-- Số món chỉ có sau khi mount (giỏ ở localStorage), nên HTML từ server không lệch với lúc hydrate. -->
+        <!-- The item count exists only after mount (cart in localStorage), so server HTML matches hydration. -->
         <NuxtLink
           to="/gio-hang"
           class="relative inline-flex h-10 items-center gap-2 rounded-md px-2.5 text-sm font-medium transition-colors hover:bg-secondary lg:order-6"
@@ -186,7 +187,7 @@ onBeforeUnmount(() => {
         >
           <ShoppingBag class="h-5 w-5" aria-hidden="true" />
           <span class="hidden sm:inline">Giỏ hàng</span>
-          <!-- Tên truy cập ở aria-label: ghép từ các span trong flex thì trình duyệt chèn dấu cách trước dấu phẩy. -->
+          <!-- Name in aria-label: built from flex spans, browsers add a space before the comma. -->
           <span
             v-if="cart.count.value"
             class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold tabular-nums text-primary-foreground sm:static sm:h-5"
@@ -259,7 +260,7 @@ onBeforeUnmount(() => {
       </div>
     </footer>
 
-    <!-- Khung chat chỉ ở trình duyệt và tải sau trang: HTML từ server không đổi, lỗi của nó không làm hỏng trang. -->
+    <!-- Browser-only, loaded after the page: server HTML is unchanged and widget errors cannot break it. -->
     <ClientOnly>
       <LazyChatWidget v-if="!chatHiddenOn(route.path)" />
     </ClientOnly>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AttributeDefinition, AttributeValue } from '@ecommerce/shared'
 
-/** Ô nhập một thuộc tính, sinh theo kiểu trong schema. Bỏ trống là `null`. */
+/** Input for one attribute, generated from its schema type. Empty is `null`. */
 const props = defineProps<{ definition: AttributeDefinition; disabled?: boolean }>()
 const value = defineModel<AttributeValue | null | undefined>({ required: true })
 

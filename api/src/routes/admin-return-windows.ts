@@ -7,8 +7,9 @@ import { parse } from '../http/validation.ts'
 import { loadReturnWindows, saveReturnWindows } from '../support/returns.ts'
 
 /**
- * Hạn đổi trả theo nhóm hàng (GLOSSARY, spec M6b), mount tại `/return-windows`. Xem: người sửa nội dung, người xử lý
- * yêu cầu và người xem đơn; sửa: `content.edit` (đi cùng trang chính sách đổi trả), có audit.
+ * Return windows per product type (GLOSSARY "Hạn đổi trả", spec M6b), mounted at `/return-windows`. Viewable by
+ * content editors, request handlers and order viewers; editing needs `content.edit` (it goes with the returns policy
+ * page), audited.
  */
 export function adminReturnWindowRoutes(prisma: Db) {
   return Router()

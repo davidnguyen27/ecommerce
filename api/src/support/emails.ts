@@ -6,11 +6,11 @@ import { EXCHANGE_SEND_DAYS } from './exchanges.ts'
 import type { SupportForView } from './support.ts'
 
 /**
- * Email cho khách về yêu cầu hỗ trợ (spec M6b), theo từng lúc và từng loại yêu cầu. Nội dung chủ doanh nghiệp giao cho
- * cửa hàng soạn (2026-11-18). Cửa hàng chịu phí gửi hàng trả, đổi và bảo hành.
+ * Customer emails about support requests (spec M6b), per moment and request type. The owner left the wording to the
+ * shop (2026-11-18). The shop pays shipping for returns, exchanges and warranty.
  */
 
-/** Lúc gửi email: tạo yêu cầu, nhân viên trả lời, chấp nhận, xong, từ chối. */
+/** When an email goes out: created, staff reply, accepted, resolved, rejected. */
 export type SupportEmail = 'created' | 'reply' | 'accepted' | 'resolved' | 'rejected'
 
 const KIND_TEXT: Record<SupportRequestKind, string> = {
@@ -26,7 +26,7 @@ export const SHIPPING_COVERED =
 
 const sendsGoods = (kind: SupportRequestKind) => kind === 'return' || kind === 'exchange' || kind === 'warranty'
 
-/** Danh sách sản phẩm của yêu cầu, mỗi dòng một sản phẩm; đổi hàng ghi kèm biến thể đổi sang. */
+/** The request's products, one per line; exchanges also name the target variant. */
 function linesText(request: SupportForView) {
   return request.lines.map(
     (l) =>
@@ -95,8 +95,8 @@ function rejectedText(request: SupportForView, message?: string): string[] {
 }
 
 /**
- * Link trang yêu cầu: trang tài khoản nếu yêu cầu thuộc tài khoản; link tra cứu đơn kèm token mới nếu gắn đơn; không thì
- * (khách vãng lai chuyển từ chatbot, M8) link kèm token mới của chính yêu cầu.
+ * Request page link: the account page if the request belongs to an account; an order lookup link with a new token if
+ * tied to an order; otherwise (a guest handed off from the chatbot, M8) a link with a new token of the request itself.
  */
 async function requestUrl(tx: DbClient, siteUrl: string, request: SupportForView) {
   if (request.customerId) return new URL(`/tai-khoan/yeu-cau/${request.code}`, siteUrl).toString()
@@ -115,8 +115,8 @@ async function requestUrl(tx: DbClient, siteUrl: string, request: SupportForView
 }
 
 /**
- * Xếp email cho khách trong transaction của thay đổi; `message` là lời của nhân viên kèm theo (trả lời, hướng dẫn gửi
- * hàng, lý do từ chối, số tiền hoàn, mã vận đơn).
+ * Queues a customer email in the change's transaction; `message` is the staff text included (reply, shipping
+ * instructions, rejection reason, refund amount, tracking number).
  */
 export async function queueSupportEmail(
   tx: DbClient,

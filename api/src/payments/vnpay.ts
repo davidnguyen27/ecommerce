@@ -10,13 +10,13 @@ import {
   type StoredTransaction,
 } from './gateway.ts'
 
-// Theo tài liệu VNPAY (https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html và
-// .../truy-van-hoan-tien/querydr&refund.html, đọc 2026-11-11). Những điểm đánh dấu "kiểm trên sandbox" tài liệu chưa
-// nói rõ; ticket 16 kiểm.
+// Per the VNPAY docs (https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html and
+// .../truy-van-hoan-tien/querydr&refund.html, read 2026-11-11). Points marked "check on sandbox" are unclear in the
+// docs; ticket 16 checks them.
 
 /**
- * Địa chỉ VNPAY theo môi trường. Bản production không có trong tài liệu đã đọc: lấy theo hiểu biết chung, phải kiểm
- * lại khi ký hợp đồng.
+ * VNPAY hosts per environment. Production is not in the docs read: taken from general knowledge, recheck when the
+ * contract is signed.
  */
 export const VNPAY_HOSTS = {
   sandbox: {
@@ -32,26 +32,26 @@ export const VNPAY_HOSTS = {
 export type VnpayEnv = keyof typeof VNPAY_HOSTS
 
 export type VnpayKeys = {
-  /** `vnp_TmnCode`, mã định danh kết nối. */
+  /** `vnp_TmnCode`, the merchant terminal id. */
   tmnCode: string
-  /** `vnp_HashSecret`, ký URL thanh toán, IPN và truy vấn. */
+  /** `vnp_HashSecret`, signs payment URLs, IPN and queries. */
   hashSecret: string
   env: VnpayEnv
 }
 
 const VERSION = '2.1.0'
 
-/** HMAC-SHA512 (hex), cách VNPAY ký mọi thứ. */
+/** HMAC-SHA512 (hex), how VNPAY signs everything. */
 export function vnpayHmac(text: string, secret: string) {
   return createHmac('sha512', secret).update(text, 'utf8').digest('hex')
 }
 
-/** Encode như `urlencode` của PHP, cách mẫu PHP/Java của VNPAY ký: khoảng trắng thành `+`. */
+/** Encodes like PHP's `urlencode`, as VNPAY's PHP/Java samples sign: spaces become `+`. */
 const encode = (value: string) => encodeURIComponent(value).replace(/%20/g, '+')
 
 /**
- * Chuỗi ký của URL thanh toán và IPN: mọi tham số `vnp_*` có giá trị, trừ `vnp_SecureHash`/`vnp_SecureHashType`,
- * sắp tăng dần theo tên, `key=value` đã encode, nối bằng `&`. Dùng luôn làm query của URL thanh toán.
+ * Signing string of payment URLs and IPN: every non-empty `vnp_*` param except `vnp_SecureHash`/`vnp_SecureHashType`,
+ * sorted by name, encoded `key=value`, joined with `&`. Also used as the payment URL query.
  */
 export function vnpaySignData(params: Record<string, unknown>) {
   return Object.entries(params)
@@ -75,19 +75,19 @@ const sameHex = (actual: unknown, expected: string) => {
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
-/** Tham số VNPAY gửi về (IPN, trang quay về) có đúng chữ ký không; so sánh thời gian hằng. */
+/** Whether params from VNPAY (IPN, return page) are correctly signed; constant-time comparison. */
 export function isValidVnpaySignature(params: Record<string, unknown>, hashSecret: string) {
   return sameHex(params.vnp_SecureHash, vnpayHmac(vnpaySignData(params), hashSecret))
 }
 
 const VN_OFFSET_MS = 7 * 60 * 60_000
 
-/** `yyyyMMddHHmmss` theo GMT+7, định dạng ngày giờ của VNPAY. */
+/** `yyyyMMddHHmmss` in GMT+7, VNPAY's date format. */
 export function vnDateTime(date: Date) {
   return new Date(date.getTime() + VN_OFFSET_MS).toISOString().replace(/\D/g, '').slice(0, 14)
 }
 
-/** Đọc `yyyyMMddHHmmss` (GMT+7); sai định dạng thì `null`. */
+/** Parses `yyyyMMddHHmmss` (GMT+7); bad format gives `null`. */
 export function parseVnDateTime(text: string): Date | null {
   const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(text)
   if (!m) return null
@@ -96,21 +96,21 @@ export function parseVnDateTime(text: string): Date | null {
 }
 
 /**
- * `vnp_TxnRef` của đơn: mã đơn, `T`, giờ tạo link (`yyyyMMddHHmmss`, GMT+7). VNPAY không cho trùng trong ngày; mã đơn
- * chỉ duy nhất trong một DB (reset DB thì đánh lại), nên ghép thêm giờ tạo. Giờ này cũng là `vnp_TransactionDate` khi
- * truy vấn, nên không phải lưu riêng.
+ * The order's `vnp_TxnRef`: order code, `T`, link creation time (`yyyyMMddHHmmss`, GMT+7). VNPAY forbids repeats
+ * within a day and order codes are unique only per DB (a reset renumbers), so the time is appended. It is also the
+ * query's `vnp_TransactionDate`, so nothing extra is stored.
  */
 export function txnRef(orderCode: number, createdAt: Date) {
   return `${orderCode}T${vnDateTime(createdAt)}`
 }
 
-/** Mã đơn và giờ tạo trong `vnp_TxnRef` do `txnRef` tạo; mã lạ thì `null`. */
+/** Order code and creation time from a `vnp_TxnRef` made by `txnRef`; unknown refs give `null`. */
 export function parseTxnRef(ref: string): { orderCode: number; createDate: string } | null {
   const m = /^(\d{1,15})T(\d{14})$/.exec(ref)
   return m ? { orderCode: Number(m[1]), createDate: m[2]! } : null
 }
 
-/** `vnp_OrderInfo`: VNPAY đòi tiếng Việt không dấu, không ký tự đặc biệt, tối đa 255 ký tự. */
+/** `vnp_OrderInfo`: VNPAY requires Vietnamese without diacritics or special characters, at most 255 characters. */
 export function asciiOrderInfo(text: string) {
   return text
     .normalize('NFD')
@@ -123,7 +123,7 @@ export function asciiOrderInfo(text: string) {
     .slice(0, 255)
 }
 
-/** Kết quả thanh toán VNPAY gửi trong IPN và trả trong truy vấn: thành công khi cả hai mã là `00` (tài liệu). */
+/** VNPAY payment result in IPN and queries: success when both codes are `00` (docs). */
 export const isVnpaySuccess = (params: { vnp_ResponseCode?: unknown; vnp_TransactionStatus?: unknown }) =>
   params.vnp_ResponseCode === '00' && params.vnp_TransactionStatus === '00'
 
@@ -147,7 +147,7 @@ const QueryResponse = z.looseObject({
 })
 type QueryResponse = z.infer<typeof QueryResponse>
 
-/** Thứ tự trường của chuỗi ký response truy vấn, nối bằng `|` (tài liệu querydr). */
+/** Field order of the query response signing string, joined with `|` (querydr docs). */
 const QUERY_RESPONSE_FIELDS = [
   'vnp_ResponseId',
   'vnp_Command',
@@ -166,7 +166,7 @@ const QUERY_RESPONSE_FIELDS = [
   'vnp_PromotionAmount',
 ] as const
 
-/** Thứ tự trường của chuỗi ký response hoàn tiền, nối bằng `|` (tài liệu querydr&refund, đọc 2026-11-17). */
+/** Field order of the refund response signing string, joined with `|` (querydr&refund docs, read 2026-11-17). */
 const REFUND_RESPONSE_FIELDS = [
   'vnp_ResponseId',
   'vnp_Command',
@@ -184,8 +184,8 @@ const REFUND_RESPONSE_FIELDS = [
 ] as const
 
 /**
- * `vnp_TxnRef` của giao dịch gốc, lấy từ payload đã lưu (IPN, trang quay về hay truy vấn đều mang trường này); không có
- * thì giao dịch không hoàn qua VNPAY được.
+ * The original transaction's `vnp_TxnRef` from the stored payload (IPN, return page and query all carry it); without
+ * it the transaction cannot be refunded via VNPAY.
  */
 function storedTxnRef(transaction: StoredTransaction) {
   const payload = transaction.payload as { vnp_TxnRef?: unknown } | null
@@ -194,8 +194,8 @@ function storedTxnRef(transaction: StoredTransaction) {
 }
 
 /**
- * Ánh xạ kết quả lệnh hoàn (tài liệu): `00` kèm trạng thái `00` là đã hoàn; kèm `05` (VNPAY đang xử lý) hay `06` (đã
- * gửi ngân hàng) là đang xử lý; `94` (đã có yêu cầu hoàn đang xử lý) cũng là đang xử lý; còn lại là bị từ chối.
+ * Maps the refund result (docs): `00` with status `00` is refunded; with `05` (VNPAY processing) or `06` (sent to the
+ * bank) is processing; `94` (a refund already in progress) is processing too; anything else is rejected.
  */
 export function refundOutcome(body: { vnp_ResponseCode?: string; vnp_TransactionStatus?: string }) {
   if (body.vnp_ResponseCode === '94') return 'processing' as const
@@ -206,8 +206,8 @@ export function refundOutcome(body: { vnp_ResponseCode?: string; vnp_Transaction
 }
 
 /**
- * Cổng VNPAY (ADR 0010). Link thanh toán là URL ký sẵn, không gọi VNPAY; truy vấn gọi API `querydr` bằng `fetch`,
- * không tự thử lại. `vnp_OrderInfo` không mang thông tin khách.
+ * VNPAY gateway (ADR 0010). Payment links are pre-signed URLs, no VNPAY call; queries call `querydr` via `fetch`
+ * without retries. `vnp_OrderInfo` carries no customer data.
  */
 export class VnpayPaymentGateway implements PaymentGateway {
   private readonly fetch: typeof globalThis.fetch
@@ -215,11 +215,11 @@ export class VnpayPaymentGateway implements PaymentGateway {
 
   constructor(
     private readonly options: VnpayKeys & {
-      /** `vnp_IpAddr` khi truy vấn: IP máy chủ gọi VNPAY. */
+      /** `vnp_IpAddr` for queries: the IP of the server calling VNPAY. */
       serverIp?: string
       fetch?: typeof globalThis.fetch
       now?: () => Date
-      /** `vnp_RequestId` của truy vấn; test truyền giá trị cố định. */
+      /** Query `vnp_RequestId`; tests pass a fixed value. */
       requestId?: () => string
     },
   ) {
@@ -244,7 +244,7 @@ export class VnpayPaymentGateway implements PaymentGateway {
       vnp_IpAddr: request.clientIp,
       vnp_CreateDate: vnDateTime(now),
       vnp_ExpireDate: vnDateTime(request.expiresAt),
-      // Không gửi `vnp_BankCode`: khách tự chọn ATM, thẻ quốc tế hay QR ở trang VNPAY.
+      // No `vnp_BankCode`: the customer picks ATM, international card or QR on the VNPAY page.
     }
     const query = vnpaySignData(params)
     const checkoutUrl = `${VNPAY_HOSTS[this.options.env].payUrl}?${query}&vnp_SecureHash=${vnpayHmac(query, this.options.hashSecret)}`
@@ -266,7 +266,7 @@ export class VnpayPaymentGateway implements PaymentGateway {
       vnp_CreateDate: vnDateTime(this.now()),
       vnp_IpAddr: this.options.serverIp ?? '127.0.0.1',
     }
-    // Kiểm trên sandbox: tài liệu chỉ ghi `hashWithSecureType`, coi như HMAC-SHA512 như URL thanh toán.
+    // Check on sandbox: the docs only say `hashWithSecureType`; assumed HMAC-SHA512 like payment URLs.
     const signed = [
       request.vnp_RequestId,
       request.vnp_Version,
@@ -280,7 +280,7 @@ export class VnpayPaymentGateway implements PaymentGateway {
     ].join('|')
     const body = await this.call({ ...request, vnp_SecureHash: vnpayHmac(signed, hashSecret) })
 
-    // 91: VNPAY chưa có giao dịch nào cho mã này, tức khách chưa trả.
+    // 91: VNPAY has no transaction for this ref, i.e. not paid yet.
     if (body.vnp_ResponseCode === '91') return { status: 'pending', transactions: [] }
     if (body.vnp_ResponseCode !== '00') {
       throw new PaymentGatewayError(`VNPAY querydr ${body.vnp_ResponseCode}: ${body.vnp_Message ?? ''}`)
@@ -289,7 +289,7 @@ export class VnpayPaymentGateway implements PaymentGateway {
     if (!sameHex(body.vnp_SecureHash, expected)) throw new PaymentGatewayError('VNPAY: response truy vấn sai chữ ký')
 
     if (isVnpaySuccess(body)) return { status: 'paid', transactions: [this.transaction(body)] }
-    // 01: chưa hoàn tất (khách chưa trả xong); 02: lỗi; các mã khác (hoàn tiền, nghi gian lận) để nhân viên xem.
+    // 01: incomplete (customer has not finished paying); 02: error; other codes (refunded, suspected fraud) for staff.
     if (body.vnp_TransactionStatus === '01') return { status: 'pending', transactions: [] }
     return { status: 'failed', transactions: [] }
   }
@@ -299,9 +299,9 @@ export class VnpayPaymentGateway implements PaymentGateway {
   }
 
   /**
-   * Lệnh `refund` (ADR 0014): hoàn đủ (`02`) hay một phần (`03`) một giao dịch gốc. Chuỗi ký theo thứ tự trường của
-   * tài liệu, nối bằng `|`, HMAC-SHA512 như mọi lệnh khác (tài liệu chỉ ghi `hashWithSecureType`; chưa xác minh được trên
-   * sandbox, ticket 06). Response `00` phải đúng chữ ký; mã lỗi thì không có gì để tin nên không kiểm.
+   * `refund` command (ADR 0014): full (`02`) or partial (`03`) refund of an original transaction. Signing string in the
+   * docs' field order, joined with `|`, HMAC-SHA512 like every other command (docs only say `hashWithSecureType`; not
+   * yet verified on sandbox, ticket 06). A `00` response must be correctly signed; error codes carry nothing to trust.
    */
   async refund(request: RefundRequest): Promise<RefundResult> {
     const ref = storedTxnRef(request.transaction)
@@ -310,7 +310,7 @@ export class VnpayPaymentGateway implements PaymentGateway {
       throw new PaymentGatewayError('VNPAY: giao dịch gốc thiếu vnp_TxnRef, không hoàn qua cổng được')
     const { tmnCode, hashSecret } = this.options
     const body = {
-      // Id khoản hoàn bỏ gạch: 32 ký tự chữ số, không trùng trong ngày như tài liệu đòi.
+      // Refund id without dashes: 32 alphanumerics, unique within the day as the docs require.
       vnp_RequestId: request.refundId.replace(/-/g, ''),
       vnp_Version: VERSION,
       vnp_Command: 'refund',
@@ -352,8 +352,8 @@ export class VnpayPaymentGateway implements PaymentGateway {
   }
 
   async cancelLink() {
-    // VNPAY không có API hủy URL thanh toán chưa trả (ADR 0010): URL tự hết hạn theo `vnp_ExpireDate`; tiền về cho
-    // đơn đã hủy thành cần đối soát.
+    // VNPAY has no API to cancel an unpaid payment URL (ADR 0010): it expires via `vnp_ExpireDate`; money for a
+    // cancelled order needs reconciliation.
   }
 
   private transaction(body: QueryResponse) {
@@ -369,7 +369,7 @@ export class VnpayPaymentGateway implements PaymentGateway {
     }
   }
 
-  /** POST JSON tới API giao dịch; mọi lỗi thành `PaymentGatewayError`. */
+  /** POSTs JSON to the transaction API; every error becomes `PaymentGatewayError`. */
   private async call(body: Record<string, string>) {
     let res: Response
     try {

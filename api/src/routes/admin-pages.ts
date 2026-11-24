@@ -69,7 +69,7 @@ const slugTaken = () =>
   ])
 const pageNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy trang nội dung')
 
-/** Soạn và xuất bản trang nội dung; mọi route cần `content.edit`. */
+/** Draft and publish content pages; every route needs `content.edit`. */
 export function adminPageRoutes(prisma: Db) {
   return Router()
     .use(requirePermission('content.edit'))
@@ -116,7 +116,7 @@ export function adminPageRoutes(prisma: Db) {
     .post('/:id/publish', async (req, res) => {
       const { id } = parse(PageParams, req.params)
       const version = await audited(prisma, req, async (tx, audit) => {
-        // Khóa dòng trang để hai lần xuất bản cùng lúc không tranh nhau số phiên bản.
+        // Lock the page row so two concurrent publishes do not race for the version number.
         const locked = await tx.$queryRaw<unknown[]>`SELECT 1 FROM content_page WHERE id = ${id}::uuid FOR UPDATE`
         if (locked.length === 0) throw pageNotFound()
         const page = await tx.contentPage.findUniqueOrThrow({
@@ -124,7 +124,7 @@ export function adminPageRoutes(prisma: Db) {
           include: { versions: { ...LATEST_VERSION, include: PUBLISHER } },
         })
         const latest = page.versions[0]
-        // Bản đang soạn chưa đổi gì so với phiên bản đang xuất bản thì không tạo phiên bản trùng.
+        // A draft identical to the published version creates no duplicate version.
         if (latest && sameContent(latest, page)) return latest
 
         const created = await tx.contentPageVersion.create({

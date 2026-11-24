@@ -37,7 +37,7 @@ function goTo(target: number) {
 
 const lastPage = computed(() => Math.max(1, Math.ceil((result.value?.total ?? 0) / PAGE_SIZE)))
 
-// Form tạo phiếu: mỗi dòng nhập SKU thì tra tên sản phẩm và tồn hiện tại, để nhân viên thấy mình nhập đúng mã.
+// Receipt form: each SKU entered looks up the product name and current stock, so staff see they typed the right code.
 
 type Line = { sku: string; quantity: number | null; found: { productName: string; onHand: number } | null | undefined }
 const today = () => new Date().toLocaleDateString('sv-SE')
@@ -52,14 +52,14 @@ function openForm() {
   preview.value = null
 }
 
-// Xem trước rồi mới ghi (ADR 0013): hàng về được giữ ngay cho đơn đặt trước đã cọc, nên kho cần biết trước bao nhiêu
-// thành hàng sẵn. Sửa dòng nào thì phải xem trước lại.
+// Preview before recording (ADR 0013): arrivals are reserved at once for deposited pre-orders, so the warehouse must
+// know how much becomes regular stock. Editing any line requires a new preview.
 const preview = ref<{ key: string; result: StockReceiptPreview } | null>(null)
 const linesKey = computed(() => JSON.stringify(form.value?.lines.map((l) => [l.sku.trim().toUpperCase(), l.quantity])))
 const previewed = computed(() => (preview.value?.key === linesKey.value ? preview.value.result : null))
 const previewOf = (index: number) => previewed.value?.lines[index]
 
-/** `undefined` là chưa tra, `null` là không có SKU này. */
+/** `undefined` means not looked up yet, `null` means no such SKU. */
 async function lookUp(line: Line) {
   const sku = line.sku.trim().toUpperCase()
   if (!sku) return (line.found = undefined)

@@ -4,12 +4,12 @@ import { bearer, createStaff } from './support/staff.ts'
 
 const SHIPMENT = { carrier: 'Giao Hàng Nhanh', trackingNumber: 'GHN1' }
 const DAY = 24 * 60 * 60_000
-/** Ngày lịch theo giờ Việt Nam, `days` ngày tính từ hôm nay. */
+/** Vietnam-time calendar day, `days` days from today. */
 const vnDate = (days = 0) => new Date(Date.now() + 7 * 60 * 60_000 + days * DAY).toISOString().slice(0, 10)
 
 /**
- * Cửa hàng có cổng giả lập (AM-40 giá 2.000.000, còn 3 đôi) và hai mã: GIAM10 (10%, tối đa 500.000) và BOT100
- * (100.000). `place` đặt 1 đôi với một mã như khách vãng lai.
+ * A shop with the simulator (AM-40 at 2,000,000, 3 pairs) and two vouchers: GIAM10 (10%, max 500,000) and BOT100
+ * (100,000). `place` orders 1 pair with a voucher as a guest.
  */
 async function voucherShop() {
   const app = await shop({ simulator: true })

@@ -39,7 +39,7 @@ describe('giới hạn tần suất đăng nhập', () => {
   ] as const)(
     'đăng nhập của %s: quá số lần thử cho một email thì 429, kể cả đúng mật khẩu và đổi IP; email khác vẫn thử được',
     async (_label, audience, account) => {
-      // Dựng chính sách bảo mật cũng đăng nhập owner một lần, nên app cho nhân viên chỉ có owner.
+      // Setting up the privacy policy also signs the owner in once, so the staff app has only the owner.
       const { request } = audience === 'customer' ? await appReadyForSignUp() : await appWithOwner()
       if (audience === 'customer') await register(request)
       for (let i = 0; i < LOGIN_PER_EMAIL; i++) {

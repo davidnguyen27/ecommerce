@@ -4,7 +4,7 @@ import { claimCustomerToken, issueCustomerToken } from './customer-tokens.ts'
 
 const VERIFICATION_TTL_MS = 48 * 60 * 60 * 1000
 
-/** Tạo token xác minh một lần và xếp thư chứa link vào hàng đợi, cùng `db` (thường là transaction). */
+/** Creates a one-time verification token and queues the email with its link, in `db` (usually a transaction). */
 export async function sendVerificationEmail(
   db: DbClient,
   emails: EmailQueue,
@@ -27,8 +27,8 @@ export async function sendVerificationEmail(
 }
 
 /**
- * Dùng token xác minh; trả `false` khi token sai, đã dùng hoặc hết hạn. Cùng transaction, các đơn vãng lai
- * (chưa có `customer_id`) đặt bằng đúng email này được gắn vào khách: giờ đã chắc email là của khách.
+ * Uses a verification token; `false` when wrong, used or expired. In the same transaction, guest orders (no
+ * `customer_id`) placed with this exact email are linked to the customer: the email is now proven theirs.
  */
 export async function verifyEmail(prisma: Db, token: string): Promise<boolean> {
   return prisma.$transaction(async (tx) => {
@@ -39,7 +39,7 @@ export async function verifyEmail(prisma: Db, token: string): Promise<boolean> {
       data: { emailVerifiedAt: new Date() },
     })
     const customer = await tx.customer.findUniqueOrThrow({ where: { id: customerId } })
-    // Email trên đơn và trên khách đều lưu chữ thường.
+    // Emails on orders and customers are both stored lowercase.
     await tx.order.updateMany({ where: { customerId: null, email: customer.email }, data: { customerId } })
     return true
   })

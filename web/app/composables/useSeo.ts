@@ -1,14 +1,14 @@
 type SeoOptions = {
   title: MaybeRefOrGetter<string>
   description: MaybeRefOrGetter<string>
-  /** Đường dẫn chuẩn của trang; mặc định là đường dẫn hiện tại bỏ query (`?sku=`, `utm_*`, …). */
+  /** The page's canonical path; defaults to the current path without query (`?sku=`, `utm_*`, …). */
   canonicalPath?: MaybeRefOrGetter<string>
   image?: MaybeRefOrGetter<string | undefined>
-  /** Trang trùng nội dung với trang khác (kết quả tìm kiếm, URL có bộ lọc) hoặc riêng của từng khách. */
+  /** A page duplicating another (search results, filtered URLs) or specific to one customer. */
   noindex?: MaybeRefOrGetter<boolean>
 }
 
-/** Title, description, canonical và Open Graph cho trang khách. URL tuyệt đối dựng từ `siteUrl`. */
+/** Title, description, canonical and Open Graph for customer pages. Absolute URLs are built from `siteUrl`. */
 export function useSeo(options: SeoOptions) {
   const route = useRoute()
   const absolute = useAbsoluteUrl()
@@ -26,13 +26,13 @@ export function useSeo(options: SeoOptions) {
     ogUrl: url,
     ogType: 'website',
     ogImage: image,
-    // `follow` để máy tìm kiếm vẫn đi theo link tới trang sản phẩm, danh mục.
+    // `follow` so search engines still follow links to product and category pages.
     robots: () => (toValue(options.noindex) ? 'noindex, follow' : undefined),
   })
   useHead({ link: [{ rel: 'canonical', href: url }] })
 }
 
-/** Đổi đường dẫn (hoặc URL ảnh đã tuyệt đối) thành URL tuyệt đối trên website. */
+/** Turns a path (or an already absolute image URL) into an absolute website URL. */
 export function useAbsoluteUrl() {
   const { siteUrl } = useRuntimeConfig().public
   return (path: string) => new URL(path, siteUrl).href

@@ -13,7 +13,7 @@ const photo = () =>
     .jpeg()
     .toBuffer()
 
-/** Owner đã đăng nhập; thương hiệu Nike, danh mục Sneaker; `add` tạo sản phẩm giày có ảnh và biến thể. */
+/** Signed-in owner; brand Nike, category Sneaker; `add` creates a shoe product with images and variants. */
 async function shop() {
   const app = await appWithOwner()
   const { accessToken: token } = await login(app.request, OWNER.email, OWNER.password)

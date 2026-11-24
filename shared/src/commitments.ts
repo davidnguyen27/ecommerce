@@ -1,12 +1,12 @@
 import { z } from 'zod'
 
-/** Chứng từ nhận pdf và ảnh; MIME type đọc từ nội dung file, không theo đuôi. */
+/** Documents accept pdf and images; the MIME type comes from content, not the extension. */
 export const DOCUMENT_CONTENT_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] as const
 
-/** Dung lượng tối đa của một chứng từ tải lên (bản scan nhiều trang). */
+/** Max size of an uploaded document (multi-page scans). */
 export const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024
 
-/** Chứng từ nguồn hàng nội bộ; chỉ có metadata, file mở qua URL ký. */
+/** Internal supplier document; metadata only, the file opens via a signed URL. */
 export const AdminProductDocument = z.object({
   id: z.string(),
   fileName: z.string(),
@@ -19,11 +19,11 @@ export type AdminProductDocument = z.infer<typeof AdminProductDocument>
 export const AdminProductDocumentList = z.object({ items: z.array(AdminProductDocument) })
 export type AdminProductDocumentList = z.infer<typeof AdminProductDocumentList>
 
-/** URL ký có hạn tới file chứng từ trên bucket private; mỗi lần cấp đều ghi audit. */
+/** Expiring signed URL to the document in the private bucket; each one issued is audited. */
 export const DocumentUrl = z.object({ url: z.string(), expiresAt: z.string() })
 export type DocumentUrl = z.infer<typeof DocumentUrl>
 
-/** `warranty`: loại cam kết là bảo hành; bảo hành chỉ hiện với khách qua loại này (ADR 0005). */
+/** `warranty`: the commitment type is a warranty; warranty reaches customers only through it (ADR 0005). */
 export const CommitmentKind = z.enum(['warranty', 'other'])
 export type CommitmentKind = z.infer<typeof CommitmentKind>
 
@@ -36,15 +36,15 @@ export type CommitmentTypeList = z.infer<typeof CommitmentTypeList>
 export const CommitmentTypeRequest = z.object({ name: z.string().trim().min(1).max(200), kind: CommitmentKind })
 export type CommitmentTypeRequest = z.infer<typeof CommitmentTypeRequest>
 
-/** Cam kết có bằng chứng của một sản phẩm, như nhân viên thấy. */
+/** A product's evidenced commitment, as staff see it. */
 export const AdminCommitment = z.object({
   id: z.string(),
   typeId: z.string(),
   typeName: z.string(),
   kind: CommitmentKind,
-  /** Nội dung hiển thị cho khách. */
+  /** Text shown to customers. */
   statement: z.string(),
-  /** Chứng từ của chính sản phẩm này làm bằng chứng; luôn có ít nhất một. */
+  /** Documents of this same product as evidence; always at least one. */
   documentIds: z.array(z.string()),
 })
 export type AdminCommitment = z.infer<typeof AdminCommitment>
@@ -59,9 +59,9 @@ export const CommitmentRequest = z.object({
 })
 export type CommitmentRequest = z.infer<typeof CommitmentRequest>
 
-/** Cam kết có bằng chứng như khách thấy: không có chứng từ hay URL của chứng từ. */
+/** An evidenced commitment as customers see it: no documents or document URLs. */
 export const PublicCommitment = z.object({
-  /** Tên loại cam kết, ví dụ "Bảo hành chính hãng". */
+  /** Commitment type name, e.g. "Bảo hành chính hãng". */
   type: z.string(),
   kind: CommitmentKind,
   statement: z.string(),

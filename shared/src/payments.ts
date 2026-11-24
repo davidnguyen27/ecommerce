@@ -1,17 +1,17 @@
 import { z } from 'zod'
 
 /**
- * Query của IPN VNPAY báo kết quả thanh toán (ADR 0010). Chữ ký kiểm trên toàn bộ tham số `vnp_*` gốc trước khi parse;
- * schema chỉ giữ các trường hệ thống dùng, các trường khác được giữ nguyên.
+ * VNPAY IPN query reporting a payment result (ADR 0010). The signature is checked over all original `vnp_*` params
+ * before parsing; the schema keeps only the fields we use and passes the rest through.
  */
 export const VnpayIpnQuery = z.looseObject({
   vnp_TxnRef: z.string(),
   /** VND ×100. */
   vnp_Amount: z.string().regex(/^\d+$/),
-  /** `00` cùng `vnp_TransactionStatus` `00` mới là trả thành công. */
+  /** `00` with `vnp_TransactionStatus` `00` is a successful payment. */
   vnp_ResponseCode: z.string(),
   vnp_TransactionStatus: z.string(),
-  /** Mã giao dịch VNPAY, dùng làm mã tham chiếu của khoản tiền. */
+  /** VNPAY transaction number, used as the payment reference. */
   vnp_TransactionNo: z.string(),
   /** `yyyyMMddHHmmss`, GMT+7. */
   vnp_PayDate: z.string().optional(),
@@ -19,20 +19,20 @@ export const VnpayIpnQuery = z.looseObject({
 export type VnpayIpnQuery = z.infer<typeof VnpayIpnQuery>
 
 /**
- * Trả lời IPN (tài liệu VNPAY): `00` đã nhận, `01` không thấy đơn, `02` đã xác nhận trước đó, `97` sai chữ ký, `99` lỗi
- * khác. `00` và `02` làm VNPAY thôi gửi; mã khác VNPAY gửi lại.
+ * IPN reply (VNPAY docs): `00` received, `01` order not found, `02` already confirmed, `97` bad signature, `99` other
+ * error. `00` and `02` stop VNPAY resending; other codes make it retry.
  */
 export type VnpayIpnResult = { RspCode: '00' | '01' | '02' | '97' | '99'; Message: string }
 
-/** Nút "Giả lập đã thanh toán" của cổng giả lập: mã đơn và số tiền (đúng tổng, hoặc số khác để thử lệch tiền). */
+/** The simulator's "Giả lập đã thanh toán" button: order code and amount (the total, or another to test a mismatch). */
 export const SimulatedPaymentRequest = z.object({
   orderCode: z.number().int().positive(),
   amount: z.number().int().positive('Số tiền phải lớn hơn 0'),
-  /** Mã link (`ref` trên URL cổng giả lập), để giao dịch mang đúng mục đích; thiếu thì coi là trả đủ. */
+  /** Link ref (`ref` on the simulator URL), so the transaction gets the right purpose; missing means full payment. */
   gatewayReference: z.string().min(1).max(100).optional(),
 })
 export type SimulatedPaymentRequest = z.infer<typeof SimulatedPaymentRequest>
 
-/** Nút "Giả lập hết hạn" của cổng giả lập: đơn hết hạn giữ hàng ngay. */
+/** The simulator's "Giả lập hết hạn" button: the reservation expires now. */
 export const SimulatedExpiryRequest = z.object({ orderCode: z.number().int().positive() })
 export type SimulatedExpiryRequest = z.infer<typeof SimulatedExpiryRequest>

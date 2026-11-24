@@ -6,7 +6,7 @@ import { claimCustomerToken, issueCustomerToken } from './customer-tokens.ts'
 
 const RESET_TTL_MS = 60 * 60 * 1000
 
-/** Tạo token đặt lại mật khẩu một lần và xếp thư chứa link vào hàng đợi, cùng `db` (thường là transaction). */
+/** Creates a one-time password reset token and queues the email with its link, in `db` (usually a transaction). */
 export async function sendPasswordResetEmail(
   db: DbClient,
   emails: EmailQueue,
@@ -22,8 +22,8 @@ export async function sendPasswordResetEmail(
 }
 
 /**
- * Đổi mật khẩu của khách trong `db` (thường là transaction) và đăng xuất mọi thiết bị.
- * Link đặt lại còn dở cũng bị vô hiệu, vì chúng được cấp cho mật khẩu cũ.
+ * Changes the customer's password in `db` (usually a transaction) and signs out every device. Pending reset links
+ * are invalidated too, since they were issued for the old password.
  */
 export async function setCustomerPassword(db: DbClient, customerId: string, passwordHash: string) {
   await db.customer.update({ where: { id: customerId }, data: { passwordHash } })
@@ -34,7 +34,7 @@ export async function setCustomerPassword(db: DbClient, customerId: string, pass
   await revokeAllRefreshTokens(db, 'customer', customerId)
 }
 
-/** Đặt mật khẩu mới bằng token trong thư; trả `false` khi token sai, đã dùng hoặc hết hạn. */
+/** Sets a new password with the emailed token; `false` when wrong, used or expired. */
 export async function resetPassword(prisma: Db, token: string, password: string): Promise<boolean> {
   const passwordHash = await hashPassword(password)
   return prisma.$transaction(async (tx) => {

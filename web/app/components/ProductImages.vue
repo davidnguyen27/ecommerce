@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { AdminProductImage, AdminProductImageList, MAX_IMAGE_BYTES, IMAGE_CONTENT_TYPES } from '@ecommerce/shared'
 
-/** Ảnh của một sản phẩm trong trình soạn: tải lên, kéo thả sắp thứ tự, alt text, gắn vào biến thể. */
+/** A product's images in the editor: upload, drag to reorder, alt text, variant links. */
 const props = defineProps<{
   productId: string
-  /** Biến thể đã lưu của sản phẩm, để gắn ảnh. */
+  /** The product's saved variants, for linking images. */
   variants: { id: string; label: string }[]
 }>()
 
 const session = useAdminSession()
-// Quyền thật do API kiểm; người không có `media.upload` chỉ xem.
+// The API enforces permissions; users without `media.upload` can only view.
 const canUpload = session.can('media.upload')
 const base = `/api/admin/products/${props.productId}/images`
 
-/** Ảnh kèm bản đang soạn của alt text và biến thể. */
+/** Images with draft alt text and variants. */
 type Row = AdminProductImage & { draftAlt: string; draftVariantIds: string[] }
 
 const rows = ref<Row[]>([])
@@ -39,7 +39,7 @@ async function attempt(action: () => Promise<unknown>) {
   }
 }
 
-/** Tải lần lượt từng file; file sai loại hoặc quá lớn bị bỏ qua ngay ở trình duyệt, API vẫn kiểm lại. */
+/** Uploads files one at a time; wrong types or oversized files are skipped in the browser, the API rechecks. */
 async function upload(files: FileList | File[]) {
   error.value = null
   const skipped: string[] = []

@@ -3,7 +3,7 @@ import '~/assets/admin.css'
 const session = useAdminSession()
 const route = useRoute()
 
-// Lọc menu theo quyền thực tế của nhân viên
+// Filter the menu by the staff member's actual permissions
 const visibleGroups = computed(() =>
   ADMIN_MENU_GROUPS.map((group) => ({
     ...group,
@@ -11,7 +11,7 @@ const visibleGroups = computed(() =>
   })).filter((group) => group.items.length > 0),
 )
 
-// Mục đang active là mục có đường dẫn dài nhất khớp với trang, để `/admin/stock/movements` không sáng cả `/admin/stock`
+// The active item is the longest path matching the page, so `/admin/stock/movements` does not light up `/admin/stock`
 const activeItem = computed(() => {
   const matches = (to: string) =>
     to === '/admin' ? route.path === '/admin' : route.path === to || route.path.startsWith(`${to}/`)
@@ -19,7 +19,7 @@ const activeItem = computed(() => {
 })
 const isItemActive = (to: string) => activeItem.value === to
 
-// Lấy tiêu đề trang hiện tại cho breadcrumb
+// Current page title for the breadcrumb
 const currentTitle = computed(() => {
   return ADMIN_MENU_ITEMS.find((item) => isItemActive(item.to))?.label ?? 'Quản trị'
 })

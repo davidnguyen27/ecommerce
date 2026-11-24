@@ -1,14 +1,14 @@
 import MarkdownIt from 'markdown-it'
 
-// `html: false` thoát mọi thẻ HTML trong nội dung, và markdown-it chặn sẵn link `javascript:`,
-// nên nội dung nhân viên soạn không chèn được script vào trang khách.
+// `html: false` escapes every HTML tag in the content, and markdown-it already blocks `javascript:` links, so
+// staff-written content cannot inject scripts into customer pages.
 const md = new MarkdownIt({ html: false, linkify: true })
 
 export function renderMarkdown(source: string): string {
   return md.render(source)
 }
 
-/** Chữ thuần của nội dung markdown (bỏ cú pháp, giữ chữ của link), để làm mô tả trong thẻ meta. */
+/** Plain text of markdown content (syntax removed, link text kept), for meta descriptions. */
 export function markdownText(source: string): string {
   return md
     .parse(source, {})

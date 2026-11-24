@@ -8,12 +8,12 @@ import {
 } from '@ecommerce/shared'
 
 /**
- * Cam kết có bằng chứng của một sản phẩm. Ai soạn sản phẩm cũng xem được; ghi cần `commitment.edit`.
- * Bảo hành chỉ hiện với khách qua đây (ADR 0005), và mỗi cam kết phải dựa trên chứng từ của chính sản phẩm.
+ * A product's evidenced commitments. Anyone editing products can view; writing needs `commitment.edit`. Warranty
+ * reaches customers only through here (ADR 0005), and each commitment must rest on the product's own documents.
  */
 const props = defineProps<{
   productId: string
-  /** Chứng từ của sản phẩm để chọn làm bằng chứng; rỗng khi người dùng không có `document.view`. */
+  /** The product's documents to pick as evidence; empty when the user lacks `document.view`. */
   documents: AdminProductDocument[]
 }>()
 

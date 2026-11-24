@@ -2,7 +2,7 @@ import type { Permission } from '@ecommerce/shared'
 
 declare module '#app' {
   interface PageMeta {
-    /** Permission trang quản trị cần có (danh sách: có ít nhất một); middleware `admin-auth` kiểm tra. */
+    /** Permission an admin page needs (a list: at least one); checked by the `admin-auth` middleware. */
     permission?: Permission | readonly Permission[]
   }
 }

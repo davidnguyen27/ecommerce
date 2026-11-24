@@ -168,7 +168,7 @@ function brandAudit(request: Request, token: string) {
     .then((res) => res.body.items as { action: string; before: unknown; after: unknown }[])
 }
 
-/** File mà URL công khai trỏ tới, đọc từ storage giả. */
+/** The file a public URL points to, read from the fake storage. */
 const publicObject = (storage: InMemoryStorage, url: string) =>
   storage.objects.get(`public/${url.replace('memory://public/', '')}`)
 

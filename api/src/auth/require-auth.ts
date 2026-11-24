@@ -8,13 +8,13 @@ declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
-      /** Có sau khi qua `requireAuth`. */
+      /** Set after `requireAuth`. */
       auth?: { audience: AuthAudience; subjectId: string }
     }
   }
 }
 
-/** Chỉ cho qua request mang access token còn hạn của đúng audience. */
+/** Only lets through requests with an unexpired access token for the right audience. */
 export function requireAuth(secret: Uint8Array, audience: AuthAudience): RequestHandler {
   return async (req, _res, next) => {
     const header = req.headers.authorization
@@ -28,16 +28,16 @@ export function requireAuth(secret: Uint8Array, audience: AuthAudience): Request
 }
 
 /**
- * Đăng nhập không bắt buộc: không có header `Authorization` thì cho qua như khách vãng lai, có thì token phải còn
- * hạn và đúng audience (sai thì 401, để trình duyệt refresh rồi gửi lại thay vì bị coi là khách vãng lai).
- * Route đọc `req.auth?.subjectId`.
+ * Optional sign-in: no `Authorization` header passes as a guest; with one, the token must be valid for the audience
+ * (else 401, so the browser refreshes and retries instead of being treated as a guest). Routes read
+ * `req.auth?.subjectId`.
  */
 export function optionalAuth(secret: Uint8Array, audience: AuthAudience): RequestHandler {
   const required = requireAuth(secret, audience)
   return (req, res, next) => (req.headers.authorization === undefined ? next() : required(req, res, next))
 }
 
-/** Lấy subject đã xác thực; chỉ gọi sau `requireAuth`. */
+/** The authenticated subject; call only after `requireAuth`. */
 export function authSubject(req: Request): string {
   if (!req.auth) throw new Error('Route chưa đi qua requireAuth')
   return req.auth.subjectId

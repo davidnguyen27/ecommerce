@@ -2,10 +2,9 @@
 import type { AdminOrder, FieldError } from '@ecommerce/shared'
 
 /**
- * Xử lý giao hàng ở trang chi tiết đơn: chuẩn bị, bàn giao vận chuyển kèm đơn vị vận chuyển và mã vận đơn, rồi
- * đánh dấu đã giao hoặc giao thất bại. Giao thất bại thì giao lại, hoặc nhận hàng hoàn về rồi giao lại từ kho hay hủy
- * đơn (M6a).
- * Thành công thì emit `update` với `AdminOrder` mà API trả; lỗi thì emit `reload` để trang nạp lại trạng thái mới.
+ * Fulfillment on the order detail page: prepare, hand over with carrier and tracking number, then mark delivered or
+ * failed. After a failed delivery: redeliver, or return to stock then redeliver from stock or cancel (M6a).
+ * On success emits `update` with the `AdminOrder` the API returns; on error emits `reload` to refetch the state.
  */
 const props = defineProps<{ order: AdminOrder; canFulfill: boolean }>()
 const emit = defineEmits<{ update: [order: unknown]; reload: [] }>()
@@ -28,7 +27,7 @@ async function run(path: string, body?: Record<string, unknown>) {
   } catch (err) {
     error.value = apiErrorMessage(err)
     fieldErrors.value = apiFieldErrors(err)
-    // Lỗi trạng thái (ví dụ người khác vừa xử lý đơn): nạp lại để thấy trạng thái mới; lỗi trường thì giữ form.
+    // Status error (e.g. someone just handled the order): reload to see it; field errors keep the form.
     if (!fieldErrors.value.length) emit('reload')
   } finally {
     busy.value = false
@@ -42,7 +41,7 @@ const deliver = () => {
 }
 const redeliver = () => run('redeliver', { ...form })
 
-// Mặc định nhập lại tồn cả dòng; nhân viên chuyển phần hỏng/mất sang ô bên cạnh.
+// Default to restocking the whole line; staff move damaged/lost units to the next field.
 const returns = ref(props.order.lines.map((line) => ({ restocked: line.quantity, writtenOff: 0 })))
 const returnsValid = computed(() =>
   props.order.lines.every((line, i) => {

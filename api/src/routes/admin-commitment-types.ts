@@ -21,8 +21,8 @@ const auditFields = ({ name, kind }: CommitmentType) => ({ name, kind })
 const nameTaken = () => conflictField('name', 'Đã có loại cam kết cùng tên')
 
 /**
- * Danh sách đóng các loại cam kết. Ai soạn sản phẩm hay xem chứng từ cũng đọc được;
- * thêm, sửa cần `commitment.edit`. Không có xóa: cam kết đã ghi luôn trỏ tới một loại còn tồn tại.
+ * Closed list of commitment types. Anyone editing products or viewing documents can read it; adding or editing needs
+ * `commitment.edit`. No delete: recorded commitments always point to an existing type.
  */
 export function adminCommitmentTypeRoutes(prisma: Db) {
   return Router()

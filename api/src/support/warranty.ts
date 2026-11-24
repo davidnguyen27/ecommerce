@@ -10,12 +10,13 @@ import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest, notFound, type
 import { queueSupportEmail } from './emails.ts'
 
 /**
- * Bảo hành (spec M6b ticket 06): khách báo lỗi một dòng của đơn đã giao. Nhân viên ghi các mốc nhận hàng của khách →
- * gửi hãng hay sửa → trả lại khách (mã vận đơn), rồi kết quả. Không mốc nào đụng tới tồn: hàng của khách không phải hàng
- * của cửa hàng. Kết quả "đổi mới" hay "hoàn tiền" tạo yêu cầu đổi hay trả nối tiếp, đã chấp nhận và coi như đã nhận hàng.
+ * Warranty (spec M6b ticket 06): the customer reports a defect on a delivered line. Staff record milestones: item
+ * received → sent to the brand or repaired → returned to the customer (tracking number), then the outcome. No
+ * milestone touches stock: the customer's item is not shop stock. "Replaced" or "refunded" creates a follow-up exchange
+ * or return, already accepted and treated as received.
  */
 
-/** Dòng bảo hành: dòng đơn theo biến thể gốc, số lượng không quá số của dòng, biến thể khách đang giữ. */
+/** Warranty line: order line by original variant, quantity within the line, the variant the customer holds. */
 export async function planWarrantyLine(
   tx: DbClient,
   orderId: string,
@@ -35,7 +36,7 @@ export async function planWarrantyLine(
   return { orderLineId: orderLine.id, quantity: line.quantity, heldVariantId: held.get(orderLine.id)! }
 }
 
-/** Mốc và kết quả bảo hành như khách và nhân viên thấy; `null` với loại khác. */
+/** Warranty milestones and outcome as customers and staff see them; `null` for other types. */
 export function warrantyOf(request: SupportForView): WarrantyView | null {
   if (request.kind !== 'warranty') return null
   const { warrantyReturnCarrier: carrier, warrantyReturnTrackingNumber: trackingNumber } = request
@@ -49,7 +50,7 @@ export function warrantyOf(request: SupportForView): WarrantyView | null {
   }
 }
 
-/** Sản phẩm của dòng bảo hành có cam kết loại `warranty` (ADR 0005) không; `null` với loại khác. */
+/** Whether the line's product has a `warranty` commitment (ADR 0005); `null` for other types. */
 export async function hasWarrantyCommitment(db: DbClient, request: SupportForView) {
   const productId = request.kind === 'warranty' ? request.lines[0]?.orderLine.variant.productId : undefined
   if (!productId) return null
@@ -63,8 +64,9 @@ const MILESTONE_MESSAGES = {
 } as const
 
 /**
- * Ghi một mốc bảo hành (`support.handle`), đúng thứ tự: nhận hàng → gửi hãng/sửa → trả lại khách. Sai thứ tự, ghi lại mốc
- * đã có, hay yêu cầu đã kết thúc thì 409. Mỗi mốc thêm một tin cho khách; trả lại khách thì gửi email kèm mã vận đơn.
+ * Records a warranty milestone (`support.handle`) in order: received → sent/repaired → returned. Wrong order, a
+ * repeated milestone, or a finished request gives 409. Each milestone adds a customer message; returning emails the
+ * tracking number.
  */
 export async function recordWarrantyMilestone(
   tx: DbClient,
@@ -108,7 +110,7 @@ export async function recordWarrantyMilestone(
       : MILESTONE_MESSAGES[input.milestone]
   await tx.supportRequest.update({
     where: { id: request.id },
-    // Nhân viên đang làm việc với hàng của khách: yêu cầu đang xử lý.
+    // Staff are now working on the customer's item: the request is in progress.
     data: { ...data, ...(request.status === 'new' && { status: 'in_progress' }) },
   })
   await tx.supportMessage.create({ data: { requestId: request.id, author: 'staff', staffId, body: message } })
@@ -132,14 +134,13 @@ const OUTCOME_MESSAGES = {
 } as const
 
 /**
- * Ghi kết quả bảo hành (`support.handle`), một lần:
- * - `repaired`: cần đã trả lại khách;
- * - `rejected`: cần lý do (schema kiểm); yêu cầu `rejected`;
- * - `replaced`/`refunded`: cần đã nhận hàng; tạo yêu cầu đổi cùng biến thể (giữ hàng ngay) hay yêu cầu trả, đã chấp nhận
- *   và coi như đã nhận hàng (ghi hỏng, không nhập lại tồn), nối với yêu cầu bảo hành. Kho chỉ còn bàn giao hàng đổi; nhân
- *   viên đề xuất hoàn cho yêu cầu trả như thường.
- *
- * Khóa đơn trước rồi mới khóa yêu cầu (cùng thứ tự với trả hàng). Trả mã yêu cầu bảo hành.
+ * Records the warranty outcome (`support.handle`), once:
+ * - `repaired`: must be returned to the customer first;
+ * - `rejected`: needs a reason (schema-checked); the request becomes `rejected`;
+ * - `replaced`/`refunded`: must be received; creates an exchange to the same variant (reserved now) or a return,
+ *   accepted and treated as received (written off, not restocked), linked to the warranty request. The warehouse only
+ *   hands over the exchange; staff propose the return refund as usual.
+ * Locks the order before the request (same order as returns). Returns the warranty request code.
  */
 export async function recordWarrantyOutcome(
   tx: DbClient,
@@ -192,8 +193,8 @@ export async function recordWarrantyOutcome(
 }
 
 /**
- * Yêu cầu đổi (cùng biến thể khách đang giữ) hay trả nối tiếp yêu cầu bảo hành. Dòng phải còn trả/đổi được (dưới khóa
- * đơn); đổi thì giữ hàng ngay, thiếu thì 409 để nhân viên chọn hoàn tiền.
+ * Follow-up exchange (to the held variant) or return of a warranty request. The line must still be returnable (under
+ * the order lock); an exchange reserves at once, and a shortage gives 409 so staff can refund instead.
  */
 async function createFollowUp(tx: DbClient, warranty: SupportForView, kind: 'exchange' | 'return', staffId: string) {
   const line = warranty.lines[0]!
@@ -228,7 +229,7 @@ async function createFollowUp(tx: DbClient, warranty: SupportForView, kind: 'exc
       decision: 'accepted',
       decidedById: staffId,
       decidedAt: now,
-      // Hàng cũ đã ở cửa hàng từ mốc bảo hành: coi như đã nhận, ghi hỏng (không nhập lại tồn).
+      // The old item has been at the shop since the warranty milestone: treat as received, written off (not restocked).
       receivedAt: now,
       receivedById: staffId,
       returnWindowDays: window.days,

@@ -1,11 +1,11 @@
-// Luồng mua hàng trọn vẹn: khách đặt mua, cổng giả lập báo đã trả, nhân viên kho chuẩn bị, bàn giao, đánh dấu đã giao.
-// Sau mỗi bước kiểm tồn, số đang giữ, sổ xuất nhập (qua API quản trị) và trạng thái đơn.
+// The full purchase flow: a customer checks out, the simulator reports payment, the warehouse prepares, hands over and
+// marks delivered. After each step it checks stock, reserved, ledger (admin API) and order status.
 import { expect, test } from '@playwright/test'
 import type { AdminOrder } from '@ecommerce/shared'
 import { adminLogin } from '../support/admin-login.ts'
 import { AdminApi, PRICE, PRODUCT_PATH, PROVINCE_CODE, SHIPPING_FEE, SKU, WAREHOUSE } from '../support/stack.ts'
 
-/** Email và số điện thoại riêng cho mỗi lượt, để chạy lại không vướng giới hạn 3 đơn chờ mỗi email/số điện thoại. */
+/** Unique email and phone per run, so reruns avoid the 3 pending orders per email/phone limit. */
 const runId = Date.now().toString().slice(-8)
 const BUYER = {
   name: 'Nguyễn Văn E2E',
@@ -34,12 +34,12 @@ test('khách đặt mua, thanh toán giả lập, kho chuẩn bị, bàn giao v�
     }).toEqual(status)
     return order
   }
-  /** Chưa bàn giao thì không có dòng sổ nào mới cho biến thể. */
+  /** Before handover there is no new ledger row for the variant. */
   const expectNoNewMovement = async () => {
     expect((await api.movementsOf(before.variantId)).total).toBe(ledgerBefore.total)
   }
 
-  // 1. Khách thêm vào giỏ.
+  // 1. The customer adds to cart.
   await page.goto(PRODUCT_PATH)
   await page.getByRole('button', { name: 'Thêm vào giỏ' }).click()
   const cartLink = page.getByRole('link', { name: 'Giỏ hàng, 1 món', exact: true })
@@ -50,12 +50,12 @@ test('khách đặt mua, thanh toán giả lập, kho chuẩn bị, bàn giao v�
   await expect(page.getByRole('link', { name: 'Air Max 90' })).toBeVisible()
   await page.getByRole('link', { name: 'Đặt mua' }).click()
 
-  // 2. Đặt mua.
+  // 2. Checkout.
   await expect(page.getByRole('heading', { level: 1, name: 'Đặt mua' })).toBeVisible()
   await page.getByLabel('Họ tên người nhận').fill(BUYER.name)
   await page.getByLabel('Số điện thoại').fill(BUYER.phone)
   await page.getByLabel('Email').fill(BUYER.email)
-  // Nhãn "Tỉnh/thành" cũng khớp ô phường/xã (option "Chọn tỉnh/thành trước"), nên chọn theo name.
+  // The "Tỉnh/thành" label also matches the ward field (option "Chọn tỉnh/thành trước"), so select by name.
   await page.locator('select[name=province]').selectOption(PROVINCE_CODE)
   const ward = page.locator('select[name=ward]')
   await expect(ward).toBeEnabled()
@@ -66,18 +66,18 @@ test('khách đặt mua, thanh toán giả lập, kho chuẩn bị, bàn giao v�
   await page.getByRole('checkbox', { name: /chính sách bảo mật/ }).check()
   await page.getByRole('button', { name: 'Đặt mua và thanh toán' }).click()
 
-  // Chuyển sang cổng thanh toán giả lập, link mang mã đơn và số tiền.
+  // On to the payment simulator, the link carrying order code and amount.
   await expect(page.getByRole('heading', { level: 1, name: 'Cổng thanh toán giả lập' })).toBeVisible()
   const code = new URL(page.url()).searchParams.get('orderCode')
   expect(code).toMatch(/^\d+$/)
   await expect(page.getByTestId('simulator-amount')).toHaveText(vnd(PRICE + SHIPPING_FEE))
 
-  // Đặt mua giữ một cái, chưa trừ tồn, chưa ghi sổ.
+  // Checkout reserves one unit, deducts no stock, writes no ledger.
   await expectOrder(code!, { status: 'pending_payment', paymentStatus: 'unpaid', fulfillmentStatus: 'not_prepared' })
   await expectStock(before.onHand, before.reserved + 1)
   await expectNoNewMovement()
 
-  // 3. Giả lập đã thanh toán, rồi quay về trang đơn.
+  // 3. Simulate payment, then back to the order page.
   await page.getByRole('button', { name: 'Giả lập đã thanh toán' }).click()
   await expect(page.getByRole('heading', { level: 1, name: `Đơn hàng #${code}` })).toBeVisible()
   await expect(page.getByTestId('order-status')).toHaveText('Đang xử lý')
@@ -96,7 +96,7 @@ test('khách đặt mua, thanh toán giả lập, kho chuẩn bị, bàn giao v�
   await expectStock(before.onHand, before.reserved + 1)
   await expectNoNewMovement()
 
-  // 4. Nhân viên kho xử lý đơn ở trang quản trị, trong một phiên trình duyệt riêng.
+  // 4. The warehouse clerk handles the order in admin, in a separate browser session.
   const staff = await browser.newContext()
   const admin = await staff.newPage()
   admin.on('dialog', (dialog) => void dialog.accept())
@@ -111,7 +111,7 @@ test('khách đặt mua, thanh toán giả lập, kho chuẩn bị, bàn giao v�
   await expectStock(before.onHand, before.reserved + 1)
   await expectNoNewMovement()
 
-  // Bàn giao trừ tồn và nhả số đang giữ cùng lúc, ghi một dòng xuất bán.
+  // Handover deducts stock and releases reserved together, writing one sale row.
   const trackingNumber = `GHN${runId}`
   await admin.getByLabel('Đơn vị vận chuyển').fill('Giao Hàng Nhanh')
   await admin.getByLabel('Mã vận đơn').fill(trackingNumber)
@@ -133,7 +133,7 @@ test('khách đặt mua, thanh toán giả lập, kho chuẩn bị, bàn giao v�
     orderCode: Number(code),
   })
 
-  // 5. Đã giao: đơn hoàn tất, kho không đổi thêm.
+  // 5. Delivered: the order completes, stock unchanged.
   await admin.getByRole('button', { name: 'Đã giao', exact: true }).click()
   await expect(admin.getByTestId('admin-order-status')).toHaveText('Hoàn tất')
   await expectOrder(code!, { status: 'completed', paymentStatus: 'paid', fulfillmentStatus: 'delivered' })
@@ -141,14 +141,14 @@ test('khách đặt mua, thanh toán giả lập, kho chuẩn bị, bàn giao v�
   expect((await api.movementsOf(before.variantId)).total).toBe(ledgerBefore.total + 1)
   await staff.close()
 
-  // Khách mở lại đơn thấy đã giao và mã vận đơn.
+  // The customer reopens the order and sees delivered with the tracking number.
   await page.goto(customerOrderUrl)
   await expect(page.getByTestId('order-status')).toHaveText('Hoàn tất')
   await expect(page.getByTestId('fulfillment-status')).toHaveText('Đã giao')
   await expect(page.getByTestId('order-tracking-number')).toHaveText(trackingNumber)
 })
 
-/** Định dạng tiền như `formatVnd` của web: `3.530.000 ₫`. */
+/** Money formatted like the web's `formatVnd`: `3.530.000 ₫`. */
 function vnd(amount: number) {
   return `${new Intl.NumberFormat('vi-VN').format(amount)} ₫`
 }

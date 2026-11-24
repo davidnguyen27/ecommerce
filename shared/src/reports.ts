@@ -4,12 +4,12 @@ import { OrderCancelCause, OrderCancelReason, ReconciliationReason, VoucherKind 
 import { RefundStatus } from './refunds.ts'
 import { SupportRequestKind, SupportReturnReason, WarrantyOutcome } from './support.ts'
 
-/** Khoảng ngày dài nhất của một báo cáo, tính cả hai đầu. */
+/** Longest date range of a report, both ends included. */
 export const REPORT_MAX_DAYS = 366
 
 const DAY = 24 * 60 * 60_000
 
-/** Số ngày của khoảng `from`–`to` (ngày lịch `YYYY-MM-DD`), tính cả hai đầu. */
+/** Days in the `from`–`to` range (calendar days `YYYY-MM-DD`), both ends included. */
 export const reportDays = (from: string, to: string) => (Date.parse(to) - Date.parse(from)) / DAY + 1
 
 export const ReportGroupBy = z.enum(['day', 'month'])
@@ -21,7 +21,7 @@ const ReportPeriodShape = z.object({
   groupBy: ReportGroupBy.default('day'),
 })
 
-/** Kiểm khoảng ngày; tách khỏi schema vì zod không cho `extend` một schema đã có refine. */
+/** Checks the date range; separate from the schema since zod cannot `extend` a refined schema. */
 const checkPeriod = (query: { from: string; to: string }, ctx: z.RefinementCtx) => {
   const days = reportDays(query.from, query.to)
   if (days < 1) ctx.addIssue({ code: 'custom', path: ['to'], message: 'Ngày kết thúc phải sau ngày bắt đầu' })
@@ -29,91 +29,91 @@ const checkPeriod = (query: { from: string; to: string }, ctx: z.RefinementCtx) 
     ctx.addIssue({ code: 'custom', path: ['to'], message: `Kỳ báo cáo dài tối đa ${REPORT_MAX_DAYS} ngày` })
 }
 
-/** Kỳ báo cáo: ngày lịch theo giờ Việt Nam, từ đầu ngày `from` tới hết ngày `to`. */
+/** Report period: Vietnam-time calendar days, from the start of `from` to the end of `to`. */
 export const ReportQuery = ReportPeriodShape.superRefine(checkPeriod)
 export type ReportQuery = z.infer<typeof ReportQuery>
 
-/** Số dòng mỗi trang của báo cáo xuất nhập tồn. */
+/** Rows per page of the stock movement report. */
 export const STOCK_REPORT_PAGE_SIZE = 100
 
-/** Query của báo cáo xuất nhập tồn: kỳ (bỏ qua `groupBy`), bộ lọc và trang. */
+/** Stock movement report query: period (`groupBy` ignored), filters and page. */
 export const StockReportQuery = ReportPeriodShape.extend({
   productType: ProductType.optional(),
   brandId: z.uuid().optional(),
-  /** Chỉ biến thể có biến động trong kỳ. */
+  /** Only variants with movements in the period. */
   movedOnly: z.stringbool().default(false),
   page: z.coerce.number().int().min(1).default(1),
 }).superRefine(checkPeriod)
 export type StockReportQuery = z.infer<typeof StockReportQuery>
 
-/** Số của một kỳ doanh thu (GLOSSARY "Doanh thu", ADR 0016), VND. */
+/** Figures of one revenue period (GLOSSARY "Doanh thu", ADR 0016), VND. */
 export const RevenueFigures = z.object({
-  /** Số đơn đã giao trong kỳ. */
+  /** Orders delivered in the period. */
   deliveredOrders: z.number().int(),
-  /** Doanh thu gộp của đơn hàng sẵn và của đơn đặt trước; `gross` là tổng hai số. */
+  /** Gross revenue of in-stock orders and of pre-orders; `gross` is their sum. */
   grossStandard: z.number().int(),
   grossPreorder: z.number().int(),
   gross: z.number().int(),
-  /** Hàng trả lại: các khoản hoàn của trả hàng đã xong trong kỳ. */
+  /** Returns: return refunds completed in the period. */
   returns: z.number().int(),
-  /** Doanh thu thuần = gộp − hàng trả lại. */
+  /** Net revenue = gross − returns. */
   net: z.number().int(),
-  /** Phí giao của các đơn đã giao; không thuộc doanh thu. */
+  /** Shipping fees of delivered orders; not revenue. */
   shippingFees: z.number().int(),
-  /** Mất cọc của đơn đặt trước bị hủy trong kỳ; không thuộc doanh thu. */
+  /** Forfeited deposits of pre-orders cancelled in the period; not revenue. */
   forfeitedDeposits: z.number().int(),
 })
 export type RevenueFigures = z.infer<typeof RevenueFigures>
 
-/** Số lượng và doanh thu gộp của một nhóm dòng đơn đã giao; không trừ hàng trả lại. */
+/** Quantity and gross revenue of a group of delivered order lines; returns not deducted. */
 const SalesFigures = z.object({ quantity: z.number().int(), gross: z.number().int() })
 
-/** Số SKU nhiều nhất trong bảng top SKU. */
+/** Max SKUs in the top SKU table. */
 export const REVENUE_TOP_SKUS = 50
 
 export const RevenueReport = z.object({
   from: z.iso.date(),
   to: z.iso.date(),
   groupBy: ReportGroupBy,
-  /** Mỗi ngày (`YYYY-MM-DD`) hay mỗi tháng (`YYYY-MM`) của kỳ, kể cả kỳ không có số. */
+  /** Each day (`YYYY-MM-DD`) or month (`YYYY-MM`) of the period, empty ones included. */
   rows: z.array(RevenueFigures.extend({ period: z.string() })),
   total: RevenueFigures,
-  /** Theo nhóm hàng và thương hiệu hiện tại của sản phẩm, doanh thu gộp giảm dần. */
+  /** By the product's current type and brand, gross revenue descending. */
   byProductType: z.array(SalesFigures.extend({ productType: ProductType })),
   byBrand: z.array(SalesFigures.extend({ brandId: z.string(), brandName: z.string() })),
-  /** Tối đa `REVENUE_TOP_SKUS` biến thể, doanh thu gộp giảm dần. */
+  /** At most `REVENUE_TOP_SKUS` variants, gross revenue descending. */
   topSkus: z.array(SalesFigures.extend({ variantId: z.string(), sku: z.string(), productName: z.string() })),
 })
 export type RevenueReport = z.infer<typeof RevenueReport>
 
-/** Tiền thu của một kỳ (GLOSSARY "Tiền thu"), VND. */
+/** Collections of one period (GLOSSARY "Tiền thu"), VND. */
 export const CollectionsFigures = z.object({
-  /** Tiền vào theo ngày nhận, chia theo mục đích của khoản thu; `received` là tổng. */
+  /** Money in by date received, split by payment purpose; `received` is the total. */
   receivedFull: z.number().int(),
   receivedDeposit: z.number().int(),
   receivedRemainder: z.number().int(),
   received: z.number().int(),
-  /** Tiền ra: khoản hoàn đã xong theo ngày xong, chia theo nguồn (khoản tạo lại tính theo nguồn của khoản gốc). */
+  /** Money out: refunds completed by completion date, split by origin (retries count as their original's origin). */
   refundedCancellation: z.number().int(),
   refundedReconciliation: z.number().int(),
   refundedReturn: z.number().int(),
   refunded: z.number().int(),
-  /** Tiền thu thuần = tiền vào − tiền ra. */
+  /** Net collections = in − out. */
   net: z.number().int(),
 })
 export type CollectionsFigures = z.infer<typeof CollectionsFigures>
 
 const CountedAmount = z.object({ count: z.number().int(), amount: z.number().int() })
 
-/** Số tại thời điểm xem, không theo kỳ. */
+/** Point-in-time figures, not per period. */
 export const CollectionsSnapshot = z.object({
-  /** Tiền đã nhận trừ đã hoàn của đơn đặt trước chưa giao, chưa hủy; `count` là số đơn. */
+  /** Received minus refunded for undelivered, uncancelled pre-orders; `count` is the order count. */
   depositsHeld: CountedAmount,
-  /** Phần còn lại của đơn đặt trước đã cọc, chưa trả đủ, chưa hủy; `count` là số đơn. */
+  /** Remaining balance of deposited, not fully paid, uncancelled pre-orders; `count` is the order count. */
   outstanding: CountedAmount,
-  /** Khoản hoàn chờ thực hiện hoặc cổng đang xử lý. */
+  /** Refunds pending or gateway processing. */
   refunding: CountedAmount,
-  /** Mục cần đối soát đang mở. */
+  /** Open reconciliation items. */
   reconciliation: CountedAmount,
 })
 export type CollectionsSnapshot = z.infer<typeof CollectionsSnapshot>
@@ -128,14 +128,14 @@ export const CollectionsReport = z.object({
 })
 export type CollectionsReport = z.infer<typeof CollectionsReport>
 
-/** Số lượng xuất nhập của một biến thể trong kỳ (GLOSSARY "Tồn đầu" / "Tồn cuối"). */
+/** One variant's stock movement in the period (GLOSSARY "Tồn đầu" / "Tồn cuối"). */
 export const StockFigures = z.object({
   opening: z.number().int(),
-  /** Phiếu nhập và tồn đầu kỳ. */
+  /** Receipts and opening stock. */
   received: z.number().int(),
-  /** Xuất bán, gồm hàng đổi giao đi. */
+  /** Sales, exchange shipments included. */
   sold: z.number().int(),
-  /** Hàng hoàn về: sau giao thất bại, và hàng khách trả hay đổi. */
+  /** Goods back: after failed deliveries, and customer returns or exchanges. */
   returned: z.number().int(),
   adjustedUp: z.number().int(),
   adjustedDown: z.number().int(),
@@ -155,9 +155,9 @@ export const StockReport = z.object({
       productType: ProductType,
     }),
   ),
-  /** Tổng của mọi dòng khớp bộ lọc, không chỉ trang này. */
+  /** Totals of every matching row, not just this page. */
   totals: StockFigures,
-  /** Thương hiệu có biến thể trong sổ, cho bộ lọc (kế toán không có quyền đọc danh sách thương hiệu của danh mục). */
+  /** Brands with variants in the ledger, for the filter (accounting cannot read the catalog brand list). */
   brands: z.array(z.object({ id: z.string(), name: z.string() })),
   total: z.number().int(),
   page: z.number().int(),
@@ -165,15 +165,15 @@ export const StockReport = z.object({
 })
 export type StockReport = z.infer<typeof StockReport>
 
-/** Hiệu quả mã giảm giá, theo các đơn chưa hủy tạo trong kỳ. */
+/** Voucher performance, over uncancelled orders created in the period. */
 export const VoucherFigures = z.object({
-  /** Số lượt: số đơn chưa hủy dùng mã (GLOSSARY "Lượt dùng"). */
+  /** Uses: uncancelled orders with the voucher (GLOSSARY "Lượt dùng"). */
   redemptions: z.number().int(),
-  /** Tổng tiền giảm chụp trên đơn. */
+  /** Total discount snapshotted on orders. */
   discount: z.number().int(),
-  /** Tiền hàng sau giảm của các đơn đó. */
+  /** Goods after discount of those orders. */
   netGoods: z.number().int(),
-  /** Số đơn trong đó đã giao tới khách, tính tới lúc xem. */
+  /** How many of them were delivered, as of viewing. */
   deliveredOrders: z.number().int(),
 })
 export type VoucherFigures = z.infer<typeof VoucherFigures>
@@ -181,7 +181,9 @@ export type VoucherFigures = z.infer<typeof VoucherFigures>
 export const VoucherReport = z.object({
   from: z.iso.date(),
   to: z.iso.date(),
-  /** Mỗi mã có ít nhất một lượt trong kỳ, số lượt giảm dần. Mã và mức giảm là của mã hiện tại. */
+  /**
+   * Each voucher with at least one use in the period, uses descending. Code and amount are the voucher's current ones.
+   */
   items: z.array(
     VoucherFigures.extend({
       voucherId: z.string(),
@@ -196,48 +198,48 @@ export const VoucherReport = z.object({
 })
 export type VoucherReport = z.infer<typeof VoucherReport>
 
-/** Số đơn chia theo hình thức bán; `total` là tổng hai số. */
+/** Orders split by sale type; `total` is their sum. */
 const KindCounts = z.object({ standard: z.number().int(), preorder: z.number().int(), total: z.number().int() })
 
-/** Nguồn của khoản hoàn trong báo cáo; khoản tạo lại tính theo nguồn của khoản gốc. */
+/** Refund origin in reports; retries count as their original's origin. */
 export const ReportRefundOrigin = z.enum(['cancellation', 'reconciliation', 'return'])
 export type ReportRefundOrigin = z.infer<typeof ReportRefundOrigin>
 
-/** Hủy đơn và hoàn tiền của các đơn, khoản hoàn tạo trong kỳ (GLOSSARY "Đơn đã xác nhận", "Đơn bỏ dở"). */
+/** Cancellations and refunds of orders and refunds created in the period (GLOSSARY "Đơn đã xác nhận", "Đơn bỏ dở"). */
 export const CancellationReport = z.object({
   from: z.iso.date(),
   to: z.iso.date(),
-  /** Đơn đã xác nhận tạo trong kỳ: mẫu số của tỷ lệ hủy. */
+  /** Confirmed orders created in the period: the cancel rate's denominator. */
   confirmed: KindCounts,
-  /** Đơn đã xác nhận đã bị hủy (hủy khi đã nhận tiền). */
+  /** Confirmed orders that were cancelled (cancelled after payment). */
   cancelled: KindCounts,
-  /** Tỷ lệ hủy 0–1; `null` khi không có đơn đã xác nhận. */
+  /** Cancel rate 0–1; `null` without confirmed orders. */
   rate: z.object({ standard: z.number().nullable(), preorder: z.number().nullable(), total: z.number().nullable() }),
-  /** Mọi lý do hủy, kể cả lý do không có đơn nào. */
+  /** Every cancel cause, including those with no orders. */
   byCause: z.array(KindCounts.extend({ cause: OrderCancelCause })),
-  /** Đơn bỏ dở tạo trong kỳ theo lý do hủy; không vào tỷ lệ hủy. */
+  /** Abandoned orders created in the period by cancel reason; not in the cancel rate. */
   abandoned: z.array(z.object({ reason: OrderCancelReason, count: z.number().int() })),
   abandonedTotal: z.number().int(),
-  /** Khoản hoàn tạo trong kỳ theo nguồn và trạng thái hiện tại; chỉ các ô có khoản. */
+  /** Refunds created in the period by origin and current status; only non-empty cells. */
   refunds: z.array(
     z.object({ origin: ReportRefundOrigin, status: RefundStatus, count: z.number().int(), amount: z.number().int() }),
   ),
 })
 export type CancellationReport = z.infer<typeof CancellationReport>
 
-/** Loại yêu cầu trong báo cáo đổi trả. */
+/** Request type in the returns report. */
 export const ReturnKind = z.enum(['return', 'exchange'])
 export type ReturnKind = z.infer<typeof ReturnKind>
 
-/** Kết quả bảo hành trong báo cáo: kết quả đã ghi, từ chối tiếp nhận, hoặc đang xử lý. */
+/** Warranty outcome in reports: a recorded outcome, rejected intake, or still in progress. */
 export const WarrantyReportOutcome = z.enum([...WarrantyOutcome.options, 'declined', 'in_progress'])
 export type WarrantyReportOutcome = z.infer<typeof WarrantyReportOutcome>
 
-/** Đổi trả và bảo hành của các yêu cầu tạo trong kỳ (spec M7). */
+/** Returns, exchanges and warranty of requests created in the period (spec M7). */
 export const ReturnsReport = z.object({
   from: z.iso.date(),
   to: z.iso.date(),
-  /** Số yêu cầu trả và đổi theo quyết định; `pending` là chưa quyết. */
+  /** Return and exchange requests by decision; `pending` is undecided. */
   requests: z.array(
     z.object({
       kind: ReturnKind,
@@ -247,7 +249,7 @@ export const ReturnsReport = z.object({
       total: z.number().int(),
     }),
   ),
-  /** Số lượng trên các dòng yêu cầu theo lý do và nhóm hàng; yêu cầu đổi không có lý do (`null`). */
+  /** Quantities on request lines by reason and product type; exchanges have no reason (`null`). */
   lines: z.array(
     z.object({
       kind: ReturnKind,
@@ -257,8 +259,8 @@ export const ReturnsReport = z.object({
     }),
   ),
   /**
-   * Tỷ lệ trả theo nhóm hàng: số cái của yêu cầu trả đã chấp nhận tạo trong kỳ / số cái của đơn giao trong kỳ. Hai số
-   * không cùng tập đơn. `rate` là `null` khi không giao cái nào.
+   * Return rate per product type: units in accepted returns created in the period / units of orders delivered in the
+   * period. Not the same set of orders. `rate` is `null` when nothing was delivered.
    */
   returnRate: z.array(
     z.object({
@@ -268,18 +270,18 @@ export const ReturnsReport = z.object({
       rate: z.number().nullable(),
     }),
   ),
-  /** Yêu cầu bảo hành theo kết quả, đủ mọi kết quả. */
+  /** Warranty requests by outcome, every outcome listed. */
   warranty: z.array(z.object({ outcome: WarrantyReportOutcome, count: z.number().int() })),
   warrantyTotal: z.number().int(),
 })
 export type ReturnsReport = z.infer<typeof ReturnsReport>
 
-/** Một mục của bảng ngoại lệ: tổng số việc và tối đa vài dòng đầu. */
+/** One exceptions section: total count and a few top rows. */
 const exceptionSection = <T extends z.ZodType>(item: T) => z.object({ count: z.number().int(), items: z.array(item) })
 
-/** Bảng ngoại lệ ở trang chủ quản trị (spec M7): việc đang chờ quyết, tính tại thời điểm xem. */
+/** Exceptions board on the admin home (spec M7): pending decisions as of viewing. */
 export const ExceptionsReport = z.object({
-  /** Ngưỡng đang dùng, để trang ghi đúng số ngày và số cái. */
+  /** Thresholds in use, so the page shows the right day and unit counts. */
   thresholds: z.object({ staleRefundDays: z.number().int(), lowStock: z.number().int() }),
   reconciliation: exceptionSection(
     z.object({
@@ -290,7 +292,7 @@ export const ExceptionsReport = z.object({
       receivedAt: z.string(),
     }),
   ),
-  /** Khoản hoàn chờ thực hiện hay cổng đang xử lý, tạo quá `staleRefundDays` ngày. */
+  /** Refunds pending or gateway processing, created more than `staleRefundDays` days ago. */
   staleRefunds: exceptionSection(
     z.object({
       id: z.string(),
@@ -303,43 +305,43 @@ export const ExceptionsReport = z.object({
   overdueRemainders: exceptionSection(
     z.object({ orderCode: z.number().int(), remainingAmount: z.number().int(), remainderDueAt: z.string() }),
   ),
-  /** Đơn đặt trước chưa giao, chưa hủy, đã quá ngày cuối của thời gian giao dự kiến. */
+  /** Undelivered, uncancelled pre-orders past the last day of their expected delivery. */
   latePreorders: exceptionSection(
     z.object({ orderCode: z.number().int(), productName: z.string(), deliveryTo: z.iso.date() }),
   ),
   unassignedSupport: exceptionSection(
     z.object({ code: z.number().int(), kind: SupportRequestKind, subject: z.string(), createdAt: z.string() }),
   ),
-  /** Biến thể đang bán của sản phẩm đã xuất bản, còn bán được (tồn − giữ hàng) không quá `lowStock` cái. */
+  /** Variants on sale of published products with at most `lowStock` sellable units (on-hand − reserved). */
   lowStock: exceptionSection(
     z.object({ variantId: z.string(), sku: z.string(), productName: z.string(), available: z.number().int() }),
   ),
 })
 export type ExceptionsReport = z.infer<typeof ExceptionsReport>
 
-/** Số của chatbot trong một kỳ (M8): cuộc trò chuyện tính theo lúc mở cuộc, tin theo lúc gửi. */
+/** Chatbot figures for one period (M8): conversations by start time, messages by send time. */
 export const ChatbotFigures = z.object({
   conversations: z.number().int(),
   customerMessages: z.number().int(),
-  /** Cuộc mở trong kỳ đã chuyển thành yêu cầu hỗ trợ. */
+  /** Conversations started in the period that became support requests. */
   handedOff: z.number().int(),
 })
 export type ChatbotFigures = z.infer<typeof ChatbotFigures>
 
-/** Báo cáo chatbot (`GET /api/admin/reports/chatbot`, quyền `chatbot.manage`). */
+/** Chatbot report (`GET /api/admin/reports/chatbot`, permission `chatbot.manage`). */
 export const ChatbotReport = z.object({
   from: z.iso.date(),
   to: z.iso.date(),
   groupBy: ReportGroupBy,
   rows: z.array(ChatbotFigures.extend({ period: z.string() })),
   total: ChatbotFigures.extend({
-    /** Cuộc đã chuyển trên cuộc mở trong kỳ; `null` khi không có cuộc nào. */
+    /** Handed-off over started conversations in the period; `null` without conversations. */
     handoffRate: z.number().nullable(),
-    /** Tin của khách không có trả lời vì mọi model hết lượt, và vì lỗi. */
+    /** Customer messages unanswered because every model was out of quota, and because of errors. */
     exhaustedTurns: z.number().int(),
     failedTurns: z.number().int(),
   }),
-  /** Theo model, theo ngày của `chat_usage_day`; model nhiều lượt gọi trước. */
+  /** Per model, per `chat_usage_day` day; busiest models first. */
   models: z.array(
     z.object({
       model: z.string(),

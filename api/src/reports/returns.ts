@@ -12,8 +12,8 @@ import { inPeriod, type Period } from './period.ts'
 import { deliveredInPeriod } from './sql.ts'
 
 /**
- * Đổi trả và bảo hành (spec M7): yêu cầu trả, đổi, bảo hành tạo trong kỳ. Tỷ lệ trả lấy tử số từ yêu cầu trả đã chấp
- * nhận tạo trong kỳ, mẫu số từ đơn giao trong kỳ, theo nhóm hàng của sản phẩm trên dòng đơn.
+ * Returns, exchanges and warranty (spec M7): requests created in the period. The return rate's numerator is accepted
+ * returns created in the period, its denominator orders delivered in the period, by the line's product type.
  */
 export async function returnsReport(db: DbClient, period: Period): Promise<ReturnsReport> {
   const createdAt = inPeriod(Prisma.sql`s."created_at"`, period)
@@ -65,7 +65,7 @@ export async function returnsReport(db: DbClient, period: Period): Promise<Retur
     target.total += row.count
   }
 
-  // Nhiều nhóm (đã chấp nhận hay chưa) cùng lý do × nhóm hàng: gộp lại cho bảng dòng.
+  // Several groups (accepted or not) share reason × product type: merge them for the row table.
   const lineTotals = new Map<string, ReturnsReport['lines'][number]>()
   const returned = new Map<ProductType, number>()
   for (const row of lines) {

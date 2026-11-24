@@ -38,7 +38,7 @@ function goTo(page: number) {
 }
 
 const lastPage = computed(() => Math.max(1, Math.ceil((report.value?.total ?? 0) / (report.value?.pageSize ?? 1))))
-// Xuất Excel theo kỳ và bộ lọc đang chọn, mọi dòng (không theo trang).
+// Excel export for the selected period and filters, every row (not paginated).
 const exportQuery = computed(() => ({
   from: period.value.from,
   to: period.value.to,

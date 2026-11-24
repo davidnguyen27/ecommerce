@@ -18,22 +18,22 @@ import { isValidVnpaySignature, isVnpaySuccess, parseTxnRef, parseVnDateTime } f
 
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đơn hàng')
 
-/** Cổng thanh toán báo tiền về, không cần đăng nhập. */
+/** The payment gateway reports money; no sign-in. */
 export function paymentRoutes({ prisma, emails, siteUrl, payments, vnpayHashSecret, logger }: AppDeps) {
   const router = Router()
   const recordDeps = { prisma, emails, siteUrl }
 
   if (vnpayHashSecret) {
     /**
-     * Kết quả thanh toán VNPAY có chữ ký, từ IPN hay từ trang quay về: cùng bộ tham số, cùng chữ ký, ghi qua cùng
-     * `recordPayment` nên về trùng chỉ ghi một lần. Mã trả lời theo ADR 0010.
+     * Signed VNPAY payment results, from IPN or the return page: same params, same signature, recorded through the same
+     * `recordPayment`, so duplicates are written once. Response codes per ADR 0010.
      */
     const recordVnpayResult = async (
       req: Request,
       raw: Record<string, unknown>,
       source: PaymentSource,
     ): Promise<VnpayIpnResult> => {
-      // Kiểm chữ ký trên toàn bộ tham số gốc trước khi đọc gì khác.
+      // Check the signature over all original params before reading anything else.
       if (!isValidVnpaySignature(raw, vnpayHashSecret)) {
         req.log.warn({ source }, 'Kết quả VNPAY sai chữ ký')
         return { RspCode: '97', Message: 'Invalid signature' }
@@ -46,7 +46,7 @@ export function paymentRoutes({ prisma, emails, siteUrl, payments, vnpayHashSecr
       }
       const data = parsed.data
       if (!isVnpaySuccess(data)) {
-        // Khách hủy, thẻ lỗi, hết hạn...: không có tiền về, đơn giữ nguyên chờ thanh toán.
+        // Customer cancelled, card error, expired…: no money, the order stays pending.
         req.log.info(
           { source, txnRef: data.vnp_TxnRef, responseCode: data.vnp_ResponseCode, status: data.vnp_TransactionStatus },
           'VNPAY: giao dịch không thành công',
@@ -69,7 +69,8 @@ export function paymentRoutes({ prisma, emails, siteUrl, payments, vnpayHashSecr
         )
         if (outcome === 'unknown_order') return { RspCode: '01', Message: 'Order not found' }
         if (outcome === 'duplicate') return { RspCode: '02', Message: 'Order already confirmed' }
-        // `paid`, hay `flagged` (lệch tiền, trả sau khi hủy) đã vào đối soát: gửi lại cũng không đổi gì.
+        // `paid`, or `flagged` (amount mismatch, paid after cancel) already in reconciliation: resending changes
+        // nothing.
         return { RspCode: '00', Message: 'Confirm Success' }
       } catch (err) {
         req.log.error({ err, source }, 'Không ghi nhận được kết quả VNPAY')
@@ -77,14 +78,14 @@ export function paymentRoutes({ prisma, emails, siteUrl, payments, vnpayHashSecr
       }
     }
 
-    // IPN: VNPAY gọi server bằng GET, tham số trong query; kết quả đọc trong body JSON.
+    // IPN: VNPAY calls the server with GET, params in the query; it reads the result from the JSON body.
     router.get('/vnpay/ipn', async (req, res) => {
       res.json(await recordVnpayResult(req, req.query as Record<string, unknown>, 'webhook'))
     })
 
-    // Trang quay về: VNPAY gửi kèm cùng bộ tham số có chữ ký trên URL; trang kết quả chuyển lại cho API. Người dùng
-    // chốt 2026-11-12 vì `querydr` của sandbox lỗi và IPN cần tunnel (ADR 0010). Chữ ký chỉ VNPAY và hệ thống tạo
-    // được, nên an toàn như IPN; không cần token đơn.
+    // Return page: VNPAY puts the same signed params on the URL; the result page forwards them to the API. Decided
+    // 2026-11-12 since sandbox `querydr` fails and IPN needs a tunnel (ADR 0010). Only VNPAY and we can sign, so it is
+    // as safe as IPN; no order token needed.
     router.post('/vnpay/return', async (req, res) => {
       const body: unknown = req.body
       const raw = body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : {}
@@ -92,7 +93,7 @@ export function paymentRoutes({ prisma, emails, siteUrl, payments, vnpayHashSecr
     })
   }
 
-  // Chỉ có khi API chạy cổng giả lập (local, smoke): đi trọn luồng mua mà không có tiền thật.
+  // Only when the API runs the simulator (local, smoke): the full purchase flow without real money.
   if (payments instanceof SimulatorPaymentGateway) {
     router.post('/simulator/paid', async (req, res) => {
       const input = parse(SimulatedPaymentRequest, req.body)
@@ -109,7 +110,7 @@ export function paymentRoutes({ prisma, emails, siteUrl, payments, vnpayHashSecr
       res.status(204).end()
     })
 
-    // Hết hạn ngay, không chờ 15 phút: cùng hàm với job hết hạn, chỉ bỏ điều kiện đã quá hạn.
+    // Expire now instead of waiting 15 minutes: the same function as the expiry job, minus the overdue condition.
     router.post('/simulator/expired', async (req, res) => {
       const { orderCode } = parse(SimulatedExpiryRequest, req.body)
       const order = await prisma.order.findUnique({ where: { code: orderCode }, select: { id: true } })

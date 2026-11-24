@@ -1,7 +1,7 @@
 /**
- * Khách nhắc tới nhân viên hay người thật (có dấu, không dấu, tiếng Anh). Model không gọi `handoff` đều đặn khi khách
- * đòi gặp người (chatbot-check 2026-11-21: 1/3 lần khi đang xem sản phẩm), nên API tự đề nghị chuyển theo câu của khách.
- * Bắt nhầm (ví dụ hỏi về nhân viên giao hàng) chỉ làm nút "Gặp nhân viên" nổi bật, không tạo gì.
+ * The customer mentions staff or a human (with or without diacritics, or English). The model does not call `handoff`
+ * reliably when asked for a person (chatbot-check 2026-11-21: 1/3 while viewing a product), so the API offers handoff
+ * from the message itself. False hits (e.g. asking about delivery staff) only highlight the "Gặp nhân viên" button.
  */
 const ASKS_FOR_STAFF =
   /nh[aâ]n\s*vi[eê]n|ng[uư][oờ]i\s*th[aậ]t|t[uư]\s*v[aấ]n\s*vi[eê]n|\bhuman\b|real\s+person|\bstaff\b|\bagent\b/i
@@ -10,35 +10,36 @@ export function asksForStaff(text: string): boolean {
   return ASKS_FOR_STAFF.test(text)
 }
 
-/** Chữ cái chỉ tiếng Việt mới có (kể cả dấu thanh): có một chữ là tin tiếng Việt. */
+/** Letters only Vietnamese has (tone marks included): one is enough to call the message Vietnamese. */
 const VIETNAMESE_LETTER = /[ăâđêôơưàáạảãằắặẳẵầấậẩẫèéẹẻẽềếệểễìíịỉĩòóọỏõồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹ]/i
 const ENGLISH_WORD =
   /\b(the|a|an|do|does|you|your|have|has|is|are|what|which|how|can|i|my|me|for|under|with|any|price|size|ship|order|bag|shoes?|sneakers?|watch|black|white)\b/gi
 
 /**
- * Tin của khách là tiếng Anh: không có chữ cái riêng của tiếng Việt và có từ hai từ tiếng Anh thông dụng trở lên. Khách
- * Việt gõ không dấu ("co tui den khong") không có từ tiếng Anh nào nên không bị nhầm. Lời nhắc chung trong prompt không
- * đủ: qwen vẫn trả lời tiếng Việt cho tin tiếng Anh khi danh mục và chính sách đều tiếng Việt (chatbot-check 2026-11-21).
+ * The message is English: no Vietnamese-only letters and at least two common English words. Vietnamese typed without
+ * diacritics ("co tui den khong") has no English words, so it is not misread. A general prompt hint was not enough:
+ * qwen still answered English messages in Vietnamese when catalog and policies were Vietnamese (chatbot-check
+ * 2026-11-21).
  */
 export function looksEnglish(text: string): boolean {
   if (VIETNAMESE_LETTER.test(text)) return false
   return (text.match(ENGLISH_WORD)?.length ?? 0) >= 2
 }
 
-/** Nói về size: "size", "cỡ", hệ size EU, US, UK. "cỡ" không kèm `\b`: regex coi "ỡ" không phải chữ cái. */
+/** Talks about size: "size", "cỡ", EU/US/UK sizes. "cỡ" has no `\b`: regex does not treat "ỡ" as a letter. */
 const SIZE_WORD = /\b(?:size|eu|us|uk)\b|(?<![a-zà-ỹ])cỡ(?![a-zà-ỹ])/i
 /**
- * Một con số có dạng size giày, quần áo (30–49, hay 5–13 kiểu US), kể cả "38,5". Số không cần đứng sát chữ size:
- * model hay viết "size EU thường tương ứng là 41" (chatbot-check 2026-11-22).
+ * A number shaped like a shoe or clothing size (30–49, or US 5–13), "38,5" included. It need not sit next to the size
+ * word: the model often writes "size EU thường tương ứng là 41" (chatbot-check 2026-11-22).
  */
 const SIZE_NUMBER = /(?<![\d.,])(?:[34]\d|[5-9]|1[0-3])(?:,5)?(?![\d.,]?\d)(?!\s*(?:cm|mm|triệu|nghìn|k\b|%))/i
-/** Cụm từ gợi ý một size hợp với khách. */
+/** Phrases suggesting a size fits the customer. */
 const RECOMMENDS =
   /phù hợp|gợi ý|khuyên|tương ứng|nên (?:chọn|đi|mặc|lấy|mang)|vừa với|thường|\bfits?\b|recommend|suggest|should|would suit|corresponds?|usually|typically/i
 
 /**
- * Câu trả lời có gợi ý size: một câu nói về size, có một con số dạng size, và có cụm gợi ý. "Size 41 còn hàng" không
- * tính. Bắt nhầm chỉ tốn thêm một lần gọi model để viết lại (`runTurn`).
+ * The answer suggests a size: a sentence about size, a size-shaped number and a suggesting phrase. "Size 41 còn hàng"
+ * does not count. A false hit only costs one rewrite call (`runTurn`).
  */
 export function suggestsSize(text: string): boolean {
   return text
@@ -46,24 +47,24 @@ export function suggestsSize(text: string): boolean {
     .some((sentence) => SIZE_WORD.test(sentence) && SIZE_NUMBER.test(sentence) && RECOMMENDS.test(sentence))
 }
 
-/** URL đầy đủ tới trang sản phẩm hay chính sách, kể cả dạng `<…>`; nhóm 1 là đường dẫn của shop. */
+/** Full URL to a product or policy page, `<…>` form included; group 1 is the shop path. */
 const ABSOLUTE_SHOP_LINK = /<?https?:\/\/[^\s/()<>[\]]+(\/(?:san-pham|trang)\/[a-z0-9-]+)>?/gi
 
 /**
- * Đổi link sản phẩm, chính sách mà model tự gắn tên miền ("https://www.example.com/san-pham/…", đi luồng demo
- * 2026-11-23: 3/6 lần) thành đường dẫn của shop, để link mở đúng trang. Prompt chỉ đưa đường dẫn, model tự bịa tên miền.
+ * Turns product and policy links where the model invented a domain ("https://www.example.com/san-pham/…", demo
+ * walkthrough 2026-11-23: 3/6) into shop paths, so links open the right page. The prompt only gives paths.
  */
 export function relativeShopLinks(text: string): string {
   return htmlLinksToMarkdown(text).replace(ABSOLUTE_SHOP_LINK, '$1')
 }
 
-/** Thẻ `<a href="…">chữ</a>`; nhóm 1 là href, nhóm 2 là chữ (bỏ thẻ con). */
+/** An `<a href="…">text</a>` tag; group 1 is the href, group 2 the text (child tags dropped). */
 const HTML_LINK = /<a\s[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
 
 /**
- * Model đôi khi viết link bằng HTML (`<a href="/san-pham/…">Xem chi tiết</a>`, demo 2026-11-23: 3/5 lần sau khi gpt-oss
- * chuyển sang `reasoning_effort: 'medium'`). Khung chat render markdown với `html: false` nên khách thấy nguyên chuỗi
- * thẻ; đổi thành link markdown, markdown-it vẫn chặn link nguy hiểm như `javascript:`.
+ * The model sometimes writes HTML links (`<a href="/san-pham/…">Xem chi tiết</a>`, demo 2026-11-23: 3/5 after gpt-oss
+ * moved to `reasoning_effort: 'medium'`). The chat renders markdown with `html: false`, so customers saw raw tags;
+ * convert to markdown links, where markdown-it still blocks dangerous ones like `javascript:`.
  */
 function htmlLinksToMarkdown(text: string): string {
   return text.replace(HTML_LINK, (_tag, href: string, inner: string) => {
@@ -72,13 +73,13 @@ function htmlLinksToMarkdown(text: string): string {
   })
 }
 
-/** Nhãn công cụ đầu dòng: "Tool: handoff - ", "[Tool call: get_product(...)]", "Function: search_products:". */
+/** Leading tool labels: "Tool: handoff - ", "[Tool call: get_product(...)]", "Function: search_products:". */
 const TOOL_LABEL =
   /^[ \t]*\[?(?:tool|function)(?:[ \t]+call)?[ \t]*:[ \t]*[a-z_]+(?:\([^)\n]*\))?\]?[ \t]*(?:[-–—:][ \t]*)?/gim
 
 /**
- * Bỏ nhãn công cụ model viết lẫn vào câu trả lời: qwen từng trả lời "Tool: handoff - Tôi sẽ chuyển bạn…" (2026-11-22).
- * Giữ phần chữ sau nhãn; dòng chỉ có nhãn thì bỏ cả dòng. Không có nhãn thì trả nguyên văn.
+ * Strips tool labels the model mixes into answers: qwen once replied "Tool: handoff - Tôi sẽ chuyển bạn…" (2026-11-22).
+ * Keeps the text after the label; label-only lines are dropped. Without labels the text is returned as is.
  */
 export function stripToolLabels(text: string): string {
   const stripped = text.replace(TOOL_LABEL, '')
@@ -89,11 +90,11 @@ export function stripToolLabels(text: string): string {
     .trim()
 }
 
-/** Một câu, kèm dấu câu và khoảng trắng sau nó; dấu chấm trong số ("25.5") không cắt câu. */
+/** One sentence with its punctuation and trailing space; dots inside numbers ("25.5") do not split. */
 const SENTENCE = /(?:[^.!?\n]|\.(?=\d))+(?:[.!?]+|$)[ \t]*/gm
 /**
- * Chatbot nói chính nó đã làm ("mình đã gửi", "I've forwarded"), hay yêu cầu của khách đã được gửi. Câu chính sách kiểu
- * "sau khi yêu cầu đã được gửi, nhân viên sẽ phản hồi" không tính.
+ * The chatbot claims it acted ("mình đã gửi", "I've forwarded"), or that the request was sent. Policy sentences like
+ * "sau khi yêu cầu đã được gửi, nhân viên sẽ phản hồi" do not count.
  */
 const VERB_VI = '(?:gửi|chuyển|kết nối|báo|thông báo|liên hệ)'
 const VERB_EN = '(?:sent|forwarded|transferred|passed|escalated|connected|notified)'
@@ -103,19 +104,18 @@ const SENT = new RegExp(
     `|\\byour\\s+(?:request|question|message|conversation)\\s+(?:has|have)\\s+(?:just\\s+|already\\s+)?been\\s+${VERB_EN}\\b`,
   'i',
 )
-/** Câu đó nói về nhân viên hay yêu cầu hỗ trợ, không phải ví dụ "hàng đã gửi đi". */
+/** The sentence is about staff or a support request, not e.g. "hàng đã gửi đi". */
 const TO_STAFF =
   /nhân viên|yêu cầu|bộ phận|tư vấn viên|người hỗ trợ|\bstaff\b|\bteam\b|\bagents?\b|\brequest\b|\bhuman\b|\bsupport\b/i
-/** Câu trả lời còn lại đã mời khách bấm nút thì không thêm lời mời. */
+/** The remaining answer already invites the customer to press the button, so no invitation is added. */
 const INVITES = /bấm|nhấn|\bpress\b|\bclick\b|\btap\b/i
 const INVITE_VI = 'Bạn bấm nút "Gặp nhân viên" bên dưới để gửi câu hỏi cho nhân viên nhé.'
 const INVITE_EN = 'Press the "Gặp nhân viên" button below to send your question to our staff.'
 
 /**
- * Bỏ các câu nói đã gửi, đã chuyển cho nhân viên: chưa có gì được gửi tới khi khách bấm xác nhận. Prompt đã cấm, nhưng
- * qwen vẫn viết "Mình đã gửi yêu cầu chuyển cho nhân viên" (chatbot-check 2026-11-21). Bỏ câu thay vì gọi model viết
- * lại: không tốn thêm lượt; còn câu nào mời bấm nút thì giữ, không còn thì thêm lời mời. Không có câu như vậy thì trả
- * nguyên văn.
+ * Drops sentences claiming a handoff was sent: nothing is sent until the customer confirms. The prompt forbids it, but
+ * qwen still wrote "Mình đã gửi yêu cầu chuyển cho nhân viên" (chatbot-check 2026-11-21). Dropping avoids a rewrite
+ * call; a sentence inviting the button is kept, else an invitation is added. Otherwise the text is returned as is.
  */
 export function dropSentClaims(text: string, english: boolean): string {
   let dropped = false

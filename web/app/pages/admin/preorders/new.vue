@@ -17,7 +17,7 @@ const products = ref<AdminProductList['items']>([])
 const productId = ref('')
 const product = ref<AdminProduct | null>(null)
 
-// Chỉ sản phẩm đã xuất bản mới mở được đợt.
+// Only published products can get a campaign.
 try {
   const list = AdminProductList.parse(await session.adminFetch('/api/admin/products'))
   products.value = list.items.filter((p) => p.status === 'published').sort((a, b) => a.name.localeCompare(b.name))

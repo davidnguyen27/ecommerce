@@ -6,15 +6,15 @@ import type { EmailQueue } from '../jobs/jobs.ts'
 import { changeStock, reserveStock } from '../stock/stock.ts'
 import { issueOrderLookupUrl, recordOrderEvent } from './orders.ts'
 
-/** Bản audit của một lần chuyển trạng thái giao hàng; hàm chuyển trạng thái biết nguồn và đích nên tự khai. */
+/** Audit entry of one fulfillment transition; the transition knows its source and target, so it declares them. */
 export type FulfillmentAudit = Pick<AuditEntry, 'action' | 'before' | 'after'>
 
-/** Gửi email cho khách khi xử lý giao hàng: hàng đợi thư và địa chỉ website để dựng link tra cứu. */
+/** Customer email during fulfillment: the mail queue and the website URL for lookup links. */
 export type FulfillmentMail = { emails: EmailQueue; siteUrl: string }
 
 /**
- * Khóa đơn `FOR UPDATE` (cùng khóa với hủy đơn và ghi nhận thanh toán) rồi kiểm đơn đã trả đủ và đang ở `from`.
- * Đơn chưa trả hay đã hủy thì chưa xử lý giao hàng được; sai cạnh trạng thái giao hàng thì 409.
+ * Locks the order (same lock as cancel and payment) and checks it is fully paid and at `from`. Unpaid or cancelled
+ * orders cannot be fulfilled; a wrong fulfillment edge gives 409.
  */
 async function lockForTransition(tx: Prisma.TransactionClient, orderId: string, from: FulfillmentStatus) {
   const [locked] = await tx.$queryRaw<{ status: string; paymentStatus: string; fulfillmentStatus: string }[]>`
@@ -30,7 +30,7 @@ async function lockForTransition(tx: Prisma.TransactionClient, orderId: string, 
   }
 }
 
-/** `not_prepared` → `preparing`: nhân viên kho bắt đầu soạn hàng. Gọi trong transaction của `audited()`. */
+/** `not_prepared` → `preparing`: the warehouse starts packing. Call in the `audited()` transaction. */
 export async function prepareOrder(
   tx: Prisma.TransactionClient,
   orderId: string,
@@ -47,8 +47,8 @@ export async function prepareOrder(
 }
 
 /**
- * `preparing` → `handed_over`: hàng rời tồn (ADR 0007). Trong transaction của `audited()`: khóa đơn, rồi qua
- * `changeStock` (khóa biến thể theo thứ tự id) trừ cả tồn và số đang giữ, ghi một dòng sổ xuất bán mỗi dòng đơn.
+ * `preparing` → `handed_over`: goods leave stock (ADR 0007). In the `audited()` transaction: locks the order, then via
+ * `changeStock` (variants locked by id) deducts on-hand and reserved, one sale ledger row per order line.
  */
 export async function handOverOrder(
   tx: Prisma.TransactionClient,
@@ -71,7 +71,7 @@ export async function handOverOrder(
       lines.map((line, i) => ({
         variantId: line.variantId,
         quantity: -line.quantity,
-        // Đơn đã trả đủ thì đang giữ đủ: đơn hàng sẵn từ lúc đặt, đơn đặt trước từ lúc hàng về (ADR 0013).
+        // A fully paid order is fully reserved: in-stock orders since checkout, pre-orders since arrival (ADR 0013).
         releaseReserved: line.reservedQuantity,
         kind: 'sale' as const,
         orderId,
@@ -84,9 +84,9 @@ export async function handOverOrder(
     data: { fulfillmentStatus: 'handed_over', ...shipment, handedOverAt: new Date() },
   })
   await recordOrderEvent(tx, orderId, 'handed_over', { type: 'staff', staffId }, shipment)
-  // Trong cùng transaction: bàn giao rollback thì không có thư.
+  // Same transaction: if the handover rolls back, no email.
   const link = await issueOrderLookupUrl(tx, siteUrl, order)
-  // Bản nháp, chờ chủ doanh nghiệp duyệt nội dung.
+  // Draft, awaiting the owner's approval of the wording.
   await emails.sendEmail(tx, {
     to: order.email,
     subject: `Đơn hàng #${order.code} đã được giao cho đơn vị vận chuyển`,
@@ -108,7 +108,7 @@ export async function handOverOrder(
   }
 }
 
-/** `handed_over` → `delivered`: đã giao tới khách, đơn hoàn tất. Gọi trong transaction của `audited()`. */
+/** `handed_over` → `delivered`: delivered, the order completes. Call in the `audited()` transaction. */
 export async function deliverOrder(
   tx: Prisma.TransactionClient,
   orderId: string,
@@ -125,8 +125,8 @@ export async function deliverOrder(
 }
 
 /**
- * `handed_over` → `failed`: giao không thành công. Đơn vẫn `processing`: sau đó giao lại, hoặc nhận hàng hoàn về rồi hủy (M6a);
- * khách nhận email báo shop sẽ liên hệ, xếp trong cùng transaction. Gọi trong transaction của `audited()`.
+ * `handed_over` → `failed`: delivery failed. The order stays `processing`: redeliver later, or return to stock then
+ * cancel (M6a). The customer is emailed that the shop will call, in the same transaction.
  */
 export async function failDelivery(
   tx: Prisma.TransactionClient,
@@ -137,7 +137,7 @@ export async function failDelivery(
   await lockForTransition(tx, orderId, 'handed_over')
   const order = await tx.order.update({ where: { id: orderId }, data: { fulfillmentStatus: 'failed' } })
   await recordOrderEvent(tx, orderId, 'delivery_failed', { type: 'staff', staffId })
-  // Bản nháp, chờ chủ doanh nghiệp duyệt nội dung.
+  // Draft, awaiting the owner's approval of the wording.
   await emails.sendEmail(tx, {
     to: order.email,
     subject: `Giao hàng chưa thành công đơn hàng #${order.code}`,
@@ -157,8 +157,9 @@ export async function failDelivery(
 }
 
 /**
- * Giao lại (GLOSSARY): `failed` → `handed_over` với đơn vị vận chuyển, mã vận đơn và lúc bàn giao mới. Hàng chưa về kho
- * nên không đổi tồn; mã cũ còn trong sự kiện đơn và audit. Không thu thêm tiền, không gửi email (spec M6a).
+ * Redelivery (GLOSSARY "Giao lại"): `failed` → `handed_over` with a new carrier, tracking number and handover time.
+ * The goods never came back, so stock is unchanged; the old tracking stays in events and audit. No charge, no email
+ * (spec M6a).
  */
 export async function redeliverOrder(
   tx: Prisma.TransactionClient,
@@ -184,9 +185,9 @@ export async function redeliverOrder(
 }
 
 /**
- * Nhận hàng hoàn về (GLOSSARY): `failed` → `returned`. Mỗi dòng đơn: số nhập lại tồn + số hỏng/mất = số lượng, sai thì
- * 400. Phần nhập lại tồn qua `changeStock` loại `return` trỏ về đơn; phần hỏng/mất không ghi sổ vì hàng đã rời tồn lúc
- * bàn giao. Xóa đơn vị vận chuyển, mã vận đơn, lúc bàn giao (còn trong sự kiện đơn). Không hủy đơn, không hoàn tiền.
+ * Return to stock (GLOSSARY "Nhận hàng hoàn về"): `failed` → `returned`. Per line, restocked + written off = quantity,
+ * else 400. Restocked goods go through `changeStock` as `return` on the order; write-offs get no ledger row since the
+ * goods left stock at handover. Clears carrier, tracking and handover time (kept in events). No cancel, no refund.
  */
 export async function returnToStock(
   tx: Prisma.TransactionClient,
@@ -255,9 +256,9 @@ export async function returnToStock(
 }
 
 /**
- * Giao lại từ kho: `returned` → `not_prepared`. Giữ hàng lại cho mọi dòng như lúc đặt mua (đơn đặt trước cũng vậy: hàng
- * đã thành hàng sẵn khi nhập lại tồn), thiếu thì 409 kèm các SKU thiếu. Đưa số nhập lại/hỏng của dòng về 0; đơn đi lại
- * luồng chuẩn bị → bàn giao.
+ * Redeliver from stock: `returned` → `not_prepared`. Reserves every line again as at checkout (pre-orders too: the
+ * goods became regular stock when restocked); shortages give 409 with the SKUs. Resets restocked/written-off to 0; the
+ * order goes through prepare → hand over again.
  */
 export async function restockForRedelivery(
   tx: Prisma.TransactionClient,

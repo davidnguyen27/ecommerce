@@ -1,4 +1,4 @@
-// Tên tiếng Việt cho mã hành động và loại đối tượng trong nhật ký. Mã chưa có ở đây thì hiện nguyên mã.
+// Vietnamese names for audit action codes and entity types. Codes missing here show as is.
 
 const AUDIT_ACTION_LABELS: Record<string, string> = {
   'staff.create': 'Thêm nhân viên',

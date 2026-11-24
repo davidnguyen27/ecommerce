@@ -8,7 +8,7 @@ export const SUPPORT_KIND_LABELS: Record<SupportRequestKind, string> = {
   other: 'Khác',
 }
 
-/** Trạng thái như nhân viên thấy. */
+/** Status as staff see it. */
 export const SUPPORT_STATUS_LABELS: Record<SupportRequestStatus, string> = {
   new: 'Mới',
   in_progress: 'Đang xử lý',
@@ -17,7 +17,7 @@ export const SUPPORT_STATUS_LABELS: Record<SupportRequestStatus, string> = {
   rejected: 'Từ chối',
 }
 
-/** Trạng thái như khách thấy: "chờ khách" nói là cửa hàng đang chờ bạn trả lời. */
+/** Status as customers see it: "chờ khách" says the shop is waiting for your reply. */
 export const SUPPORT_STATUS_CUSTOMER_LABELS: Record<SupportRequestStatus, string> = {
   new: 'Đã gửi',
   in_progress: 'Đang xử lý',
@@ -28,7 +28,7 @@ export const SUPPORT_STATUS_CUSTOMER_LABELS: Record<SupportRequestStatus, string
 
 export const isSupportClosed = (status: SupportRequestStatus) => status === 'resolved' || status === 'rejected'
 
-/** Kết quả bảo hành (spec M6b ticket 06). */
+/** Warranty outcome (spec M6b ticket 06). */
 export const WARRANTY_OUTCOME_LABELS: Record<WarrantyOutcome, string> = {
   repaired: 'Đã sửa xong',
   replaced: 'Đổi sản phẩm mới',

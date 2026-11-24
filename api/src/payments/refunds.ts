@@ -8,9 +8,9 @@ import { dateVN, vnd } from '../orders/format.ts'
 import { issueOrderLookupUrl, recordOrderEvent } from '../orders/orders.ts'
 
 /**
- * Hoàn tiền (GLOSSARY, ADR 0014): khoản trả lại cho khách gắn với một đơn, theo dõi tới khi có kết quả. Mọi thao tác
- * chạy dưới khóa đơn `FOR UPDATE` (cùng khóa với ghi nhận thanh toán, hủy đơn, đối soát), nên tổng các khoản không
- * thất bại không bao giờ vượt tổng đã nhận, kể cả khi hai yêu cầu đến cùng lúc.
+ * Refunds (GLOSSARY "Hoàn tiền", ADR 0014): money returned to a customer for an order, tracked until it resolves. Every
+ * operation runs under the order lock (same lock as payment, cancel, reconciliation), so non-failed refunds never
+ * exceed what was received, even with concurrent requests.
  */
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -18,17 +18,17 @@ const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấ
 export const conflict = (message: string, details?: Record<string, unknown>) =>
   new AppError(409, ErrorCode.CONFLICT, message, undefined, details)
 
-/** Khóa đơn `FOR UPDATE`. Gọi trước mọi đọc số tiền dùng để quyết định ghi hoàn tiền. */
+/** Locks the order. Call before reading any amount used to decide a refund write. */
 export async function lockOrderForRefund(tx: DbClient, orderId: string) {
   await tx.$queryRaw`SELECT "id" FROM "order" WHERE "id" = ${orderId}::uuid FOR UPDATE`
 }
 
-/** Đủ của một khoản hoàn để tính tổng. */
+/** Enough of a refund to compute totals. */
 type RefundAmount = Pick<Refund, 'amount' | 'status' | 'paymentTransactionId'>
 
 /**
- * Đã hoàn xong, đang hoàn (chờ hoặc cổng đang xử lý) và còn hoàn được, từ tổng đã nhận và các khoản hoàn của một đơn
- * (ADR 0014). Hàm thuần: chi tiết đơn ở trang quản trị và các thao tác ghi dùng chung một cách tính.
+ * Refunded, refunding (pending or gateway processing) and still refundable, from total received and the order's refunds
+ * (ADR 0014). Pure: the admin order detail and every write share one calculation.
  */
 export function summarizeRefunds(received: bigint, refunds: readonly RefundAmount[]) {
   const sum = (...statuses: Refund['status'][]) =>
@@ -38,7 +38,7 @@ export function summarizeRefunds(received: bigint, refunds: readonly RefundAmoun
   return { received, refunded, refunding, refundable: received - refunded - refunding }
 }
 
-/** Phần đã hoàn (hay đang hoàn) qua cổng của từng giao dịch gốc; hoàn thủ công không gắn giao dịch nào. */
+/** Amount refunded (or refunding) via the gateway per original transaction; manual refunds link to none. */
 export function refundedViaGateway(refunds: readonly RefundAmount[]) {
   const used = new Map<string, bigint>()
   for (const r of refunds) {
@@ -49,9 +49,9 @@ export function refundedViaGateway(refunds: readonly RefundAmount[]) {
   return used
 }
 
-/** Đã nhận, đã hoàn xong, đang hoàn và còn hoàn được của một đơn, VND. Gọi dưới khóa đơn khi dùng để quyết định ghi. */
+/** Received, refunded, refunding and refundable for an order, VND. Call under the order lock when deciding a write. */
 export async function refundTotals(tx: DbClient, orderId: string) {
-  // Tuần tự: trong transaction chỉ có một kết nối, không chạy hai truy vấn cùng lúc.
+  // Sequential: a transaction has one connection, so no parallel queries.
   const received = await tx.paymentTransaction.aggregate({ where: { orderId }, _sum: { amount: true } })
   const refunds = await tx.refund.findMany({
     where: { orderId },
@@ -66,15 +66,15 @@ export type NewRefund = {
   origin: RefundOrigin
   reconciliationItemId?: string
   retryOfId?: string
-  /** Yêu cầu trả hàng; bắt buộc khi `origin = return` (M6b). */
+  /** Return request; required when `origin = return` (M6b). */
   supportRequestId?: string
   note?: string
   staffId: string
 }
 
 /**
- * Tạo một khoản hoàn `pending`. Gọi khi đơn đã bị khóa: số tiền phải > 0 và không vượt số còn hoàn được, vượt thì 409
- * kèm `refundable`. Ghi sự kiện đơn; audit do nơi gọi ghi cùng thao tác của nó.
+ * Creates a `pending` refund. Call with the order locked: the amount must be > 0 and within the refundable amount,
+ * else 409 with `refundable`. Records an order event; the caller writes the audit with its own action.
  */
 export async function createRefund(tx: DbClient, input: NewRefund) {
   if (input.amount <= 0n) throw conflictField('amount', 'Số tiền hoàn phải lớn hơn 0')
@@ -106,7 +106,7 @@ export async function createRefund(tx: DbClient, input: NewRefund) {
   return refund
 }
 
-/** Khóa đơn của khoản hoàn rồi đọc lại khoản dưới khóa; id lạ thì 404. */
+/** Locks the refund's order, then rereads the refund under the lock; unknown id gives 404. */
 export async function lockRefund(tx: DbClient, refundId: string) {
   if (!UUID.test(refundId)) throw notFound()
   const found = await tx.refund.findUnique({ where: { id: refundId }, select: { orderId: true } })
@@ -118,7 +118,7 @@ export async function lockRefund(tx: DbClient, refundId: string) {
   })
 }
 
-/** Nối các ghi chú khác rỗng, mỗi ghi chú một dòng; không còn gì thì `null`. */
+/** Joins non-empty notes, one per line; nothing left gives `null`. */
 export const joinNotes = (...notes: (string | null | undefined)[]) =>
   notes
     .map((n) => n?.trim())
@@ -133,8 +133,8 @@ const auditView = (refund: Refund) => ({
 })
 
 /**
- * Kế toán đã chuyển khoản ngoài hệ thống: khoản `pending` thành `succeeded` với mã giao dịch ngân hàng và ngày chuyển.
- * Không lưu số tài khoản của khách. Xếp email "Đã hoàn tiền". Trả mã đơn.
+ * Accounting paid outside the system: a `pending` refund becomes `succeeded` with the bank transaction ref and date.
+ * The customer's account number is not stored. Queues the "Đã hoàn tiền" email. Returns the order code.
  */
 export async function executeManualRefund(
   tx: DbClient,
@@ -179,8 +179,8 @@ export async function executeManualRefund(
 }
 
 /**
- * Chốt bằng tay một khoản cổng đang xử lý (ADR 0014: không có job theo dõi), sau khi kế toán kiểm trên cổng merchant.
- * Đã hoàn thì xếp email "Đã hoàn tiền". Trả mã đơn.
+ * Settles a gateway-processing refund by hand (ADR 0014: no tracking job), after accounting checks the merchant portal.
+ * If refunded, queues the "Đã hoàn tiền" email. Returns the order code.
  */
 export async function settleRefund(
   tx: DbClient,
@@ -220,8 +220,8 @@ export async function settleRefund(
 }
 
 /**
- * Tạo lại một khoản thất bại thành khoản `pending` mới (`origin = retry`). Mỗi khoản thất bại tạo lại được một lần; số
- * tiền không vượt khoản thất bại và không vượt số còn hoàn được. Trả mã đơn.
+ * Recreates a failed refund as a new `pending` one (`origin = retry`). Each failed refund can be recreated once; the
+ * amount is at most the failed one and within the refundable amount. Returns the order code.
  */
 export async function retryRefund(
   tx: DbClient,
@@ -243,7 +243,7 @@ export async function retryRefund(
     amount,
     origin: 'retry',
     retryOfId: failed.id,
-    // Khoản hoàn trả hàng tạo lại vẫn thuộc yêu cầu trả đó.
+    // A recreated return refund still belongs to that return request.
     supportRequestId: failed.supportRequestId ?? undefined,
     note: input.note,
     staffId,
@@ -258,7 +258,7 @@ export async function retryRefund(
   return failed.order.code
 }
 
-/** Xếp email "Đã hoàn tiền" (số tiền, ngày, link tra cứu có token mới) trong transaction của thay đổi trạng thái. */
+/** Queues the "Đã hoàn tiền" email (amount, date, lookup link with a new token) in the state change's transaction. */
 export async function queueRefundSucceededEmail(
   tx: DbClient,
   { emails, siteUrl }: CustomerMail,
@@ -267,7 +267,7 @@ export async function queueRefundSucceededEmail(
 ) {
   const link = await issueOrderLookupUrl(tx, siteUrl, order)
   const day = refund.transferredOn ?? refund.completedAt ?? new Date()
-  // Bản nháp, chờ chủ doanh nghiệp duyệt nội dung.
+  // Draft, awaiting the owner's approval of the wording.
   await emails.sendEmail(tx, {
     to: order.email,
     subject: `Đã hoàn tiền đơn hàng #${order.code}`,

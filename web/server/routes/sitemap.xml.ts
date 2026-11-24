@@ -3,7 +3,10 @@ import { Sitemap } from '@ecommerce/shared'
 const XML_ENTITIES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }
 const escapeXml = (text: string) => text.replace(/[&<>"']/g, (c) => XML_ENTITIES[c]!)
 
-/** Sitemap dựng mỗi lần đọc từ API, nên có ngay nội dung vừa xuất bản và mất ngay nội dung vừa lưu trữ, ẩn. */
+/**
+ * The sitemap is built from the API on every read, so new publishes appear and archived or hidden content vanish at
+ * once.
+ */
 export default defineEventHandler(async (event) => {
   const { apiBase, public: site } = useRuntimeConfig(event)
   const { entries } = Sitemap.parse(await $fetch('/api/sitemap', { baseURL: apiBase }))

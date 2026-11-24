@@ -27,12 +27,12 @@ const ACTIONS: Record<ProductStatus, string> = {
   draft: 'catalog.product.unarchive',
 }
 
-/** Trạng thái và phiên bản khách đang thấy, ghi vào audit khi chuyển trạng thái. */
+/** Status and the version customers see, recorded in audit on transitions. */
 const lifecycle = (draft: Draft) => ({ status: draft.status, liveVersion: draft.liveVersion?.version ?? null })
 
 /**
- * Vòng đời và trang chính sách của sản phẩm, mount tại `/products/:id`; cần `catalog.edit`.
- * Khóa dòng sản phẩm như biến thể và ảnh, để điều kiện xuất bản không bị thao tác song song làm sai.
+ * Product lifecycle and policy pages, mounted at `/products/:id`; needs `catalog.edit`. Locks the product row like
+ * variants and images, so concurrent edits cannot break publish conditions.
  */
 export function adminProductPublishingRoutes(prisma: Db, storage: Storage) {
   return Router({ mergeParams: true })
@@ -60,7 +60,7 @@ export function adminProductPublishingRoutes(prisma: Db, storage: Storage) {
             throw new AppError(409, ErrorCode.CONFLICT, 'Sản phẩm chưa đủ điều kiện xuất bản', blockers)
           }
           const snapshot = buildSnapshot(before)
-          // Xuất bản lại khi không có gì thay đổi thì không tạo phiên bản trùng.
+          // Republishing with no changes creates no duplicate version.
           if (isDeepStrictEqual(liveSnapshot(before), snapshot)) return unchanged
           await assertLiveSlugFree(tx, id, snapshot.slug)
           const version = await createVersion(tx, id, snapshot, currentStaff(req).id)
@@ -77,7 +77,8 @@ export function adminProductPublishingRoutes(prisma: Db, storage: Storage) {
           before: lifecycle(before),
           after: lifecycle(after),
         })
-        // Ảnh đã gỡ khỏi bản đang soạn nhưng còn giữ file cho phiên bản cũ; giờ khách không còn thấy thì xóa được.
+        // Images removed from the draft kept their files for the old version; now that customers no longer see it,
+        // delete them.
         const used = new Set([...after.images.map((i) => i.storageKey), ...liveImages(after).map((i) => i.key)])
         return { draft: after, unused: liveImages(before).filter((i) => !used.has(i.key)) }
       })
@@ -117,8 +118,8 @@ export function adminProductPublishingRoutes(prisma: Db, storage: Storage) {
 }
 
 /**
- * Slug chỉ duy nhất trong bản đang soạn: sản phẩm đã đổi slug mà chưa xuất bản lại vẫn giữ slug cũ trên website.
- * Khóa chung cho mọi lần xuất bản để hai sản phẩm không cùng lúc lên website với một slug.
+ * Slugs are unique only among drafts: a product renamed but not republished keeps its old slug on the website. A
+ * shared lock for every publish keeps two products from going live with one slug at the same time.
  */
 async function assertLiveSlugFree(tx: Prisma.TransactionClient, productId: string, slug: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('catalog.product.live_slug'))`

@@ -31,7 +31,7 @@ import { revenueReport } from '../reports/revenue.ts'
 import { stockReport } from '../reports/stock.ts'
 import { voucherReport } from '../reports/vouchers.ts'
 
-/** File Excel của một báo cáo: `bao-cao-<slug>-<from>-<to>.xlsx`. */
+/** Excel file of a report: `bao-cao-<slug>-<from>-<to>.xlsx`. */
 async function sendXlsx(res: Response, slug: string, title: string, period: Period, sheets: SheetSpec[]) {
   const file = await buildWorkbook(title, period, sheets)
   res.type(XLSX_TYPE).attachment(`bao-cao-${slug}-${period.from}-${period.to}.xlsx`).send(file)
@@ -40,8 +40,8 @@ async function sendXlsx(res: Response, slug: string, title: string, period: Peri
 const periodFrom = (req: Request) => periodOf(parse(ReportQuery, req.query))
 
 /**
- * Báo cáo (M7), mount tại `/reports`; chỉ đọc nên không qua `audited()`, kể cả xuất Excel. Mọi báo cáo cần
- * `report.view`. Bản `.xlsx` dùng đúng hàm tính số của bản JSON nên hai bản luôn khớp.
+ * Reports (M7), mounted at `/reports`; read-only, so no `audited()`, Excel export included. Every report needs
+ * `report.view`. The `.xlsx` uses the same calculation as the JSON, so they always match.
  */
 export function adminReportRoutes(prisma: Db) {
   return (
@@ -108,7 +108,7 @@ export function adminReportRoutes(prisma: Db) {
         const sheets = returnsSheets(await returnsReport(prisma, period))
         await sendXlsx(res, 'doi-tra', 'Báo cáo đổi trả và bảo hành', period, sheets)
       })
-      // Không theo kỳ: việc đang chờ tại thời điểm xem. Không có bản Excel.
+      // Not per period: what is pending right now. No Excel version.
       .get('/exceptions', async (_req, res) => {
         const body: ExceptionsReport = await exceptionsReport(prisma)
         res.json(body)

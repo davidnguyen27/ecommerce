@@ -5,7 +5,9 @@ import { bearer, createStaff } from './support/staff.ts'
 const DAY = 24 * 60 * 60_000
 const at = (days: number) => new Date(Date.now() + days * DAY).toISOString()
 
-/** Cửa hàng của `shop()` có mã `TET2027` giảm 10% tối đa 500.000; `order(n)` là khách `n` đặt 1 đôi AM-40 kèm mã. */
+/**
+ * `shop()` with voucher `TET2027` at 10% up to 500,000; `order(n)` is customer `n` ordering 1 pair of AM-40 with it.
+ */
 async function voucherOrders() {
   const app = await shop()
   const created = await app.request
@@ -58,7 +60,7 @@ describe('mã giảm giá trong đơn ở trang quản trị', () => {
       },
       lines: [{ sku: 'AM-40', lineTotal: 2_000_000, discount: 200_000 }],
     })
-    // Khách cũng thấy tiền giảm của dòng qua link tra cứu.
+    // Customers also see the line discount via the lookup link.
     const view = await app.request.get(`/api/orders/${placed.code}`).query({ token: placed.token })
     expect(view.body.lines[0].discount).toBe(200_000)
   })

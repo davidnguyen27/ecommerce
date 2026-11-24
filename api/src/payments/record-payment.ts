@@ -10,44 +10,44 @@ import { dayVN, isoDay, vnd, voucherLines } from '../orders/format.ts'
 import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../orders/orders.ts'
 import type { PaymentGateway } from './gateway.ts'
 
-/** Một khoản tiền cổng báo về, từ callback (nguồn `webhook`), truy vấn hay cổng giả lập. */
+/** Money the gateway reports, from a callback (`webhook` source), a query or the simulator. */
 export type PaymentReceipt = {
   orderCode: number
   /** VND. */
   amount: number
-  /** Mã tham chiếu giao dịch của cổng; cùng một khoản thì cùng mã dù đến từ đường nào. */
+  /** Gateway transaction reference; the same payment has the same reference whichever way it arrives. */
   reference: string
   /**
-   * Mã đơn bên cổng của link mà khoản này về qua (VNPAY `vnp_TxnRef`); quyết định mục đích của giao dịch. Không có, hay
-   * không thấy link của đơn mang mã này (đơn cũ), thì coi là trả đủ.
+   * Gateway reference of the link this payment came through (VNPAY `vnp_TxnRef`); decides the transaction's purpose.
+   * Missing, or no link of the order with it (old orders), counts as full payment.
    */
   gatewayReference?: string
   paidAt: Date
   source: PaymentSource
-  /** Dữ liệu gốc, lưu để đối chiếu. */
+  /** Raw data, kept for matching. */
   payload: Prisma.InputJsonValue
 }
 
 /**
- * `paid`: đơn vừa thành đã trả đủ. `deposit_paid`: đơn đặt trước vừa nhận đủ cọc. `flagged`: khoản tiền cần đối soát.
- * `duplicate`: khoản này đã ghi từ trước. `unknown_order`: không có đơn mang mã này.
+ * `paid`: the order just became fully paid. `deposit_paid`: a pre-order just got its full deposit. `flagged`: needs
+ * reconciliation. `duplicate`: already recorded. `unknown_order`: no order with this code.
  */
 export type RecordPaymentOutcome = 'paid' | 'deposit_paid' | 'flagged' | 'duplicate' | 'unknown_order'
 
 export type RecordPaymentDeps = { prisma: Db; emails: EmailQueue; siteUrl: string }
 
 /**
- * Hàm duy nhất ghi nhận tiền về cho đơn (ADR 0009), chạy nhiều lần vẫn một kết quả. Khóa đơn `FOR UPDATE` nên callback
- * và truy vấn cùng về thì lần sau thấy giao dịch lần trước đã ghi. Đơn đang chờ một khoản (`awaitedPayment`) mà tổng
- * các giao dịch đúng mục đích bằng đúng số phải nhận thì tiến một bước: đơn hàng sẵn thành đã trả đủ, đơn đặt trước
- * chờ cọc thành đã cọc, đơn đặt trước đã về hàng thành đã trả đủ. Mọi trường hợp khác gắn cờ cần đối soát, không đổi
- * trạng thái đơn.
+ * The single place recording money for an order (ADR 0009), idempotent. Locks the order so a callback and a query
+ * arriving together see each other's write. When the order awaits a payment (`awaitedPayment`) and the transactions of
+ * that purpose add up to exactly what is due, it advances one step: in-stock orders become paid, pending pre-orders
+ * deposited, arrived pre-orders paid. Anything else is flagged for reconciliation without changing the order status.
  */
 export async function recordPayment(deps: RecordPaymentDeps, receipt: PaymentReceipt): Promise<RecordPaymentOutcome> {
   try {
     return await deps.prisma.$transaction((tx) => recordInTransaction(tx, deps, receipt))
   } catch (err) {
-    // Cùng mã tham chiếu đang được ghi cho một đơn khác, song song: unique chặn, coi như đã ghi.
+    // The same reference is being recorded for another order concurrently: the unique index blocks it; treat as
+    // recorded.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return 'duplicate'
     throw err
   }
@@ -86,9 +86,9 @@ async function recordInTransaction(
       payload: receipt.payload,
     },
   })
-  // Khoản đơn đang chờ lúc này, nếu có: đơn hàng sẵn chờ thanh toán chờ các khoản trả đủ bằng tổng phải trả; đơn đặt
-  // trước chờ cọc chờ các khoản cọc bằng tiền cọc; đơn đặt trước đã cọc và đã về hàng chờ các khoản phần còn lại bằng
-  // phần còn lại (ticket 07). Mỗi bước chỉ được tất toán bằng khoản đúng mục đích của nó.
+  // What the order awaits now, if anything: pending in-stock orders full payments matching the total; pending
+  // pre-orders deposit payments matching the deposit; deposited, arrived pre-orders remainder payments matching the
+  // remainder (ticket 07). Each step settles only with payments of its own purpose.
   const awaiting = awaitedPayment(order)
   const eventData = { amount: receipt.amount, reference: receipt.reference, source: receipt.source }
 
@@ -103,10 +103,10 @@ async function recordInTransaction(
         data:
           awaiting.purpose === 'deposit'
             ? { status: 'processing', paymentStatus: 'deposit_paid', depositPaidAt: new Date(), reservedUntil: null }
-            : // Trả đủ phần còn lại thì hết quá hạn (ticket 08); đơn hàng sẵn không bao giờ có cờ này.
+            : // Paying the remainder clears the overdue flag (ticket 08); in-stock orders never have it.
               { status: 'processing', paymentStatus: 'paid', reservedUntil: null, remainderOverdueAt: null },
       })
-      // Khoản trước bị gắn lệch tiền mà nay đủ: các mục đó không còn gì để kế toán xử lý.
+      // Earlier payments flagged as mismatched now add up: those items need nothing more from accounting.
       const settled = await tx.reconciliationItem.findMany({
         where: { orderId: order.id, status: 'open', reason: 'amount_mismatch' },
         select: { id: true },
@@ -131,8 +131,8 @@ async function recordInTransaction(
     }
   }
 
-  // Đơn đang chờ đúng khoản này mà tiền chưa khớp thì lệch tiền; không chờ khoản nào (đã trả đủ, hay hàng chưa về mà đã
-  // trả phần còn lại) thì tiền thừa.
+  // Awaiting this payment but the amount is off: mismatch. Awaiting nothing (already paid, or remainder paid before
+  // arrival): overpayment.
   const transactionPurpose = link?.purpose ?? 'full'
   const reason: ReconciliationReason =
     order.status === 'cancelled'
@@ -156,8 +156,8 @@ async function recordInTransaction(
 }
 
 /**
- * Hỏi cổng các khoản đã về qua mọi link của đơn, cũ trước, và ghi nhận từng khoản (nguồn `query`), phòng khi callback
- * tới chậm hoặc không tới. Đơn chưa có link thì không hỏi. Cổng lỗi thì ném; nơi gọi quyết định log rồi đi tiếp.
+ * Asks the gateway for payments on every link of the order, oldest first, and records each (`query` source), in case a
+ * callback is late or missing. No links, no query. Gateway errors throw; the caller decides to log and move on.
  */
 export async function recordGatewayPayments(
   deps: RecordPaymentDeps & { payments: PaymentGateway },
@@ -184,7 +184,7 @@ export async function recordGatewayPayments(
   }
 }
 
-/** Mã đơn bên cổng của mọi link của đơn, cũ trước: để hủy link khi hủy đơn. */
+/** Gateway references of every link of the order, oldest first: to cancel links on order cancel. */
 export const PAYMENT_LINK_REFERENCES = {
   select: { gatewayReference: true },
   orderBy: { createdAt: 'asc' },
@@ -192,7 +192,7 @@ export const PAYMENT_LINK_REFERENCES = {
 
 type OrderWithLines = Prisma.OrderGetPayload<{ include: { lines: true } }>
 
-/** Khoản đơn đang chờ: mục đích và số tiền phải nhận đủ; `null` khi đơn không chờ khoản nào. */
+/** What the order awaits: purpose and amount due; `null` when it awaits nothing. */
 function awaitedPayment(order: Prisma.OrderGetPayload<object>): { purpose: PaymentPurpose; due: bigint } | null {
   if (order.kind === 'standard') {
     return order.status === 'pending_payment' ? { purpose: 'full', due: order.total } : null
@@ -205,8 +205,8 @@ function awaitedPayment(order: Prisma.OrderGetPayload<object>): { purpose: Payme
 }
 
 /**
- * Xếp email "đã nhận thanh toán" (tóm tắt đơn, tổng tiền, link tra cứu có token mới) trong transaction của thay đổi
- * trạng thái. Dùng chung cho thanh toán bình thường và khôi phục đơn khi đối soát. `order.lines` xếp theo `position`.
+ * Queues the "payment received" email (order summary, total, lookup link with a new token) in the state change's
+ * transaction. Shared by normal payments and reconciliation restores. `order.lines` sorted by `position`.
  */
 export async function queuePaymentReceivedEmail(
   tx: DbClient,
@@ -221,7 +221,7 @@ export async function queuePaymentReceivedEmail(
     const name = attributes ? `${line.productName} (${attributes})` : line.productName
     return `- ${name} x ${line.quantity}: ${vnd(line.price * BigInt(line.quantity))}`
   })
-  // Bản nháp, chờ chủ doanh nghiệp duyệt nội dung.
+  // Draft, awaiting the owner's approval of the wording.
   await emails.sendEmail(tx, {
     to: order.email,
     subject: `Đã nhận thanh toán đơn hàng #${order.code}`,
@@ -243,8 +243,8 @@ export async function queuePaymentReceivedEmail(
 }
 
 /**
- * Xếp email "đã nhận cọc" của đơn đặt trước (tiền cọc, phần còn lại, thời gian giao dự kiến, link tra cứu có token
- * mới) trong transaction của thay đổi trạng thái. Dùng chung cho cọc về bình thường và khôi phục khi đối soát.
+ * Queues the pre-order "deposit received" email (deposit, remaining balance, expected delivery, lookup link with a new
+ * token) in the state change's transaction. Shared by normal deposits and reconciliation restores.
  */
 export async function queueDepositReceivedEmail(
   tx: DbClient,
@@ -257,7 +257,7 @@ export async function queueDepositReceivedEmail(
   }
   const link = await issueOrderLookupUrl(tx, siteUrl, order)
   const line = order.lines[0]!
-  // Bản nháp, chờ chủ doanh nghiệp duyệt nội dung.
+  // Draft, awaiting the owner's approval of the wording.
   await emails.sendEmail(tx, {
     to: order.email,
     subject: `Đã nhận tiền cọc đơn đặt trước #${order.code}`,

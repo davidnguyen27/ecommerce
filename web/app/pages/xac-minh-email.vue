@@ -3,14 +3,14 @@ const route = useRoute()
 const { apiBase } = useRuntimeConfig()
 const token = typeof route.query.token === 'string' ? route.query.token : ''
 
-// Xác minh ngay lúc render phía server; link chỉ cần mở một lần.
+// Verify during server render; the link only needs opening once.
 const { error } = await useAsyncData('verify-email', async () => {
   if (!token) throw new Error('Thiếu token')
   await $fetch('/api/auth/verify-email', { baseURL: apiBase, method: 'POST', body: { token } })
   return true
 })
 
-// Trang riêng của từng khách, không có nội dung để index.
+// Specific to each customer, nothing to index.
 useSeo({ title: 'Xác minh email', description: 'Xác minh email tài khoản khách hàng.', noindex: true })
 </script>
 

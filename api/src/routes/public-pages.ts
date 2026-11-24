@@ -8,7 +8,7 @@ import { parse } from '../http/validation.ts'
 
 const SlugParams = z.object({ slug: z.string() })
 
-/** Khách đọc trang nội dung; chỉ phiên bản đã xuất bản lộ ra, bản đang soạn thì không. */
+/** Customers read content pages; only published versions are exposed, never drafts. */
 export function publicPageRoutes(prisma: Db) {
   return Router()
     .get('/', async (_req, res) => {

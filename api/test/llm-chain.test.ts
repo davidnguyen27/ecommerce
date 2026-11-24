@@ -10,8 +10,8 @@ import {
   type LlmRequest,
 } from '../src/adapters/llm.ts'
 
-// Chuỗi model chưa có route nào dùng (ticket 02 mới có API chat), và không được gọi nhà cung cấp thật trong test:
-// gọi thẳng `LlmChain` với `fetch` giả trả lời theo từng model.
+// No route used the model chain yet (ticket 02 added the chat API), and tests must not call real providers: call
+// `LlmChain` directly with a fake `fetch` answering per model.
 
 const KEYS = { GROQ_API_KEY: 'gsk_test', OPENROUTER_API_KEY: 'sk-or-test' }
 const REQUEST: LlmRequest = { messages: [{ role: 'user', content: 'Có túi đen dưới 5 triệu không?' }] }
@@ -28,7 +28,7 @@ function okReply(content: string, extra: Record<string, unknown> = {}): Reply {
   }
 }
 
-/** `fetch` giả: mỗi model có hàng đợi trả lời riêng; ghi lại model và body của từng lần gọi. */
+/** Fake `fetch`: each model has its own reply queue; records the model and body of each call. */
 function fakeFetch(replies: Record<string, Reply[]>) {
   const calls: { model: string; body: Record<string, unknown>; auth: string | null }[] = []
   const fn: typeof fetch = async (_url, init) => {
@@ -195,7 +195,7 @@ describe('model giả cho E2E', () => {
   it('tin cuối của khách thì tìm sản phẩm bằng câu đó; có kết quả công cụ thì trả lời bằng tên sản phẩm', async () => {
     const llm = new DemoLlm()
     const tools = [{ name: 'search_products', description: 'Tìm', parameters: {} }]
-    // Sản phẩm đang xem (API dựng sẵn) là kết quả công cụ khác: vẫn tìm bằng câu của khách.
+    // The viewed product (prebuilt by the API) is another tool's result: still search with the customer's text.
     const viewing = [
       {
         role: 'assistant' as const,

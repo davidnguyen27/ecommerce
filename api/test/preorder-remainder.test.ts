@@ -66,7 +66,7 @@ describe('trả phần còn lại', () => {
       app.request.post(`/api/admin/orders/${app.code}/${path}`).set(bearer(app.token)).send(body)
     expect((await admin('prepare')).status).toBe(200)
     expect((await admin('hand-over', { carrier: 'GHN', trackingNumber: 'GHN123' })).status).toBe(200)
-    // Hàng rời kho: tồn và số đang giữ cùng giảm, sổ có một dòng xuất bán tham chiếu đơn.
+    // Goods leave stock: on-hand and reserved both drop, with one sale ledger row referencing the order.
     const stock = await app.request.get('/api/admin/stock').query({ q: 'AM-41' }).set(bearer(app.token))
     expect(stock.body.items.find((i: { sku: string }) => i.sku === 'AM-41')).toMatchObject({ onHand: 0, reserved: 0 })
     const sales = await movementsOf(app.request, app.token, { variantId: app.v41.id, kind: 'sale' })
@@ -109,7 +109,7 @@ describe('trả phần còn lại', () => {
     await app.arrive()
     await app.payRemainder()
 
-    // Job hết hạn không có endpoint: test gọi thẳng hàm job chạy với `now` ở tương lai, rồi kiểm qua HTTP.
+    // The expiry job has no endpoint: tests call it with a future `now`, then check via HTTP.
     expect(await expireOverdueOrders(app.expireDeps, new Date(Date.now() + 60 * 60_000))).toBe(0)
 
     expect((await app.order({ refresh: '1' })).body).toMatchObject({

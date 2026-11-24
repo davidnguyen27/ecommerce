@@ -6,7 +6,10 @@ import { OWNER, appWithOwner, bearer, createStaff, login, type Request } from '.
 
 const GUEST = { name: 'Lan', email: 'lan@example.com' }
 
-/** App có owner, chính sách bảo mật, chatbot bật với câu thời gian phản hồi; model giả đề nghị chuyển ở lượt đầu. */
+/**
+ * App with an owner, a privacy policy, the chatbot on with a response-time sentence; the fake model offers handoff
+ * first.
+ */
 async function handoffApp() {
   const llm = new ScriptedLlm([
     {
@@ -86,7 +89,7 @@ describe('khách vãng lai chuyển nhân viên', () => {
     expect(reply.body.messages).toHaveLength(2)
     expect((await request.get(`/api/support-requests/${code}`).query({ token: 'sai' })).status).toBe(404)
     expect((await request.get(`/api/support-requests/${code}`)).status).toBe(404)
-    // Đường này không tạo được yêu cầu mới.
+    // This path cannot create new requests.
     expect(
       (await request.post('/api/support-requests').query({ token }).send({ kind: 'other', subject: 'a', message: 'b' }))
         .status,
@@ -145,7 +148,7 @@ describe('giới hạn chuyển nhân viên chỉ tính lần tạo được', (
     expect((await handoff(request, { name: 'Lan', email: 'lan2@example.com', message: 'Hỏi' }, ip)).status).toBe(201)
     expect((await handoff(request, { name: 'Lan', email: 'lan3@example.com', message: 'Hỏi' }, ip)).status).toBe(429)
 
-    // Email đã cắt khoảng trắng và đổi chữ thường: cùng email với yêu cầu đầu.
+    // The email was trimmed and lowercased: the same email as the first request.
     const view = await request.get(`/api/admin/support-requests/${spaced.body.requestCode}`).set(bearer(ownerToken))
     expect(view.body.contactEmail).toBe(GUEST.email)
   })
@@ -190,7 +193,7 @@ describe('nhân viên và dữ liệu', () => {
     ).toBeNull()
   })
 
-  // Ràng buộc trong DB không có đường HTTP nào chạm tới (API luôn đi đúng): thử bằng SQL trực tiếp.
+  // A DB constraint no HTTP path reaches (the API always complies): try it with SQL directly.
   it('DB chặn yêu cầu không đơn, không tài khoản mà không do chatbot tạo, và yêu cầu khác "khác" không có đơn', async () => {
     const { prisma } = await handoffApp()
     const insert = (kind: string, createdBy: string) =>
@@ -205,7 +208,7 @@ describe('nhân viên và dữ liệu', () => {
     await expect(insert('other', 'chatbot')).resolves.toBe(1)
   })
 
-  // Job dọn không có endpoint; gọi thẳng hàm job rồi kiểm qua HTTP.
+  // The cleanup job has no endpoint; call the job function directly, then check via HTTP.
   it('job dọn giữ cuộc trò chuyện đã chuyển nhân viên dù quá 90 ngày', async () => {
     const { request, prisma } = await handoffApp()
     const conversationId = await conversationWithHandoff(request)

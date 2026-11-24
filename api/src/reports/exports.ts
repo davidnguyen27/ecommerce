@@ -9,7 +9,7 @@ import type {
 import type { SheetSpec } from './excel.ts'
 import * as L from './labels.ts'
 
-// Mỗi báo cáo thành các sheet của file Excel, cùng bảng như tab trên trang quản trị.
+// Each report as Excel sheets, the same tables as the admin page tabs.
 
 const periodLabel = (period: string) => period.split('-').reverse().join('/')
 const num = (header: string) => ({ header, format: 'number' as const })

@@ -1,6 +1,6 @@
-// Bảng điều khiển chỉ hiện lối tắt tới trang người đăng nhập mở được (quyền khai ở web/app/utils/adminMenu.ts).
-// Kho có `catalog.edit` là có chủ ý (được sửa sản phẩm, danh mục), nhưng không có `content.edit` nên không thấy
-// lối tắt soạn chính sách, và không có `audit.view` nên không thấy nhật ký kiểm toán.
+// The dashboard only shows shortcuts to pages the user can open (permissions in web/app/utils/adminMenu.ts).
+// The warehouse role has `catalog.edit` on purpose (edits products, categories), but without `content.edit` it sees no
+// policy shortcut, and without `audit.view` no audit log.
 import { expect, test, type Page } from '@playwright/test'
 import { adminLogin } from '../support/admin-login.ts'
 import { WAREHOUSE } from '../support/stack.ts'

@@ -7,7 +7,7 @@ import { adjust } from './support/stock.ts'
 
 const SHIPMENT = { carrier: 'Giao Hàng Nhanh', trackingNumber: 'GHN1' }
 const DAY = 24 * 60 * 60_000
-/** Ngày lịch theo giờ Việt Nam, `days` ngày tính từ hôm nay, dạng mốc 00:00 UTC như cột `DATE`. */
+/** Vietnam-time calendar day, `days` days from today, as 00:00 UTC like a `DATE` column. */
 const vnDay = (days: number) =>
   new Date(`${new Date(Date.now() + 7 * 60 * 60_000 + days * DAY).toISOString().slice(0, 10)}T00:00:00Z`)
 
@@ -31,7 +31,7 @@ describe('bảng ngoại lệ', () => {
     const { request, token, v40, v41, product, editVariant } = await shop()
     const lowStock = async () => (await exceptions(request, token)).lowStock
 
-    // AM-40 còn 3 đôi: chưa sắp hết; AM-41 hết hàng.
+    // AM-40 has 3 pairs: not low yet; AM-41 is out of stock.
     expect(await lowStock()).toEqual({
       count: 1,
       items: [{ variantId: v41.id, sku: 'AM-41', productName: 'Air Max', available: 0 }],
@@ -59,12 +59,12 @@ describe('bảng ngoại lệ', () => {
     const { request, token } = app
     const report = () => exceptions(request, token)
 
-    // Khách hủy đơn chưa trả rồi tiền mới về: cần đối soát.
+    // The customer cancels an unpaid order, then money arrives: reconciliation needed.
     const late = (await app.checkout()).body as { code: number; token: string }
     expect((await request.post(`/api/orders/${late.code}/cancel`).query({ token: late.token })).status).toBe(200)
     await request.post('/api/payments/simulator/paid').send({ orderCode: late.code, amount: 2_030_000 })
 
-    // Đơn đã trả bị hủy, khoản hoàn đang chờ.
+    // A paid order is cancelled, its refund pending.
     const paid = (await app.checkout()).body as { code: number; token: string }
     await request.post('/api/payments/simulator/paid').send({ orderCode: paid.code, amount: 2_030_000 })
     const cancelled = await request

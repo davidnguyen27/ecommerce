@@ -41,17 +41,17 @@ const slugTaken = () =>
 
 const brandNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy thương hiệu')
 
-/** Quản lý thương hiệu: logo cần `media.upload`, các route khác cần `catalog.edit`. */
+/** Brand management: logos need `media.upload`, other routes `catalog.edit`. */
 export function adminBrandRoutes(prisma: Db, storage: Storage) {
   return (
     Router()
-      // Khai báo trước quyền chung `catalog.edit` bên dưới, vì logo có quyền riêng.
+      // Declared before the shared `catalog.edit` guard below, since logos have their own permission.
       .put('/:id/logo', requirePermission('media.upload'), receiveImage, async (req, res) => {
         const { id } = parse(BrandParams, req.params)
         const file = uploadedFile(req)
         if (!(await prisma.brand.findUnique({ where: { id } }))) throw brandNotFound()
 
-        // Mỗi logo một tiền tố mới: URL đổi theo nên CDN không phục vụ logo cũ.
+        // A new prefix per logo: the URL changes, so the CDN never serves the old one.
         const logo = await storeImage(storage, `brands/${id}/${randomUUID()}`, file, LOGO_WIDTHS)
         const brand = await setLogo(prisma, storage, req, id, logo).catch(async (err: unknown) => {
           await deleteImageFilesQuietly(storage, req, logo)
@@ -109,12 +109,12 @@ export function adminBrandRoutes(prisma: Db, storage: Storage) {
 
 const BrandParams = z.object({ id: z.uuid() })
 
-/** Trường nghiệp vụ ghi vào audit. */
+/** Business fields recorded in audit. */
 function auditFields({ slug, name, description, hidden }: Brand) {
   return { slug, name, description, hidden }
 }
 
-/** Sửa một thương hiệu kèm audit trước/sau. `change` trả `null` khi không có gì đổi: khi đó không ghi gì. */
+/** Updates a brand with before/after audit. `change` returns `null` when nothing changes: then nothing is written. */
 async function updateBrand(
   prisma: Db,
   req: Request,
@@ -135,8 +135,8 @@ async function updateBrand(
 }
 
 /**
- * Đặt logo mới (`null` là gỡ logo) kèm audit; logo cũ bị xóa khỏi storage sau khi commit.
- * Khóa dòng thương hiệu để hai lần đổi logo cùng lúc không để sót file của logo bị thay.
+ * Sets a new logo (`null` removes it) with audit; the old logo is deleted from storage after commit. Locks the brand
+ * row so two concurrent logo changes never leave a replaced file behind.
  */
 async function setLogo(prisma: Db, storage: Storage, req: Request, id: string, logo: StoredImage | null) {
   const { before, after } = await audited(prisma, req, async (tx, audit) => {

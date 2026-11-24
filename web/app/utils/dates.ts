@@ -1,7 +1,7 @@
-// Cố định múi giờ: SSR và trình duyệt render cùng một chuỗi, và nhân viên ở đâu cũng thấy giờ Việt Nam.
+// Fixed time zone: SSR and the browser render the same string, and staff anywhere see Vietnam time.
 const TIME_ZONE = 'Asia/Ho_Chi_Minh'
 
-/** Thời điểm ISO thành `30/10/2026 14:05` (kèm giây khi cần đối chiếu nhật ký). */
+/** ISO timestamp as `30/10/2026 14:05` (with seconds when matching logs). */
 export const formatDateTime = (iso: string, options: { seconds?: boolean } = {}) =>
   new Date(iso).toLocaleString('vi-VN', {
     timeZone: TIME_ZONE,
@@ -13,8 +13,8 @@ export const formatDateTime = (iso: string, options: { seconds?: boolean } = {})
     ...(options.seconds && { second: '2-digit' }),
   })
 
-/** Thời điểm ISO thành ngày `30/10/2026`. */
+/** ISO timestamp as the day `30/10/2026`. */
 export const formatDate = (iso: string) => new Date(iso).toLocaleDateString('vi-VN', { timeZone: TIME_ZONE })
 
-/** Ngày lịch `YYYY-MM-DD` (không có giờ, như ngày hàng về) thành `30/10/2026`, không qua múi giờ nào. */
+/** Calendar day `YYYY-MM-DD` (no time, like an arrival date) as `30/10/2026`, with no time zone conversion. */
 export const formatDateOnly = (date: string) => date.split('-').reverse().join('/')

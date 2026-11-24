@@ -1,23 +1,23 @@
 import { z } from 'zod'
 
-/** Mã lỗi thống nhất mà mọi endpoint trả về trong `error.code`. */
+/** Uniform error code every endpoint returns in `error.code`. */
 export const ErrorCode = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   UNAUTHORIZED: 'UNAUTHORIZED',
   FORBIDDEN: 'FORBIDDEN',
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT: 'CONFLICT',
-  /** Vượt giới hạn tần suất; response kèm header `Retry-After` (giây). */
+  /** Rate limit exceeded; the response carries a `Retry-After` header (seconds). */
   RATE_LIMITED: 'RATE_LIMITED',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
-  /** Dịch vụ bên ngoài (cổng thanh toán) lỗi; thử lại sau. */
+  /** An external service (payment gateway) failed; retry later. */
   BAD_GATEWAY: 'BAD_GATEWAY',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
 
 export const FieldError = z.object({
-  /** Đường dẫn tới trường lỗi, nối bằng dấu chấm, ví dụ `variants.0.price`. */
+  /** Path to the bad field, dot-separated, e.g. `variants.0.price`. */
   path: z.string(),
   message: z.string(),
 })
@@ -28,7 +28,7 @@ export const ApiErrorBody = z.object({
     code: z.enum(ErrorCode),
     message: z.string(),
     fields: z.array(FieldError).optional(),
-    /** Dữ liệu kèm lỗi để client xử lý tiếp, ví dụ tồn hiện tại khi điều chỉnh tồn bị 409. */
+    /** Data for the client to act on, e.g. current stock when a stock adjustment gets 409. */
     details: z.record(z.string(), z.unknown()).optional(),
     requestId: z.string(),
   }),

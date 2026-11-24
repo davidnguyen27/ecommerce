@@ -2,16 +2,16 @@
 import type { CreatableSupportKind, CreateSupportRequest, OrderLineView, PublicSupportSummary } from '@ecommerce/shared'
 
 /**
- * Danh sách yêu cầu hỗ trợ của khách và form gửi yêu cầu mới (spec M6b). Dùng ở trang đơn (yêu cầu của đơn) và trang
- * tài khoản (mọi yêu cầu của khách). `orderCode` có ở trang đơn trong tài khoản để gắn yêu cầu vào đơn.
+ * The customer's support requests and the new request form (spec M6b). Used on the order page (that order's requests)
+ * and the account page (all of them). `orderCode` is set on the account order page to tie requests to the order.
  */
 const props = defineProps<{
   client: SupportClient
   orderCode?: number
   title?: string
-  /** Đơn đang xem gửi được yêu cầu hủy (`canRequestCancel`): hiện loại "Hủy đơn" (spec M6b ticket 03). */
+  /** The order can take a cancel request (`canRequestCancel`): shows the "Hủy đơn" type (spec M6b ticket 03). */
   canCancel?: boolean
-  /** Dòng của đơn đã giao: có thì hiện loại "Trả hàng" và cho chọn dòng muốn trả (ticket 04). */
+  /** Delivered order lines: when present, shows the "Trả hàng" type and lets the customer pick lines (ticket 04). */
   returnLines?: OrderLineView[]
 }>()
 
@@ -23,10 +23,10 @@ const open = ref(false)
 const sending = ref(false)
 const form = reactive({ kind: 'other' as CreatableSupportKind, subject: '', message: '' })
 const images = ref<File[]>([])
-// Yêu cầu đã tạo mà có ảnh gửi không được: vẫn mở được yêu cầu, báo ảnh nào lỗi.
+// The request was created but some images failed: it still opens, and the failed images are reported.
 const createdLink = ref<string | null>(null)
 
-// Dòng trả, đổi hay bảo hành đã chọn (SupportLinesPicker); rỗng là chưa chọn.
+// Return, exchange or warranty lines picked (SupportLinesPicker); empty means none.
 const pickedLines = ref<NonNullable<Extract<CreateSupportRequest, { lines: unknown }>['lines']>>([])
 const needsLines = computed(() => form.kind === 'return' || form.kind === 'exchange' || form.kind === 'warranty')
 
@@ -49,12 +49,12 @@ async function submit() {
       message: form.message,
       ...(props.orderCode !== undefined && { orderCode: props.orderCode }),
     }
-    // API kiểm dòng theo loại; ép kiểu vì union theo `kind` không suy ra được từ `form.kind` lúc chạy.
+    // The API checks lines per type; cast since the `kind` union cannot be inferred from `form.kind` at runtime.
     const body = (
       needsLines.value ? { ...base, kind: form.kind, lines: pickedLines.value } : { ...base, kind: form.kind }
     ) as CreateSupportRequest
     const created = await props.client.create(body)
-    // Ảnh gắn vào tin đầu tiên của yêu cầu vừa tạo.
+    // Images attach to the first message of the new request.
     const firstMessage = created.messages[0]!.id
     const uploaded = await attachAll((file) => props.client.attach(created.code, firstMessage, file), images.value)
     if (uploaded.error) {

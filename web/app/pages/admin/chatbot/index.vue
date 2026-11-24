@@ -3,7 +3,7 @@ import { ChatbotModelStatus, ChatbotSettings } from '@ecommerce/shared'
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'chatbot.manage' })
 
-// Cài đặt chatbot (spec M8): bật/tắt, câu thời gian phản hồi đọc cho khách khi chuyển nhân viên, trạng thái model.
+// Chatbot settings (spec M8): on/off, the response-time sentence read to customers on handoff, model status.
 const session = useAdminSession()
 const form = reactive(ChatbotSettings.parse(await session.adminFetch('/api/admin/chatbot/settings')))
 const models = ref<ChatbotModelStatus | null>(null)

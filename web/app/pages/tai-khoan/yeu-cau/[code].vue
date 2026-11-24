@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PublicSupportRequest } from '@ecommerce/shared'
 
-// Yêu cầu hỗ trợ trong tài khoản: phiên khách chỉ có ở trình duyệt nên nạp sau khi mount.
+// Account support request: the customer session exists only in the browser, so it loads after mount.
 const route = useRoute()
 const code = computed(() => Number(route.params.code))
 const session = useCustomerSession()

@@ -7,16 +7,16 @@ const PAGE_SIZE = 50
 
 type Filters = Pick<AdminOrderQuery, 'status' | 'paymentStatus' | 'fulfillmentStatus' | 'sort' | 'kind'> & {
   q: string
-  /** Đơn đặt trước của một đợt; `''` là mọi đợt. */
+  /** Pre-orders of one campaign; `''` means every campaign. */
   campaignId: string
   remainderOverdue: boolean
-  /** Đơn đã dùng mã giảm giá này; `''` là không lọc. */
+  /** Orders that used this voucher; `''` means no filter. */
   voucherCode: string
-  /** Chỉ đơn có hoàn tiền chưa xong (chờ hoàn hoặc cổng đang xử lý). */
+  /** Only orders with an unfinished refund (pending or gateway processing). */
   refundOpen: boolean
 }
 const ANY_ORDER = { kind: 'all', campaignId: '', remainderOverdue: false, voucherCode: '', refundOpen: false } as const
-// Mặc định giống API: hàng chờ soạn, đơn cũ trước để soạn theo thứ tự đặt.
+// Same default as the API: the packing queue, oldest first to pack in order.
 const TO_PREPARE: Filters = {
   status: 'processing',
   paymentStatus: 'paid',
@@ -38,9 +38,9 @@ const session = useAdminSession()
 const route = useRoute()
 const result = ref<AdminOrderPage | null>(null)
 const error = ref<string | null>(null)
-// Trang chi tiết đợt và "Đặt trước cần xử lý" mở danh sách này với `?campaignId=` hay `?remainderOverdue=true`.
+// The campaign detail and "Đặt trước cần xử lý" open this list with `?campaignId=` or `?remainderOverdue=true`.
 const fromLink = typeof route.query.campaignId === 'string' || route.query.remainderOverdue === 'true'
-// `?refund=open` mở thẳng danh sách đơn có hoàn tiền chưa xong, cũ trước.
+// `?refund=open` opens the list of orders with unfinished refunds, oldest first.
 const filters = reactive<Filters>(
   route.query.refund === 'open'
     ? { ...ALL, sort: 'oldest', refundOpen: true }

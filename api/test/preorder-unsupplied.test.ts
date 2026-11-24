@@ -4,8 +4,9 @@ import { ADDRESS } from './support/shop.ts'
 import { bearer, createStaff } from './support/staff.ts'
 
 /**
- * Đợt AM-41 (cọc 630.000 một đôi, 20 suất). `place(n)` đặt trước `n` đôi bằng một khách mới; `deposited(n)` đặt rồi trả
- * cọc ngay (thứ tự gọi là thứ tự cọc). `receive(n)` ghi phiếu nhập `n` đôi AM-41.
+ * An AM-41 campaign (630,000 deposit per pair, 20 allocation). `place(n)` pre-orders `n` pairs as a new customer;
+ * `deposited(n)` also pays the deposit at once (call order is deposit order). `receive(n)` records a receipt of `n`
+ * pairs of AM-41.
  */
 async function unsupplied() {
   const app = await preorderShop()
@@ -77,7 +78,7 @@ describe('hủy các đơn chờ hàng khi đợt không nhập được hàng',
     const partial = await deposited(2)
     const waiting = await deposited(1)
     const unpaid = await place(1)
-    await receive(2) // đơn đầu về đủ, đơn thứ hai về 1/2
+    await receive(2) // first order fully arrived, second half arrived
     expect(await stock()).toEqual({ onHand: 2, reserved: 2 })
 
     const previewed = await preview()
@@ -95,7 +96,7 @@ describe('hủy các đơn chờ hàng khi đợt không nhập được hàng',
     expect(res.status).toBe(200)
     expect(res.body.cancelledOrderCodes).toEqual([partial.code, waiting.code])
     expect(res.body.campaign.closedAt).toEqual(expect.any(String))
-    // Phần đã giữ của đơn về một phần thành hàng sẵn, không chuyển cho đơn nào.
+    // The partly arrived order's held stock becomes regular stock, passed to no order.
     expect(await stock()).toEqual({ onHand: 2, reserved: 1 })
 
     for (const order of [partial, waiting]) {

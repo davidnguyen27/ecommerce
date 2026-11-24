@@ -14,7 +14,7 @@ import type { DbClient } from '../db.ts'
 import { fileError } from '../media/upload.ts'
 import { loadAttributeSchema } from './attribute-schemas.ts'
 
-/** Tên sheet của từng nhóm hàng trong file import. */
+/** Sheet name for each product type in the import file. */
 const SHEET_NAMES: Record<ProductType, string> = {
   footwear: 'Giày dép',
   apparel: 'Quần áo',
@@ -28,7 +28,7 @@ const NO = 'Không'
 
 type CellValue = string | number | boolean | null
 
-/** Một cột của sheet. Tiêu đề trong file là `<nhãn>[ *] [<key>]`; key trong ngoặc vuông là thứ dùng khi đọc lại. */
+/** A sheet column. Headers read `<label>[ *] [<key>]`; the bracketed key is what parsing uses. */
 type Column = { key: string; label: string; required: boolean; definition?: AttributeDefinition }
 
 const fixed = (key: string, label: string, required = false): Column => ({ key, label, required })
@@ -46,7 +46,7 @@ const PRODUCT_COLUMNS = [
 ]
 const PRICE_KEYS = ['price', 'compareAtPrice']
 
-/** Cột của một nhóm hàng: thông tin chung, thuộc tính cấp sản phẩm (`sp.`), SKU, thuộc tính cấp biến thể (`bt.`), giá. */
+/** Columns of a product type: general info, product attributes (`sp.`), SKU, variant attributes (`bt.`), prices. */
 function columnsOf(definitions: readonly AttributeDefinition[]): Column[] {
   const attribute = (prefix: string) => (d: AttributeDefinition) => ({
     key: `${prefix}.${d.key}`,
@@ -65,7 +65,7 @@ function columnsOf(definitions: readonly AttributeDefinition[]): Column[] {
   ]
 }
 
-/** Cột thuộc phần thông tin sản phẩm: các dòng cùng slug phải giống nhau ở những cột này. */
+/** Product-level columns: rows sharing a slug must agree on these. */
 const isProductColumn = (key: string) => key.startsWith('sp.') || PRODUCT_COLUMNS.some((c) => c.key === key)
 
 const headerOf = (column: Column) => `${column.label}${column.required ? ' *' : ''} [${column.key}]`
@@ -81,9 +81,9 @@ function columnLetter(index: number) {
   return letter
 }
 
-// Dữ liệu tham chiếu: thương hiệu, danh mục theo đường dẫn, schema thuộc tính
+// Reference data: brands, categories by path, attribute schemas
 
-/** Tên không có unique constraint, nên một tên có thể ứng với nhiều id; khi đó dòng import báo lỗi thay vì đoán. */
+/** Names are not unique, so one name may map to several ids; the row then errors instead of guessing. */
 type NameIndex = Map<string, string[]>
 const normalizeName = (name: string) => name.trim().toLowerCase()
 
@@ -92,7 +92,7 @@ function addName(index: NameIndex, name: string, id: string) {
   index.set(key, [...(index.get(key) ?? []), id])
 }
 
-/** Danh mục ghi theo đường dẫn từ gốc của nhóm hàng, ví dụ `Sneaker > Chạy bộ`, vì tên danh mục có thể lặp ở nhánh khác. */
+/** Categories by path from the type root, e.g. `Sneaker > Chạy bộ`, since names can repeat in other branches. */
 export async function loadReference(db: DbClient) {
   const [brands, categories, schemas] = await Promise.all([
     db.brand.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
@@ -135,20 +135,20 @@ export async function loadReference(db: DbClient) {
 }
 export type Reference = Awaited<ReturnType<typeof loadReference>>
 
-// File mẫu
+// Template file
 
 /**
- * exceljs 4.4 có `worksheet.dataValidations.add(range, …)` nhưng bộ type không khai báo. Gắn validation cho cả vùng
- * thay vì từng ô, để file mẫu không phình ra vì 2.000 dòng × nhiều cột.
+ * exceljs 4.4 has `worksheet.dataValidations.add(range, …)` but its types omit it. Validating whole ranges instead of
+ * cells keeps the template from bloating over 2,000 rows × many columns.
  */
 type WithRangeValidations = ExcelJS.Worksheet & {
   dataValidations: { add(range: string, validation: ExcelJS.DataValidation): void }
 }
 
-/** File mẫu sinh từ dữ liệu hiện tại; danh sách thả xuống đặt ở một sheet ẩn để không vướng giới hạn 255 ký tự của Excel. */
+/** Template built from current data; dropdown lists live on a hidden sheet to dodge Excel's 255-character limit. */
 export async function buildTemplate(ref: Reference): Promise<Buffer> {
   const lists: { title: string; values: string[] }[] = []
-  /** Đăng ký một danh sách, trả về vùng ô trên sheet ẩn để dùng trong data validation. */
+  /** Registers a list and returns its range on the hidden sheet, for data validation. */
   const listRange = (title: string, values: string[]) => {
     if (values.length === 0) return null
     lists.push({ title, values })
@@ -199,9 +199,9 @@ export async function buildTemplate(ref: Reference): Promise<Buffer> {
   return Buffer.from(await workbook.xlsx.writeBuffer())
 }
 
-// Đọc file
+// Parsing
 
-/** Một dòng dữ liệu, giá trị theo key cột. */
+/** One data row, values by column key. */
 export type SheetRow = { productType: ProductType; sheet: string; row: number; values: Map<string, CellValue> }
 
 function cellValue(cell: ExcelJS.Cell): CellValue {
@@ -218,9 +218,12 @@ function cellValue(cell: ExcelJS.Cell): CellValue {
 
 const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04])
 
-/** Đọc mọi sheet nhóm hàng; sheet khác (kể cả sheet danh sách) bị bỏ qua. Lỗi cấu trúc trả về như lỗi của file. */
+/**
+ * Reads every product-type sheet; other sheets (the list sheet too) are ignored. Structure errors return as file
+ * errors.
+ */
 export async function readWorkbook(buffer: Buffer, ref: Reference) {
-  // .xlsx là file zip; kiểm nội dung thật thay vì tin đuôi file.
+  // .xlsx is a zip; check the content instead of trusting the extension.
   if (!buffer.subarray(0, 4).equals(ZIP_MAGIC)) throw fileError(400, 'File phải là Excel .xlsx')
   const workbook = new ExcelJS.Workbook()
   try {
@@ -228,7 +231,7 @@ export async function readWorkbook(buffer: Buffer, ref: Reference) {
   } catch {
     throw fileError(400, 'Không đọc được file Excel .xlsx')
   }
-  // File Office khác (như .docx) cũng là zip và exceljs đọc không lỗi, nhưng không có sheet nào; .xlsx luôn có ít nhất một.
+  // Other Office files (like .docx) are zips that exceljs reads without error but with no sheets; .xlsx always has one.
   if (workbook.worksheets.length === 0) throw fileError(400, 'File phải là Excel .xlsx')
   if (!ProductType.options.some((type) => workbook.getWorksheet(SHEET_NAMES[type]))) {
     const names = ProductType.options.map((type) => SHEET_NAMES[type]).join(', ')
@@ -275,13 +278,13 @@ export async function readWorkbook(buffer: Buffer, ref: Reference) {
 const filled = (rows: readonly SheetRow[], keys: readonly string[]) =>
   rows.some((r) => keys.some((key) => r.values.get(key) !== null && r.values.get(key) !== undefined))
 
-/** File có điền ô giá nào không; có thì cần quyền `price.edit`. */
+/** Whether any price cell is filled; if so, `price.edit` is required. */
 export const hasPrices = (rows: readonly SheetRow[]) => filled(rows, PRICE_KEYS)
 
-/** File có điền ô tồn đầu kỳ nào không; có thì cần quyền `stock.adjust`. */
+/** Whether any opening-stock cell is filled; if so, `stock.adjust` is required. */
 export const hasOpeningStock = (rows: readonly SheetRow[]) => filled(rows, ['openingStock'])
 
-/** Tồn đầu kỳ: số nguyên không âm; trống thì `null`; sai thì `NaN`. */
+/** Opening stock: non-negative integer; empty gives `null`; invalid gives `NaN`. */
 function parseOpeningStock(value: CellValue | undefined): number | null {
   const n = parsePrice(value)
   return n === null || (Number.isInteger(n) && n >= 0 && n <= 1_000_000) ? n : Number.NaN
@@ -291,7 +294,7 @@ const OPENING_STOCK_ERROR = 'Tồn đầu kỳ phải là số nguyên không â
 export const ALREADY_LEDGERED =
   'Biến thể đã có dòng trong sổ xuất nhập; tồn đầu kỳ chỉ ghi một lần, hãy dùng điều chỉnh ở trang Tồn kho'
 
-// Kiểm và lập kế hoạch tạo
+// Validation and creation plan
 
 const text = (value: CellValue | undefined) => (value === null || value === undefined ? '' : String(value))
 
@@ -302,7 +305,7 @@ function parseBoolean(value: CellValue | undefined): boolean | null | undefined 
   return v === normalizeName(YES) ? true : v === normalizeName(NO) ? false : null
 }
 
-/** Giá ghi bằng số, hoặc chuỗi chữ số có dấu phân cách hàng nghìn ("3.500.000"); không đọc được thì `NaN`. */
+/** A price as a number, or digits with thousands separators ("3.500.000"); unreadable gives `NaN`. */
 function parsePrice(value: CellValue | undefined): number | null {
   if (value === null || value === undefined) return null
   if (typeof value === 'number') return value
@@ -310,7 +313,7 @@ function parsePrice(value: CellValue | undefined): number | null {
   return /^\d+$/.test(digits) ? Number(digits) : Number.NaN
 }
 
-/** Giá trị ô thành giá trị thuộc tính; kiểu sai thì để nguyên cho `checkAttributes` báo lỗi. */
+/** Cell value to attribute value; wrong types pass through for `checkAttributes` to report. */
 function attributeValue(definition: AttributeDefinition, value: CellValue): unknown {
   if (value === null) return undefined
   switch (definition.type) {
@@ -350,8 +353,8 @@ export type PlannedVariant = {
   sortOrder: number
 }
 /**
- * Tồn đầu kỳ sẽ ghi, cho biến thể đã có hoặc biến thể sắp tạo (theo SKU). `sheet`, `row` là dòng trong file, để
- * báo lỗi khi lúc ghi phát hiện biến thể đã có dòng sổ.
+ * Opening stock to write, for an existing or new variant (by SKU). `sheet` and `row` locate the file row, to report
+ * when the write finds the variant already has ledger rows.
  */
 export type PlannedOpening = { sku: string; quantity: number; sheet: string; row: number }
 export type PlannedProduct = {
@@ -369,13 +372,13 @@ export type PlannedProduct = {
   variants: PlannedVariant[]
 }
 
-/** Đường dẫn lỗi của zod (trường của request) → key cột. */
+/** Zod error path (request field) → column key. */
 const COLUMN_OF_FIELD: Record<string, string> = { brandId: 'brand', categoryId: 'category' }
 
 /**
- * Kiểm cả file và lập danh sách sản phẩm sẽ tạo. Dòng có SKU đã tồn tại chỉ dùng cột tồn đầu kỳ (các cột khác bỏ
- * qua, có cảnh báo); slug đã thuộc về sản phẩm có sẵn là lỗi, vì import không thêm biến thể vào sản phẩm đã có.
- * Gọi trong transaction khi xác nhận; việc biến thể chưa có dòng sổ được kiểm lại dưới khóa lúc ghi.
+ * Validates the whole file and lists the products to create. Rows with an existing SKU only use opening stock (other
+ * columns ignored, with a warning); a slug owned by an existing product is an error, since import never adds variants
+ * to existing products. Called in the confirm transaction; "no ledger rows yet" is rechecked under lock on write.
  */
 export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: Reference) {
   const errors: ImportIssue[] = []
@@ -417,7 +420,7 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
   const takenSlugs = new Set(existingSlugs.map((p) => p.slug))
 
   const openings: PlannedOpening[] = []
-  /** Dòng đầu tiên dùng mỗi SKU, cho cả SKU đã có lẫn SKU mới: hai dòng cùng SKU là lỗi. */
+  /** First row using each SKU, existing or new: two rows with one SKU is an error. */
   const seenSkus = new Map<string, SheetRow>()
   const duplicateSku = (row: SheetRow, sku: string) => {
     const other = seenSkus.get(sku)
@@ -444,7 +447,7 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
     groups.set(key, [...(groups.get(key) ?? []), row])
   }
 
-  /** Dòng đầu tiên dùng mỗi slug; nhóm theo cả nhóm hàng nên cùng slug ở hai sheet phải bắt riêng ở đây. */
+  /** First row using each slug; grouped by product type, so the same slug on two sheets must be caught here. */
   const slugOwners = new Map<string, SheetRow>()
   const products: PlannedProduct[] = []
   for (const group of groups.values()) {
@@ -486,7 +489,7 @@ export async function planImport(db: DbClient, rows: readonly SheetRow[], ref: R
     const shipping = parseBoolean(first.values.get('groundShippingOnly'))
     if (shipping === null) fail(first, 'groundShippingOnly', `Chỉ nhận "${YES}" hoặc "${NO}"`)
     const product = ProductRequest.safeParse({
-      // Id giả để zod kiểm các trường khác; thương hiệu, danh mục sai đã báo lỗi ở trên.
+      // Placeholder ids so zod checks the other fields; bad brands and categories were reported above.
       brandId: brandId ?? randomUUID(),
       categoryId: categoryId ?? randomUUID(),
       name: text(first.values.get('name')),

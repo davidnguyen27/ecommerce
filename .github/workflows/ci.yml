@@ -1,8 +1,8 @@
-# CI cho mọi push và PR: lint và test web, typecheck, test API (Testcontainers), smoke toàn stack (docker compose)
-# và E2E bằng Playwright trên stack đó.
-# Runner ubuntu có sẵn Docker nên không cần secret: test dùng giá trị test, smoke tự sinh JWT_SECRET,
-# email ghi ra log, file giữ trong bộ nhớ, cổng thanh toán là cổng giả lập.
-# Không bật retry: CI Linux là cửa đánh giá test chập chờn trên Docker Desktop (ticket 15 của M0–M1).
+# CI for every push and PR: web lint and tests, typecheck, API tests (Testcontainers), full-stack smoke (docker compose)
+# and Playwright E2E on that stack.
+# Ubuntu runners have Docker, so no secrets are needed: tests use test values, smoke generates JWT_SECRET, email goes
+# to the log, files stay in memory, payments use the simulator.
+# No retries: Linux CI is the judge of flaky tests on Docker Desktop (M0–M1 ticket 15).
 name: CI
 
 on:
@@ -29,7 +29,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      # Test logic thuần của web (không cần Docker), chạy ở đây cho gọn.
+      # Pure-logic web tests (no Docker), run here to keep it simple.
       - run: pnpm --filter @ecommerce/web test
 
   typecheck:
@@ -56,7 +56,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # global-setup dựng Postgres bằng Testcontainers, qua Docker có sẵn trên runner.
+      # global-setup starts Postgres with Testcontainers, via the runner's Docker.
       - run: pnpm --filter @ecommerce/api test
 
   smoke:
@@ -65,15 +65,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-      # Không cài dependency và không cache: scripts/smoke.ts chỉ dùng module có sẵn của Node,
-      # còn image api và web được build trong docker compose.
+      # No dependency install and no cache: scripts/smoke.ts uses only Node built-ins, and the api and web images are built
+      # by docker compose.
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
       - run: pnpm smoke
 
-  # Luồng mua hàng bằng trình duyệt thật (ticket 14 của M3), trên stack của smoke. Chạy sau khi smoke đạt,
-  # tự dựng lại stack bằng `pnpm smoke --keep` (job riêng, máy riêng). Đỏ thì tải trace của Playwright trong artifact.
+  # Real-browser purchase flow (M3 ticket 14) on the smoke stack. Runs after smoke passes and rebuilds the stack with
+  # `pnpm smoke --keep` (separate job, separate machine). On red, download the Playwright trace from the artifacts.
   e2e:
     needs: smoke
     runs-on: ubuntu-latest

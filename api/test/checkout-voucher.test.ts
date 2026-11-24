@@ -8,8 +8,8 @@ const DAY = 24 * 60 * 60_000
 const at = (days: number) => new Date(Date.now() + days * DAY).toISOString()
 
 /**
- * Cửa hàng của `shop()` (AM-40 giá 2.000.000 còn 3 đôi, phí giao 30.000) và mã `TET2027` giảm 10% tối đa 500.000 cho
- * mọi hình thức bán, 1 lượt mỗi khách; `voucher` tạo thêm mã khác qua API quản trị.
+ * `shop()` (AM-40 at 2,000,000 with 3 pairs, shipping 30,000) and voucher `TET2027` at 10% up to 500,000 for every
+ * sale type, 1 use per customer; `voucher` creates more vouchers via the admin API.
  */
 async function voucherShop() {
   const app = await shop()
@@ -38,12 +38,12 @@ async function voucherShop() {
       voucherCode: 'tet2027',
       ...body,
     })
-  /** Khách đặt 1 đôi AM-40 kèm mã, mặc định với tiền giảm 200.000 như báo giá. */
+  /** A customer orders 1 pair of AM-40 with the voucher, by default with the 200,000 discount from the quote. */
   const order = (body: Record<string, unknown> = {}) =>
     app.checkout({ voucherCode: 'tet2027', discount: 200_000, ...body })
   const view = (res: { body: { code: number; token: string } }) =>
     request.get(`/api/orders/${res.body.code}`).query({ token: res.body.token })
-  /** Số đơn ở danh sách đơn của trang quản trị, mọi trạng thái; `voucherCode` lọc theo mã. */
+  /** Order count in the admin order list, every status; `voucherCode` filters by voucher. */
   const orderCount = async (voucherCode?: string) => {
     const res = await request
       .get('/api/admin/orders')
@@ -55,7 +55,7 @@ async function voucherShop() {
   return { ...app, voucher, quote, order, view, orderCount }
 }
 
-/** Khách khác: email và số điện thoại khác `ADDRESS`. */
+/** Another customer: email and phone different from `ADDRESS`. */
 const otherCustomer = (n: number) => ({
   address: { ...ADDRESS, email: `khach${n}@example.com`, phone: `091000000${n}` },
 })
@@ -138,7 +138,7 @@ describe('báo giá kèm mã giảm giá', () => {
       shortfall: 500_000,
     })
     expect(await reasonOf('ADIDAS')).toMatchObject({ applied: false, reason: 'not_applicable' })
-    // Mã không áp được thì báo giá như không có mã.
+    // A voucher that does not apply quotes as if there were none.
     expect((await app.quote({ voucherCode: 'CU2026' })).body).toMatchObject({ discount: 0, total: 2_030_000 })
   })
 
@@ -156,7 +156,7 @@ describe('báo giá kèm mã giảm giá', () => {
     expect((await app.quote({ email: 'khac@example.com', phone: '0900000000' })).body.voucher).toMatchObject({
       applied: true,
     })
-    // Email, số điện thoại chưa nhập xong không làm báo giá lỗi.
+    // Half-typed email and phone do not break the quote.
     expect((await app.quote({ email: 'an@', phone: '09' })).status).toBe(200)
   })
 
@@ -227,7 +227,7 @@ describe('đặt mua kèm mã giảm giá', () => {
     })
     expect((await app.order({ voucherCode: 'MOTLUOT' })).body.error.details.voucher.reason).toBe('exhausted')
     expect(await app.orderCount()).toBe(before)
-    // Đặt mua giới hạn 5 lần mỗi giờ theo IP (M3); các trường hợp còn lại ở test sau.
+    // Checkout is limited to 5 per hour per IP (M3); the other cases are in later tests.
   })
 
   it('cùng số điện thoại là cùng một khách; mã tắt sau khi khách áp thì 409', async () => {
@@ -237,7 +237,7 @@ describe('đặt mua kèm mã giảm giá', () => {
 
     const same = await app.order({ address: { ...ADDRESS, email: 'moi@example.com', phone: '0910000002' } })
     expect(same.body.error.details.voucher.reason).toBe('customer_limit')
-    // Cùng email viết hoa khác, số điện thoại khác: vẫn là cùng một khách.
+    // The same email in other case with another phone: still the same customer.
     const sameEmail = await app.order({ address: { ...ADDRESS, email: 'KHACH2@Example.com', phone: '0919999999' } })
     expect(sameEmail.body.error.details.voucher.reason).toBe('customer_limit')
     await app.request.post(`/api/admin/vouchers/${tet.id}/disable`).set(bearer(app.token))
@@ -284,7 +284,7 @@ describe('đặt mua kèm mã giảm giá', () => {
     expect((await app.order()).status).toBe(201)
     expect((await app.order()).body.error.details.voucher.reason).toBe('customer_limit')
 
-    // Job hết hạn không có endpoint: gọi thẳng hàm job với `now` sau hạn giữ hàng, rồi kiểm qua HTTP.
+    // The expiry job has no endpoint: call it with `now` after the reservation deadline, then check via HTTP.
     await expireOverdueOrders(app.expireDeps, new Date(Date.now() + 60 * 60_000))
 
     expect((await app.order()).status).toBe(201)
@@ -314,8 +314,8 @@ describe('đặt mua kèm mã giảm giá', () => {
 })
 
 describe('ràng buộc trong DB', () => {
-  // Không có đường HTTP nào ghi được đơn sai: thử ghi thẳng bằng prisma để chắc check constraint chặn (CODING_STANDARDS,
-  // ngoại lệ "bất biến mà API hiện tại chưa chạm tới").
+  // No HTTP path can write a bad order: write directly with prisma to confirm the check constraint blocks it
+  // (CODING_STANDARDS exception "bất biến mà API hiện tại chưa chạm tới").
   it('đơn không dùng mã (như đơn có từ trước M5) có tiền giảm 0; không ghi được tiền giảm thiếu mã hay tổng lệch', async () => {
     const app = await voucherShop()
     const res = await app.checkout()

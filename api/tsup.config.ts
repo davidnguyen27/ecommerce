@@ -4,7 +4,7 @@ export default defineConfig({
   entry: ['src/server.ts'],
   format: 'esm',
   target: 'node24',
-  // shared là mã nguồn TS trong workspace nên phải gộp vào bundle.
+  // shared is TS source in the workspace, so it must be bundled.
   noExternal: ['@ecommerce/shared'],
   clean: true,
 })

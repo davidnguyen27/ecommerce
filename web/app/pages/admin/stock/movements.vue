@@ -9,7 +9,8 @@ const session = useAdminSession()
 const route = useRoute()
 const result = ref<StockMovementPage | null>(null)
 const error = ref<string | null>(null)
-// `?variantId=` đến từ trang tồn hoặc trang soạn sản phẩm. Ngày hiểu theo giờ của trình duyệt; `to` tính hết ngày đã chọn.
+// `?variantId=` comes from the stock or product editor page. Dates use the browser's time zone; `to` covers the whole
+// day.
 const filters = reactive({
   variantId: typeof route.query.variantId === 'string' ? route.query.variantId : '',
   kind: '',
@@ -57,7 +58,7 @@ function goTo(page: number) {
 }
 
 const lastPage = computed(() => Math.max(1, Math.ceil((result.value?.total ?? 0) / PAGE_SIZE)))
-/** SKU đang lọc, lấy từ dòng sổ đầu tiên; chưa có dòng nào thì không biết SKU. */
+/** The filtered SKU, from the first ledger row; unknown while there are none. */
 const filteredSku = computed(() => (filters.variantId ? result.value?.items[0]?.variant.sku : undefined))
 
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n))

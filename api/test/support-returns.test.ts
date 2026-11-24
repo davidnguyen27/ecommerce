@@ -18,8 +18,8 @@ type AdminView = {
 }
 
 /**
- * Cửa hàng có cổng giả lập (AM-40 giá 2.000.000, còn 3 đôi), một nhân viên bán hàng và một nhân viên kho.
- * `delivered(quantity, body)` đặt đơn vãng lai, trả đủ, chuẩn bị, bàn giao, đã giao. `ask` gửi yêu cầu trả qua link đơn.
+ * A shop with the simulator (AM-40 at 2,000,000, 3 pairs), a sales clerk and a warehouse clerk. `delivered(quantity,
+ * body)` places a guest order, pays, prepares, hands over, delivers. `ask` sends a return request via the order link.
  */
 async function returnShop() {
   const app = await shop({ simulator: true })
@@ -135,7 +135,7 @@ describe('gửi yêu cầu trả hàng', () => {
     const placed = await delivered()
     expect((await ask(placed, [{ variantId: v41.id, quantity: 1, reason: 'other' }])).status).toBe(400)
     expect((await ask(placed)).status).toBe(201)
-    // Dòng có 2 đôi, yêu cầu trước đã chiếm 1: trả 2 nữa thì vượt.
+    // The line has 2 pairs and an earlier request took 1: returning 2 more exceeds it.
     const over = await ask(placed, [{ variantId: v40.id, quantity: 2, reason: 'other' }])
     expect(over.status).toBe(409)
     expect(over.body.error.message).toContain('chỉ còn trả hay đổi được 1')
@@ -217,7 +217,7 @@ describe('xử lý yêu cầu trả hàng', () => {
         saleTypes: ['standard'],
       })
     expect(voucher.status).toBe(201)
-    // 2 đôi × 2.000.000, giảm 10% = 400.000 chia cho dòng; trả 1 đôi thì trừ 200.000.
+    // 2 pairs × 2,000,000, 10% off = 400,000 spread on the line; returning 1 pair deducts 200,000.
     const placed = await delivered(2, { voucherCode: 'tet2027', discount: 400_000 })
     const code = (await ask(placed)).body.code as number
     await admin(code, 'decide', { decision: 'accepted', message: 'OK' })
@@ -286,7 +286,7 @@ describe('hạn đổi trả', () => {
     const get = () => request.get('/api/admin/return-windows').set(bearer(warehouse.accessToken))
 
     expect((await get()).body.items).toHaveLength(5)
-    // Chủ doanh nghiệp chốt 14 ngày cho mọi nhóm hàng (migration 20261118000100).
+    // The owner settled on 14 days for every product type (migration 20261118000100).
     expect((await get()).body.items.every((i: { days: number | null }) => i.days === 14)).toBe(true)
     const put = (items: Record<string, unknown>[], as = sales.accessToken) =>
       request.put('/api/admin/return-windows').set(bearer(as)).send({ items })
@@ -335,7 +335,7 @@ describe('khách thấy khoản hoàn; lọc quá hạn đổi trả', () => {
     const { delivered, ask, request, token, prisma } = await returnShop()
     const late = (await ask(await delivered(1))).body.code as number
     await ask(await delivered(1))
-    // Dựng trạng thái: lúc gửi đã quá hạn 3 ngày (bảng sự kiện đơn chỉ ghi thêm nên không lùi được lúc giao).
+    // Set up the state: submitted 3 days late (order events are append-only, so delivery time cannot be moved back).
     await prisma.supportRequest.update({ where: { code: late }, data: { returnWindowDays: 7, overdueDays: 3 } })
 
     const list = await request
@@ -370,7 +370,7 @@ describe('kết thúc yêu cầu đã nhận hàng; hoàn tạo lại', () => {
     expect((await admin(code, 'receive', { lines }, warehouse.accessToken)).status).toBe(200)
     const proposed = await admin(code, 'refund', { refundAmount: 2_000_000 })
     const refundId = proposed.body.refunds[0].id as string
-    // Dựng trạng thái: cổng báo hoàn thất bại.
+    // Set up the state: the gateway reports a failed refund.
     const transaction = await prisma.paymentTransaction.findFirstOrThrow({ where: { order: { code: placed.code } } })
     await prisma.refund.update({
       where: { id: refundId },

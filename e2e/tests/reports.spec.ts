@@ -1,8 +1,8 @@
-// Báo cáo (M7), bằng trình duyệt thật trên stack smoke:
-// 1. Khách mua và trả; đơn được giao. Owner mở Báo cáo, thấy doanh thu của kỳ khớp API; đổi kỳ sang tháng trước;
-//    xuất Excel tải được file đúng tên.
-// 2. Kế toán thấy mục Báo cáo và khối "Cần xử lý" ở trang chủ; nhân viên kho không thấy cả hai.
-// Số liệu so với API quản trị chứ không so với số cố định, vì các spec khác cũng giao đơn trên cùng stack.
+// Reports (M7), in a real browser on the smoke stack:
+// 1. A customer buys and pays; the order is delivered. The owner opens Reports and sees the period's revenue matching
+//    the API; switches to last month; Excel export downloads a correctly named file.
+// 2. The accountant sees Reports and the "Cần xử lý" block on the home page; the warehouse clerk sees neither.
+// Figures are compared with the admin API, not fixed numbers, since other specs deliver orders on the same stack.
 import { expect, test, type Browser } from '@playwright/test'
 import type { RevenueReport } from '@ecommerce/shared'
 import { adminLogin } from '../support/admin-login.ts'
@@ -11,9 +11,9 @@ import { resetRateLimits } from '../support/rate-limit.ts'
 import { ACCOUNTANT, AdminApi, OWNER, PRICE, WAREHOUSE } from '../support/stack.ts'
 
 const DAY = 24 * 60 * 60_000
-/** Ngày lịch theo giờ Việt Nam `YYYY-MM-DD`. */
+/** Vietnam-time calendar day `YYYY-MM-DD`. */
 const vnDate = (date: Date) => new Date(date.getTime() + 7 * 60 * 60_000).toISOString().slice(0, 10)
-/** Như `formatVnd` của trang quản trị. */
+/** Like the admin page's `formatVnd`. */
 const vnd = (amount: number) => `${new Intl.NumberFormat('vi-VN').format(amount)} ₫`
 
 test.beforeAll(async () => {
@@ -39,7 +39,7 @@ test('owner thấy doanh thu của đơn vừa giao, đổi kỳ sang tháng tr�
   await expect(page.getByRole('heading', { level: 1, name: 'Báo cáo' })).toBeVisible()
   await expect(page.getByTestId('revenue-net')).toHaveText(vnd(current.total.net))
 
-  // Tháng trước: ngày cuối là hôm trước ngày 1 của tháng này.
+  // Last month: its last day is the day before the 1st of this month.
   const lastDay = vnDate(new Date(Date.parse(`${monthStart}T00:00:00+07:00`) - DAY))
   const from = `${lastDay.slice(0, 8)}01`
   const previous = await api.get<RevenueReport>(`/api/admin/reports/revenue?from=${from}&to=${lastDay}`)
@@ -56,7 +56,7 @@ test('owner thấy doanh thu của đơn vừa giao, đổi kỳ sang tháng tr�
   expect(download.suggestedFilename()).toBe(`bao-cao-doanh-thu-${from}-${lastDay}.xlsx`)
 })
 
-/** Trang chủ quản trị của một nhân viên trong phiên trình duyệt riêng. */
+/** A staff member's admin home in a separate browser session. */
 async function dashboardOf(browser: Browser, credentials: { email: string; password: string }) {
   const context = await browser.newContext()
   const page = await context.newPage()

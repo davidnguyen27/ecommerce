@@ -2,28 +2,28 @@
 import { ORDER_CANCEL_CAUSE_CUSTOMER_TEXT, type PublicOrder } from '@ecommerce/shared'
 
 /**
- * Một đơn như khách thấy: trạng thái đơn, thanh toán và giao hàng tách riêng, thời gian giữ hàng còn lại,
- * đơn vị vận chuyển và mã vận đơn khi đã bàn giao, dòng đơn, tiền và địa chỉ nhận.
- * Dùng chung cho trang đơn qua token và trang đơn trong tài khoản; nút thao tác đặt qua slot `actions`.
+ * An order as customers see it: order, payment and fulfillment status apart, time left on the reservation, carrier
+ * and tracking once handed over, lines, money and address. Shared by the token order page and the account order page;
+ * action buttons go in the `actions` slot.
  */
 const props = defineProps<{
   order: PublicOrder
-  /** Nơi dùng có đường hủy đơn (token hay tài khoản): hiện nút hủy khi đơn còn chờ thanh toán. */
+  /** The caller has a cancel path (token or account): shows the cancel button while the order awaits payment. */
   cancellable?: boolean
   cancelling?: boolean
-  /** Đang tạo link trả phần còn lại (nơi dùng gọi API khi nhận `payRemainder`). */
+  /** Creating the remaining-balance link (the caller calls the API on `payRemainder`). */
   payingRemainder?: boolean
 }>()
 const emit = defineEmits<{ cancel: []; payRemainder: [] }>()
 
 const deliveryText = (from: string, to: string) => `${formatDateOnly(from)} – ${formatDateOnly(to)}`
-// Nhân viên đã đổi thời gian giao của đợt sau khi khách đặt (ticket 09): hiện cả thời gian mới lẫn lời hẹn lúc đặt.
+// Staff changed the campaign's delivery after the order (ticket 09): show the new dates and the original promise.
 const deliveryChanged = computed(() => {
   const p = props.order.preorder
   return p !== null && (p.currentDeliveryFrom !== p.deliveryFrom || p.currentDeliveryTo !== p.deliveryTo)
 })
 
-// Đơn đã hủy giữ trạng thái thanh toán "đã cọc" (ADR 0014) nhưng không còn phần nào phải trả.
+// A cancelled order keeps "deposited" as payment status (ADR 0014) but nothing is left to pay.
 const awaitingRemainder = computed(
   () =>
     props.order.status === 'processing' &&
@@ -31,7 +31,7 @@ const awaitingRemainder = computed(
     props.order.preorder?.remainderDueAt != null,
 )
 
-// Đơn đặt trước chờ cọc chỉ giữ suất, không giữ hàng (ADR 0013).
+// A pending-deposit pre-order holds allocation, not stock (ADR 0013).
 const isPreorder = computed(() => props.order.preorder !== null)
 const heldThing = computed(() => (isPreorder.value ? 'Suất đặt trước' : 'Hàng'))
 
@@ -40,8 +40,8 @@ function requestCancel() {
     emit('cancel')
 }
 
-// Giỏ đã được làm trống lúc đặt mua: đơn hết hạn thì đưa các dòng đơn trở lại giỏ để khách đặt lại.
-// Giá là giá lúc đặt; trang giỏ tự báo nếu giá hay tồn đã đổi.
+// The cart was emptied at checkout: when the order expires, put its lines back so the customer can reorder.
+// Prices are the order-time prices; the cart page reports any price or stock change.
 const cart = useCart()
 async function backToCart() {
   for (const line of props.order.lines) {
@@ -50,7 +50,7 @@ async function backToCart() {
   await navigateTo('/gio-hang')
 }
 
-// Đồng hồ chỉ chạy ở trình duyệt; trang đơn không SSR dữ liệu đơn nên không lệch lúc hydrate.
+// The countdown runs only in the browser; the order page does not SSR order data, so hydration never mismatches.
 const now = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
@@ -103,7 +103,7 @@ const remainingText = computed(() => {
       <template v-else>Đã hết thời gian giữ {{ isPreorder ? 'suất' : 'hàng' }}.</template>
     </div>
 
-    <!-- Đơn đặt trước không nằm trong giỏ (ADR 0012): hết hạn thì khách đặt lại từ trang sản phẩm. -->
+    <!-- Pre-orders are not in the cart (ADR 0012): after expiry the customer reorders from the product page. -->
     <p
       v-if="order.status === 'cancelled' && order.cancelReason === 'expired' && isPreorder"
       class="rounded-md border border-border bg-card px-4 py-3 text-sm"
@@ -124,7 +124,7 @@ const remainingText = computed(() => {
         Quay lại giỏ hàng
       </button>
     </div>
-    <!-- Đơn đã nhận tiền bị cửa hàng hủy (M6a): lý do và tiền hoàn; hoàn tiền theo dõi riêng (ADR 0014). -->
+    <!-- A paid order cancelled by the shop (M6a): cause and refund; refunds are tracked separately (ADR 0014). -->
     <div
       v-else-if="order.status === 'cancelled' && order.cancelCause"
       class="space-y-2 rounded-md border border-border bg-card px-4 py-3 text-sm"
@@ -222,7 +222,7 @@ const remainingText = computed(() => {
       </button>
     </div>
 
-    <!-- Đơn đặt trước đã cọc và hàng đã về đủ: trả phần còn lại để shop chuẩn bị và giao hàng. -->
+    <!-- A deposited pre-order with stock fully arrived: pay the remainder so the shop can prepare and ship. -->
     <div
       v-if="awaitingRemainder && order.preorder"
       :class="[

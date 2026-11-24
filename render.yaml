@@ -1,5 +1,6 @@
-# Blueprint của Render cho API bản demo (ADR 0011, docs/deploy.md). Web chạy trên Netlify (web/netlify.toml), DB trên
-# Neon, ảnh trên Cloudflare R2. Biến `sync: false` điền trong dashboard Render khi tạo Blueprint; không ghi khóa ở đây.
+# Render Blueprint for the demo API (ADR 0011, docs/deploy.md). The web runs on Netlify (web/netlify.toml), the DB on
+# Neon, images on Cloudflare R2. `sync: false` vars are filled in the Render dashboard when creating the Blueprint; no
+# keys here.
 services:
   - type: web
     name: atelier-demo-api
@@ -8,21 +9,22 @@ services:
     region: singapore
     dockerfilePath: api/Dockerfile
     dockerContext: .
-    # Gói Free không có pre-deploy command: chạy migration rồi mới khởi động API (script `start:migrate` của api,
-    # WORKDIR của image là /repo/api). Render không tách được `sh -c "..."` (cả chuỗi thành tên lệnh), nên để lệnh đơn.
+    # The Free plan has no pre-deploy command: run migrations, then start the API (the api `start:migrate` script; the
+    # image WORKDIR is /repo/api). Render cannot split `sh -c "..."` (the whole string becomes the command), so one command.
     dockerCommand: pnpm start:migrate
     healthCheckPath: /healthz
     autoDeploy: true
     envVars:
       - key: JWT_SECRET
         generateValue: true
-      # Neon: connection string direct (không có -pooler), vì pg-boss dùng LISTEN/NOTIFY.
+      # Neon: the direct connection string (no -pooler), since pg-boss uses LISTEN/NOTIFY.
       - key: DATABASE_URL
         sync: false
-      # URL web trên Netlify, ví dụ https://<site>.netlify.app: link trong email, trang VNPAY đưa khách về.
+      # Web URL on Netlify, e.g. https://<site>.netlify.app: links in emails, the page VNPAY returns customers to.
       - key: SITE_URL
         sync: false
-      # Qua Netlify: "<khách>, <Netlify nội bộ 100.64.x>, <Netlify 47.130.x>, <Cloudflare>, <10.x>": 5 tầng, đo bằng audit (ADR 0011).
+      # Via Netlify: "<client>, <Netlify internal 100.64.x>, <Netlify 47.130.x>, <Cloudflare>, <10.x>": 5 hops, measured
+      # with the audit log (ADR 0011).
       - key: TRUST_PROXY
         value: '5'
       - key: MAIL_PROVIDER
@@ -47,10 +49,10 @@ services:
         sync: false
       - key: VNPAY_ENV
         value: sandbox
-      # Image chạy NODE_ENV=production; khóa VNPAY sandbox ở production cần dòng này (bản demo, không nhận tiền thật).
+      # The image runs NODE_ENV=production; VNPAY sandbox keys in production need this line (demo, no real money).
       - key: PAYMENT_SIMULATOR
         value: allow
-      # Chatbot (ADR 0017): khóa gói miễn phí; để trống thì chatbot tự tắt.
+      # Chatbot (ADR 0017): free-tier keys; empty turns the chatbot off.
       - key: GROQ_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY

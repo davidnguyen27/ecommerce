@@ -10,7 +10,7 @@ import type {
   WarrantyReportOutcome,
 } from '@ecommerce/shared'
 
-// Nhãn tiếng Việt cho file Excel báo cáo; giữ khớp với nhãn trang quản trị ở `web/app/utils/*Labels.ts`.
+// Vietnamese labels for report Excel files; keep in sync with the admin labels in `web/app/utils/*Labels.ts`.
 
 export const PRODUCT_TYPE: Record<ProductType, string> = {
   footwear: 'Giày dép',

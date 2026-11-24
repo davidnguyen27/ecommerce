@@ -6,15 +6,18 @@ import { ProductStatus, Sku, VariantStatus } from './products.ts'
 import { PageQuery, pageOf } from './pagination.ts'
 import type { Permission } from './staff.ts'
 
-/** Loại biến động trong sổ xuất nhập. */
+/** Ledger movement kind. */
 export const StockMovementKind = z.enum(['receipt', 'adjustment', 'opening', 'sale', 'return'])
 export type StockMovementKind = z.infer<typeof StockMovementKind>
 
-/** Lý do điều chỉnh: kiểm kê, hàng hỏng, mất hàng, khác. */
+/** Adjustment reason: stocktake, damaged, lost, other. */
 export const StockAdjustmentReason = z.enum(['stocktake', 'damaged', 'lost', 'other'])
 export type StockAdjustmentReason = z.infer<typeof StockAdjustmentReason>
 
-/** Ai soạn danh mục, đặt giá hoặc giữ kho đều xem được tồn và sổ xuất nhập; đổi tồn cần `stock.adjust`. */
+/**
+ * Catalog editors, price setters and warehouse staff can view stock and the ledger; changing stock needs
+ * `stock.adjust`.
+ */
 export const STOCK_VIEW_PERMISSIONS = [
   'catalog.edit',
   'price.edit',
@@ -22,8 +25,8 @@ export const STOCK_VIEW_PERMISSIONS = [
 ] as const satisfies readonly Permission[]
 
 /**
- * Cách nhập số của từng lý do điều chỉnh: kiểm kê nhập số đếm thực tế (`countedQuantity`); hỏng, mất nhập số giảm;
- * khác nhập số có dấu. API và form quản trị cùng đọc bảng này.
+ * How each adjustment reason takes its number: stocktake enters the counted quantity (`countedQuantity`); damaged and
+ * lost enter the decrease; other enters a signed change. The API and the admin form both read this table.
  */
 export const ADJUSTMENT_INPUT = {
   stocktake: { field: 'countedQuantity', mode: 'count' },
@@ -32,7 +35,7 @@ export const ADJUSTMENT_INPUT = {
   other: { field: 'quantity', mode: 'signed' },
 } as const satisfies Record<StockAdjustmentReason, { field: string; mode: 'count' | 'decrease' | 'signed' }>
 
-/** Thay đổi tồn (có dấu) khi nhân viên nhập `amount` với lý do này, lúc tồn đang là `onHand`. */
+/** Signed stock change when staff enter `amount` with this reason while on-hand is `onHand`. */
 export function adjustmentDelta(reason: StockAdjustmentReason, amount: number, onHand: number) {
   switch (ADJUSTMENT_INPUT[reason].mode) {
     case 'count':
@@ -49,14 +52,17 @@ const Note = z.string().trim().max(1000).default('')
 
 const AdjustmentBase = z.object({
   variantId: z.uuid(),
-  /** Tồn lúc nhân viên mở form; khác tồn hiện tại thì bị từ chối để không ghi đè một thay đổi chen vào. */
+  /**
+   * On-hand when the form opened; a mismatch with the current value is rejected so a concurrent change is not
+   * overwritten.
+   */
   expectedOnHand: z.number().int().min(0),
   note: Note,
 })
 
 /**
- * Một lần điều chỉnh tồn của một biến thể. Kiểm kê gửi số đếm thực tế; hỏng, mất gửi số giảm;
- * khác gửi số tăng hoặc giảm (có dấu) và bắt buộc ghi chú.
+ * One stock adjustment of a variant. Stocktake sends the counted quantity; damaged and lost send the decrease; other
+ * sends a signed change and requires a note.
  */
 export const StockAdjustmentRequest = z.discriminatedUnion('reason', [
   AdjustmentBase.extend({ reason: z.literal('stocktake'), countedQuantity: Quantity.min(0) }),
@@ -70,14 +76,14 @@ export const StockAdjustmentRequest = z.discriminatedUnion('reason', [
 ])
 export type StockAdjustmentRequest = z.input<typeof StockAdjustmentRequest>
 
-/** Tồn của một biến thể ở trang quản trị. */
+/** A variant's stock on the admin page. */
 export const StockItem = z.object({
   variantId: z.string(),
   sku: z.string(),
   attributes: AttributeValues,
   status: VariantStatus,
   onHand: z.number(),
-  /** Số đang giữ cho đơn (ADR 0007), nằm trong `onHand`. */
+  /** Reserved for orders (ADR 0007), part of `onHand`. */
   reserved: z.number(),
   product: z.object({ id: z.string(), name: z.string(), productType: ProductType, status: ProductStatus }),
   brand: z.object({ id: z.string(), name: z.string() }),
@@ -87,7 +93,7 @@ export type StockItem = z.infer<typeof StockItem>
 export const StockSort = z.enum(['on_hand_asc', 'on_hand_desc', 'name'])
 export type StockSort = z.infer<typeof StockSort>
 
-/** Query string của `GET /api/admin/stock`. `q` tìm theo SKU hoặc tên sản phẩm. */
+/** Query string of `GET /api/admin/stock`. `q` searches SKU or product name. */
 export const StockQuery = z.object({
   q: z.string().trim().max(200).optional(),
   productType: ProductType.optional(),
@@ -101,20 +107,20 @@ export type StockQuery = z.infer<typeof StockQuery>
 export const StockPage = pageOf(StockItem)
 export type StockPage = z.infer<typeof StockPage>
 
-/** Một dòng sổ xuất nhập. */
+/** One ledger row. */
 export const StockMovement = z.object({
   id: z.string(),
   kind: StockMovementKind,
-  /** Có dấu: dương là tăng, âm là giảm. */
+  /** Signed: positive increases, negative decreases. */
   quantity: z.number(),
   onHandAfter: z.number(),
   reason: StockAdjustmentReason.nullable(),
   note: z.string(),
-  /** Phiếu nhập của dòng loại nhập kho; loại khác thì `null`. */
+  /** The receipt of a receipt row; `null` for other kinds. */
   receiptId: z.string().nullable(),
-  /** Mã đơn của dòng xuất bán hay hàng hoàn về; loại khác thì `null`. */
+  /** Order code of a sale or return row; `null` for other kinds. */
   orderCode: z.number().nullable(),
-  /** Mã yêu cầu hỗ trợ của dòng nhập lại (trả hàng) hay xuất bán (giao hàng đổi); loại khác thì `null`. */
+  /** Support request code of a restock (return) or sale (exchange shipment) row; `null` for other kinds. */
   supportRequestCode: z.number().nullable(),
   variant: z.object({ id: z.string(), sku: z.string() }),
   product: z.object({ id: z.string(), name: z.string() }),
@@ -123,7 +129,7 @@ export const StockMovement = z.object({
 })
 export type StockMovement = z.infer<typeof StockMovement>
 
-/** Query string của `GET /api/admin/stock/movements`. Khoảng thời gian tính `from <= createdAt < to`. */
+/** Query string of `GET /api/admin/stock/movements`. The range is `from <= createdAt < to`. */
 export const StockMovementQuery = z.object({
   variantId: z.uuid().optional(),
   kind: StockMovementKind.optional(),
@@ -136,12 +142,12 @@ export type StockMovementQuery = z.infer<typeof StockMovementQuery>
 export const StockMovementPage = pageOf(StockMovement)
 export type StockMovementPage = z.infer<typeof StockMovementPage>
 
-// Phiếu nhập
+// Stock receipts
 
-/** Ghi một lô hàng về kho: nhiều dòng SKU và số lượng, ghi toàn bộ hoặc không dòng nào. SKU không được trùng. */
+/** Records a stock arrival: several SKU and quantity lines, all written or none. SKUs must be unique. */
 export const StockReceiptRequest = z.object({
   supplierName: z.string().trim().min(1, 'Cần tên nhà cung cấp').max(200),
-  /** Ngày hàng về, `YYYY-MM-DD`. */
+  /** Arrival date, `YYYY-MM-DD`. */
   receivedOn: z.iso.date(),
   note: Note,
   lines: z
@@ -151,13 +157,14 @@ export const StockReceiptRequest = z.object({
 })
 export type StockReceiptRequest = z.input<typeof StockReceiptRequest>
 
-/** Body của `POST /api/admin/stock/receipts/preview`: các dòng định nhập, kiểm như lúc ghi phiếu. */
+/** Body of `POST /api/admin/stock/receipts/preview`: the planned lines, checked as when recording. */
 export const StockReceiptPreviewRequest = StockReceiptRequest.pick({ lines: true })
 export type StockReceiptPreviewRequest = z.input<typeof StockReceiptPreviewRequest>
 
 /**
- * Hàng định nhập sẽ được chia thế nào, không ghi gì (ADR 0013): số giữ ngay cho đơn đặt trước đã cọc đang chờ, số đơn
- * được chia, số đơn sẽ về đủ, và số thành hàng sẵn. Có thể lệch với lúc ghi nếu có đơn cọc xen vào giữa.
+ * How the planned arrival would be allocated, writing nothing (ADR 0013): units reserved at once for waiting deposited
+ * pre-orders, orders allocated, orders becoming fully arrived, and units left as regular stock. May differ at record
+ * time if a deposit lands in between.
  */
 export const StockReceiptPreview = z.object({
   lines: z.array(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createTestApp } from './support/test-app.ts'
 
-// Đăng nhập là endpoint thật nhận dữ liệu vào, đi qua đúng đường kiểm tra dữ liệu chung.
+// Sign-in is a real endpoint taking input, going through the shared validation path.
 const LOGIN = '/api/admin/auth/login'
 
 describe('cấu trúc lỗi thống nhất', () => {

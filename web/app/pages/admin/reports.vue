@@ -19,7 +19,7 @@ const period = useReportPeriod()
 const form = reactive({ ...period.value })
 const error = ref<string | null>(null)
 watch(period, (value) => Object.assign(form, value))
-// Chỉ báo cáo theo ngày/tháng mới dùng cách nhóm; các tab khác là bảng của cả kỳ.
+// Only the day/month reports use grouping; other tabs are whole-period tables.
 const groupable = computed(() => ['/admin/reports/revenue', '/admin/reports/collections'].includes(route.path))
 
 function apply() {
@@ -48,7 +48,7 @@ function apply() {
       <NuxtLink v-for="tab in TABS" :key="tab.to" :to="{ path: tab.to, query: route.query }" class="report-tab">{{
         tab.label
       }}</NuxtLink>
-      <!-- Báo cáo chatbot là trang riêng (quyền chatbot.manage, không cần report.view), cùng kỳ đang chọn. -->
+      <!-- The chatbot report is a separate page (chatbot.manage, no report.view needed), with the same period. -->
       <NuxtLink
         v-if="session.canOpen('/admin/chatbot/report')"
         :to="{ path: '/admin/chatbot/report', query: route.query }"

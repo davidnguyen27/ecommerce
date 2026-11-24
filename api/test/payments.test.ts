@@ -7,7 +7,7 @@ import { bearer } from './support/staff.ts'
 
 const TOTAL = 2_030_000
 
-/** Chờ thư "đã nhận thanh toán" của đơn qua hàng đợi job. */
+/** Waits for the order's "payment received" email via the job queue. */
 async function paymentMails(mailer: InMemoryMailer, code: number, count = 1) {
   return vi.waitFor(
     () => {
@@ -21,14 +21,14 @@ async function paymentMails(mailer: InMemoryMailer, code: number, count = 1) {
 
 type App = Awaited<ReturnType<typeof shop>>
 
-/** Giao dịch thanh toán của đơn, đọc ở chi tiết đơn trang quản trị. */
+/** The order's payment transactions, read from the admin order detail. */
 async function transactions({ request, token }: App, code: number) {
   const res = await request.get(`/api/admin/orders/${code}`).set(bearer(token))
   expect(res.status).toBe(200)
   return res.body.payments as { amount: number; reference: string; source: string }[]
 }
 
-/** Mọi mục cần đối soát, cũ trước. */
+/** Every reconciliation item, oldest first. */
 async function reconciliation({ request, token }: App) {
   const res = await request.get('/api/admin/reconciliation').query({ status: 'all' }).set(bearer(token))
   expect(res.status).toBe(200)
@@ -37,13 +37,13 @@ async function reconciliation({ request, token }: App) {
   )
 }
 
-/** Cổng trả lời truy vấn: đơn đã nhận một khoản. */
+/** The gateway answers a query: the order received one payment. */
 const paidInfo = (amount: number, reference: string): PaymentInfo => ({
   status: 'paid',
   transactions: [{ reference, amount, paidAt: new Date('2026-11-02T03:20:00Z') }],
 })
 
-/** Cửa hàng đã có một đơn AM-40 chờ thanh toán, tổng 2.030.000. */
+/** A shop with one pending AM-40 order, total 2,030,000. */
 async function pendingOrder() {
   const app = await shop()
   const res = await app.checkout()
@@ -83,7 +83,7 @@ describe('ghi nhận thanh toán qua IPN', () => {
     expect(mail).toMatchObject({ to: 'an@example.com', subject: `Đã nhận thanh toán đơn hàng #${code}` })
     expect(mail!.text).toContain('Air Max')
     expect(mail!.text).toContain('2.030.000')
-    // Link trong thư mở được đơn bằng token mới cấp cho thư.
+    // The email link opens the order with the token issued for the email.
     const link = /https:\/\/shop\.test\/don-hang\/(\d+)\?token=([\w-]+)/.exec(mail!.text)
     expect(link?.[1]).toBe(String(code))
     const viaMail = await request.get(`/api/orders/${code}`).query({ token: link![2] })
@@ -130,7 +130,7 @@ describe('ghi nhận thanh toán qua IPN', () => {
     const cancelled = await ipn(
       signedIpn(ipnParams(code, TOTAL, { vnp_ResponseCode: '24', vnp_TransactionStatus: '02' })),
     )
-    // Mẫu PHP của VNPAY chỉ xét một mã; hệ thống đòi cả hai mã là 00.
+    // VNPAY's PHP sample checks one code; we require both to be 00.
     const halfOk = await ipn(signedIpn(ipnParams(code, TOTAL, { vnp_TransactionStatus: '01' })))
 
     for (const res of [cancelled, halfOk]) expect(res.body.RspCode).toBe('00')
@@ -316,7 +316,7 @@ describe('bảng giao dịch thanh toán', () => {
     const { code, ipn, prisma } = await pendingOrder()
     await ipn(signedIpn(ipnParams(code, TOTAL)))
 
-    // Không có API nào sửa giao dịch; thử thẳng bằng SQL để chắc trigger chặn.
+    // No API edits transactions; try with SQL directly to confirm the trigger blocks it.
     await expect(prisma.$executeRaw`UPDATE "payment_transaction" SET "amount" = 1`).rejects.toThrow(
       /chỉ cho phép thêm mới/,
     )
@@ -353,7 +353,7 @@ describe('ghi nhận từ trang quay về VNPAY', () => {
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ RspCode: '00', Message: 'Confirm Success' })
     expect((await app.order()).body).toMatchObject({ status: 'processing', paymentStatus: 'paid' })
-    // `pendingOrder` đè `token` bằng token đơn; trang quản trị cần token admin.
+    // `pendingOrder` overrides `token` with the order token; the admin page needs the admin token.
     expect(await transactions({ ...app, token: app.adminToken }, app.code)).toEqual([
       expect.objectContaining({ source: 'return', amount: TOTAL }),
     ])

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { PublicSupportRequest } from '@ecommerce/shared'
 
-// Yêu cầu hỗ trợ của khách vãng lai: mở bằng mã đơn và token tra cứu đơn trong link email (`?don=…&token=…`), hoặc
-// token đã nhớ của tab đặt mua. Yêu cầu không gắn đơn (chatbot chuyển nhân viên, M8) mở bằng token riêng của yêu cầu
-// (`?token=…`, không có `don`). Dữ liệu cá nhân: chỉ nạp ở trình duyệt.
+// A guest's support request: opened with the order code and lookup token from the email link (`?don=…&token=…`), or the
+// checkout tab's remembered token. Requests without an order (chatbot handoff, M8) open with their own token
+// (`?token=…`, no `don`). Personal data: loaded only in the browser.
 const route = useRoute()
 const code = computed(() => Number(route.params.code))
 const orderCode = computed(() => (typeof route.query.don === 'string' ? Number(route.query.don) : NaN))

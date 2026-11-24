@@ -9,7 +9,7 @@ async function post(request: Request, token: string, path: string, body: Record<
   return res.body as { id: string }
 }
 
-/** Owner đã đăng nhập; thương hiệu Nike, Chanel; danh mục Sneaker > Chạy bộ (giày dép) và Nước hoa nữ. */
+/** Signed-in owner; brands Nike, Chanel; categories Sneaker > Chạy bộ (footwear) and Nước hoa nữ. */
 async function shop() {
   const app = await appWithOwner()
   const { accessToken: token } = await login(app.request, OWNER.email, OWNER.password)
@@ -43,14 +43,14 @@ async function template(request: Request, token: string) {
   return workbook
 }
 
-/** Key trong ngoặc vuông ở cuối tiêu đề cột, ví dụ `Màu [bt.mau]` → `bt.mau`. */
+/** The bracketed key at the end of a column header, e.g. `Màu [bt.mau]` → `bt.mau`. */
 const keyOf = (header: unknown) => /\[([^\]]+)\]\s*$/.exec(String(header ?? ''))?.[1]
 
 const headerKeys = (sheet: ExcelJS.Worksheet) => (sheet.getRow(1).values as unknown[]).slice(1).map(keyOf)
 
 type Row = Record<string, string | number | boolean>
 
-/** Điền các dòng vào sheet của file mẫu theo key cột, rồi trả file .xlsx. */
+/** Fills rows into the template sheet by column key, then returns the .xlsx file. */
 async function fill(workbook: ExcelJS.Workbook, sheetName: string, rows: Row[]) {
   const sheet = workbook.getWorksheet(sheetName)!
   const keys = headerKeys(sheet)
@@ -122,7 +122,7 @@ describe('file mẫu', () => {
     const footwear = workbook.getWorksheet('Giày dép')!
     const lists = workbook.getWorksheet('Danh sách')!
     const columnOf = (key: string) => headerKeys(footwear).indexOf(key) + 1
-    /** Giá trị của vùng `'Danh sách'!$B$2:$B$5` trên sheet ẩn. */
+    /** Values of range `'Danh sách'!$B$2:$B$5` on the hidden sheet. */
     const listValues = (formula: string) => {
       const [, column, from, to] = /\$([A-Z]+)\$(\d+):\$[A-Z]+\$(\d+)/.exec(formula)!
       return Array.from(
@@ -515,7 +515,7 @@ describe('quyền và giới hạn', () => {
   })
 })
 
-/** File zip không nén, đủ để giả một file Office khác Excel (ví dụ .docx) mà không cần thêm thư viện. */
+/** An uncompressed zip, enough to fake a non-Excel Office file (e.g. .docx) without another library. */
 function zipOf(files: Record<string, string>) {
   const locals: Buffer[] = []
   const centrals: Buffer[] = []

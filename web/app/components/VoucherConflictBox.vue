@@ -2,8 +2,8 @@
 import type { VoucherConflict } from '@ecommerce/shared'
 
 /**
- * Hộp chọn khi đặt bị 409 về mã: lý do, các khoản khi không dùng mã (đặt trước có thêm tiền cọc), và hai lựa chọn. Tiền
- * giảm chỉ đổi (`changed`) thì báo giá mới đã hiện số mới, chỉ cần quay lại xác nhận.
+ * Choice box when ordering hits a voucher 409: the reason, amounts without the voucher (plus deposit for pre-orders),
+ * and two options. When only the discount changed (`changed`), the new quote already shows it; just confirm again.
  */
 defineProps<{ conflict: VoucherConflict; submitting: boolean }>()
 const emit = defineEmits<{ proceed: []; back: [] }>()

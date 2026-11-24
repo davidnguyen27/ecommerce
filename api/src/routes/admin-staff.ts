@@ -31,8 +31,8 @@ function toSummary(staff: Staff): StaffSummary {
 }
 
 /**
- * Quản lý nhân viên; mọi route cần `staff.manage`.
- * Người có quyền này gán được cả role owner, nên hiện chỉ owner có nó; cấp cho role khác thì phải chặn việc tự nâng quyền.
+ * Staff management; every route needs `staff.manage`. Holders can assign the owner role, so only owners have it; giving
+ * it to another role would need a guard against self-promotion.
  */
 export function adminStaffRoutes(prisma: Db) {
   return Router()
@@ -54,7 +54,7 @@ export function adminStaffRoutes(prisma: Db) {
         await audit({ action: 'staff.create', entityType: 'staff', entityId: created.id, after: toSummary(created) })
         return created
       }).catch((err: unknown) => {
-        // Hai request cùng tạo một email lọt qua bước kiểm tra trên thì unique index chặn lại.
+        // Two requests creating the same email past the check above are stopped by the unique index.
         throw isUniqueViolation(err) ? emailTaken : err
       })
       res.status(201).json(toSummary(staff))
@@ -68,7 +68,7 @@ export function adminStaffRoutes(prisma: Db) {
         if (email !== before.email) data.email = email
         return Object.keys(data).length ? data : null
       }).catch((err: unknown) => {
-        // Email trùng nhân viên khác thì unique index chặn; transaction rollback nên không còn audit.
+        // An email taken by other staff is stopped by the unique index; the rollback drops the audit too.
         throw isUniqueViolation(err) ? emailTakenError() : err
       })
       res.json(body)
@@ -105,7 +105,7 @@ function sameRoles(a: readonly StaffRole[], b: readonly StaffRole[]) {
   return a.length === b.length && a.every((role) => b.includes(role))
 }
 
-/** Thay đổi làm phiên đang có không còn đúng: email đăng nhập, quyền, trạng thái khóa. */
+/** Changes that invalidate existing sessions: sign-in email, permissions, lock status. */
 function affectsSessions(before: Staff, after: Staff) {
   return (
     before.email !== after.email ||
@@ -115,9 +115,9 @@ function affectsSessions(before: Staff, after: Staff) {
 }
 
 /**
- * Sửa một nhân viên kèm audit trước/sau. Đổi role, khóa/mở khóa hay email thì thu hồi mọi phiên của người đó
- * để thay đổi áp dụng cả với các thiết bị đang đăng nhập; chỉ đổi tên thì giữ phiên.
- * `change` trả `null` khi không có gì đổi: khi đó không ghi gì và không thu hồi phiên.
+ * Updates a staff member with before/after audit. Changing role, lock or email revokes all their sessions so it applies
+ * on signed-in devices too; a name change keeps sessions. `change` returns `null` when nothing changes: then nothing is
+ * written and no session is revoked.
  */
 async function updateStaff(
   prisma: Db,
@@ -127,7 +127,7 @@ async function updateStaff(
 ) {
   const { id } = parse(StaffParams, req.params)
   const updated = await audited(prisma, req, async (tx, audit) => {
-    // Xếp hàng các thay đổi role/khóa, để hai owner không cùng gỡ nhau rồi không còn ai.
+    // Serialize role/lock changes, so two owners cannot demote each other and leave nobody.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('staff.owners'))`
     const before = await tx.staff.findUnique({ where: { id } })
     if (!before) throw new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy nhân viên')

@@ -6,7 +6,8 @@ import { bearer } from './support/staff.ts'
 const SUBJECT = 'Thời gian giao dự kiến của đơn đặt trước'
 
 /**
- * Một đợt AM-41 (giao 10–20/12/2026) có đủ loại đơn: A đã về hàng, D1 và D2 đã cọc đang chờ hàng, P chờ cọc, C đã hủy.
+ * An AM-41 campaign (delivery 10–20/12/2026) with every kind of order: A arrived, D1 and D2 deposited awaiting stock,
+ * P awaiting deposit, C cancelled.
  */
 async function campaignWithOrders() {
   const app = await preorderShop()
@@ -47,14 +48,14 @@ async function campaignWithOrders() {
 
   const update = (body: Record<string, unknown>) =>
     request.patch(`/api/admin/preorder-campaigns/${campaignId}`).set(bearer(token)).send(body)
-  /** Mã đơn của các thư báo đổi thời gian giao đã xếp; đợi hàng đợi thư chạy hết. */
+  /** Order codes of the queued delivery change emails; waits for the mail queue to drain. */
   const notifiedCodes = async (expected: number) => {
     const codes = () =>
       app.mailer.sent
         .filter((m) => m.subject.startsWith(SUBJECT))
         .map((m) => Number(/#(\d+)/.exec(m.subject)![1]))
         .sort()
-    // Chờ hàng đợi thư gửi đủ `expected` thư, rồi chờ thêm một lúc để thư thừa (nếu có) cũng kịp tới.
+    // Wait for the queue to send `expected` emails, then a bit more so any extra email also arrives.
     await vi.waitFor(() => expect(codes().length).toBeGreaterThanOrEqual(expected), { timeout: 10_000, interval: 100 })
     await new Promise((resolve) => setTimeout(resolve, 500))
     return codes()

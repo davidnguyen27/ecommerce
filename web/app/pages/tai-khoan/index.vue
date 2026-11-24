@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CUSTOMER_PASSWORD_MIN_LENGTH, type CustomerProfile } from '@ecommerce/shared'
 
-// Phiên khách chỉ có ở trình duyệt nên trang này nạp dữ liệu sau khi mount, không qua SSR.
+// The customer session exists only in the browser, so this page loads data after mount, not during SSR.
 const session = useCustomerSession()
 const supportClient = accountSupportClient(session.accountFetch)
 const profile = ref<CustomerProfile | null>(null)
@@ -51,7 +51,7 @@ async function changePassword() {
 
 const consentedOn = computed(() => (profile.value ? formatDateTime(profile.value.privacyConsent.consentedAt) : ''))
 
-// Trang riêng của từng khách, không có nội dung để index.
+// Specific to each customer, nothing to index.
 useSeo({ title: 'Tài khoản', description: 'Thông tin tài khoản khách hàng.', noindex: true })
 </script>
 

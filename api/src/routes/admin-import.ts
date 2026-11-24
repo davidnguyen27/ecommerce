@@ -23,12 +23,12 @@ import { changeStock } from '../stock/stock.ts'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const receiveImportFile = receiveFile(MAX_BYTES, 'File import tối đa 5 MB')
-/** Import tối đa vài nghìn câu lệnh trong một transaction; mặc định 5 giây của Prisma không đủ. */
+/** Import runs up to a few thousand statements in one transaction; Prisma's 5 s default is not enough. */
 const IMPORT_TIMEOUT_MS = 120_000
 
 /**
- * Đọc file và chặn cả file khi có điền giá mà thiếu `price.edit`, hoặc có điền tồn đầu kỳ mà thiếu `stock.adjust`:
- * import không thành cửa sau để đổi giá hay tồn.
+ * Reads the file and blocks it entirely when prices are filled without `price.edit` or opening stock without
+ * `stock.adjust`: import is no back door for changing prices or stock.
  */
 async function readUpload(req: Request, ref: Reference) {
   const file = requiredFile(req, 'Chọn file Excel .xlsx để import')
@@ -50,7 +50,7 @@ async function readUpload(req: Request, ref: Reference) {
   return { ...read, fileName: file.originalname }
 }
 
-/** 400 cho file còn lỗi khi xác nhận (không ghi gì); đường dẫn lỗi dạng `<sheet> / <dòng> / <cột>`. */
+/** 400 for a file that still has errors at confirm (nothing written); error paths read `<sheet> / <row> / <column>`. */
 function invalidImportFile(errors: ImportIssue[]) {
   const fields = errors.map((e) => ({
     path: [e.sheet, e.row, e.column].filter((p) => p !== null).join(' / '),
@@ -60,8 +60,8 @@ function invalidImportFile(errors: ImportIssue[]) {
 }
 
 /**
- * Ghi tồn đầu kỳ qua `changeStock`, sau khi biến thể mới đã được tạo. Điều kiện "chưa có dòng sổ" được kiểm lại
- * dưới khóa, vì có thể đã có dòng sổ từ lúc xem trước tới giờ. Trả các bản audit `stock.opening`.
+ * Writes opening stock via `changeStock` after the new variants exist. "No ledger rows yet" is rechecked under the
+ * lock, since rows may have appeared since the preview. Returns the `stock.opening` audit entries.
  */
 async function recordOpeningStocks(
   tx: Prisma.TransactionClient,
@@ -74,7 +74,7 @@ async function recordOpeningStocks(
     select: { id: true, sku: true },
   })
   const idOf = new Map(variants.map((v) => [v.sku, v.id]))
-  // SKU có thể vừa bị đổi ở trang sản phẩm sau lúc xem trước.
+  // The SKU may have just changed on the product page after the preview.
   const missing = openings.filter((o) => !idOf.has(o.sku))
   if (missing.length) {
     throw invalidImportFile(
@@ -109,7 +109,7 @@ async function recordOpeningStocks(
   }))
 }
 
-/** Import sản phẩm và biến thể bằng file .xlsx; mọi thao tác cần `catalog.edit`. */
+/** Import products and variants from an .xlsx file; everything needs `catalog.edit`. */
 export function adminImportRoutes(prisma: Db) {
   return Router()
     .use(requirePermission('catalog.edit'))
@@ -138,7 +138,8 @@ export function adminImportRoutes(prisma: Db) {
         prisma,
         req,
         async (tx, audit) => {
-          // Giữ schema thuộc tính, thương hiệu và danh mục đứng yên tới hết transaction, như khi ghi sản phẩm từng cái.
+          // Keep attribute schemas, brands and categories still until the transaction ends, as for single product
+          // writes.
           await tx.$executeRaw`SELECT 1 FROM "attribute_schema" FOR SHARE`
           await tx.$executeRaw`SELECT 1 FROM "brand" FOR KEY SHARE`
           await tx.$executeRaw`SELECT 1 FROM "category" FOR KEY SHARE`
@@ -147,7 +148,7 @@ export function adminImportRoutes(prisma: Db) {
           const plan = await planImport(tx, rows, ref)
           const errors = [...structure, ...plan.errors]
           if (errors.length) throw invalidImportFile(errors)
-          // Không tạo gì và không có tồn đầu kỳ (mọi dòng có SKU đã tồn tại): không ghi gì, kể cả audit.
+          // Nothing to create and no opening stock (every row's SKU already exists): write nothing, audit included.
           if (plan.products.length === 0 && plan.openings.length === 0) {
             return { products: 0, variants: 0, openingStocks: 0 }
           }

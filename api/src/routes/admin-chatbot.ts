@@ -25,8 +25,8 @@ const DAY_MS = 24 * 60 * 60_000
 const FIRST_QUESTION_LENGTH = 120
 
 /**
- * Chatbot ở trang quản trị (spec M8): quyền `chatbot.manage`, mặc định chỉ owner. Cuộc trò chuyện không kèm IP (chỉ
- * lưu dạng băm, không trả ra).
+ * Admin chatbot pages (spec M8): permission `chatbot.manage`, owner only by default. Conversations carry no IP (only
+ * stored hashed, never returned).
  */
 export function adminChatbotRoutes(prisma: Db, llm: LlmClient | undefined) {
   return (
@@ -39,7 +39,7 @@ export function adminChatbotRoutes(prisma: Db, llm: LlmClient | undefined) {
       .put('/settings', async (req, res) => {
         const after = parse(ChatbotSettings, req.body)
         const body: ChatbotSettings = await audited(prisma, req, async (tx, audit) => {
-          // Hai lần sửa cùng lúc thì `before` của lần sau là đúng bản lần trước đã ghi.
+          // With two concurrent edits, the second's `before` is exactly what the first wrote.
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('chatbot_setting'))`
           const before = await readChatbotSettings(tx)
           if (isDeepStrictEqual(before, after)) return before
@@ -49,7 +49,7 @@ export function adminChatbotRoutes(prisma: Db, llm: LlmClient | undefined) {
         })
         res.json(body)
       })
-      // Trạng thái nằm trong bộ nhớ của process API đang trả lời (ADR 0017); nhiều instance thì mỗi instance một trạng thái.
+      // State lives in the memory of the answering API process (ADR 0017); with several instances each has its own.
       .get('/status', (_req, res) => {
         const body: ChatbotModelStatus = {
           configured: llm !== undefined,
@@ -134,8 +134,8 @@ export function adminChatbotRoutes(prisma: Db, llm: LlmClient | undefined) {
 }
 
 /**
- * Báo cáo chatbot (spec M8), mount tại `/reports/chatbot` trước router báo cáo M7: dùng quyền `chatbot.manage` thay cho
- * `report.view`, nên người chỉ có `chatbot.manage` vẫn xem được.
+ * Chatbot report (spec M8), mounted at `/reports/chatbot` before the M7 report router: uses `chatbot.manage` instead of
+ * `report.view`, so holders of only `chatbot.manage` can still see it.
  */
 export function adminChatbotReportRoutes(prisma: Db) {
   return Router()

@@ -3,16 +3,18 @@ import { describe, expect, it } from 'vitest'
 import { PaymentGatewayError, type RefundRequest } from '../src/payments/gateway.ts'
 import { VnpayPaymentGateway, refundOutcome } from '../src/payments/vnpay.ts'
 
-// Khóa giả của test, không phải khóa sandbox hay khóa thật.
+// Fake test key, not a sandbox or real key.
 const KEYS = { tmnCode: 'TESTTMN1', hashSecret: 'test-secret', env: 'sandbox' as const }
 const API_URL = 'https://sandbox.vnpayment.vn/merchant_webapi/api/transaction'
-/** 2026-11-17 10:00:00 giờ Việt Nam. */
+/** 2026-11-17 10:00:00 Vietnam time. */
 const NOW = new Date('2026-11-17T03:00:00Z')
 const REF = '100123T20261110093000'
 
 const sha512 = (text: string) => createHmac('sha512', KEYS.hashSecret).update(text).digest('hex')
 
-/** Lệnh hoàn mẫu: giao dịch gốc 2.030.000 đã về qua trang quay về, mang `vnp_TxnRef` trong payload. */
+/**
+ * Sample refund command: an original 2,030,000 transaction received via the return page, `vnp_TxnRef` in the payload.
+ */
 const request = (overrides: Partial<RefundRequest> = {}): RefundRequest => ({
   refundId: '0b8f5a52-3d1c-4c55-9a43-6c0d2f6f1a10',
   orderCode: 100123,
@@ -23,7 +25,10 @@ const request = (overrides: Partial<RefundRequest> = {}): RefundRequest => ({
   ...overrides,
 })
 
-/** Response hoàn tiền như VNPAY trả, ký theo chuỗi `|` của tài liệu (tính độc lập với code đang test). */
+/**
+ * A refund response as VNPAY returns it, signed per the docs' `|` string (computed independently of the code under
+ * test).
+ */
 function refundResponse(fields: Record<string, string>, sign = true) {
   const body: Record<string, string> = {
     vnp_ResponseId: 'resp-1',

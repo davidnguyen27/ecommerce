@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { PayRemainderResult, PublicOrder, canRequestCancel } from '@ecommerce/shared'
 
-// Đơn là dữ liệu cá nhân, mở bằng token: chỉ nạp ở trình duyệt, HTML từ server không có gì của đơn.
-// Hai cách vào: link trong email (`?token=…`), hoặc trang kết quả khi cổng thanh toán đưa khách quay về
-// (`?ket-qua=1`, không có token trong URL; token lấy từ sessionStorage của tab đặt mua).
+// Orders are personal data opened by token: loaded only in the browser, server HTML has nothing of the order.
+// Two entries: the email link (`?token=…`), or the result page when the gateway sends the customer back (`?ket-qua=1`,
+// no token in the URL; the token comes from the checkout tab's sessionStorage).
 const route = useRoute()
 const code = computed(() => String(route.params.code))
 const isResult = computed(() => route.query['ket-qua'] === '1')
@@ -12,7 +12,7 @@ const error = ref<string | null>(null)
 const missingToken = ref(false)
 const checking = ref(false)
 
-// Yêu cầu hỗ trợ của đơn đi cùng token tra cứu (spec M6b).
+// The order's support requests go with the lookup token (spec M6b).
 const supportClient = computed(() => {
   const token = lookupToken()
   return token ? guestSupportClient(Number(code.value), token) : null
@@ -30,7 +30,7 @@ async function load() {
   }
   checking.value = true
   try {
-    // Trang kết quả hỏi cổng thanh toán trước khi trả đơn, phòng khi thông báo của cổng tới chậm.
+    // The result page asks the gateway before returning the order, in case the gateway's notice is late.
     const query = isResult.value ? { token, refresh: '1' } : { token }
     order.value = PublicOrder.parse(await $fetch(`/api/orders/${encodeURIComponent(code.value)}`, { query }))
     error.value = null
@@ -40,8 +40,9 @@ async function load() {
     checking.value = false
   }
 }
-// VNPAY đưa khách về kèm kết quả có chữ ký (`vnp_*`) trên URL: chuyển cho API kiểm chữ ký và ghi nhận (ADR 0010),
-// không cần token đơn; rồi bỏ khỏi URL để tải lại hay chia sẻ link không mang theo. Lỗi thì `refresh=1` vẫn thử.
+// VNPAY returns the customer with a signed result (`vnp_*`) in the URL: forward it to the API to verify and record
+// (ADR 0010), no order token needed; then strip it so reloads and shared links do not carry it. On error `refresh=1`
+// still tries.
 async function forwardGatewayResult() {
   const entries = Object.entries(route.query)
   const signed = Object.fromEntries(
@@ -51,7 +52,7 @@ async function forwardGatewayResult() {
   try {
     await $fetch('/api/payments/vnpay/return', { method: 'POST', body: signed })
   } catch {
-    // Đã có IPN, truy vấn cổng và job hết hạn làm đường dự phòng.
+    // IPN, gateway queries and the expiry job are the fallbacks.
   }
   await navigateTo({ query: Object.fromEntries(entries.filter(([key]) => !key.startsWith('vnp_'))) }, { replace: true })
 }
@@ -61,7 +62,7 @@ onMounted(async () => {
   await load()
 })
 
-// Token cho xem và hủy đơn chưa thanh toán; không gửi email khi khách tự hủy.
+// The token allows viewing and cancelling unpaid orders; no email when customers cancel themselves.
 const cancelling = ref(false)
 const cancelError = ref<string | null>(null)
 async function cancel() {
@@ -75,14 +76,15 @@ async function cancel() {
     )
   } catch (err) {
     cancelError.value = apiErrorMessage(err)
-    // Đơn có thể vừa được thanh toán: nạp lại để khách thấy trạng thái mới.
+    // The order may have just been paid: reload so the customer sees the new status.
     await load()
   } finally {
     cancelling.value = false
   }
 }
 
-// Cổng đưa khách về mà đơn vẫn chờ tiền: chờ thanh toán (hay chờ cọc), hoặc đã về hàng mà chưa nhận phần còn lại.
+// The gateway sent the customer back but the order still awaits money: payment (or deposit), or the remainder after
+// arrival.
 const awaitingPayment = computed(
   () =>
     isResult.value &&
@@ -92,7 +94,7 @@ const awaitingPayment = computed(
         order.value.preorder?.arrivedAt != null)),
 )
 
-// Trả phần còn lại của đơn đặt trước bằng chính token đang mở đơn; nhớ token để trang kết quả mở lại được đơn.
+// Pay a pre-order's remainder with the token that opened the order; remember it so the result page can reopen it.
 const payingRemainder = ref(false)
 async function payRemainder() {
   const token = lookupToken()
@@ -112,7 +114,7 @@ async function payRemainder() {
   }
 }
 
-// Link email có token trong URL: không gửi URL này cho trang khác qua Referer.
+// Email links carry the token in the URL: do not leak it to other sites via Referer.
 useHead({ meta: [{ name: 'referrer', content: 'no-referrer' }] })
 useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đơn hàng của bạn.', noindex: true })
 </script>

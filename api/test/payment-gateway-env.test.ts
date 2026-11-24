@@ -6,7 +6,8 @@ import { SimulatorPaymentGateway } from '../src/payments/gateway.ts'
 import { paymentGatewayFromEnv, vnpayKeysFromEnv } from '../src/payments/gateway-from-env.ts'
 import { VnpayPaymentGateway } from '../src/payments/vnpay.ts'
 
-// Chọn cổng chạy lúc khởi động, không có đường HTTP nào chạm tới: gọi thẳng hàm, và chạy thật server cho ca production.
+// Gateway selection runs at startup with no HTTP path: call the function directly, and run the real server for
+// production.
 
 const SITE = 'https://shop.test'
 const KEYS = { VNPAY_TMN_CODE: 'TESTTMN1', VNPAY_HASH_SECRET: 'secret-test' }
@@ -74,7 +75,7 @@ describe('chọn cổng thanh toán theo biến môi trường', () => {
       env: {
         ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^VNPAY_|^PAYMENT_/.test(name))),
         NODE_ENV: 'production',
-        // DB không tồn tại: API phải dừng trước khi kết nối.
+        // The DB does not exist: the API must stop before connecting.
         DATABASE_URL: 'postgresql://nobody:nobody@127.0.0.1:1/none',
         JWT_SECRET: 'x'.repeat(32),
         SITE_URL: SITE,
@@ -82,7 +83,7 @@ describe('chọn cổng thanh toán theo biến môi trường', () => {
         STORAGE_PROVIDER: 'memory',
       },
       encoding: 'utf8',
-      // Nạp server.ts qua tsx chậm khi cả bộ test chạy song song.
+      // Loading server.ts via tsx is slow while the whole suite runs in parallel.
       timeout: 90_000,
     })
 

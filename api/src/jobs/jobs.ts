@@ -15,24 +15,24 @@ const EXPIRE_OVERDUE_ORDERS = 'expire-overdue-orders'
 const REMAINDER_DEADLINES = 'remainder-deadlines'
 const OVERDUE_EXCHANGES = 'overdue-exchanges'
 
-/** Xếp thư vào hàng đợi; route chỉ cần phần này của `Jobs`. */
-/** Gửi email cho khách: hàng đợi thư và địa chỉ website để dựng link tra cứu đơn. */
+/** Queues an email; routes only need this part of `Jobs`. */
+/** Customer emails: the mail queue and the website URL for order lookup links. */
 export type CustomerMail = { emails: EmailQueue; siteUrl: string }
 
 export interface EmailQueue {
-  /** Ghi job bằng `db`; gọi trong transaction thì thư chỉ được gửi khi transaction commit. */
+  /** Writes the job with `db`; inside a transaction the email is only sent on commit. */
   sendEmail(db: DbClient, mail: Mail): Promise<void>
 }
 
-/** Hẹn job hết hạn cho đơn vừa đặt; route đặt mua chỉ cần phần này của `Jobs`. */
+/** Schedules the expiry job for a new order; checkout only needs this part of `Jobs`. */
 export interface OrderExpiryQueue {
-  /** Ghi job bằng `db` (transaction đặt mua): đơn rollback thì không còn job. */
+  /** Writes the job with `db` (the checkout transaction): a rollback leaves no job. */
   scheduleOrderExpiry(db: DbClient, orderId: string, at: Date): Promise<void>
 }
 
 /**
- * Hàng đợi job nền trên Postgres (pg-boss); worker gửi email qua `mailer`, hủy đơn hết hạn giữ hàng (hỏi cổng
- * `payments` trước) và dọn token hết hạn mỗi đêm.
+ * Background job queue on Postgres (pg-boss); the worker sends email via `mailer`, cancels orders whose reservation
+ * expired (asking `payments` first) and cleans expired tokens nightly.
  */
 export class Jobs implements EmailQueue, OrderExpiryQueue {
   readonly #boss: PgBoss
@@ -48,7 +48,7 @@ export class Jobs implements EmailQueue, OrderExpiryQueue {
     mailer: Mailer
     logger: Logger
     payments: PaymentGateway
-    /** Gốc URL website, cho link trong email khi job hết hạn ghi nhận được tiền về. */
+    /** Website base URL, for email links when the expiry job records a late payment. */
     siteUrl: string
     maxConnections?: number
   }) {
@@ -65,19 +65,19 @@ export class Jobs implements EmailQueue, OrderExpiryQueue {
     this.#boss.on('error', (err) => options.logger.error({ err }, 'Lỗi hàng đợi job'))
   }
 
-  /** Tạo schema pg-boss nếu chưa có và bắt đầu nhận job. */
+  /** Creates the pg-boss schema if missing and starts taking jobs. */
   async start() {
     await this.#boss.start()
-    // Nhà cung cấp email lỗi tạm thời thì thử lại, giãn dần.
+    // Retry transient email provider errors with backoff.
     await this.#boss.createQueue(SEND_EMAIL, { notify: true, retryLimit: 5, retryDelay: 30, retryBackoff: true })
-    // Nhiều thư xếp trong cùng một transaction (phiếu nhập làm nhiều đơn về đủ, đổi thời gian giao của đợt) chỉ sinh một
-    // NOTIFY: Postgres gộp các NOTIFY giống nhau trong một transaction. Worker lấy từng thư một (lỗi thì chỉ thư đó thử
-    // lại), nên các thư còn lại chờ lượt hỏi định kỳ: hạ từ 30 giây mặc định xuống 2 giây.
+    // Many emails queued in one transaction (a receipt completing several orders, a campaign delivery change) produce
+    // one NOTIFY: Postgres merges identical NOTIFYs per transaction. The worker takes one email at a time (only a
+    // failing one retries), so the rest wait for polling: lowered from the 30 s default to 2 s.
     await this.#boss.work<Mail>(SEND_EMAIL, { notifyPollingIntervalSeconds: 2 }, async ([job]) => {
       if (job) await this.#mailer.send(job.data)
     })
     await this.#boss.createQueue(DELETE_EXPIRED)
-    // Lịch lưu trong DB nên nhiều instance API cùng gọi `schedule` vẫn chỉ chạy một job mỗi lần.
+    // Schedules live in the DB, so several API instances calling `schedule` still run one job at a time.
     await this.#boss.schedule(DELETE_EXPIRED, '0 3 * * *', null, { tz: 'Asia/Ho_Chi_Minh' })
     await this.#boss.work(DELETE_EXPIRED, async () => {
       const deleted = await deleteExpiredRecords(this.#prisma)
@@ -95,21 +95,21 @@ export class Jobs implements EmailQueue, OrderExpiryQueue {
     await this.#boss.work<{ orderId: string }>(EXPIRE_ORDER, async ([job]) => {
       if (job) await expireOrder(expireDeps, job.data.orderId, new Date())
     })
-    // Lưới an toàn khi job của từng đơn bị mất hay chạy sớm: quét đơn quá hạn mỗi phút.
+    // Safety net when a per-order job is lost or runs early: sweep overdue orders every minute.
     await this.#boss.createQueue(EXPIRE_OVERDUE_ORDERS)
     await this.#boss.schedule(EXPIRE_OVERDUE_ORDERS, '* * * * *')
     await this.#boss.work(EXPIRE_OVERDUE_ORDERS, async () => {
       const expired = await expireOverdueOrders(expireDeps)
       if (expired > 0) this.#logger.info({ expired }, 'Đã hủy đơn hết hạn giữ hàng')
     })
-    // Đơn đặt trước đã về hàng: nhắc trước hạn trả phần còn lại và gắn cờ quá hạn, mỗi giờ.
+    // Arrived pre-orders: remind before the remaining-balance deadline and flag overdue ones, hourly.
     await this.#boss.createQueue(REMAINDER_DEADLINES)
     await this.#boss.schedule(REMAINDER_DEADLINES, '0 * * * *')
     await this.#boss.work(REMAINDER_DEADLINES, async () => {
       const result = await processRemainderDeadlines(expireDeps)
       if (result.reminded > 0 || result.flagged > 0) this.#logger.info(result, 'Đã xử lý hạn trả phần còn lại')
     })
-    // Đổi hàng đã chấp nhận quá 7 ngày chưa nhận hàng cũ: gắn cờ cho nhân viên, mỗi sáng (spec M6b).
+    // Accepted exchanges with the old item not received after 7 days: flag for staff, every morning (spec M6b).
     await this.#boss.createQueue(OVERDUE_EXCHANGES)
     await this.#boss.schedule(OVERDUE_EXCHANGES, '0 7 * * *', null, { tz: 'Asia/Ho_Chi_Minh' })
     await this.#boss.work(OVERDUE_EXCHANGES, async () => {

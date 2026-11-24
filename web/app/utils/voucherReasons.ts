@@ -1,6 +1,6 @@
 import type { VoucherReason } from '@ecommerce/shared'
 
-/** Lý do mã không dùng được, như khách đọc. `disabled` hiện như hết hạn. */
+/** Why a voucher does not apply, as customers read it. `disabled` shows as expired. */
 export function voucherReasonText(reason: VoucherReason, shortfall?: number) {
   switch (reason) {
     case 'not_found':

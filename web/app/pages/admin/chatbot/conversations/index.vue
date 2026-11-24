@@ -113,7 +113,7 @@ await load()
                 <td class="admin-table-num">{{ item.customerMessageCount }}</td>
                 <td class="admin-table-num">{{ item.failedTurns || '' }}</td>
                 <td>
-                  <!-- Người có chatbot.manage chưa chắc mở được trang yêu cầu hỗ trợ: chỉ hiện mã khi không có quyền. -->
+                  <!-- chatbot.manage alone may not open support requests: show just the code. -->
                   <NuxtLink
                     v-if="item.supportRequestCode && canOpenSupport"
                     :to="`/admin/support/${item.supportRequestCode}`"

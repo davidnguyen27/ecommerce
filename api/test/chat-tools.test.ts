@@ -6,7 +6,7 @@ import { preorderShop } from './support/preorder.ts'
 import { shop } from './support/shop.ts'
 import { bearer, type Request } from './support/staff.ts'
 
-/** Cửa hàng của `shop()` (Air Max đã xuất bản, chính sách đổi trả đã xuất bản), chatbot đã bật với model giả. */
+/** `shop()` (Air Max published, returns policy published), with the chatbot on and a fake model. */
 async function chatShop(llm = new ScriptedLlm()) {
   const app = await shop({ llm })
   const res = await app.request
@@ -27,7 +27,7 @@ function ask(request: Request, content: string, extra: Record<string, unknown> =
   return request.post('/api/chat/messages').send({ content, ...extra })
 }
 
-/** Kết quả công cụ model nhận ở lần gọi thứ `index`, theo thứ tự lời gọi. */
+/** The tool result the model received on call `index`, in call order. */
 function toolOutputs(llm: ScriptedLlm, index: number) {
   return llm.requests[index]!.messages.flatMap((m: LlmMessage) =>
     m.role === 'tool' ? [JSON.parse(m.content) as Record<string, unknown>] : [],
@@ -44,7 +44,7 @@ describe('tìm sản phẩm', () => {
     )
     const res = await ask(request, 'Có giày Air Max không?')
     expect(res.status).toBe(200)
-    // Model viết sai giá; thẻ vẫn đúng giá vì lấy từ DB.
+    // The model wrote a wrong price; the card stays right since it comes from the DB.
     expect(res.body.cards).toHaveLength(1)
     expect(res.body.cards[0]).toMatchObject({ slug: 'air-max', name: 'Air Max', fromPrice: 2_000_000, inStock: true })
     expect(res.body.reply.products).toEqual([{ slug: 'air-max', name: 'Air Max' }])
@@ -90,7 +90,7 @@ describe('tìm sản phẩm', () => {
     expect(found.body.cards.map((c: { slug: string }) => c.slug)).toEqual(['air-max'])
     const tooCheap = await ask(request, 'Dưới 1 triệu có không?')
     expect(tooCheap.body.cards).toEqual([])
-    // Từ khóa và giá đều không khớp: tìm lại không dùng từ khóa cũng rỗng, kèm ghi chú.
+    // Neither keyword nor price matches: retrying without the keyword is empty too, with a note.
     expect(toolOutputs(llm, 3)).toEqual([{ products: [], note: expect.any(String) }])
   })
 
@@ -131,7 +131,7 @@ describe('chi tiết sản phẩm', () => {
       brand: 'Nike',
       policies: ['doi-tra'],
     })
-    // Một dòng mỗi biến thể, tiết kiệm token.
+    // One line per variant, to save tokens.
     expect(product!.variants).toEqual([
       'Đen / 40: 2000000 in stock',
       'Đen / 41: 2100000 pre-order (cọc 30%, dự kiến 2026-12-10 – 2026-12-20)',
@@ -192,7 +192,7 @@ describe('vòng lặp và ngữ cảnh', () => {
     expect(res.body.reply.content).toBe('Mình gợi ý Air Max.')
     expect(res.body.cards).toHaveLength(1)
     expect(llm.requests.map((r) => r.tools?.length ?? 0)).toEqual([4, 4, 4, 0])
-    // Mỗi lần gọi có đúng một lời nhắc ngôn ngữ, ở cuối, sau kết quả công cụ.
+    // Each call has exactly one language reminder, last, after the tool results.
     for (const { messages } of llm.requests) {
       expect(messages.filter((m) => m.role === 'system' && m.content === VIETNAMESE_REMINDER)).toHaveLength(1)
       expect(messages.at(-1)).toEqual({ role: 'system', content: VIETNAMESE_REMINDER })

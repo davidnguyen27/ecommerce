@@ -10,7 +10,7 @@ const session = useAdminSession()
 const actors = ref<AuditActor[]>([])
 const result = ref<AuditPage | null>(null)
 const error = ref<string | null>(null)
-// Ngày lấy từ ô chọn ngày, hiểu theo giờ của trình duyệt; `to` tính hết ngày đã chọn.
+// Dates come from the date picker in the browser's time zone; `to` covers the whole chosen day.
 const filters = reactive({ actorId: '', entityType: '', from: '', to: '', page: 1 })
 
 function startOfDay(date: string, addDays = 0) {

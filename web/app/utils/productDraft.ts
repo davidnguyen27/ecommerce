@@ -8,10 +8,10 @@ export const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
 
 export const VARIANT_STATUS_LABELS: Record<VariantStatus, string> = { active: 'Đang bán', discontinued: 'Ngừng bán' }
 
-/** Giá trị đang soạn; ô bỏ trống là `null` hoặc chưa có khóa. */
+/** Draft values; an empty field is `null` or a missing key. */
 export type DraftValues = Record<string, AttributeValue | null | undefined>
 
-/** Một dòng biến thể đang soạn; `id` rỗng là dòng thêm mới. */
+/** A draft variant row; an empty `id` is the add row. */
 export type VariantDraft = {
   id: string
   sku: string
@@ -22,7 +22,7 @@ export type VariantDraft = {
   compareAtPrice: number | null
 }
 
-/** Lỗi theo trường của lần lưu gần nhất; `target` là `product`, `status` hoặc id biến thể (rỗng với dòng thêm mới). */
+/** Field errors of the latest save; `target` is `product`, `status` or a variant id (empty for the add row). */
 export type TargetedFieldErrors = { target: string; fields: FieldError[] }
 
 export const fieldErrorAt = (errors: TargetedFieldErrors, target: string, path: string) =>

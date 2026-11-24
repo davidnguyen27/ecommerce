@@ -1,4 +1,4 @@
-// Stack E2E là stack của `pnpm smoke --keep`: cổng, tài khoản owner và sản phẩm lấy từ seed trong scripts/smoke.ts.
+// The E2E stack is the `pnpm smoke --keep` stack: port, owner account and products come from the scripts/smoke.ts seed.
 import type {
   AdminOrder,
   ContentPageDetail,
@@ -12,29 +12,29 @@ import type {
 export const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8081'
 
 export const OWNER = { email: 'smoke@example.com', password: 'mat-khau-smoke-test' }
-/** Nhân viên kho do global-setup tạo nếu chưa có. */
+/** Warehouse clerk created by global-setup if missing. */
 export const WAREHOUSE = { email: 'kho-e2e@example.com', password: 'mat-khau-kho-e2e-test', name: 'Kho E2E' }
-/** Nhân viên bán hàng và kế toán do global-setup tạo nếu chưa có (hủy đơn đã trả và hoàn tiền, M6a). */
+/** Sales clerk and accountant created by global-setup if missing (paid order cancels and refunds, M6a). */
 export const SALES = { email: 'ban-hang-e2e@example.com', password: 'mat-khau-ban-hang-e2e', name: 'Bán hàng E2E' }
 export const ACCOUNTANT = { email: 'ke-toan-e2e@example.com', password: 'mat-khau-ke-toan-e2e', name: 'Kế toán E2E' }
 
-/** Biến thể còn hàng của sản phẩm seed (smoke đặt tồn 3). */
+/** In-stock variant of the seed product (smoke sets stock to 3). */
 export const PRODUCT_PATH = '/san-pham/air-max-90?sku=AM90-DEN-40'
 export const SKU = 'AM90-DEN-40'
 export const PRICE = 3_500_000
-/** TP. Hồ Chí Minh; global-setup đặt phí giao riêng cho tỉnh này. */
+/** TP. Hồ Chí Minh; global-setup sets its own shipping fee. */
 export const PROVINCE_CODE = '79'
 export const SHIPPING_FEE = 30_000
 
 const OWNER_TOKEN_ENV = 'E2E_OWNER_ACCESS_TOKEN'
 
-/** Gọi API quản trị bằng access token (client `mobile`, không cần cookie). */
+/** Calls the admin API with an access token (`mobile` client, no cookie needed). */
 export class AdminApi {
   private constructor(private readonly token: string) {}
 
   /**
-   * Owner đăng nhập một lần ở global-setup, token (sống 15 phút) truyền cho các test qua biến môi trường:
-   * đăng nhập bị giới hạn 10 lần mỗi email trong 15 phút, chạy lại vài lần là chạm.
+   * The owner signs in once in global-setup and the token (valid 15 minutes) reaches tests via an environment variable:
+   * sign-in is limited to 10 per email per 15 minutes, which a few reruns would hit.
    */
   static async owner() {
     const token = process.env[OWNER_TOKEN_ENV]
