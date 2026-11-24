@@ -2,13 +2,13 @@ import { z } from 'zod'
 import { ImageRenditions } from './media.ts'
 import { Slug } from './slug.ts'
 
-/** Năm nhóm hàng cố định, là gốc của cây danh mục (ADR 0004). */
+/** The five fixed product types, roots of the category tree (ADR 0004). */
 export const ProductType = z.enum(['footwear', 'apparel', 'watch', 'bag', 'fragrance'])
 export type ProductType = z.infer<typeof ProductType>
 
 const Name = z.string().trim().min(1).max(200)
 
-// Thương hiệu
+// Brands
 
 export const BrandRequest = z.object({
   name: Name,
@@ -23,7 +23,7 @@ export const AdminBrand = z.object({
   name: z.string(),
   description: z.string(),
   hidden: z.boolean(),
-  /** `null` khi chưa có logo. */
+  /** `null` when there is no logo. */
   logo: ImageRenditions.nullable(),
   updatedAt: z.string(),
 })
@@ -32,7 +32,7 @@ export type AdminBrand = z.infer<typeof AdminBrand>
 export const AdminBrandList = z.object({ items: z.array(AdminBrand) })
 export type AdminBrandList = z.infer<typeof AdminBrandList>
 
-/** Thương hiệu đang hiển thị, như khách thấy. */
+/** A visible brand, as customers see it. */
 export const PublicBrand = z.object({
   slug: z.string(),
   name: z.string(),
@@ -44,13 +44,13 @@ export type PublicBrand = z.infer<typeof PublicBrand>
 export const PublicBrandList = z.object({ items: z.array(PublicBrand.pick({ slug: true, name: true })) })
 export type PublicBrandList = z.infer<typeof PublicBrandList>
 
-// Danh mục
+// Categories
 
-/** Phần sửa được của danh mục. Nhóm hàng cố định từ lúc tạo; đổi cha chỉ trong cùng nhóm hàng. */
+/** Editable part of a category. The product type is fixed at creation; reparenting stays within the type. */
 export const UpdateCategoryRequest = z.object({
   name: Name,
   slug: Slug,
-  /** `null` là con trực tiếp của nhóm hàng. */
+  /** `null` is a direct child of the product type. */
   parentId: z.uuid().nullable(),
 })
 export type UpdateCategoryRequest = z.infer<typeof UpdateCategoryRequest>
@@ -84,13 +84,13 @@ export const CategoryNode: z.ZodType<CategoryNode> = CategoryLink.extend({
   },
 })
 
-/** Cây danh mục công khai: đủ năm nhóm hàng theo thứ tự cố định, chỉ gồm các danh mục khách thấy được. */
+/** Public category tree: all five types in fixed order, only categories customers can see. */
 export const CategoryTree = z.object({
   items: z.array(z.object({ productType: ProductType, children: z.array(CategoryNode) })),
 })
 export type CategoryTree = z.infer<typeof CategoryTree>
 
-/** Trang danh mục: `ancestors` xếp từ gốc xuống, không gồm nhóm hàng. */
+/** Category page: `ancestors` from the root down, excluding the product type. */
 export const PublicCategory = CategoryLink.extend({
   productType: ProductType,
   ancestors: z.array(CategoryLink),

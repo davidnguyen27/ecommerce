@@ -11,34 +11,34 @@ export const Permission = z.enum([
   'document.view',
   'content.edit',
   'audit.view',
-  /** Tạo cam kết có bằng chứng và quản lý loại cam kết; mặc định chỉ owner. */
+  /** Create evidenced commitments and manage commitment types; owner only by default. */
   'commitment.edit',
-  /** Nhập kho và điều chỉnh tồn. */
+  /** Receive stock and adjust it. */
   'stock.adjust',
-  /** Xem danh sách và chi tiết đơn hàng. */
+  /** View order lists and details. */
   'order.view',
-  /** Xử lý đơn: chuẩn bị, bàn giao, đã giao, giao thất bại, hủy đơn chưa thanh toán. */
+  /** Fulfill orders: prepare, hand over, deliver, failed delivery, cancel unpaid orders. */
   'order.fulfill',
-  /** Đối soát tiền: khôi phục đơn, đóng mục đã xử lý ngoài hệ thống, giải quyết bằng hoàn tiền. */
+  /** Reconcile payments: restore orders, close items handled outside the system, resolve by refund. */
   'payment.reconcile',
-  /** Hủy đơn đã nhận tiền (đã trả đủ hoặc đã cọc) và đề xuất số tiền hoàn (M6a). */
+  /** Cancel paid orders (fully paid or deposited) and propose the refund (M6a). */
   'order.cancel_paid',
-  /** Thực hiện hoàn tiền: ghi chuyển khoản, hoàn qua cổng, chốt kết quả, tạo lại khoản thất bại (ADR 0014). */
+  /** Execute refunds: record transfers, refund via gateway, settle results, recreate failed ones (ADR 0014). */
   'payment.refund',
-  /** Xử lý yêu cầu hỗ trợ: nhận, trả lời, ghi chú nội bộ, đổi trạng thái, tạo hộ khách (M6b). */
+  /** Handle support requests: take, reply, internal notes, status changes, create on behalf of customers (M6b). */
   'support.handle',
-  /** Mở, sửa, đóng đợt đặt trước; cập nhật tiến độ nhập hàng và thời gian giao dự kiến. */
+  /** Open, edit, close pre-order campaigns; update supply progress and expected delivery. */
   'preorder.manage',
-  /** Tạo, sửa, tắt mã giảm giá. */
+  /** Create, edit, disable vouchers. */
   'voucher.manage',
-  /** Xem báo cáo, bảng ngoại lệ và xuất Excel (M7). */
+  /** View reports and the exceptions board, export Excel (M7). */
   'report.view',
-  /** Bật, tắt chatbot, đọc cuộc trò chuyện và báo cáo chatbot (M8); mặc định chỉ owner. */
+  /** Turn the chatbot on/off, read conversations and the chatbot report (M8); owner only by default. */
   'chatbot.manage',
 ])
 export type Permission = z.infer<typeof Permission>
 
-/** Nhân viên đang đăng nhập, kèm quyền tính từ role hiện tại. */
+/** The signed-in staff member, with permissions from the current role. */
 export const StaffProfile = z.object({
   id: z.string(),
   email: z.string(),

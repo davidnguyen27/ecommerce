@@ -3,14 +3,14 @@ import { AuditActor } from './audit.ts'
 import { OrderKind, OrderStatus, PaymentStatus, VoucherKind } from './orders.ts'
 import { PageQuery, pageOf } from './pagination.ts'
 
-/** Sắp tới, đang chạy, hết hạn, đã tắt; tính từ thời hạn và thời điểm tắt, không lưu. */
+/** Upcoming, active, expired, disabled; derived from validity and disable time, not stored. */
 export const VoucherStatus = z.enum(['upcoming', 'active', 'expired', 'disabled'])
 export type VoucherStatus = z.infer<typeof VoucherStatus>
 
-/** Trần giảm theo Nghị định 81/2018 (spec M5, chờ chủ DN xác nhận). */
+/** Discount cap per Decree 81/2018 (spec M5, pending owner confirmation). */
 export const VOUCHER_MAX_PERCENT = 50
 
-/** Chữ và số, 4–20 ký tự; khách gõ không phân biệt hoa thường nên lưu chữ hoa. */
+/** Letters and digits, 4–20 characters; customers type it case-insensitively, so it is stored uppercase. */
 export const VoucherCode = z
   .string()
   .trim()
@@ -20,16 +20,16 @@ export const VoucherCode = z
 const Money = z.number().int().min(0).max(1_000_000_000)
 
 const VoucherFields = z.object({
-  /** Ghi chú nội bộ, khách không thấy. */
+  /** Internal note, hidden from customers. */
   description: z.string().trim().max(500),
   kind: VoucherKind,
-  /** VND, chỉ với `fixed`. */
+  /** VND, `fixed` only. */
   amount: Money.min(1_000, 'Ít nhất 1.000 đ').nullable(),
-  /** Phần trăm, chỉ với `percent`. */
+  /** Percentage, `percent` only. */
   percent: z.number().int().min(1, 'Ít nhất 1%').max(VOUCHER_MAX_PERCENT, `Tối đa ${VOUCHER_MAX_PERCENT}%`).nullable(),
-  /** VND, bắt buộc với `percent`. */
+  /** VND, required for `percent`. */
   maxDiscount: Money.min(1_000, 'Ít nhất 1.000 đ').nullable(),
-  /** Tiền hàng tối thiểu của các dòng thuộc phạm vi, VND. */
+  /** Minimum goods of in-scope lines, VND. */
   minSubtotal: Money,
   startsAt: z.iso.datetime({ offset: true }),
   endsAt: z.iso.datetime({ offset: true }),
@@ -37,16 +37,16 @@ const VoucherFields = z.object({
     .array(OrderKind)
     .min(1, 'Chọn ít nhất một hình thức bán')
     .refine((types) => new Set(types).size === types.length, 'Hình thức bán bị trùng'),
-  /** Trống là không giới hạn. */
+  /** Empty means unlimited. */
   totalLimit: z.number().int().min(1, 'Ít nhất 1 lượt').max(1_000_000).nullable(),
   perCustomerLimit: z.number().int().min(1, 'Ít nhất 1 lượt').max(1_000),
-  /** Trống là mọi thương hiệu. */
+  /** Empty means every brand. */
   brandIds: z.array(z.uuid()).max(200),
-  /** Trống là mọi danh mục; một danh mục gồm cả con cháu. */
+  /** Empty means every category; a category includes its descendants. */
   categoryIds: z.array(z.uuid()).max(200),
 })
 
-/** Ràng buộc giữa các trường, dùng cho cả tạo và cho bản đã ghép sau khi sửa. */
+/** Cross-field rules, used on create and on the merged version after an edit. */
 const voucherRules = (v: z.infer<typeof VoucherFields>, ctx: z.RefinementCtx) => {
   const issue = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message })
   if (v.kind === 'fixed') {
@@ -73,26 +73,26 @@ const withDefaults = VoucherFields.extend({
   categoryIds: VoucherFields.shape.categoryIds.default([]),
 })
 
-/** Tạo một mã giảm giá. */
+/** Creates a voucher. */
 export const VoucherCreate = withDefaults.extend({ code: VoucherCode }).superRefine(voucherRules)
 export type VoucherCreate = z.input<typeof VoucherCreate>
 
-/** Một mã đầy đủ sau khi ghép phần sửa vào mã hiện có; API dùng để kiểm lại ràng buộc giữa các trường. */
+/** A full voucher after merging the edit into the current one; the API rechecks cross-field rules on it. */
 export const VoucherDraft = VoucherFields.superRefine(voucherRules)
 
 /**
- * Sửa mã: chỉ gửi các trường muốn đổi; chuỗi mã không đổi được. Khi mã đã có lượt dùng thì chỉ đổi được mô tả, thời
- * điểm kết thúc và tổng lượt (không thấp hơn số đã dùng).
+ * Edits a voucher: send only the fields to change; the code itself is fixed. Once used, only the description, end time
+ * and total uses (not below used) can change.
  */
 export const VoucherUpdate = VoucherFields.partial()
 export type VoucherUpdate = z.input<typeof VoucherUpdate>
 
-/** Các trường vẫn sửa được khi mã đã có lượt dùng. */
+/** Fields still editable once the voucher has been used. */
 export const VOUCHER_FIELDS_EDITABLE_AFTER_USE = ['description', 'endsAt', 'totalLimit'] as const
 
 export const VoucherQuery = PageQuery.extend({
   status: z.enum([...VoucherStatus.options, 'all']).default('all'),
-  /** Tìm theo một phần chuỗi mã, không phân biệt hoa thường. */
+  /** Searches part of the code, case-insensitive. */
   q: z.string().trim().max(20).optional(),
 })
 export type VoucherQuery = z.infer<typeof VoucherQuery>
@@ -114,7 +114,7 @@ export const Voucher = z.object({
   brands: z.array(z.object({ id: z.string(), name: z.string() })),
   categories: z.array(z.object({ id: z.string(), name: z.string() })),
   status: VoucherStatus,
-  /** Số lượt đã dùng: số đơn chưa hủy có mã này. */
+  /** Uses: uncancelled orders with this voucher. */
   used: z.number(),
   disabledAt: z.string().nullable(),
   createdAt: z.string(),
@@ -126,8 +126,8 @@ export const VoucherPage = pageOf(Voucher)
 export type VoucherPage = z.infer<typeof VoucherPage>
 
 /**
- * Một đơn đã dùng mã (`GET /api/admin/vouchers/:id/orders`), mới nhất trước. Đơn đã hủy vẫn có trong danh sách nhưng
- * `counted` là `false`: không chiếm lượt.
+ * An order that used the voucher (`GET /api/admin/vouchers/:id/orders`), newest first. Cancelled orders stay listed
+ * with `counted` `false`: they take no use.
  */
 export const VoucherOrder = z.object({
   code: z.number(),
@@ -146,11 +146,11 @@ export type VoucherOrder = z.infer<typeof VoucherOrder>
 export const VoucherOrderPage = pageOf(VoucherOrder)
 export type VoucherOrderPage = z.infer<typeof VoucherOrderPage>
 
-// Khách áp mã khi đặt mua hoặc đặt trước.
+// Customers apply a voucher at checkout or pre-order.
 
 /**
- * Vì sao mã không dùng được cho đơn này. `disabled` hiện cho khách như hết hạn; `changed` chỉ có khi đặt: tiền giảm khác
- * số khách đã thấy (giá hay giỏ đổi), khách xem lại rồi xác nhận.
+ * Why the voucher does not work for this order. `disabled` shows to customers as expired; `changed` only at order time:
+ * the discount differs from what was seen (price or cart changed), so the customer reviews and confirms.
  */
 export const VoucherReason = z.enum([
   'not_found',
@@ -166,10 +166,13 @@ export const VoucherReason = z.enum([
 ])
 export type VoucherReason = z.infer<typeof VoucherReason>
 
-/** Mã khách gõ gửi lên báo giá và đặt mua; định dạng sai thì báo `not_found` thay vì lỗi form. */
+/** The code typed, sent with quote and checkout; a malformed one reports `not_found` instead of a form error. */
 export const VoucherCodeInput = z.string().trim().min(1).max(40)
 
-/** Kết quả áp mã trong báo giá. `lines` là tiền giảm từng dòng; `shortfall` là số tiền hàng còn thiếu để đạt tối thiểu. */
+/**
+ * Voucher result in a quote. `lines` is the discount per line; `shortfall` the goods still missing to reach the
+ * minimum.
+ */
 export const VoucherQuote = z.discriminatedUnion('applied', [
   z.object({
     applied: z.literal(true),
@@ -187,8 +190,8 @@ export const VoucherQuote = z.discriminatedUnion('applied', [
 export type VoucherQuote = z.infer<typeof VoucherQuote>
 
 /**
- * `error.details.voucher` của 409 khi đặt kèm mã: lý do, tiền giảm mới khi mã vẫn áp được (`changed`), và tổng phải trả
- * khi không dùng mã để khách chọn đặt tiếp không mã.
+ * `error.details.voucher` of a 409 when ordering with a voucher: the reason, the new discount when it still applies
+ * (`changed`), and the total without the voucher so the customer can continue without it.
  */
 export const VoucherConflict = z.object({
   code: z.string(),
@@ -196,7 +199,7 @@ export const VoucherConflict = z.object({
   discount: z.number().nullable(),
   shortfall: z.number().optional(),
   totalWithoutVoucher: z.number(),
-  /** Chỉ khi đặt trước: tiền cọc khi không dùng mã, là số khách sẽ trả ngay nếu đặt tiếp không mã. */
+  /** Pre-orders only: the deposit without the voucher, what the customer pays now if continuing without it. */
   depositAmountWithoutVoucher: z.number().optional(),
 })
 export type VoucherConflict = z.infer<typeof VoucherConflict>

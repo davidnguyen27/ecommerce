@@ -4,12 +4,11 @@ const Text = z.string().trim().max(500)
 const HttpUrl = z.union([z.literal(''), z.url({ protocol: /^https?$/ })])
 
 /**
- * Thông tin pháp lý của doanh nghiệp hiển thị ở chân trang mọi trang website.
- * Chuỗi rỗng nghĩa là chưa điền; hệ thống không tự điền nội dung.
+ * Business legal info shown in every website footer. An empty string means not filled; the system never fills it in.
  */
 export const LegalInfo = z.object({
   companyName: Text,
-  /** Mã số doanh nghiệp trên giấy chứng nhận đăng ký kinh doanh. */
+  /** Enterprise code from the business registration certificate. */
   businessRegistrationNumber: Text,
   businessRegistrationIssuedBy: Text,
   /** `YYYY-MM-DD`. */
@@ -17,9 +16,9 @@ export const LegalInfo = z.object({
   address: Text,
   phone: Text,
   email: z.union([z.literal(''), z.email()]),
-  /** Ảnh logo "Đã thông báo Bộ Công Thương". */
+  /** The "Đã thông báo Bộ Công Thương" logo image. */
   moitLogoUrl: HttpUrl,
-  /** Trang hồ sơ thông báo website trên online.gov.vn mà logo liên kết tới. */
+  /** The website registration page on online.gov.vn the logo links to. */
   moitNoticeUrl: HttpUrl,
 })
 export type LegalInfo = z.infer<typeof LegalInfo>

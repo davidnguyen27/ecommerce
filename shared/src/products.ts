@@ -8,13 +8,13 @@ import { Slug } from './slug.ts'
 export const ProductStatus = z.enum(['draft', 'published', 'archived'])
 export type ProductStatus = z.infer<typeof ProductStatus>
 
-/** Đang bán hoặc ngừng bán (GLOSSARY "Ngừng bán"). */
+/** On sale or discontinued (GLOSSARY "Ngừng bán"). */
 export const VariantStatus = z.enum(['active', 'discontinued'])
 export type VariantStatus = z.infer<typeof VariantStatus>
 
 const Cell = z.string().trim().max(200)
 
-/** Bảng size: một hàng tiêu đề và các hàng dữ liệu cùng số cột. */
+/** Size chart: one header row and data rows with the same number of columns. */
 export const SizeChart = z
   .object({
     columns: z.array(Cell.min(1)).min(1).max(20),
@@ -31,30 +31,30 @@ export type SizeChart = z.infer<typeof SizeChart>
 
 const LongText = z.string().max(20_000).default('')
 
-/** Phần soạn được của sản phẩm. Trạng thái không nằm ở đây: sản phẩm mới luôn là nháp. */
+/** Editable part of a product. Status is not here: new products are always drafts. */
 export const ProductRequest = z.object({
   brandId: z.uuid(),
-  /** Nhóm hàng lấy từ danh mục lúc tạo; về sau chỉ đổi được sang danh mục cùng nhóm hàng. */
+  /** The product type comes from the category at creation; later only categories of the same type are allowed. */
   categoryId: z.uuid(),
   name: z.string().trim().min(1).max(200),
   slug: Slug,
   modelCode: z.string().trim().max(100).default(''),
   description: LongText,
-  /** Hướng dẫn sử dụng và bảo quản. */
+  /** Usage and care instructions. */
   usageCare: LongText,
   sizeChart: SizeChart.nullable().default(null),
-  /** Thông tin nguồn gốc công bố; bảo hành chỉ là cam kết có bằng chứng (ADR 0005). */
+  /** Published origin statement; warranty is only an evidenced commitment (ADR 0005). */
   originStatement: LongText,
-  /** Thuộc tính cấp sản phẩm, kiểm theo schema của nhóm hàng. */
+  /** Product-level attributes, validated against the product type schema. */
   attributes: z.record(z.string(), z.unknown()).default({}),
   groundShippingOnly: z.boolean().default(false),
 })
 export type ProductRequest = z.input<typeof ProductRequest>
 
-/** Giá VND đã gồm VAT, số nguyên dương. */
+/** VND price including VAT, positive integer. */
 const Price = z.number().int('Giá phải là số nguyên VND').positive('Giá phải lớn hơn 0').max(1_000_000_000_000)
 
-/** SKU lưu chữ hoa, để `abc-1` và `ABC-1` không thành hai SKU. */
+/** SKUs are stored uppercase, so `abc-1` and `ABC-1` are one SKU. */
 export const Sku = z
   .string()
   .trim()
@@ -64,14 +64,14 @@ export const Sku = z
   .transform((sku) => sku.toUpperCase())
 
 /**
- * Biến thể. `price`, `compareAtPrice` bỏ qua thì giữ nguyên; gửi kèm giá khác giá hiện tại cần `price.edit`.
- * Giá hãng để trống hoặc không thấp hơn giá bán.
+ * A variant. Omitted `price`, `compareAtPrice` stay unchanged; a price different from the current one needs
+ * `price.edit`. Compare-at price is empty or not below the sale price.
  */
 export const VariantRequest = z.object({
   sku: Sku,
   attributes: z.record(z.string(), z.unknown()).default({}),
   status: VariantStatus.default('active'),
-  /** Bỏ qua khi tạo thì xếp cuối. */
+  /** Omitted on create means last. */
   sortOrder: z.number().int().min(0).max(100_000).optional(),
   price: Price.nullable().optional(),
   compareAtPrice: Price.nullable().optional(),
@@ -105,7 +105,7 @@ export const AdminProduct = z.object({
   groundShippingOnly: z.boolean(),
   status: ProductStatus,
   updatedAt: z.string(),
-  /** Xếp theo thứ tự hiển thị. */
+  /** In display order. */
   variants: z.array(AdminVariant),
 })
 export type AdminProduct = z.infer<typeof AdminProduct>
@@ -129,33 +129,33 @@ export type AdminProductSummary = z.infer<typeof AdminProductSummary>
 export const AdminProductList = z.object({ items: z.array(AdminProductSummary) })
 export type AdminProductList = z.infer<typeof AdminProductList>
 
-// Vòng đời và xuất bản
+// Lifecycle and publishing
 
 /**
- * Chuyển trạng thái: Nháp → Đã xuất bản, Nháp → Lưu trữ, Đã xuất bản → Lưu trữ, Lưu trữ → Nháp.
- * Gửi `published` khi đang xuất bản là xuất bản lại các thay đổi.
+ * Status transitions: Draft → Published, Draft → Archived, Published → Archived, Archived → Draft. Sending
+ * `published` while published republishes the changes.
  */
 export const ChangeProductStatusRequest = z.object({ status: ProductStatus })
 export type ChangeProductStatusRequest = z.infer<typeof ChangeProductStatusRequest>
 
-/** Trang chính sách áp dụng cho sản phẩm, thay cả danh sách. */
+/** Policy pages applying to the product, replacing the whole list. */
 export const ProductPoliciesRequest = z.object({ pageIds: z.array(z.uuid()).max(50) })
 export type ProductPoliciesRequest = z.infer<typeof ProductPoliciesRequest>
 
-/** Trang chính sách để chọn gắn vào sản phẩm; người soạn sản phẩm không cần quyền soạn nội dung. */
+/** Policy pages to pick for a product; product editors do not need content edit rights. */
 export const PolicyPageOptionList = z.object({
   items: z.array(z.object({ id: z.string(), slug: z.string(), title: z.string(), published: z.boolean() })),
 })
 export type PolicyPageOptionList = z.infer<typeof PolicyPageOptionList>
 
 export const AdminProductDetail = AdminProduct.extend({
-  /** Như `AdminProduct.variants`, kèm tồn trong kho (chỉ đọc; đổi tồn qua `/api/admin/stock`). */
+  /** Like `AdminProduct.variants`, with stock on hand (read-only; change stock via `/api/admin/stock`). */
   variants: z.array(AdminVariant.extend({ onHand: z.number() })),
-  /** Trang chính sách đã gắn, kể cả trang chưa xuất bản (khách chỉ thấy trang đã xuất bản). */
+  /** Linked policy pages, unpublished ones included (customers only see published pages). */
   policyPageIds: z.array(z.string()),
-  /** Phiên bản khách đang thấy; `null` khi sản phẩm không ở trạng thái đã xuất bản. */
+  /** The version customers see; `null` when the product is not published. */
   liveVersion: z.object({ version: z.number(), publishedAt: z.string() }).nullable(),
-  /** Bản đang soạn khác phiên bản khách đang thấy; chỉ có nghĩa khi đã xuất bản. */
+  /** The draft differs from the version customers see; only meaningful once published. */
   hasUnpublishedChanges: z.boolean(),
 })
 export type AdminProductDetail = z.infer<typeof AdminProductDetail>
@@ -166,13 +166,13 @@ export const PublicImage = ImageRenditions.extend({ alt: z.string() })
 export type PublicImage = z.infer<typeof PublicImage>
 
 /**
- * Điều khách thấy về một biến thể: còn hàng sẵn, đang nhận đặt trước (hết hàng nhưng thuộc đợt đang mở và còn suất),
- * hay hết hàng. Hàng đặt trước không tính là còn hàng (GLOSSARY "Đang nhận đặt trước").
+ * What customers see about a variant: in stock, open for pre-order (out of stock but in an open campaign with
+ * allocation left), or out of stock. Pre-order stock does not count as in stock (GLOSSARY "Đang nhận đặt trước").
  */
 export const VariantAvailability = z.enum(['in_stock', 'preorder', 'out_of_stock'])
 export type VariantAvailability = z.infer<typeof VariantAvailability>
 
-/** Đợt đặt trước của một biến thể như khách thấy: mức cọc và thời gian giao dự kiến (`YYYY-MM-DD`). */
+/** A variant's pre-order campaign as customers see it: deposit percent and expected delivery (`YYYY-MM-DD`). */
 export const PreorderOffer = z.object({
   campaignId: z.string(),
   depositPercent: z.number(),
@@ -181,33 +181,33 @@ export const PreorderOffer = z.object({
 })
 export type PreorderOffer = z.infer<typeof PreorderOffer>
 
-/** Thẻ sản phẩm ở trang danh mục, thương hiệu. */
+/** Product card on category and brand pages. */
 export const ProductCard = z.object({
   slug: z.string(),
   name: z.string(),
   brand: z.object({ slug: z.string(), name: z.string() }),
-  /** Giá thấp nhất trong các biến thể đang bán ("từ X ₫"). */
+  /** Lowest price among variants on sale ("từ X ₫"). */
   fromPrice: z.number(),
-  /** Giá hãng của chính biến thể có giá thấp nhất. */
+  /** Compare-at price of that lowest-priced variant. */
   compareAtPrice: z.number().nullable(),
   image: PublicImage.nullable(),
-  /** Có ít nhất một biến thể đang hiện với khách còn hàng; không bao giờ kèm số lượng (ADR 0006). */
+  /** At least one visible variant is in stock; never with a count (ADR 0006). */
   inStock: z.boolean(),
-  /** Không còn hàng sẵn nhưng có ít nhất một biến thể đang nhận đặt trước: thẻ có nhãn "Đặt trước". */
+  /** No stock but at least one variant open for pre-order: the card gets a "Đặt trước" label. */
   preorder: z.boolean(),
 })
 export type ProductCard = z.infer<typeof ProductCard>
 
 export const PRODUCT_PAGE_SIZE = 24
 
-/** Sắp xếp kết quả; bỏ trống thì có từ khóa xếp theo độ liên quan, không có thì mới xuất bản trước. */
+/** Result order; empty means relevance with a keyword, otherwise newest published first. */
 export const ProductSort = z.enum(['newest', 'price_asc', 'price_desc'])
 export type ProductSort = z.infer<typeof ProductSort>
 
-/** Bộ lọc thuộc tính trên URL là `attr.<key>=<giá trị>`, lặp lại để chọn nhiều giá trị (ví dụ `attr.gioi_tinh=Nam`). */
+/** Attribute filters in the URL are `attr.<key>=<value>`, repeated for several values (e.g. `attr.gioi_tinh=Nam`). */
 export const ATTRIBUTE_FILTER_PREFIX = 'attr.'
 
-/** Ô bỏ trống trên form gửi lên chuỗi rỗng; coi như không lọc. */
+/** Empty form fields arrive as empty strings; treated as no filter. */
 const blank = (value: unknown) => (value === '' ? undefined : value)
 const QueryText = z.preprocess(blank, z.string().trim().max(200).optional())
 const PriceBound = z.preprocess(blank, z.coerce.number().int().min(0).max(1_000_000_000_000).optional())
@@ -222,25 +222,25 @@ const FilterValues = z
   .pipe(z.array(z.string().max(100)).max(50))
 
 export const ProductListQuery = z.object({
-  /** Từ khóa: tên sản phẩm, tên thương hiệu, mã mẫu (không dấu, sai chính tả nhẹ) hoặc SKU. */
+  /** Keyword: product name, brand name, model code (diacritics and small typos tolerated) or SKU. */
   q: QueryText,
-  /** Slug danh mục; gồm cả sản phẩm ở các danh mục con. */
+  /** Category slug; includes products in subcategories. */
   category: QueryText,
-  /** Slug thương hiệu. */
+  /** Brand slug. */
   brand: QueryText,
-  /** Nhóm hàng; ở trang danh mục thì nhóm hàng lấy từ danh mục. */
+  /** Product type; on category pages it comes from the category. */
   type: z.preprocess(blank, ProductType.optional()),
-  /** Khoảng giá VND, so trên giá các biến thể đang bán. */
+  /** VND price range, compared with the prices of variants on sale. */
   minPrice: PriceBound,
   maxPrice: PriceBound,
   sort: z.preprocess(blank, ProductSort.optional()),
   page: z.coerce.number().int().min(1).max(10_000).default(1),
-  /** Key thuộc tính → các giá trị chọn, gom từ `attr.<key>` bằng `attributeFiltersOf`. */
+  /** Attribute key → chosen values, gathered from `attr.<key>` by `attributeFiltersOf`. */
   attributes: z.record(z.string(), FilterValues).default({}),
 })
 export type ProductListQuery = z.input<typeof ProductListQuery>
 
-/** Gom các tham số `attr.<key>` của query string thành `{ key: giá trị }`. */
+/** Gathers the `attr.<key>` query params into `{ key: values }`. */
 export function attributeFiltersOf(query: Record<string, unknown>) {
   return Object.fromEntries(
     Object.entries(query)
@@ -249,7 +249,7 @@ export function attributeFiltersOf(query: Record<string, unknown>) {
   )
 }
 
-/** Sản phẩm đã xuất bản, một trang. */
+/** Published products, one page. */
 export const ProductCardList = z.object({
   items: z.array(ProductCard),
   page: z.number(),
@@ -258,7 +258,7 @@ export const ProductCardList = z.object({
 })
 export type ProductCardList = z.infer<typeof ProductCardList>
 
-/** Một bộ lọc thuộc tính và số sản phẩm của từng giá trị khi giữ nguyên mọi bộ lọc khác. */
+/** One attribute filter and the product count per value, keeping every other filter. */
 export const AttributeFacet = z.object({
   key: z.string(),
   label: z.string(),
@@ -268,29 +268,29 @@ export const AttributeFacet = z.object({
 })
 export type AttributeFacet = z.infer<typeof AttributeFacet>
 
-/** Kết quả tìm kiếm và lọc: một trang thẻ sản phẩm kèm facets. */
+/** Search and filter result: a page of product cards with facets. */
 export const ProductSearchResult = ProductCardList.extend({
-  /** Nhóm hàng đang xem (theo `type` hoặc danh mục); `null` thì chỉ lọc được giới tính, chung cho mọi nhóm hàng. */
+  /** Product type in view (from `type` or the category); `null` allows only gender, shared by all types. */
   productType: ProductType.nullable(),
   facets: z.object({
-    /** Số sản phẩm của từng nhóm hàng, để thu hẹp khi chưa chọn nhóm hàng. */
+    /** Product count per type, to narrow down before a type is picked. */
     productTypes: z.array(z.object({ productType: ProductType, count: z.number() })),
-    /** Thuộc tính có `filterable` của nhóm hàng đang xem, theo thứ tự trong schema. */
+    /** The current type's `filterable` attributes, in schema order. */
     attributes: z.array(AttributeFacet),
-    /** Giá thấp nhất và cao nhất trong các biến thể đang bán; `null` khi không có sản phẩm. */
+    /** Lowest and highest price among variants on sale; `null` without products. */
     price: z.object({ min: z.number(), max: z.number() }).nullable(),
   }),
 })
 export type ProductSearchResult = z.infer<typeof ProductSearchResult>
 
-/** Phiên bản đang xuất bản của sản phẩm, như khách thấy. */
+/** A product's published version, as customers see it. */
 export const PublicProduct = z.object({
   slug: z.string(),
   name: z.string(),
   productType: ProductType,
-  /** `slug` là `null` khi thương hiệu đang ẩn (không có trang riêng). */
+  /** `slug` is `null` when the brand is hidden (no page of its own). */
   brand: z.object({ slug: z.string().nullable(), name: z.string() }),
-  /** `null` khi danh mục đang ẩn. */
+  /** `null` when the category is hidden. */
   category: z.object({ slug: z.string(), name: z.string() }).nullable(),
   modelCode: z.string(),
   description: z.string(),
@@ -299,32 +299,32 @@ export const PublicProduct = z.object({
   originStatement: z.string(),
   attributes: AttributeValues,
   groundShippingOnly: z.boolean(),
-  /** Định nghĩa thuộc tính của nhóm hàng, để hiển thị nhãn. */
+  /** The product type's attribute definitions, for labels. */
   attributeSchema: z.array(AttributeDefinition),
-  /** Chỉ biến thể đang bán, theo thứ tự hiển thị. */
+  /** Only variants on sale, in display order. */
   variants: z.array(
     z.object({
-      /** Id biến thể trong phiên bản đang xuất bản; giỏ hàng lưu theo id này. */
+      /** Variant id in the published version; the cart stores this id. */
       id: z.string(),
       sku: z.string(),
       attributes: AttributeValues,
       price: z.number(),
       compareAtPrice: z.number().nullable(),
-      /** Còn hàng hay hết, đọc trực tiếp từ tồn chứ không từ phiên bản xuất bản (ADR 0006). */
+      /** In or out of stock, read straight from stock rather than the published version (ADR 0006). */
       inStock: z.boolean(),
-      /** `in_stock` khi và chỉ khi `inStock`; còn lại là đặt trước được hay hết hàng. */
+      /** `in_stock` if and only if `inStock`; otherwise open for pre-order or out of stock. */
       availability: VariantAvailability,
-      /** Có khi và chỉ khi `availability` là `preorder`. */
+      /** Present if and only if `availability` is `preorder`. */
       preorder: PreorderOffer.nullable(),
     }),
   ),
-  /** Theo thứ tự hiển thị; `skus` rỗng là ảnh chung. */
+  /** In display order; empty `skus` means a shared image. */
   images: z.array(PublicImage.extend({ skus: z.array(z.string()) })),
-  /** Trang chính sách áp dụng đã xuất bản. */
+  /** Published policy pages that apply. */
   policies: z.array(z.object({ slug: z.string(), title: z.string() })),
   /**
-   * Cam kết có bằng chứng, tách khỏi thông tin nguồn gốc công bố; bảo hành chỉ có ở đây (ADR 0005).
-   * Lấy từ phiên bản đang xuất bản như các trường khác.
+   * Evidenced commitments, separate from the origin statement; warranty is only here (ADR 0005). Taken from the
+   * published version like every other field.
    */
   commitments: z.array(PublicCommitment),
   publishedAt: z.string(),

@@ -4,16 +4,16 @@ import { Slug } from './slug.ts'
 export const ContentPageKind = z.enum(['about', 'process', 'policy'])
 export type ContentPageKind = z.infer<typeof ContentPageKind>
 
-/** Slug của trang chính sách bảo mật; lời đồng ý của khách tham chiếu phiên bản hiện hành của trang này. */
+/** Slug of the privacy policy page; customer consent references its current version. */
 export const PRIVACY_POLICY_SLUG = 'chinh-sach-bao-mat'
 
 /**
- * Slug của trang chính sách đặt trước (điều kiện hủy/hoàn, quá hạn trả phần còn lại). Khách đồng ý với phiên bản
- * hiện hành khi đặt trước, và đơn lưu lại phiên bản đó cùng các chính sách khác.
+ * Slug of the pre-order policy page (cancel/refund terms, overdue remainder). Customers agree to the current version
+ * when pre-ordering, and the order stores it with the other policies.
  */
 export const PREORDER_POLICY_SLUG = 'chinh-sach-dat-truoc'
 
-/** Phần sửa được của trang. Slug và loại cố định từ lúc tạo, nên khách luôn thấy chúng khớp phiên bản đang xuất bản. */
+/** Editable part of a page. Slug and kind are fixed at creation, so they always match the published version. */
 export const UpdateContentPageRequest = z.object({
   title: z.string().trim().min(1).max(200),
   /** Markdown. */
@@ -25,8 +25,8 @@ export const CreateContentPageRequest = UpdateContentPageRequest.extend({ slug: 
 export type CreateContentPageRequest = z.infer<typeof CreateContentPageRequest>
 
 /**
- * `draft`: chưa xuất bản lần nào, khách không thấy.
- * `published`: khách thấy phiên bản `currentVersion`; `hasUnpublishedChanges` khi bản đang soạn khác phiên bản đó.
+ * `draft`: never published, customers do not see it.
+ * `published`: customers see `currentVersion`; `hasUnpublishedChanges` when the draft differs from it.
  */
 export const ContentPageStatus = z.enum(['draft', 'published'])
 export type ContentPageStatus = z.infer<typeof ContentPageStatus>
@@ -50,7 +50,7 @@ export const ContentPageList = z.object({ items: z.array(ContentPageSummary) })
 export type ContentPageList = z.infer<typeof ContentPageList>
 
 export const ContentPageVersionSummary = z.object({
-  /** Id để module khác (lời đồng ý, đơn hàng) lưu tham chiếu. */
+  /** Id other modules (consent, orders) store as a reference. */
   id: z.string(),
   version: z.number(),
   title: z.string(),
@@ -65,7 +65,7 @@ export type ContentPageVersion = z.infer<typeof ContentPageVersion>
 export const ContentPageVersionList = z.object({ items: z.array(ContentPageVersionSummary) })
 export type ContentPageVersionList = z.infer<typeof ContentPageVersionList>
 
-/** Phiên bản đang xuất bản của một trang, như khách thấy. */
+/** The published version of a page, as customers see it. */
 export const PublishedPage = z.object({
   slug: z.string(),
   kind: ContentPageKind,

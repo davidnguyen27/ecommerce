@@ -1,26 +1,26 @@
 import { z } from 'zod'
 
 /**
- * Hoàn tiền sinh ra từ đâu: hủy đơn đã nhận tiền, giải quyết mục cần đối soát, tạo lại từ một khoản thất bại, hay trả
- * hàng sau khi giao (M6b).
+ * Where a refund came from: cancelling a paid order, resolving a reconciliation item, recreating a failed refund, or a
+ * return after delivery (M6b).
  */
 export const RefundOrigin = z.enum(['cancellation', 'reconciliation', 'retry', 'return'])
 export type RefundOrigin = z.infer<typeof RefundOrigin>
 
 /**
- * Trạng thái của một khoản hoàn (GLOSSARY "Hoàn tiền", ADR 0014): chờ kế toán thực hiện, cổng đang xử lý, đã hoàn,
- * thất bại. Hoàn thủ công đi thẳng từ `pending` tới `succeeded`.
+ * Refund status (GLOSSARY "Hoàn tiền", ADR 0014): awaiting accounting, gateway processing, refunded, failed. Manual
+ * refunds go straight from `pending` to `succeeded`.
  */
 export const RefundStatus = z.enum(['pending', 'processing', 'succeeded', 'failed'])
 export type RefundStatus = z.infer<typeof RefundStatus>
 
-/** Hoàn qua lệnh hoàn của cổng, hay chuyển khoản ngoài hệ thống rồi ghi lại. */
+/** Refunded via the gateway's refund command, or by bank transfer outside the system and then recorded. */
 export const RefundMethod = z.enum(['vnpay', 'manual'])
 export type RefundMethod = z.infer<typeof RefundMethod>
 
 const Actor = z.object({ id: z.string(), name: z.string(), email: z.string() })
 
-/** Một khoản hoàn ở trang quản trị. `retriedById` có khi khoản thất bại này đã được tạo lại. */
+/** A refund on the admin page. `retriedById` is set once this failed refund was recreated. */
 export const AdminRefund = z.object({
   id: z.string(),
   amount: z.number(),
@@ -47,8 +47,8 @@ export type AdminRefund = z.infer<typeof AdminRefund>
 const Note = z.string().trim().max(2000)
 
 /**
- * Body của `POST /api/admin/refunds/:id/manual`: kế toán đã chuyển khoản ngoài hệ thống. Chỉ ghi mã giao dịch ngân hàng
- * và ngày chuyển, không ghi số tài khoản của khách.
+ * Body of `POST /api/admin/refunds/:id/manual`: accounting paid by bank transfer outside the system. Records only the
+ * bank transaction ref and date, never the customer's account number.
  */
 export const ManualRefundRequest = z.object({
   bankReference: z
@@ -56,27 +56,29 @@ export const ManualRefundRequest = z.object({
     .trim()
     .min(1, 'Nhập mã giao dịch ngân hàng')
     .max(100),
-  /** Ngày chuyển, `YYYY-MM-DD`. */
+  /** Transfer date, `YYYY-MM-DD`. */
   transferredOn: z.iso.date({ error: 'Nhập ngày chuyển' }),
   note: Note.optional(),
 })
 export type ManualRefundRequest = z.input<typeof ManualRefundRequest>
 
-/** Body của `POST /api/admin/refunds/:id/settle`: chốt khoản cổng đang xử lý sau khi kiểm trên cổng merchant. */
+/**
+ * Body of `POST /api/admin/refunds/:id/settle`: settles a gateway-processing refund after checking the merchant portal.
+ */
 export const SettleRefundRequest = z.object({
   outcome: z.enum(['succeeded', 'failed']),
   note: Note.min(1, 'Nhập ghi chú: đã kiểm gì trên cổng'),
 })
 export type SettleRefundRequest = z.input<typeof SettleRefundRequest>
 
-/** Body của `POST /api/admin/refunds/:id/retry`: tạo lại khoản thất bại, số tiền không vượt khoản đó. */
+/** Body of `POST /api/admin/refunds/:id/retry`: recreates a failed refund, at most its amount. */
 export const RetryRefundRequest = z.object({
   amount: z.number().int().positive('Số tiền phải lớn hơn 0'),
   note: Note.optional(),
 })
 export type RetryRefundRequest = z.input<typeof RetryRefundRequest>
 
-/** Một khoản hoàn như khách thấy: số tiền, đang hoàn hay đã hoàn, ngày tạo và ngày xong. Không có ghi chú nội bộ. */
+/** A refund as customers see it: amount, refunding or refunded, created and completed dates. No internal notes. */
 export const PublicRefund = z.object({
   amount: z.number(),
   status: z.enum(['refunding', 'refunded']),
