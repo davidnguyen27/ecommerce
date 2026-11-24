@@ -1,10 +1,9 @@
-// Chặn commit làm lộ khóa trong `.env`, `.env.deploy` (wizard deploy) và `.env.infra`: repo công khai trên GitHub.
-// Chạy trong hook pre-commit (.husky/pre-commit).
-// Khóa là biến có tên chứa SECRET, KEY, PASSWORD, TOKEN, HASH, hay là DATABASE_URL (chứa mật khẩu DB), dài từ 8 ký
-// tự. Giá trị đã có trong `.env.example`,
-// kể cả trong dòng chú thích (khóa local mặc định, ví dụ SeaweedFS), là công khai sẵn nên bỏ qua.
-// Chỉ in tên biến và file, không in giá trị.
-// Chạy tay: node scripts/check-staged-secrets.ts
+// Blocks commits that leak secrets from `.env`, `.env.deploy` (deploy wizard) and `.env.infra`: the repo is public on
+// GitHub. Runs in the pre-commit hook (.husky/pre-commit).
+// A secret is a variable whose name contains SECRET, KEY, PASSWORD, TOKEN, HASH, or is DATABASE_URL (holds the DB
+// password), at least 8 characters long. Values already in `.env.example`, comment lines included (default local keys,
+// e.g. SeaweedFS), are public and skipped. Prints only variable and file names, never values.
+// Run by hand: node scripts/check-staged-secrets.ts
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 
@@ -21,14 +20,14 @@ function envValues(file: string) {
     .map(([, name, raw]) => ({ name: name!, value: raw!.trim().replace(/^(["'])(.*)\1$/, '$2') }))
 }
 
-// Giá trị mặc định công khai có thể nằm trong dòng chú thích của `.env.example`, nên tìm trên cả file.
+// Public default values may sit in `.env.example` comment lines, so search the whole file.
 const published = existsSync('.env.example') ? readFileSync('.env.example', 'utf8') : ''
 const secrets = ENV_FILES.flatMap(envValues).filter(
   ({ name, value }) => SECRET_NAME.test(name) && value.length >= MIN_LENGTH && !published.includes(value),
 )
 if (secrets.length === 0) process.exit(0)
 
-// Chỉ các dòng thêm mới của phần đã stage, kèm file chứa dòng đó.
+// Only added lines of the staged changes, with their files.
 const diff = execFileSync('git', ['diff', '--cached', '--unified=0', '--no-color', '--no-ext-diff'], {
   encoding: 'utf8',
   maxBuffer: 256 * 1024 * 1024,

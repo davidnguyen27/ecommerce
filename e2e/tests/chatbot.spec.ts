@@ -1,10 +1,11 @@
-// Chatbot (M8), bằng trình duyệt thật trên stack smoke với model giả (`LLM_CHAIN=fake`, `DemoLlm`: tìm sản phẩm bằng
-// đúng câu khách hỏi rồi trả lời bằng tên sản phẩm):
-// 1. Khách vãng lai hỏi ở trang sản phẩm, thấy thẻ sản phẩm, gửi cho nhân viên; bán hàng thấy yêu cầu "chuyển từ chatbot"
-//    kèm bản chép.
-// 2. Trình duyệt chặn localStorage thì vẫn chat được.
-// 3. Owner tắt chatbot: khung chat báo tạm nghỉ, mời gặp nhân viên; đặt mua vẫn hoàn tất; trang đặt mua không có nút chat.
-// Bật, tắt chatbot đi qua API quản trị; spec để chatbot ở trạng thái tắt như mặc định.
+// Chatbot (M8), in a real browser on the smoke stack with the fake model (`LLM_CHAIN=fake`, `DemoLlm`: searches
+// products with the customer's exact text, then answers with product names):
+// 1. A guest asks on a product page, sees product cards, hands off to staff; sales sees the "chuyển từ chatbot"
+//    request with the transcript.
+// 2. With localStorage blocked, chat still works.
+// 3. The owner turns the chatbot off: the widget says it is resting and offers staff; checkout still completes; the
+//    checkout page has no chat button.
+// Turning the chatbot on/off goes through the admin API; the spec leaves it off, the default.
 import { expect, test, type Page } from '@playwright/test'
 import { adminLogin } from '../support/admin-login.ts'
 import { buyAndPay, ensureSellable } from '../support/purchase.ts'
@@ -34,7 +35,7 @@ async function ask(page: Page, question: string) {
 }
 
 test.beforeAll(async () => {
-  // Chuyển nhân viên giới hạn 3 lần mỗi IP mỗi ngày; mọi request E2E đi từ một IP.
+  // Handoff is limited to 3 per IP per day; every E2E request comes from one IP.
   resetRateLimits()
   await setChatbot(true)
 })

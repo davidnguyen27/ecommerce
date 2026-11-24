@@ -1,9 +1,12 @@
-// Yêu cầu hỗ trợ, trả hàng, đổi hàng (M6b), bằng trình duyệt thật trên stack smoke với cổng giả lập:
-// 1. Khách mua, trả, kho giao xong; khách gửi yêu cầu trả kèm ảnh; bán hàng nhận việc, chấp nhận; kho nhận hàng về; bán
-//    hàng đề xuất hoàn; kế toán ghi chuyển khoản; khách thấy yêu cầu đã xong và khoản đã hoàn.
-// 2. Khách đổi sang biến thể cùng giá còn hàng; bán hàng chấp nhận (hàng mới được giữ); kho nhận hàng cũ rồi bàn giao hàng
-//    mới; khách thấy mã vận đơn.
-// Mỗi luồng tự dọn: hàng trả về nhập lại tồn; biến thể đổi sang được đưa về giá và tồn như seed sau khi chạy.
+// Support requests, returns, exchanges (M6b), in a real browser on the smoke stack with the simulator:
+// 1. A customer buys, pays, the warehouse delivers; the customer sends a return with an image; sales takes and accepts
+//    it; the warehouse receives the goods; sales proposes the refund; accounting records the transfer; the customer
+// sees
+//    the request done and the refund completed.
+// 2. The customer exchanges to an in-stock variant at the same price; sales accepts (the new item is reserved); the
+//    warehouse receives the old item then hands over the new one; the customer sees the tracking number.
+// Each flow cleans up: returned goods restocked; the exchange variant's price and stock reset to the seed after the
+// run.
 import { expect, test, type Browser, type Page } from '@playwright/test'
 import type { AdminSupportRequest, StockItem } from '@ecommerce/shared'
 import { adminLogin } from '../support/admin-login.ts'
@@ -11,17 +14,20 @@ import { resetRateLimits } from '../support/rate-limit.ts'
 import { ACCOUNTANT, AdminApi, PRICE, PRODUCT_PATH, PROVINCE_CODE, SALES, SKU, WAREHOUSE } from '../support/stack.ts'
 
 const runId = Date.now().toString().slice(-7)
-/** Biến thể thứ hai của sản phẩm seed: seed để giá 3.200.000 và hết hàng. Luồng đổi tạm đưa về cùng giá, có một cái. */
+/**
+ * The seed product's second variant: seeded at 3,200,000 and out of stock. The exchange flow briefly sets the same
+ * price and one unit.
+ */
 const OTHER_SKU = 'AM90-TRANG-41'
 const OTHER_SEED = { price: 3_200_000, attributes: { mau: 'Trắng', size: '41' } }
-/** Ảnh PNG 1×1 hợp lệ cho đính kèm (API kiểm nội dung và xử lý lại ảnh). */
+/** A valid 1×1 PNG for attachments (the API checks content and reprocesses images). */
 const PIXEL = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64',
 )
 
 test.beforeAll(async () => {
-  // Mỗi luồng đặt một đơn và gửi một yêu cầu: xóa bộ đếm giới hạn tần suất của stack smoke.
+  // Each flow places an order and sends a request: clear the smoke stack's rate limit counters.
   resetRateLimits()
   const api = await AdminApi.owner()
   const stock = await api.stockOf(SKU)
@@ -36,7 +42,7 @@ test.beforeAll(async () => {
   }
 })
 
-/** Đặt giá và tồn của biến thể đổi sang (tồn bằng kiểm kê: số đang giữ + `available`). */
+/** Sets the exchange variant's price and stock (stock via stocktake: reserved + `available`). */
 async function setOther(api: AdminApi, price: number, available: number) {
   const item: StockItem = await api.stockOf(OTHER_SKU)
   await api.send('PUT', `/api/admin/products/${item.product.id}/variants/${item.variantId}`, {
@@ -55,7 +61,9 @@ async function setOther(api: AdminApi, price: number, available: number) {
   }
 }
 
-/** Khách vãng lai mua một cái, trả qua cổng giả lập; owner chuẩn bị, bàn giao và ghi đã giao. Trả mã đơn và link đơn. */
+/**
+ * A guest buys one unit, pays via the simulator; the owner prepares, hands over and delivers. Returns code and link.
+ */
 async function deliveredOrder(page: Page, suffix: string) {
   await page.goto(PRODUCT_PATH)
   await page.getByRole('button', { name: 'Thêm vào giỏ' }).click()
@@ -88,7 +96,9 @@ async function deliveredOrder(page: Page, suffix: string) {
   return { code, url }
 }
 
-/** Khách mở form gửi yêu cầu ở trang đơn, chọn loại, điền tiêu đề và nội dung (bước chọn dòng do `pick` làm). */
+/**
+ * The customer opens the request form on the order page, picks the type, fills subject and body (`pick` picks lines).
+ */
 async function openRequest(page: Page, url: string, kind: string, pick: () => Promise<void>) {
   await page.goto(url)
   await page.getByRole('button', { name: 'Gửi yêu cầu' }).click()
@@ -98,7 +108,7 @@ async function openRequest(page: Page, url: string, kind: string, pick: () => Pr
   await page.getByLabel('Nội dung').fill(kind === 'return' ? 'Không vừa chân' : 'Chật, muốn đổi size 41')
 }
 
-/** Gửi form và chờ sang trang yêu cầu; trả mã yêu cầu và link trang yêu cầu. */
+/** Submits the form and waits for the request page; returns the request code and link. */
 async function submitRequest(page: Page) {
   await page.getByRole('button', { name: 'Gửi yêu cầu' }).click()
   await page.waitForURL(/\/yeu-cau\/\d+/)
@@ -106,7 +116,7 @@ async function submitRequest(page: Page) {
   return { code: Number(new URL(page.url()).pathname.split('/').at(-1)), url: page.url() }
 }
 
-/** Một trang quản trị của nhân viên, trong phiên trình duyệt riêng, tự đồng ý mọi hộp `confirm`. */
+/** A staff admin page in a separate browser session, accepting every `confirm` dialog. */
 async function staffPage(browser: Browser, credentials: { email: string; password: string }, path: string) {
   const context = await browser.newContext()
   const page = await context.newPage()
@@ -116,14 +126,14 @@ async function staffPage(browser: Browser, credentials: { email: string; passwor
   return { page, close: () => context.close() }
 }
 
-/** Trang yêu cầu ở trang quản trị của một nhân viên. */
+/** The request page in a staff member's admin. */
 async function staffSupport(browser: Browser, credentials: { email: string; password: string }, code: number) {
   const staff = await staffPage(browser, credentials, `/admin/support/${code}`)
   await expect(staff.page.getByTestId('admin-support-status')).toBeVisible()
   return staff
 }
 
-/** Bán hàng nhận việc rồi chấp nhận kèm lời nhắn. */
+/** Sales takes the request, then accepts with a message. */
 async function claimAndAccept(browser: Browser, code: number) {
   const sales = await staffSupport(browser, SALES, code)
   await sales.page.getByRole('button', { name: 'Nhận việc' }).click()
@@ -134,7 +144,7 @@ async function claimAndAccept(browser: Browser, code: number) {
   await sales.close()
 }
 
-/** Kho ghi nhận hàng khách gửi về, nhập lại tồn cả dòng (mặc định của form); trả trang để làm tiếp. */
+/** The warehouse records the goods received, restocking the whole line (form default); returns the page to continue. */
 async function receive(browser: Browser, code: number) {
   const warehouse = await staffSupport(browser, WAREHOUSE, code)
   await warehouse.page.getByRole('button', { name: 'Ghi nhận hàng về' }).click()
@@ -161,12 +171,12 @@ test('trả hàng kèm ảnh: chấp nhận, nhận hàng về, đề xuất ho�
   await claimAndAccept(browser, request.code)
   const warehouse = await receive(browser, request.code)
   await warehouse.close()
-  // Hàng trả về nhập lại tồn, sổ loại "return".
+  // Returned goods are restocked, ledger kind "return".
   const stock = await api.stockOf(SKU)
   expect(stock.onHand).toBe(before.onHand)
   expect((await api.movementsOf(stock.variantId)).items[0]).toMatchObject({ kind: 'return', quantity: 1 })
 
-  // Bán hàng đề xuất hoàn số gợi ý (giá dòng, không gồm phí giao).
+  // Sales proposes the suggested refund (line price, shipping excluded).
   const sales = await staffSupport(browser, SALES, request.code)
   await expect(sales.page.getByLabel('Số tiền hoàn (VND)')).toHaveValue(String(PRICE))
   await sales.page.getByRole('button', { name: 'Đề xuất hoàn và đóng yêu cầu' }).click()
@@ -174,7 +184,7 @@ test('trả hàng kèm ảnh: chấp nhận, nhận hàng về, đề xuất ho�
   await sales.close()
   expect(await api.order(order.code)).toMatchObject({ status: 'completed', refunding: PRICE })
 
-  // Kế toán chuyển khoản ngoài hệ thống rồi ghi lại ở trang đơn.
+  // Accounting pays by transfer outside the system, then records it on the order page.
   const accountant = await staffPage(browser, ACCOUNTANT, `/admin/orders/${order.code}`)
   await accountant.page.getByLabel('Mã giao dịch ngân hàng').fill(`FT${runId}`)
   await accountant.page.getByTestId('refund-manual').click()
@@ -190,7 +200,7 @@ test('trả hàng kèm ảnh: chấp nhận, nhận hàng về, đề xuất ho�
 
 test.describe('đổi hàng', () => {
   test.afterAll(async () => {
-    // Đưa biến thể đổi sang về như seed: giá cũ, hết hàng.
+    // Reset the exchange variant to the seed: old price, out of stock.
     await setOther(await AdminApi.owner(), OTHER_SEED.price, 0)
   })
 
@@ -211,11 +221,11 @@ test.describe('đổi hàng', () => {
     const request = await submitRequest(page)
     await expect(page.getByTestId('support-lines')).toContainText(OTHER_SKU)
 
-    // Chấp nhận: hàng mới được giữ ngay.
+    // Accept: the new item is reserved at once.
     await claimAndAccept(browser, request.code)
     expect((await api.stockOf(OTHER_SKU)).reserved).toBe(otherBefore.reserved + 1)
 
-    // Kho nhận hàng cũ (nhập lại tồn) rồi bàn giao hàng mới.
+    // The warehouse receives the old item (restocked), then hands over the new one.
     const warehouse = await receive(browser, request.code)
     await warehouse.page.getByLabel('Đơn vị vận chuyển').fill('Viettel Post')
     await warehouse.page.getByLabel('Mã vận đơn').fill(`VTP${runId}`)
