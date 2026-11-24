@@ -20,8 +20,8 @@ const preorderConflict = (change: PreorderChange) => {
 }
 
 /**
- * Đặt trước một biến thể, không qua giỏ hàng (ADR 0012): mỗi đơn một dòng, trả cọc trước. Đơn chờ cọc chiếm suất của
- * đợt, không giữ hàng (ADR 0013); hết hạn hay hủy thì suất tự trống ra. Dừng ở thay đổi đầu tiên khách cần xem lại.
+ * Pre-order of one variant, outside the cart (ADR 0012): one line, deposit first. A pending order takes campaign
+ * allocation, not stock (ADR 0013). Stops at the first change the customer must review.
  */
 export const datTruoc: Plan<z.output<typeof PreorderRequest>> = {
   verb: 'đặt trước',
@@ -46,7 +46,7 @@ export const datTruoc: Plan<z.output<typeof PreorderRequest>> = {
     const variant = found.variant
     if (problem === 'discontinued' || !variant) throw preorderConflict({ kind: 'discontinued' })
     if (problem === 'in_stock') throw preorderConflict({ kind: 'in_stock' })
-    // Đợt khách thấy đã đóng hay đã thay bằng đợt khác: lời hẹn giao có thể khác, khách phải xem lại.
+    // The campaign seen has closed or been replaced: the delivery promise may differ.
     if (!campaign || campaign.id !== input.campaignId) throw preorderConflict({ kind: 'campaign' })
     if (variant.price !== input.price) {
       throw preorderConflict({ kind: 'price', from: input.price, to: variant.price })
@@ -58,7 +58,7 @@ export const datTruoc: Plan<z.output<typeof PreorderRequest>> = {
 
     const snapshot = found.snapshot!
     return {
-      // Đơn một dòng nên dòng nhận cả phần giảm; không giữ hàng.
+      // Single line, so it takes the whole discount; nothing is reserved.
       lines: [
         {
           position: 0,

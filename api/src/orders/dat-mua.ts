@@ -7,8 +7,8 @@ import { reserveStock } from '../stock/stock.ts'
 import type { Plan } from './placement-plan.ts'
 
 /**
- * Đặt mua: mọi dòng giỏ phải còn bán, đúng giá khách thấy và đủ hàng. Gom mọi dòng sai trong một lần, theo thứ tự dòng
- * khách gửi; vẫn giữ hàng các dòng đúng để báo đủ các dòng thiếu hàng (lỗi thì rollback nên không giữ gì).
+ * Checkout: every line must be on sale, at the price seen, and in stock. Reports all bad lines at once, in input order;
+ * still reserves the valid lines so every short line is found (the 409 rolls the reservation back).
  */
 export const datMua: Plan<z.output<typeof CheckoutRequest>> = {
   verb: 'đặt mua',
@@ -48,7 +48,7 @@ export const datMua: Plan<z.output<typeof CheckoutRequest>> = {
       )
     }
 
-    // Tới đây mọi dòng đều có biến thể đang bán trong snapshot đang xuất bản, và đã được giữ đủ số lượng.
+    // Every line now has a live variant in the published snapshot and is fully reserved.
     const lines = input.lines.map((line, position) => {
       const found = variants.get(line.variantId)!
       const variant = found.variant!
