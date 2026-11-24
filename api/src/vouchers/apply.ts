@@ -5,7 +5,7 @@ import {
   type VoucherQuote,
   type VoucherReason,
 } from '@ecommerce/shared'
-import type { Request, Response } from 'express'
+import type { Request } from 'express'
 import type { DbClient } from '../db.ts'
 import type { Voucher } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
@@ -117,13 +117,11 @@ type VoucherInput = {
 export async function quoteVoucher(
   db: DbClient,
   req: Request,
-  res: Response,
   code: string,
   input: VoucherInput,
 ): Promise<VoucherQuote> {
   await enforceRateLimits(
     db,
-    res,
     [{ limit: RATE_LIMITS.voucherCheckPerIp, subject: String(req.ip) }],
     'Bạn đã thử mã giảm giá quá nhiều lần, vui lòng thử lại sau',
   )

@@ -1,4 +1,3 @@
-import type { Response } from 'express'
 import { ErrorCode } from '@ecommerce/shared'
 import { hashOpaqueToken } from '../auth/opaque-token.ts'
 import type { DbClient } from '../db.ts'
@@ -33,12 +32,11 @@ export const RATE_LIMITS = {
 } satisfies Record<string, RateLimit>
 
 /**
- * Tính một lần thử vào mỗi bộ đếm; bộ đếm nào vượt `max` thì đặt `Retry-After` và ném 429.
+ * Tính một lần thử vào mỗi bộ đếm; bộ đếm nào vượt `max` thì ném 429 kèm `retryAfter` (`errorHandler` đặt header).
  * `subject` là IP, email hoặc id, tùy giới hạn. Đếm trong Postgres để mọi instance API dùng chung.
  */
 export async function enforceRateLimits(
   db: DbClient,
-  res: Response,
   hits: { limit: RateLimit; subject: string }[],
   message = 'Bạn đã thử quá nhiều lần, vui lòng thử lại sau',
 ) {
@@ -58,8 +56,5 @@ export async function enforceRateLimits(
         ceil(extract(epoch FROM "window_start" + make_interval(secs => ${limit.windowMs / 1000}::double precision) - now()))::int AS retry_after`
     if (row && row.hits > limit.max) retryAfter = Math.max(retryAfter, row.retry_after, 1)
   }
-  if (retryAfter > 0) {
-    res.setHeader('Retry-After', String(retryAfter))
-    throw new AppError(429, ErrorCode.RATE_LIMITED, message)
-  }
+  if (retryAfter > 0) throw new AppError(429, ErrorCode.RATE_LIMITED, message, undefined, undefined, retryAfter)
 }

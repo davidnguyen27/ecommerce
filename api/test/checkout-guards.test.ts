@@ -115,6 +115,16 @@ describe('giới hạn tần suất đặt mua', () => {
     expect(otherIp.status).toBe(201)
   })
 
+  it('body sai (400) không tính vào giới hạn theo IP', async () => {
+    const { checkout } = await shop()
+    for (let i = 0; i < 6; i++) {
+      const res = await checkout({ acceptPrivacyPolicy: false }).set('X-Forwarded-For', '203.0.113.3')
+      expect(res.status).toBe(400)
+    }
+
+    expect((await checkout().set('X-Forwarded-For', '203.0.113.3')).status).toBe(201)
+  })
+
   /** Đặt mua mỗi lần từ một IP khác, để chỉ giới hạn theo email và số điện thoại có tác dụng. */
   async function shopWithStock() {
     const app = await shop()

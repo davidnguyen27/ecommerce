@@ -68,7 +68,7 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
 
       let voucher: VoucherQuote | null = null
       if (input.voucherCode !== undefined) {
-        voucher = await quoteVoucher(prisma, req, res, input.voucherCode, {
+        voucher = await quoteVoucher(prisma, req, input.voucherCode, {
           saleType: 'preorder',
           lines:
             variant && snapshot
@@ -145,7 +145,6 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
       // Chung giới hạn với đặt mua: đặt trước cũng tạo đơn chờ thanh toán.
       await enforceRateLimits(
         prisma,
-        res,
         [{ limit: RATE_LIMITS.checkoutPerIp, subject: String(req.ip) }],
         'Bạn đã đặt quá nhiều lần, vui lòng thử lại sau',
       )

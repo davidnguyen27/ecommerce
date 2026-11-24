@@ -55,7 +55,7 @@ export function accountOrderRoutes({
       // Trả phần còn lại của đơn đặt trước của chính mình; cấp kèm token tra cứu cho trang kết quả thanh toán.
       .post('/:code/pay-remainder', async (req, res) => {
         const order = await findCustomerOrder(prisma, String(req.params.code), authSubject(req))
-        const body: PayRemainderResult = await createRemainderLink(prisma, { payments, siteUrl, req, res }, order.id, {
+        const body: PayRemainderResult = await createRemainderLink(prisma, { payments, siteUrl, req }, order.id, {
           issueToken: true,
         })
         res.set('Cache-Control', 'no-store').json(body)
