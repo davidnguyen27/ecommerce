@@ -19,7 +19,7 @@ import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
 import { enoughStockIds } from '../stock/stock.ts'
 import { quoteVoucher, type VoucherLine } from '../vouchers/apply.ts'
 
-/** Đặt mua của khách, không cần đăng nhập; kèm access token khách thì đơn gắn với tài khoản. */
+/** Customer checkout, no sign-in needed; a customer access token links the order to the account. */
 export function checkoutRoutes(deps: AppDeps) {
   const { prisma, storage, jwtSecret } = deps
   const customerSession = optionalAuth(new TextEncoder().encode(jwtSecret), 'customer')
@@ -55,7 +55,7 @@ export function checkoutRoutes(deps: AppDeps) {
 
       let voucher: VoucherQuote | null = null
       if (input.voucherCode !== undefined) {
-        // Chỉ các dòng mua được (còn bán, còn hàng) tính vào tiền hàng, như `subtotal`.
+        // Only buyable lines (on sale, in stock) count toward goods, like `subtotal`.
         const buyable = lines.flatMap(({ variantId, quantity, lineTotal, price }): VoucherLine[] => {
           const snapshot = variants.get(variantId)?.snapshot
           return lineTotal === null || !snapshot || price === null

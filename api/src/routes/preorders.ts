@@ -20,9 +20,8 @@ import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
 import { quoteVoucher } from '../vouchers/apply.ts'
 
 /**
- * Đặt trước một biến thể, không qua giỏ hàng (ADR 0012): mỗi đơn một dòng, trả cọc trước. Đơn chờ cọc chiếm suất của
- * đợt, không giữ hàng (ADR 0013); hết hạn hay hủy thì suất tự trống ra. Không cần đăng nhập; kèm access token khách
- * thì đơn gắn với tài khoản.
+ * Pre-order quote and placement (ADR 0012, 0013). No sign-in needed; a customer access token links the order to the
+ * account.
  */
 export function preorderRoutes(deps: AppDeps) {
   const { prisma, storage, jwtSecret } = deps
@@ -62,7 +61,7 @@ export function preorderRoutes(deps: AppDeps) {
         })
       }
       const discount = voucher?.applied ? voucher.discount : 0
-      /** Phí giao, tổng và tiền cọc khi tiền hàng được giảm `discount`; chưa có biến thể thì chưa tính được gì. */
+      /** Fee, total and deposit after `discount`; all `null` without a variant. */
       const amounts = (discount: number) =>
         subtotal === null
           ? { shippingFee: null, total: null, depositAmount: null }

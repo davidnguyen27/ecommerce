@@ -4,50 +4,50 @@ import type { CartVariant } from '../checkout/live-variants.ts'
 import type { PaymentPurpose, Prisma } from '../generated/prisma/client.ts'
 import type { VoucherLine } from '../vouchers/apply.ts'
 
-// Kiểu nội bộ của module đặt đơn (`place-order.ts`): phần riêng của mỗi loại đơn. Chỉ dùng trong `orders/`.
+// Internal types of order placement (`place-order.ts`): the per-kind part. Used only inside `orders/`.
 
 export type Tx = Prisma.TransactionClient
 
-/** Dòng đơn trước khi chia tiền giảm. */
+/** Order line before the discount is split. */
 export type LineDraft = Omit<Prisma.OrderLineUncheckedCreateWithoutOrderInput, 'discount'>
 
-/** Phần của một loại đơn mà pipeline cần sau khi plan đã khóa và kiểm. */
+/** What the pipeline needs once a plan has locked and validated. */
 export type Claim = {
   lines: LineDraft[]
-  /** Các dòng như mã giảm giá thấy (thương hiệu, danh mục lấy từ snapshot). */
+  /** Lines as the voucher sees them (brand and category from the snapshot). */
   voucherLines: VoucherLine[]
   subtotal: number
-  /** Biến thể để chụp phiên bản chính sách của sản phẩm. */
+  /** Variants whose product policy versions are snapshotted. */
   variants: Iterable<CartVariant>
-  /** Mức cọc của đợt; không có với đơn hàng sẵn. */
+  /** Campaign deposit percent; absent for in-stock orders. */
   depositPercent?: number
-  /** `details` của 409 khi mã giảm giá không còn như khách đã thấy. */
+  /** 409 `details` when the voucher no longer matches what the customer saw. */
   voucherConflictDetails: (voucher: VoucherConflict) => Record<string, unknown>
-  /** Phần riêng của loại đơn, tính khi đã có số tiền. */
+  /** Per-kind part that needs the final amounts. */
   settle: (amounts: { total: number; depositAmount: number | null }) => {
-    /** Cột riêng của loại đơn trên `order`. */
+    /** Per-kind `order` columns. */
     orderColumns: Partial<Prisma.OrderUncheckedCreateInput>
-    /** Phiên bản chính sách riêng của loại đơn, thêm vào chính sách của sản phẩm. */
+    /** Extra policy versions, added to the product policies. */
     extraPolicyVersionIds: string[]
     eventData: Prisma.InputJsonObject
     payment: { purpose: PaymentPurpose; amount: number; description: (code: number) => string }
   }
 }
 
-/** Phần riêng của một loại đơn. Nội bộ module: nơi gọi chọn loại đơn bằng entry point. */
+/** The per-kind part of placement. Callers pick a kind by entry point, never by plan. */
 export type Plan<Input> = {
-  /** Động từ trong thông điệp lỗi: "đặt mua", "đặt trước". */
+  /** Verb used in error messages: "đặt mua", "đặt trước". */
   verb: string
   saleType: 'standard' | 'preorder'
-  /** Thông điệp 429 khi quá giới hạn đặt theo IP. */
+  /** 429 message for the per-IP limit. */
   tooManyAttempts: string
-  /** Kiểm thêm trước khi đụng DB (bước 1). */
+  /** Extra body checks before any DB work (step 1). */
   checkInput?: (input: Input) => void
-  /** Bước 4–5: đọc chính sách riêng, khóa dòng biến thể hay dòng suất, kiểm và dựng dòng đơn. Lỗi thì ném 409. */
+  /** Steps 4–5: read kind-specific policy, lock variant or allocation rows, validate, build lines. Throws 409. */
   claim: (tx: Tx, input: Input) => Promise<Claim>
 }
 
-/** Phần chung của body đặt mua và đặt trước, sau khi parse. */
+/** Body fields shared by checkout and pre-order, after parsing. */
 export type PlacementInput = Pick<
   z.output<typeof CheckoutRequest>,
   'address' | 'invoice' | 'note' | 'acceptPrivacyPolicy' | 'voucherCode' | 'discount'

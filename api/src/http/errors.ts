@@ -3,8 +3,8 @@ import { ErrorCode, type ApiErrorBody, type FieldError } from '@ecommerce/shared
 import { Prisma } from '../generated/prisma/client.ts'
 
 /**
- * Lỗi có chủ đích; error handler chuyển nó thành body lỗi thống nhất. `retryAfter` (giây) thành header `Retry-After`,
- * để nơi ném 429 không cần `res` của Express.
+ * Intentional error; the error handler turns it into the standard error body. `retryAfter` (seconds) becomes the
+ * `Retry-After` header, so 429 throwers need no Express `res`.
  */
 export class AppError extends Error {
   constructor(
@@ -19,19 +19,19 @@ export class AppError extends Error {
   }
 }
 
-/** 400 gắn với một trường của form. */
+/** 400 tied to one form field. */
 export const invalidField = (path: string, message: string) =>
   new AppError(400, ErrorCode.VALIDATION_ERROR, message, [{ path, message }])
 
-/** 409 gắn với một trường của form; `details` cho client trạng thái mới để hiện lại. */
+/** 409 tied to one form field; `details` gives the client the new state to show. */
 export const conflictField = (path: string, message: string, details?: Record<string, unknown>) =>
   new AppError(409, ErrorCode.CONFLICT, message, [{ path, message }], details)
 
-/** Lỗi unique constraint của Postgres qua Prisma. */
+/** Postgres unique-constraint violation via Prisma. */
 export const isUniqueViolation = (err: unknown) =>
   err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'
 
-/** Dùng trong `.catch`: lỗi unique constraint thành lỗi nghiệp vụ `toError()`, lỗi khác ném lại nguyên. */
+/** For `.catch`: a unique violation becomes `toError()`, anything else is rethrown. */
 export const rethrowUnique =
   (toError: () => AppError) =>
   (err: unknown): never => {
@@ -44,7 +44,7 @@ export const notFound: RequestHandler = (req, _res, next) => {
 
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   const error = toAppError(err)
-  // AppError là lỗi có chủ đích, nơi ném đã tự log nếu cần; chỉ log lỗi bất ngờ.
+  // AppError is intentional and logged at the throw site if needed; log only unexpected errors.
   if (!(err instanceof AppError) && error.status >= 500) req.log.error({ err }, 'Lỗi không mong đợi')
 
   const body: ApiErrorBody = {
@@ -62,7 +62,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
 
 function toAppError(err: unknown): AppError {
   if (err instanceof AppError) return err
-  // body-parser báo lỗi phía client (JSON hỏng, body quá lớn, charset lạ) bằng `status` 4xx.
+  // body-parser reports client errors (bad JSON, body too large, odd charset) with a 4xx `status`.
   const status = err instanceof Error && 'status' in err ? Number(err.status) : 500
   if (status >= 400 && status < 500) {
     return new AppError(status, ErrorCode.VALIDATION_ERROR, 'Body của request không hợp lệ')

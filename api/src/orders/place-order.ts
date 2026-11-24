@@ -26,48 +26,47 @@ import { priceOrder } from './price-order.ts'
 
 export type PlacementDeps = Pick<AppDeps, 'prisma' | 'payments' | 'siteUrl' | 'orderExpiry'>
 
-/** Người đặt và những gì cần từ request; không có kiểu Express. */
+/** Who places the order, and what is needed from the request. No Express types. */
 export type Placer = {
-  /** `null` là khách vãng lai. */
+  /** `null` for a guest. */
   customerId: string | null
-  /** `req.ip` nguyên dạng, gửi cổng thanh toán. */
+  /** Raw `req.ip`, sent to the payment gateway. */
   clientIp: string | undefined
-  /** Log lỗi cổng trước khi ném 502. */
+  /** Logs gateway errors before the 502. */
   log: Logger
 }
 
 /**
- * Tạo đơn (GLOSSARY "Đặt mua", "Đặt trước"). Mỗi entry point tạo một đơn chờ thanh toán trong một transaction và trả
- * link thanh toán; lỗi ở bất kỳ bước nào thì rollback hết: không đơn, không hàng giữ hay suất chiếm, không lượt dùng
- * mã, không sự kiện, không job hết hạn, không đổi địa chỉ giao gần nhất. Lỗi luôn là `AppError`: 400 trường của body,
- * 429 quá số lần đặt theo IP hay quá số đơn chờ (kèm `retryAfter`), 503 chính sách chưa công bố, 409 thứ khách đã
- * thấy đã đổi (dạng `details` theo loại đơn), 502 cổng thanh toán lỗi.
+ * Order placement (GLOSSARY "Đặt mua", "Đặt trước"). Each entry point creates one pending order in a single
+ * transaction and returns its payment link; any failure rolls everything back.
+ * Errors are `AppError`: 400 bad body field, 429 IP or pending-order limit (with `retryAfter`), 503 policy not
+ * published, 409 something the customer saw has changed (`details` shape per order kind), 502 gateway error.
  */
 export function orderPlacement(deps: PlacementDeps) {
   return {
-    /** Đặt mua: giữ hàng mọi dòng đơn, trả đủ tổng. */
+    /** Checkout: reserves stock for every line, pays the full total. */
     checkout: (input: z.output<typeof CheckoutRequest>, placer: Placer): Promise<CheckoutResult> =>
       place(deps, placer, datMua, input),
-    /** Đặt trước: một dòng, chiếm suất của đợt (không giữ hàng, ADR 0013), trả tiền cọc. */
+    /** Pre-order: one line, takes campaign allocation (no reservation, ADR 0013), pays the deposit. */
     preorder: (input: z.output<typeof PreorderRequest>, placer: Placer): Promise<CheckoutResult> =>
       place(deps, placer, datTruoc, input),
   }
 }
 
 /**
- * Pipeline chung. Thứ tự các bước là bất biến của việc tạo đơn, plan không đổi được:
- * 1. Kiểm body trước khi đụng DB: đồng ý chính sách, phường/xã thuộc tỉnh. Rồi đếm một lần đặt theo IP (dùng chung
- *    cho đặt mua và đặt trước), ngoài transaction để đơn hỏng không rollback bộ đếm; body sai thì không bị đếm.
- * 2. Token tra cứu, mở transaction, cấu hình phí giao.
- * 3. Giới hạn đơn chờ: khóa advisory email rồi số điện thoại.
- * 4. Phiên bản chính sách bảo mật (khách vãng lai).
- * 5. Plan: khóa dòng biến thể (giữ hàng) hay dòng suất, kiểm, dựng dòng đơn.
- * 6. Mã giảm giá: khóa dòng mã sau dòng biến thể/suất, kiểm trên các dòng đã đúng vì tiền giảm phụ thuộc giá và số lượng.
- * 7. Phí giao, tổng, tiền cọc: đều tính trên tiền hàng sau giảm.
- * 8. Ghi đơn với snapshot.
- * 9. Sự kiện, job hết hạn, địa chỉ giao gần nhất.
- * 10. Link thanh toán sau cùng, khi mọi thứ khác đã ghi được: cổng lỗi thì cả đơn rollback.
- * Thứ tự khóa (email → số điện thoại → biến thể/suất → mã) giống mọi nơi khác để không deadlock.
+ * Shared pipeline. The step order is an invariant; plans cannot change it:
+ * 1. Validate the body, then count one IP attempt outside the transaction (a bad body is not counted, a failed order
+ *    does not roll back the counter).
+ * 2. Lookup token, open the transaction, shipping config.
+ * 3. Pending-order limit: advisory locks on email, then phone.
+ * 4. Privacy policy version (guests).
+ * 5. Plan: lock variant rows (reservation) or allocation rows, validate, build lines.
+ * 6. Voucher: locks its row last, checked on valid lines since the discount depends on price and quantity.
+ * 7. Shipping fee, total, deposit: all on goods after discount.
+ * 8. Write the order with its snapshot.
+ * 9. Event, expiry job, last shipping address.
+ * 10. Payment link last: a gateway error rolls back the whole order.
+ * Lock order (email → phone → variant/allocation → voucher) matches everywhere else to avoid deadlocks.
  */
 async function place<Input extends PlacementInput>(
   { prisma, payments, siteUrl, orderExpiry }: PlacementDeps,
@@ -93,7 +92,7 @@ async function place<Input extends PlacementInput>(
     async (tx): Promise<CheckoutResult> => {
       const config = await requireShippingFeeConfig(tx)
       await enforcePendingOrderLimit(tx, address)
-      // Khách vãng lai đồng ý với phiên bản hiện hành, đọc trong cùng transaction như lúc đăng ký.
+      // Guests consent to the current version, read in this transaction as at sign-up.
       const privacyPolicy = customerId ? null : await findCurrentPrivacyPolicy(tx)
       if (!customerId && !privacyPolicy) {
         throw new AppError(
@@ -161,7 +160,7 @@ async function place<Input extends PlacementInput>(
           total,
           ...(applied && voucherSnapshot(applied.voucher, applied.discount)),
           lookupTokenHash: hashOpaqueToken(token),
-          // Hạn giữ hàng; đơn đặt trước chờ cọc thì là hạn trả cọc, chiếm suất tới hạn này.
+          // Reservation deadline; for a pre-order, the deposit deadline that holds the allocation.
           reservedUntil,
           lines: {
             create: claim.lines.map((line) => ({ ...line, discount: lineDiscounts.get(line.variantId) ?? 0n })),
@@ -181,7 +180,7 @@ async function place<Input extends PlacementInput>(
         { total, ...settled.eventData, ...(applied && { voucherCode: applied.voucher.code, discount }) },
       )
       await orderExpiry.scheduleOrderExpiry(tx, order.id, reservedUntil)
-      // Trang đặt lần sau tự điền; cùng transaction nên đặt hỏng thì địa chỉ cũ giữ nguyên.
+      // Prefills the next checkout; same transaction, so a failed order keeps the old address.
       if (customerId) {
         const { recipientName, phone, email, provinceCode, wardCode, streetAddress } = address
         await tx.customer.update({
@@ -198,7 +197,7 @@ async function place<Input extends PlacementInput>(
       })
       return { code: order.code, token, checkoutUrl, reservedUntil: reservedUntil.toISOString() }
     },
-    // Gọi cổng thanh toán nằm trong transaction nên cần lâu hơn mặc định 5 giây.
+    // The gateway call runs inside the transaction, so allow more than the default 5 s.
     { timeout: 30_000, maxWait: 10_000 },
   )
 }

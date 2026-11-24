@@ -3,37 +3,37 @@ import { hashOpaqueToken } from '../auth/opaque-token.ts'
 import type { DbClient } from '../db.ts'
 import { AppError } from './errors.ts'
 
-/** Tối đa `max` lần trong mỗi cửa sổ cố định `windowMs`. */
+/** At most `max` hits per fixed `windowMs` window. */
 export type RateLimit = { name: string; max: number; windowMs: number }
 
 const MINUTE = 60 * 1000
 
-// Mức theo IP rộng hơn theo email, vì nhiều khách có thể dùng chung một IP (NAT của nhà mạng).
+// Per-IP limits are looser than per-email: many customers can share an IP (carrier NAT).
 export const RATE_LIMITS = {
   loginPerEmail: { name: 'login:email', max: 10, windowMs: 15 * MINUTE },
   loginPerIp: { name: 'login:ip', max: 50, windowMs: 15 * MINUTE },
   forgotPasswordPerEmail: { name: 'forgot-password:email', max: 3, windowMs: 60 * MINUTE },
   forgotPasswordPerIp: { name: 'forgot-password:ip', max: 20, windowMs: 60 * MINUTE },
   verificationEmailPerCustomer: { name: 'verification-email:customer', max: 3, windowMs: 60 * MINUTE },
-  // Số tạm, chờ chủ doanh nghiệp xác nhận. Tính cả lần bị 409 vì mỗi lần thử đều giữ hàng trong chốc lát.
+  // Provisional. 409s count too, since every attempt briefly reserves stock.
   checkoutPerIp: { name: 'checkout:ip', max: 5, windowMs: 60 * MINUTE },
-  // Mỗi lần trả phần còn lại tạo một link ở cổng; rộng hơn đặt mua vì trả không thành công thì khách thử lại.
+  // Each call creates a gateway link; looser than checkout since failed payments get retried.
   payRemainderPerIp: { name: 'pay-remainder:ip', max: 10, windowMs: 60 * MINUTE },
-  // Báo giá kèm mã giảm giá: chặn dò mã (spec M5, số tạm).
+  // Quotes with a voucher: blocks code guessing (spec M5, provisional).
   voucherCheckPerIp: { name: 'voucher-check:ip', max: 10, windowMs: MINUTE },
-  // Yêu cầu hỗ trợ (spec M6b, số tạm): khách gửi nội dung tự do nên chặn spam theo IP và theo yêu cầu.
+  // Support requests (spec M6b, provisional): free text, so limit spam per IP and per request.
   supportCreatePerIp: { name: 'support-create:ip', max: 5, windowMs: 60 * MINUTE },
   supportMessagePerRequest: { name: 'support-message:request', max: 20, windowMs: 60 * MINUTE },
   supportImagePerIp: { name: 'support-image:ip', max: 20, windowMs: 60 * MINUTE },
-  // Chatbot (spec M8, số tạm): mỗi tin tốn hạn mức model miễn phí chung của cả cửa hàng (ADR 0017).
+  // Chatbot (spec M8, provisional): every message uses the store's shared free model quota (ADR 0017).
   chatMessagePerIp: { name: 'chat-message:ip', max: 60, windowMs: 60 * MINUTE },
-  // Chuyển nhân viên tạo yêu cầu và gửi email, không cần xác minh email: chặn chặt theo IP (spec M8, số tạm).
+  // Handoff creates a request and sends email without verification: strict per IP (spec M8, provisional).
   chatHandoffPerIp: { name: 'chat-handoff:ip', max: 3, windowMs: 24 * 60 * MINUTE },
 } satisfies Record<string, RateLimit>
 
 /**
- * Tính một lần thử vào mỗi bộ đếm; bộ đếm nào vượt `max` thì ném 429 kèm `retryAfter` (`errorHandler` đặt header).
- * `subject` là IP, email hoặc id, tùy giới hạn. Đếm trong Postgres để mọi instance API dùng chung.
+ * Counts one hit per limit; any over `max` throws 429 with `retryAfter`. `subject` is an IP, email or id.
+ * Counted in Postgres so every API instance shares the counters.
  */
 export async function enforceRateLimits(
   db: DbClient,
@@ -42,9 +42,9 @@ export async function enforceRateLimits(
 ) {
   let retryAfter = 0
   for (const { limit, subject } of hits) {
-    // Băm khóa để bảng đếm không chứa email hay IP dạng đọc được.
+    // Hash the key so the table holds no readable email or IP.
     const key = hashOpaqueToken(`${limit.name}:${subject}`)
-    // Một câu lệnh vừa mở cửa sổ mới khi cửa sổ cũ đã hết, vừa tăng đếm, nên các request đồng thời không đếm sót.
+    // One statement resets an expired window and increments, so concurrent requests never miss a count.
     const [row] = await db.$queryRaw<{ hits: number; retry_after: number }[]>`
       INSERT INTO "rate_limit_bucket" ("key", "window_start", "hits") VALUES (${key}, now(), 1)
       ON CONFLICT ("key") DO UPDATE SET

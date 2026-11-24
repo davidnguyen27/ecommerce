@@ -2,15 +2,13 @@ import { depositFor, shippingFeeFor } from '@ecommerce/shared'
 
 type ShippingConfig = Parameters<typeof shippingFeeFor>[0]
 
-/** Số tiền khi đã biết tỉnh/thành (hay mức cọc), `null` khi chưa. */
+/** A number once the province (or deposit percent) is known, otherwise `null`. */
 type Known<T, Given> = [T] extends [Given] ? number : number | null
 
 /**
- * Phí giao, tổng và tiền cọc của một đơn từ tiền hàng và tiền giảm (spec M5): ngưỡng miễn phí giao so với tiền hàng
- * sau giảm, và tiền cọc tính trên tiền hàng sau giảm. Báo giá và tạo đơn dùng chung hàm này nên số khách thấy lúc báo
- * giá khớp số trên đơn. Tính giá trị "không mã" thì gọi với `discount: 0`.
- *
- * Chưa có `provinceCode` thì phí giao và tổng là `null`; không có `depositPercent` (đơn hàng sẵn) thì tiền cọc là `null`.
+ * Shipping fee, total and deposit from goods and discount. The free-shipping threshold and the deposit both use goods
+ * after discount (spec M5). Shared by quotes and placement so the quote matches the order; use `discount: 0` for the
+ * "without voucher" figures. No `provinceCode` gives `null` fee and total; no `depositPercent` gives `null` deposit.
  */
 export function priceOrder<P extends string | undefined, D extends number | undefined>(
   config: ShippingConfig,
