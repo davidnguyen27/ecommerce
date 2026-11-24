@@ -4,9 +4,9 @@ import { Prisma } from '../generated/prisma/client.ts'
 import { bucketOf, inPeriod, type Period } from './period.ts'
 
 /**
- * Báo cáo chatbot (spec M8): cuộc trò chuyện theo lúc mở cuộc, tin của khách theo lúc gửi, lượt gọi và token theo
- * `chat_usage_day`. Cuộc trò chuyện bị xóa sau 90 ngày (trừ cuộc đã chuyển), nên kỳ cũ hơn thiếu số cuộc và số tin;
- * số theo model vẫn đủ.
+ * Chatbot report (spec M8): conversations by start time, customer messages by send time, calls and tokens from
+ * `chat_usage_day`. Conversations are deleted after 90 days (except handed-off ones), so older periods lack
+ * conversation and message counts; per-model figures stay complete.
  */
 export async function chatbotReport(db: DbClient, period: Period): Promise<ChatbotReport> {
   const conversationAt = Prisma.sql`c."created_at"`
@@ -25,7 +25,7 @@ export async function chatbotReport(db: DbClient, period: Period): Promise<Chatb
       FROM "chat_message" m
       WHERE m."role" = 'customer' AND ${inPeriod(messageAt, period)}
       GROUP BY 1`,
-    // `day` đã là ngày lịch giờ Việt Nam.
+    // `day` is already a Vietnam-time calendar day.
     db.$queryRaw<ChatbotReport['models']>`
       SELECT u."model", sum(u."calls")::int AS "calls", sum(u."input_tokens")::int AS "inputTokens",
         sum(u."output_tokens")::int AS "outputTokens", sum(u."rate_limited")::int AS "rateLimited",

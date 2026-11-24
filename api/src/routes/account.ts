@@ -32,7 +32,7 @@ function findCustomer(prisma: Db, id: string) {
   })
 }
 
-/** Tài khoản của khách đang đăng nhập; đã đi qua `requireAuth` audience customer. */
+/** The signed-in customer's account; behind `requireAuth` for the customer audience. */
 export function accountRoutes(deps: CustomerAuthDeps) {
   const { prisma } = deps
   return Router()
@@ -62,7 +62,7 @@ export function accountRoutes(deps: CustomerAuthDeps) {
     .post('/email-verification', async (req, res) => {
       const customer = await prisma.customer.findUnique({ where: { id: authSubject(req) } })
       if (!customer) throw signedOut()
-      // Đã xác minh thì không gửi gì nữa.
+      // Already verified: send nothing.
       if (customer.emailVerifiedAt) return void res.status(204).end()
       await enforceRateLimits(prisma, [{ limit: RATE_LIMITS.verificationEmailPerCustomer, subject: customer.id }])
 
@@ -70,7 +70,7 @@ export function accountRoutes(deps: CustomerAuthDeps) {
       res.status(202).end()
     })
     .post('/password', async (req, res) => {
-      // Kiểm kênh trước khi đổi gì, để bước mở phiên mới ở cuối không thể hỏng.
+      // Check the channel before changing anything, so opening the new session at the end cannot fail.
       clientOf(req)
       const { currentPassword, newPassword } = parse(ChangePasswordRequest, req.body)
       const customer = await prisma.customer.findUnique({ where: { id: authSubject(req) } })
@@ -83,7 +83,7 @@ export function accountRoutes(deps: CustomerAuthDeps) {
 
       const passwordHash = await hashPassword(newPassword)
       await prisma.$transaction((tx) => setCustomerPassword(tx, customer.id, passwordHash))
-      // Mọi phiên đã bị thu hồi; thiết bị đang đổi mật khẩu nhận phiên mới để không phải đăng nhập lại.
+      // Every session was revoked; the device changing the password gets a new one so it stays signed in.
       await deps.sessions.start(req, res, customer.id)
     })
 }

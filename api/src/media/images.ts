@@ -5,16 +5,16 @@ import { IMAGE_CONTENT_TYPES, MAX_IMAGE_BYTES, type ImageRenditions } from '@eco
 import type { Storage } from '../adapters/storage.ts'
 import { fileError, receiveFile, requiredFile } from './upload.ts'
 
-/** Cỡ webp sinh sẵn cho ảnh sản phẩm: thẻ sản phẩm trên điện thoại tới ảnh lớn ở trang chi tiết. */
+/** Prebuilt webp widths for product images: phone product cards up to the large detail image. */
 export const PRODUCT_IMAGE_WIDTHS = [320, 640, 1024, 1600]
 
-/** Cỡ webp sinh sẵn cho logo thương hiệu. */
+/** Prebuilt webp widths for brand logos. */
 export const LOGO_WIDTHS = [160, 320]
 
-/** Ảnh quá lớn về số điểm ảnh (ảnh "bom giải nén") thì từ chối thay vì giải mã. */
+/** Images with too many pixels ("decompression bombs") are rejected instead of decoded. */
 const MAX_INPUT_PIXELS = 50_000_000
 
-/** Ảnh đã lưu trên bucket public, dưới tiền tố `key`. */
+/** An image stored in the public bucket under prefix `key`. */
 export const StoredImage = z.object({
   key: z.string(),
   contentType: z.string(),
@@ -30,17 +30,17 @@ const originalKey = (image: Pick<StoredImage, 'key' | 'contentType'>) =>
   `${image.key}/original.${EXTENSIONS[image.contentType]}`
 const sizeKey = (key: string, width: number) => `${key}/w${width}.webp`
 
-/** Nhận một file multipart ở trường `file` vào bộ nhớ; quá dung lượng thì 413. */
+/** Receives one multipart file in field `file` into memory; too large gives 413. */
 export const receiveImage = receiveFile(MAX_IMAGE_BYTES, `Ảnh vượt quá ${MAX_IMAGE_BYTES / 1024 / 1024} MB`)
 
-/** File đã nhận qua `receiveImage`; thiếu thì 400. */
+/** The file received via `receiveImage`; missing gives 400. */
 export function uploadedFile(req: Request): Buffer {
   return requiredFile(req, 'Chưa chọn file ảnh').buffer
 }
 
 /**
- * Kiểm loại ảnh thật từ nội dung file (không tin đuôi hay Content-Type), giữ bản gốc,
- * sinh các cỡ webp rồi đưa tất cả lên bucket public dưới tiền tố `key`.
+ * Checks the real image type from content (not the extension or Content-Type), keeps the original, builds the webp
+ * widths and uploads everything to the public bucket under prefix `key`.
  */
 export async function storeImage(storage: Storage, key: string, file: Buffer, widths: number[]): Promise<StoredImage> {
   const meta = await sharp(file, { limitInputPixels: MAX_INPUT_PIXELS })
@@ -55,8 +55,8 @@ export async function storeImage(storage: Storage, key: string, file: Buffer, wi
 
   const oriented = () => sharp(file, { limitInputPixels: MAX_INPUT_PIXELS }).autoOrient()
   const [original, ...sizes] = await Promise.all([
-    // Bản gốc nằm trên bucket public: mã hóa lại cùng định dạng để bỏ EXIF (vị trí GPS, máy chụp), xoay sẵn theo chiều chụp.
-    // png không truyền `quality`: với png, sharp hiểu đó là giảm số màu.
+    // The original is public: re-encode in the same format to strip EXIF (GPS, camera) and apply the capture rotation.
+    // No `quality` for png: sharp reads it as color reduction.
     oriented()
       .toFormat(meta.format!, meta.format === 'png' ? {} : { quality: 90 })
       .toBuffer(),
@@ -78,7 +78,7 @@ export async function storeImage(storage: Storage, key: string, file: Buffer, wi
   return image
 }
 
-/** Xóa bản gốc và mọi cỡ của ảnh trên storage. */
+/** Deletes the original and every width of the image from storage. */
 export async function deleteImageFiles(storage: Storage, image: StoredImage) {
   await Promise.all(
     [originalKey(image), ...image.widths.map((w) => sizeKey(image.key, w))].map((key) => storage.delete('public', key)),
@@ -86,8 +86,8 @@ export async function deleteImageFiles(storage: Storage, image: StoredImage) {
 }
 
 /**
- * Xóa file sau khi DB đã commit hoặc rollback. Lỗi storage chỉ ghi log: dữ liệu đã đúng,
- * file sót lại trên bucket public không ai tham chiếu tới.
+ * Deletes files after the DB commit or rollback. Storage errors are only logged: the data is right, and leftover public
+ * files are referenced by nothing.
  */
 export async function deleteImageFilesQuietly(storage: Storage, req: Request, image: StoredImage) {
   await deleteImageFiles(storage, image).catch((err: unknown) => {

@@ -7,7 +7,7 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
 }
 
-/** Tạo owner đầu tiên. Email đã có thì giữ nguyên tài khoản cũ, kể cả mật khẩu. */
+/** Creates the first owner. An existing email keeps its account, password included. */
 export async function seedOwner(prisma: Db, owner: NewStaff): Promise<{ created: boolean }> {
   const email = normalizeEmail(owner.email)
   if (await prisma.staff.findUnique({ where: { email } })) return { created: false }

@@ -16,8 +16,8 @@ import { StoredImage, imageRenditions } from '../media/images.ts'
 import { isoDay } from './format.ts'
 
 /**
- * Khoản hoàn như khách thấy. Khoản thất bại không hiện: khách chỉ cần biết tiền đang về hay đã về; kế toán tạo lại
- * khoản mới nếu cần.
+ * Refunds as customers see them. Failed ones are hidden: customers only need to know money is coming or came;
+ * accounting creates a new refund if needed.
  */
 export function toPublicRefunds(
   refunds: readonly { amount: bigint; status: string; createdAt: Date; completedAt: Date | null }[],
@@ -32,61 +32,65 @@ export function toPublicRefunds(
     }))
 }
 
-/** Ảnh đại diện lưu trên dòng đơn: file trên bucket public kèm `alt`. */
+/** Thumbnail stored on an order line: a public bucket file with `alt`. */
 export const OrderLineImage = StoredImage.extend({ alt: z.string() })
 export type OrderLineImage = z.infer<typeof OrderLineImage>
 
 /**
- * Loại sự kiện trong lịch sử đơn: `paid` khi đủ tiền, `payment_flagged` khi khoản tiền cần đối soát.
- * `cancelled` khi đơn chưa thanh toán bị hủy (`data.reason` là `OrderCancelReason`, kể cả hết hạn).
- * `preparing` khi nhân viên kho bắt đầu soạn, `handed_over` khi bàn giao vận chuyển (`data` có `carrier`,
- * `trackingNumber`). `delivered` khi đã giao (đơn hoàn tất), `delivery_failed` khi giao thất bại (đơn vẫn xử lý).
+ * Order history event kinds: `paid` when fully paid, `payment_flagged` when a payment needs reconciliation, `cancelled`
+ * when an unpaid order is cancelled (`data.reason` is `OrderCancelReason`, expiry included), `preparing` when packing
+ * starts, `handed_over` at handover (`data` has `carrier`, `trackingNumber`), `delivered` when delivered (order
+ * complete), `delivery_failed` when delivery fails (still processing).
  */
 export type OrderEventKind =
   | 'created'
   | 'paid'
-  /** Đơn đặt trước nhận đủ tiền cọc (M4). */
+  /** A pre-order received its full deposit (M4). */
   | 'deposit_paid'
-  /** Phiếu nhập giữ một phần hàng về cho đơn đặt trước (`data`: biến thể, số lượng, phiếu nhập; ADR 0013). */
+  /** A receipt reserved part of the arrived stock for a pre-order (`data`: variant, quantity, receipt; ADR 0013). */
   | 'stock_allocated'
-  /** Đơn đặt trước đã được giữ đủ hàng: bắt đầu hạn trả phần còn lại. */
+  /** A pre-order is fully reserved: the remaining-balance deadline starts. */
   | 'arrived'
-  /** Đã gửi email nhắc trả phần còn lại (ticket 08). */
+  /** Remaining-balance reminder email sent (ticket 08). */
   | 'remainder_reminded'
-  /** Quá hạn trả phần còn lại: gắn cờ, không hủy đơn (`data.remainderDueAt`). */
+  /** Remaining balance overdue: flagged, not cancelled (`data.remainderDueAt`). */
   | 'remainder_overdue'
-  /** Nhân viên đổi thời gian giao dự kiến của đợt, khách được báo (`data.before`, `data.after`; ticket 09). */
+  /**
+   * Staff changed the campaign's expected delivery and the customer was told (`data.before`, `data.after`; ticket 09).
+   */
   | 'delivery_changed'
   | 'payment_flagged'
   | 'cancelled'
   | 'preparing'
   | 'handed_over'
-  /** Kế toán khôi phục đơn đã hủy khi tiền về đủ (đối soát). */
+  /** Accounting restored a cancelled order once the money arrived in full (reconciliation). */
   | 'restored'
-  /** Kế toán đóng mục cần đối soát: đã xử lý ngoài hệ thống, hoặc bằng hoàn tiền (`data.resolution = refunded`). */
+  /**
+   * Accounting closed a reconciliation item: handled outside the system, or by refund (`data.resolution = refunded`).
+   */
   | 'reconciliation_resolved'
-  /** Một khoản hoàn được tạo, chờ kế toán thực hiện (`data`: `refundId`, `amount`, `origin`; ADR 0014). */
+  /** A refund was created, awaiting accounting (`data`: `refundId`, `amount`, `origin`; ADR 0014). */
   | 'refund_created'
-  /** Khoản hoàn đã xong: thủ công, cổng báo thành công, hoặc kế toán chốt. */
+  /** A refund completed: manually, gateway success, or settled by accounting. */
   | 'refund_succeeded'
-  /** Khoản hoàn thất bại; tạo lại được. */
+  /** A refund failed; it can be recreated. */
   | 'refund_failed'
   | 'delivered'
   | 'delivery_failed'
-  /** Giao lại đơn giao thất bại với mã vận đơn mới (`data.previous`: mã cũ; M6a). */
+  /** A failed delivery was redelivered with a new tracking number (`data.previous`: the old one; M6a). */
   | 'redelivered'
-  /** Kho nhận hàng hoàn về: từng dòng nhập lại tồn hay hỏng/mất (`data.lines`). */
+  /** The warehouse received returned goods: per line restocked or written off (`data.lines`). */
   | 'returned_to_stock'
-  /** Giao lại từ kho: giữ hàng lại cho đơn, quay về chưa chuẩn bị. */
+  /** Redelivery from stock: reserved again for the order, back to not prepared. */
   | 'restocked_for_redelivery'
-  /** Hủy đơn đóng các yêu cầu hủy của khách (`data.requestCodes`; M6b). */
+  /** Cancelling the order closed the customer's cancel requests (`data.requestCodes`; M6b). */
   | 'support_resolved'
 
-/** Ai làm: nhân viên, khách (có id khi đã đăng nhập) hoặc hệ thống. */
+/** Who acted: staff, customer (with id when signed in) or the system. */
 export type OrderEventActor =
   { type: 'staff'; staffId: string } | { type: 'customer'; customerId?: string } | { type: 'system' }
 
-/** Ghi một sự kiện vào lịch sử đơn (append-only). Gọi trong transaction của thay đổi trạng thái. */
+/** Appends an event to the order history. Call in the state change's transaction. */
 export async function recordOrderEvent(
   db: DbClient,
   orderId: string,
@@ -106,7 +110,7 @@ export async function recordOrderEvent(
   })
 }
 
-/** Link tra cứu đơn trên website, gửi khách qua email. */
+/** Website order lookup link, emailed to the customer. */
 export function orderLookupUrl(siteUrl: string, code: number, token: string) {
   const url = new URL(`/don-hang/${code}`, siteUrl)
   url.searchParams.set('token', token)
@@ -114,8 +118,8 @@ export function orderLookupUrl(siteUrl: string, code: number, token: string) {
 }
 
 /**
- * Trang kết quả thanh toán, nơi cổng đưa khách quay về. Không chứa token: cổng không được thấy link xem và hủy đơn;
- * trình duyệt giữ token từ response đặt mua.
+ * The payment result page the gateway sends customers back to. No token: the gateway must not see the view/cancel link;
+ * the browser keeps the token from the checkout response.
  */
 export function paymentResultUrl(siteUrl: string, code: number) {
   const url = new URL(`/don-hang/${code}`, siteUrl)
@@ -123,21 +127,21 @@ export function paymentResultUrl(siteUrl: string, code: number) {
   return url
 }
 
-/** Cấp thêm một token tra cứu cho đơn (chỉ lưu hash) và trả link, để gửi trong email. */
+/** Issues another lookup token for the order (hash stored) and returns the link, for emails. */
 export async function issueOrderLookupUrl(db: DbClient, siteUrl: string, order: { id: string; code: number }) {
   const token = newOpaqueToken()
   await db.orderLookupToken.create({ data: { orderId: order.id, tokenHash: hashOpaqueToken(token) } })
   return orderLookupUrl(siteUrl, order.code, token)
 }
 
-/** Đủ để dựng `PublicOrder`. */
+/** Enough to build a `PublicOrder`. */
 export const ORDER_VIEW_INCLUDE = {
   lines: { orderBy: { position: 'asc' } },
   policyVersions: { include: { pageVersion: { include: { page: { select: { slug: true } } } } } },
   privacyPolicyVersion: { select: { version: true } },
-  // Thời gian giao dự kiến hiện tại của đợt, cạnh lời hẹn lúc đặt (ticket 09).
+  // The campaign's current expected delivery, next to the promise made at order time (ticket 09).
   preorderCampaign: { select: { deliveryFrom: true, deliveryTo: true } },
-  // Đã nhận và các khoản hoàn khách thấy (ADR 0014).
+  // Received amount and the refunds customers see (ADR 0014).
   paymentTransactions: { select: { amount: true } },
   refunds: {
     select: { amount: true, status: true, createdAt: true, completedAt: true },
@@ -149,15 +153,15 @@ export type OrderForView = Prisma.OrderGetPayload<{ include: typeof ORDER_VIEW_I
 
 export const orderNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đơn hàng')
 
-/** Mã đơn từ URL thành số; chuỗi không phải mã đơn là 404, như mã không có đơn nào. */
+/** Order code from the URL as a number; a non-code string is 404, like a code with no order. */
 export function parseOrderCode(code: string) {
   if (!/^\d{1,9}$/.test(code)) throw orderNotFound()
   return Number(code)
 }
 
 /**
- * Đơn theo mã và token tra cứu. Mã lạ, thiếu token hay token sai đều là 404 như nhau, để không lộ đơn nào tồn tại.
- * `code` là chuỗi từ URL.
+ * Order by code and lookup token. Unknown code, missing or wrong token are all the same 404, so no order's existence
+ * leaks. `code` is the URL string.
  */
 export async function findOrderByToken(db: DbClient, code: string, token: string | undefined) {
   if (!token) throw orderNotFound()
@@ -172,8 +176,8 @@ export async function findOrderByToken(db: DbClient, code: string, token: string
 }
 
 /**
- * Đơn theo mã của khách đang đăng nhập. Đơn của người khác cũng là 404, như mã lạ, để không lộ đơn nào tồn tại.
- * `code` là chuỗi từ URL.
+ * Order by code for the signed-in customer. Someone else's order is also 404, like an unknown code, so nothing leaks.
+ * `code` is the URL string.
  */
 export async function findCustomerOrder(db: DbClient, code: string, customerId: string) {
   const order = await db.order.findFirst({
@@ -184,18 +188,18 @@ export async function findCustomerOrder(db: DbClient, code: string, customerId: 
   return order
 }
 
-/** Đơn đặt trước đã cọc mà chưa trả đủ: đang chờ hàng về hoặc chờ phần còn lại. */
+/** Deposited pre-orders not fully paid: waiting for stock or for the remaining balance. */
 export const DEPOSITED_PREORDER = {
   kind: 'preorder',
   status: 'processing',
   paymentStatus: 'deposit_paid',
 } as const satisfies Prisma.OrderWhereInput
 
-/** Phần còn lại của đơn đặt trước: tổng phải trả trừ tiền cọc, gồm phí giao (GLOSSARY "Phần còn lại"). */
+/** A pre-order's remaining balance: total minus deposit, shipping included (GLOSSARY "Phần còn lại"). */
 export const remainingOf = (order: { total: bigint; depositAmount: bigint | null }) =>
   order.total - order.depositAmount!
 
-/** Phần đặt trước của đơn; `null` với đơn hàng sẵn (check `order_preorder_check` bảo đảm đủ trường). */
+/** The order's pre-order part; `null` for in-stock orders (`order_preorder_check` guarantees the fields). */
 export function preorderOf(
   order: Pick<
     OrderForView,
@@ -221,7 +225,7 @@ export function preorderOf(
   const quantity = order.lines.reduce((sum, line) => sum + line.quantity, 0)
   return {
     campaignId: order.preorderCampaignId!,
-    // Đã về đủ thì là đủ, kể cả khi số đang giữ đã về 0 sau bàn giao vận chuyển.
+    // Fully arrived stays fully arrived, even after handover drops the reserved count to 0.
     arrivedQuantity: order.arrivedAt ? quantity : order.lines.reduce((sum, line) => sum + line.reservedQuantity, 0),
     quantity,
     arrivedAt: order.arrivedAt?.toISOString() ?? null,
@@ -308,7 +312,7 @@ export function toPublicOrder(storage: Storage, order: OrderForView): PublicOrde
             handedOverAt: order.handedOverAt.toISOString(),
           },
     received: order.paymentTransactions.reduce((sum, t) => sum + Number(t.amount), 0),
-    // Khoản thất bại không hiện: khách chỉ cần biết tiền đang về hay đã về; kế toán tạo lại khoản mới nếu cần.
+    // Failed refunds are hidden: customers only need to know money is coming or came; accounting recreates if needed.
     refunds: toPublicRefunds(order.refunds),
   }
 }

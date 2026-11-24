@@ -20,7 +20,7 @@ import { parse } from '../http/validation.ts'
 
 const SlugParams = z.object({ slug: z.string() })
 
-/** Sản phẩm như khách thấy (`catalog/public-products.ts`). */
+/** Products as customers see them (`catalog/public-products.ts`). */
 export function publicProductRoutes(prisma: Db, storage: Storage) {
   return Router()
     .get('/', async (req, res) => {
@@ -29,7 +29,7 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
         query.category === undefined
           ? undefined
           : await prisma.category.findUnique({ where: { slug: query.category }, select: { productType: true } })
-      // Nhóm hàng đang xem quyết định bộ lọc và facets; chưa xác định thì chỉ có giới tính, chung mọi nhóm hàng.
+      // The product type in view decides filters and facets; when unknown, only gender, shared by all types.
       const productType = category?.productType ?? query.type ?? null
       const schema = await loadAttributeSchema(prisma, productType ?? ProductType.enum.footwear)
       const filterable = schema.attributes.filter((a) => a.filterable && (productType || a.key === GENDER_KEY))
@@ -41,7 +41,7 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
         productType: query.type,
         minPrice: query.minPrice,
         maxPrice: query.maxPrice,
-        // Key không lọc được ở nhóm hàng đang xem (URL cũ, schema đã đổi) thì bỏ qua thay vì báo lỗi.
+        // Keys not filterable for the current type (old URL, changed schema) are ignored instead of erroring.
         attributes: filterable.flatMap((definition) => {
           const values = query.attributes[definition.key] ?? []
           return values.length ? [{ definition, values }] : []

@@ -3,15 +3,16 @@ import type { EmailQueue } from '../jobs/jobs.ts'
 import { dayVN } from '../orders/format.ts'
 import { DEPOSITED_PREORDER, issueOrderLookupUrl, recordOrderEvent } from '../orders/orders.ts'
 
-/** Thời gian giao dự kiến, `YYYY-MM-DD`. */
+/** Expected delivery, `YYYY-MM-DD`. */
 export type DeliveryWindow = { from: string; to: string }
 
 const windowText = ({ from, to }: DeliveryWindow) => `${dayVN(from)} – ${dayVN(to)}`
 
 /**
- * Nhân viên đổi thời gian giao dự kiến của đợt (ticket 09): báo mọi khách đã cọc mà hàng chưa về đủ, trong transaction
- * của lần sửa đợt (sửa rollback thì không có thư). Đơn giữ lời hẹn lúc đặt; trang đơn hiện thêm thời gian hiện tại của
- * đợt. Đơn chờ cọc, đơn đã về hàng hay đã hủy không nhận thư. Trả số đơn được báo.
+ * Staff changed the campaign's expected delivery (ticket 09): emails every deposited customer whose stock has not fully
+ * arrived, in the campaign edit's transaction (a rollback sends nothing). Orders keep their original promise; the order
+ * page also shows the campaign's current dates. Pending-deposit, arrived and cancelled orders get no email. Returns the
+ * number of orders notified.
  */
 export async function notifyDeliveryChange(
   tx: DbClient,
@@ -38,7 +39,7 @@ export async function notifyDeliveryChange(
     )
     const link = await issueOrderLookupUrl(tx, siteUrl, order)
     const line = order.lines[0]!
-    // Bản nháp, chờ chủ doanh nghiệp duyệt nội dung.
+    // Draft, awaiting the owner's approval of the wording.
     await emails.sendEmail(tx, {
       to: order.email,
       subject: `Thời gian giao dự kiến của đơn đặt trước #${order.code} đã thay đổi`,

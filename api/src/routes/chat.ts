@@ -33,18 +33,18 @@ import type { Db } from '../db.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { isUuid, parse } from '../http/validation.ts'
 
-/** Tiêu đề yêu cầu khi chatbot chưa tóm tắt được (khách bấm "Gặp nhân viên" trước khi hỏi gì). */
+/** Request title when the chatbot has nothing to summarize (the customer pressed "Gặp nhân viên" before asking). */
 const HANDOFF_SUBJECT = 'Khách cần nhân viên hỗ trợ (từ trợ lý tư vấn)'
 const HANDOFF_SUBJECT_MAX = 120
 const HANDOFF_MESSAGE = 'Khách chuyển từ trợ lý tư vấn, không ghi thêm lời nhắn. Xem cuộc trò chuyện bên dưới.'
 
 type Deps = Pick<AppDeps, 'prisma' | 'logger' | 'storage' | 'emails' | 'siteUrl'> & {
   llm?: LlmClient
-  /** Khóa ký access token, để nhận ra khách đã đăng nhập khi chuyển nhân viên. */
+  /** Access token signing key, to recognize signed-in customers on handoff. */
   secret: Uint8Array
 }
 
-/** Chatbot cho khách (spec M8): không cần đăng nhập; ai có mã cuộc trò chuyện thì đọc được cuộc đó. */
+/** Customer chatbot (spec M8): no sign-in; anyone with the conversation id can read it. */
 export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secret }: Deps) {
   return (
     Router()
@@ -62,7 +62,8 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
           'Bạn gửi quá nhiều câu hỏi, vui lòng thử lại sau',
         )
         const reason = unavailableReason(await readChatbotSettings(prisma), llm)
-        // Tắt hay chưa có khóa thì không lưu gì. Hết lượt thì vẫn lưu tin, để báo cáo đếm được số lần khách bị báo hết lượt.
+        // Off or no keys: store nothing. Out of quota: still store the message, so reports count how often customers
+        // hit it.
         if (!llm || reason === 'disabled' || reason === 'unconfigured') {
           const body: ChatTurnResponse = {
             conversationId: null,
@@ -83,22 +84,22 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
           ),
         )
         const viewing = await viewingProduct(prisma, storage, input.viewingProductSlug)
-        // Gọi model ngoài transaction: một lượt có thể mất tới vài chục giây.
+        // Call the model outside the transaction: a turn can take tens of seconds.
         try {
           const result = await runTurn(
             llm,
             { prisma, storage },
             promptMessages(turn.history, viewing, await policySlugs(prisma)),
           )
-          // Không ghi nội dung khách gõ; công cụ và tham số đủ để biết vì sao chatbot trả lời như vậy.
+          // Do not log what the customer typed; tools and arguments are enough to explain the answer.
           logger.info(
             { conversationId: turn.conversationId, model: result.model, tools: result.tools },
             'Chatbot đã trả lời',
           )
           const unlabeled = relativeShopLinks(stripToolLabels(result.content))
           const content = dropSentClaims(unlabeled, looksEnglish(input.content))
-          // Model đề nghị chuyển, nói tới chuyện chuyển (`dropSentClaims` vừa bỏ câu "đã gửi"), hay khách tự đòi gặp nhân
-          // viên (`asksForStaff`): tóm tắt làm tiêu đề yêu cầu (ticket 05).
+          // The model offered handoff, talked about it (`dropSentClaims` just removed a "sent" sentence), or the
+          // customer asked for staff (`asksForStaff`): summarize as the request title (ticket 05).
           const handoffSummary =
             result.handoffSummary ??
             (asksForStaff(input.content) || content !== unlabeled ? input.content.slice(0, HANDOFF_SUBJECT_MAX) : null)
@@ -152,8 +153,8 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
           res.json(body)
         }
       })
-      // Khách xác nhận chuyển nhân viên (spec M8, ticket 05): tạo yêu cầu hỗ trợ loại "khác" do chatbot tạo. Không qua
-      // model; có cuộc trò chuyện thì gắn vào yêu cầu để nhân viên đọc bản chép.
+      // The customer confirms the handoff (spec M8, ticket 05): creates an "other" support request by the chatbot. No
+      // model call; an existing conversation is attached so staff can read the transcript.
       .post('/handoff', optionalAuth(secret, 'customer'), async (req, res) => {
         const input = parse(ChatHandoffRequest, req.body)
         const customer = req.auth ? await findSupportCustomer(prisma, { id: req.auth.subjectId }) : null
@@ -188,7 +189,8 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
             },
           )
           if (conversation) {
-            // Điều kiện "chưa chuyển" nằm trong câu UPDATE: hai lần bấm cùng lúc thì lần sau rollback cả yêu cầu vừa tạo.
+            // The "not handed off yet" condition is in the UPDATE: of two concurrent clicks the second rolls back its
+            // new request.
             const { count } = await tx.chatConversation.updateMany({
               where: { id: conversation.id, supportRequestId: null },
               data: { supportRequestId: created.id },
@@ -196,8 +198,8 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
             if (count === 0)
               throw new AppError(409, ErrorCode.CONFLICT, 'Cuộc trò chuyện này đã được chuyển cho nhân viên')
           }
-          // Đếm trong cùng transaction, sau khi đã tạo được: lần bị 400 hay 409 rollback cả bộ đếm, nên không mất lượt
-          // chuyển trong ngày; quá giới hạn thì 429 rollback cả yêu cầu vừa tạo.
+          // Counted in the same transaction after creation: a 400 or 409 rolls back the counter, so no daily handoff is
+          // lost; over the limit, the 429 rolls back the new request.
           await enforceRateLimits(
             tx,
             [{ limit: RATE_LIMITS.chatHandoffPerIp, subject: req.ip ?? 'unknown' }],
@@ -224,7 +226,9 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
   )
 }
 
-/** Sản phẩm khách đang xem, để khách hỏi "cái này" (spec M8). Slug không có hay chưa xuất bản thì bỏ qua. */
+/**
+ * The product being viewed, so customers can ask about "cái này" (spec M8). Unknown or unpublished slugs are ignored.
+ */
 async function viewingProduct(prisma: Db, storage: Storage, slug: string | undefined) {
   const product = slug ? await findPublicProduct(prisma, storage, slug) : null
   return product ? { slug: product.slug, product: productForModel(product) } : undefined

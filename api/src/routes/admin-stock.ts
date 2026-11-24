@@ -47,8 +47,8 @@ async function loadStockItem(db: DbClient, variantId: string) {
 }
 
 /**
- * Tồn kho và sổ xuất nhập. Xem cần `catalog.edit`, `price.edit` hoặc `stock.adjust`
- * (người soạn danh mục và đặt giá cần biết tồn); đổi tồn cần `stock.adjust`.
+ * Stock and ledger. Viewing needs `catalog.edit`, `price.edit` or `stock.adjust` (catalog and price editors need to
+ * know stock); changing stock needs `stock.adjust`.
  */
 export function adminStockRoutes(prisma: Db) {
   return Router()

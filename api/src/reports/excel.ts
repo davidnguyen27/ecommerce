@@ -2,14 +2,14 @@ import ExcelJS from 'exceljs'
 import { REPORT_TIME_ZONE } from './period.ts'
 
 export type Cell = string | number | null
-/** Ô số tiền hay số lượng (`#,##0`), tỷ lệ 0–1 (`0.0%`), hay chữ. */
+/** A money or quantity cell (`#,##0`), a 0–1 ratio (`0.0%`), or text. */
 export type Format = 'number' | 'percent' | 'text'
 
 export type SheetSpec = {
   name: string
   columns: { header: string; format?: Format; width?: number }[]
   rows: Cell[][]
-  /** Dòng tổng, in đậm ở cuối. */
+  /** Total row, bold at the bottom. */
   total?: Cell[]
 }
 
@@ -30,8 +30,8 @@ const exportedAt = (now: Date) =>
 const vnDate = (date: string) => date.split('-').reverse().join('/')
 
 /**
- * File Excel của một báo cáo (spec M7): mỗi bảng một sheet; dòng 1 là tên báo cáo, kỳ và lúc xuất; dòng 2 là tiêu đề
- * cột. Tiền và số lượng là ô số để cộng trừ được trong Excel, không phải chuỗi đã định dạng.
+ * Excel file for a report (spec M7): one sheet per table; row 1 is the report name, period and export time; row 2 the
+ * column headers. Money and quantities are numeric cells, so they add up in Excel.
  */
 export async function buildWorkbook(
   title: string,

@@ -30,14 +30,15 @@ const figures = (row: Row): StockFigures => ({
 })
 
 /**
- * Xuất nhập tồn theo biến thể (spec M7). Tồn đầu/tồn cuối là `on_hand_after` của dòng sổ cuối cùng (theo `seq`) trước
- * đầu kỳ / trước hết kỳ; biến động trong kỳ cộng theo loại. Hiện mọi biến thể đã có dòng sổ tới hết kỳ.
+ * Stock movement by variant (spec M7). Opening/closing stock is `on_hand_after` of the last ledger row (by `seq`)
+ * before the period start / end; movements in the period are summed by kind. Shows every variant with ledger rows by
+ * the period end.
  */
 export async function stockReport(
   db: DbClient,
   period: Period,
   query: StockReportQuery,
-  /** Mọi dòng, không phân trang (xuất Excel). */
+  /** All rows, unpaginated (Excel export). */
   options: { all?: boolean } = {},
 ): Promise<StockReport> {
   const page = options.all

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { SimulatorPaymentGateway, type PaymentGateway } from './gateway.ts'
 import { VnpayPaymentGateway, type VnpayKeys } from './vnpay.ts'
 
-/** Khóa để trống hay chỉ có khoảng trắng coi như chưa đặt (`.env.example` để trống). */
+/** Empty or whitespace-only keys count as unset (`.env.example` leaves them empty). */
 const optional = z
   .string()
   .optional()
@@ -12,25 +12,25 @@ const PaymentEnv = z.object({
   NODE_ENV: optional,
   VNPAY_TMN_CODE: optional,
   VNPAY_HASH_SECRET: optional,
-  /** Mặc định `sandbox`: thanh toán thật cần đặt rõ `production` (quyết định 2026-11-11, chỉ chạy sandbox trước). */
+  /** Defaults to `sandbox`: real payments need an explicit `production` (decided 2026-11-11, sandbox first). */
   VNPAY_ENV: optional.pipe(
     z.enum(['sandbox', 'production'], { error: 'VNPAY_ENV chỉ nhận sandbox hoặc production' }).default('sandbox'),
   ),
-  /** `vnp_IpAddr` khi API truy vấn VNPAY: IP máy chủ; mặc định 127.0.0.1. */
+  /** `vnp_IpAddr` when the API queries VNPAY: the server IP; defaults to 127.0.0.1. */
   VNPAY_SERVER_IP: optional,
   /**
-   * `allow`: cho cổng giả lập, hay VNPAY sandbox, dù `NODE_ENV=production`. Chỉ dùng cho smoke/CI và chạy image trên
-   * máy.
+   * `allow`: permits the simulator, or VNPAY sandbox, even with `NODE_ENV=production`. Only for smoke/CI and running
+   * the image locally.
    */
   PAYMENT_SIMULATOR: optional,
 })
 
 const KEY_NAMES = ['VNPAY_TMN_CODE', 'VNPAY_HASH_SECRET'] as const
 
-/** Đường IPN trên API (`routes/payments.ts`); khai với VNPAY, không gửi theo từng đơn. */
+/** IPN path on the API (`routes/payments.ts`); registered with VNPAY, not sent per order. */
 export const VNPAY_IPN_PATH = '/api/payments/vnpay/ipn'
 
-/** Khóa VNPAY khi đặt đủ cả hai; chưa đặt khóa nào thì `undefined`; đặt thiếu thì ném vì đó là cấu hình sai. */
+/** VNPAY keys when both are set; `undefined` when neither; throws when only one, since that is a misconfiguration. */
 export function vnpayKeysFromEnv(env: NodeJS.ProcessEnv): VnpayKeys | undefined {
   const parsed = PaymentEnv.parse(env)
   const missing = KEY_NAMES.filter((name) => !parsed[name])
@@ -40,10 +40,10 @@ export function vnpayKeysFromEnv(env: NodeJS.ProcessEnv): VnpayKeys | undefined 
 }
 
 /**
- * Chọn cổng thanh toán (spec "Thanh toán", ADR 0010): đủ khóa VNPAY thì dùng VNPAY; chưa có khóa thì dùng cổng giả
- * lập. Với `NODE_ENV=production`, thiếu khóa hay khóa sandbox đều làm API không khởi động (cổng giả lập cho ai cũng báo
- * được "đã thanh toán", sandbox không nhận tiền thật), trừ khi bật rõ `PAYMENT_SIMULATOR=allow`. Image Docker luôn chạy
- * `NODE_ENV=production`, nên smoke/CI và docker compose local phải đặt dòng đó.
+ * Picks the payment gateway (spec "Thanh toán", ADR 0010): VNPAY with full keys, else the simulator. With
+ * `NODE_ENV=production`, missing or sandbox keys stop the API (the simulator lets anyone report "paid", sandbox takes
+ * no real money) unless `PAYMENT_SIMULATOR=allow`. The Docker image always runs `NODE_ENV=production`, so smoke/CI and
+ * local docker compose must set that line.
  */
 export function paymentGatewayFromEnv(env: NodeJS.ProcessEnv, siteUrl: string): PaymentGateway {
   const keys = vnpayKeysFromEnv(env)

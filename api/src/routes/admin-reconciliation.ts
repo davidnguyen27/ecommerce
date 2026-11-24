@@ -20,7 +20,7 @@ import { refundReconciliationItem, resolveExternally, restoreOrder } from '../pa
 export type ReconciliationDeps = { emails: EmailQueue; siteUrl: string }
 
 /**
- * Cần đối soát: xem danh sách cần `order.view`; khôi phục đơn, giải quyết bằng hoàn tiền hay đóng mục cần
+ * Reconciliation: listing needs `order.view`; restoring an order, resolving by refund or closing an item needs
  * `payment.reconcile`.
  */
 export function adminReconciliationRoutes(
@@ -43,7 +43,7 @@ export function adminReconciliationRoutes(
               select: { id: true, code: true, status: true, paymentStatus: true, total: true, recipientName: true },
             },
           },
-          // Mục cũ trước: tiền về lâu nhất cần xử lý trước.
+          // Oldest first: the longest-waiting money is handled first.
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           ...pageWindow(query),
         }),

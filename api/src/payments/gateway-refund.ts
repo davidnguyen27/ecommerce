@@ -14,20 +14,20 @@ import {
   refundedViaGateway,
 } from './refunds.ts'
 
-/** Một phần của khoản hoàn gửi tới cổng: một giao dịch gốc, một lệnh hoàn. */
+/** One part of a refund sent to the gateway: one original transaction, one refund command. */
 type Piece = { refundId: string; amount: number; full: boolean; transaction: StoredTransaction }
 
 export type GatewayRefundDeps = { prisma: Db; payments: PaymentGateway; mail: CustomerMail }
 
 /**
- * Hoàn một khoản `pending` qua cổng (ADR 0014), ba bước:
- * 1. Trong transaction dưới khóa đơn: chia số tiền theo các giao dịch cổng hoàn được, giao dịch mới nhất trước, mỗi
- *    giao dịch tới phần chưa hoàn qua cổng của nó; cần nhiều giao dịch thì tách khoản thành nhiều khoản. Mọi phần sang
- *    `processing` (cách `vnpay`, gắn giao dịch gốc) trước khi gọi cổng: lỗi giữa chừng thì khoản nằm ở "cổng đang xử
- *    lý" để kế toán kiểm và chốt tay, không bị gửi hai lần.
- * 2. Sau khi commit: gửi từng lệnh hoàn. Cổng không trả lời thì coi như đang xử lý, kèm lý do.
- * 3. Trong transaction mới: ghi kết quả từng phần (đã hoàn: email; bị từ chối: thất bại, tạo lại được).
- * Trả mã đơn.
+ * Refunds a `pending` refund via the gateway (ADR 0014), in three steps:
+ * 1. In a transaction under the order lock: split the amount over refundable gateway transactions, newest first, each
+ *    up to its unrefunded part; several transactions split the refund into several. Every part moves to `processing`
+ *    (method `vnpay`, linked transaction) before calling the gateway: a crash leaves it "gateway processing" for
+ *    accounting to check and settle, never sent twice.
+ * 2. After commit: send each refund command. No reply counts as processing, with the reason.
+ * 3. In a new transaction: record each part's result (refunded: email; rejected: failed, can be recreated).
+ * Returns the order code.
  */
 export async function executeGatewayRefund(deps: GatewayRefundDeps, req: Request, refundId: string, staffId: string) {
   const { prisma, payments, mail } = deps
@@ -64,7 +64,7 @@ export async function executeGatewayRefund(deps: GatewayRefundDeps, req: Request
         `Giao dịch qua cổng chỉ còn hoàn được ${vnd(Number(refund.amount) - left)}; hãy hoàn bằng chuyển khoản`,
       )
     }
-    // Khoản sinh từ đối soát hay tạo lại trỏ về đúng một mục/khoản gốc (unique), không tách được.
+    // Refunds from reconciliation or retries point to exactly one source item/refund (unique), so they cannot be split.
     if (plan.length > 1 && refund.origin !== 'cancellation') {
       throw conflict('Khoản này cần hoàn qua nhiều giao dịch; hãy hoàn bằng chuyển khoản')
     }
@@ -118,7 +118,7 @@ export async function executeGatewayRefund(deps: GatewayRefundDeps, req: Request
         result: await payments.refund({ ...piece, orderCode, createdBy: staffId }),
       })
     } catch (err) {
-      // Cổng không trả lời hay trả dữ liệu không tin được: không biết lệnh đã tới chưa, nên để kế toán kiểm và chốt tay.
+      // No reply or untrustworthy data: we cannot know whether the command arrived, so accounting checks and settles.
       const message = err instanceof PaymentGatewayError ? err.message : 'Lỗi khi gọi cổng'
       req.log?.error({ err, orderCode, refundId: piece.refundId }, 'Không gửi được lệnh hoàn tới cổng')
       results.push({ piece, result: { status: 'processing', message, payload: { error: message } } })
@@ -130,8 +130,8 @@ export async function executeGatewayRefund(deps: GatewayRefundDeps, req: Request
     const applied: typeof results = []
     for (const { piece, result } of results) {
       const before = await tx.refund.findUniqueOrThrow({ where: { id: piece.refundId } })
-      // Trong lúc chờ cổng, kế toán có thể đã chốt tay (rồi tạo lại) khoản này: kết quả đến muộn không ghi đè, để tổng
-      // các khoản không thất bại không vượt số đã nhận. Kết quả bị bỏ qua vẫn nằm trong audit.
+      // Accounting may have settled (and recreated) this refund while we waited: a late result does not overwrite, so
+      // non-failed refunds never exceed what was received. Ignored results stay in the audit.
       if (before.status !== 'processing') continue
       applied.push({ piece, result })
       const done = result.status !== 'processing'

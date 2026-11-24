@@ -5,17 +5,17 @@ import { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 import { isoDay } from '../orders/format.ts'
 
-/** Đợt đang mở (GLOSSARY "Đợt đặt trước"): chưa đóng tay và chưa tới hạn đóng. */
+/** An open campaign (GLOSSARY "Đợt đặt trước"): not closed by hand and not past its closing time. */
 export const isCampaignOpen = (campaign: { closedAt: Date | null; closesAt: Date }, now = new Date()) =>
   campaign.closedAt === null && campaign.closesAt > now
 
-/** Điều kiện Prisma của đợt đang mở, dùng cho truy vấn danh sách. */
+/** Prisma condition for open campaigns, for list queries. */
 export const openCampaignWhere = (now = new Date()) =>
   ({ closedAt: null, closesAt: { gt: now } }) satisfies Prisma.PreorderCampaignWhereInput
 
 /**
- * Số đã dùng của từng biến thể trong các đợt: tổng số lượng của đơn đặt trước chưa hủy, theo đợt rồi theo biến thể.
- * Tính khi cần, không lưu thành bộ đếm. Đợt hay biến thể chưa có đơn thì không có trong kết quả (tức là 0).
+ * Used allocation per variant per campaign: total quantity of uncancelled pre-orders, by campaign then variant.
+ * Computed on demand, not stored as a counter. Campaigns or variants without orders are absent (i.e. 0).
  */
 export async function usedAllocations(db: DbClient, campaignIds: string[]) {
   const used = new Map<string, Map<string, number>>()
@@ -34,13 +34,13 @@ export async function usedAllocations(db: DbClient, campaignIds: string[]) {
   return used
 }
 
-/** Điều khách thấy về một biến thể đang nhận đặt trước: đợt, mức cọc, thời gian giao dự kiến. */
+/** What customers see about a variant open for pre-order: campaign, deposit percent, expected delivery. */
 export type PreorderOffer = { campaignId: string; depositPercent: number; deliveryFrom: string; deliveryTo: string }
 
 /**
- * Những biến thể đang nhận đặt trước (GLOSSARY "Đang nhận đặt trước"), theo id biến thể: sản phẩm đã xuất bản, biến
- * thể không ngừng bán, hết hàng sẵn (`on_hand - reserved <= 0`), thuộc đợt đang mở và số đã dùng còn dưới suất.
- * Còn một cái hàng sẵn là không đặt trước được. Như `inStockIds`, không bao giờ trả số lượng hay số suất (ADR 0006).
+ * Variants open for pre-order (GLOSSARY "Đang nhận đặt trước"), by variant id: published product, variant not
+ * discontinued, no regular stock (`on_hand - reserved <= 0`), in an open campaign with used below allocation. One unit
+ * of regular stock means no pre-order. Like `inStockIds`, never returns quantities or allocations (ADR 0006).
  */
 export async function preorderOffers(db: DbClient, variantIds: readonly string[], now = new Date()) {
   const offers = new Map<string, PreorderOffer>()
@@ -83,7 +83,7 @@ export const CAMPAIGN_INCLUDE = {
 
 type CampaignRow = Prisma.PreorderCampaignGetPayload<{ include: typeof CAMPAIGN_INCLUDE }>
 
-/** Phần đầu đợt dùng chung cho danh sách và chi tiết; ngày giao lưu kiểu DATE, trả `YYYY-MM-DD`. */
+/** Campaign header shared by list and detail; delivery dates are DATE columns, returned as `YYYY-MM-DD`. */
 export function toCampaignHeader(campaign: CampaignRow, now = new Date()) {
   return {
     id: campaign.id,
@@ -102,12 +102,13 @@ export function toCampaignHeader(campaign: CampaignRow, now = new Date()) {
   }
 }
 
-/** Số liệu một biến thể trong đợt, tính từ các đơn chưa hủy (xem `PreorderCampaignVariant`). */
+/** Figures for one variant in a campaign, from uncancelled orders (see `PreorderCampaignVariant`). */
 export type VariantStats = { used: number; deposited: number; pendingDeposit: number; arrived: number }
 
 /**
- * Số liệu từng biến thể của các đợt, theo đợt rồi theo biến thể: số đã dùng, đã cọc (gồm đã trả đủ), đang chờ cọc, và
- * đã về (đã về đủ thì tính đủ số lượng, kể cả khi bàn giao đã đưa số đang giữ về 0). Một câu SQL cho cả danh sách đợt.
+ * Per-variant figures of the campaigns, by campaign then variant: used, deposited (fully paid included), awaiting
+ * deposit, and arrived (fully arrived counts the full quantity even after handover zeroed reserved). One SQL query for
+ * the whole campaign list.
  */
 export async function campaignStats(db: DbClient, campaignIds: string[]) {
   const stats = new Map<string, Map<string, VariantStats>>()
@@ -139,7 +140,7 @@ export async function campaignStats(db: DbClient, campaignIds: string[]) {
 
 const NO_ORDERS: VariantStats = { used: 0, deposited: 0, pendingDeposit: 0, arrived: 0 }
 
-/** Biến thể của đợt theo thứ tự biến thể trên sản phẩm, kèm suất và số liệu đơn. */
+/** The campaign's variants in the product's variant order, with allocation and order figures. */
 export function toCampaignVariants(campaign: CampaignRow, stats: Map<string, VariantStats> | undefined) {
   return [...campaign.variants]
     .sort((a, b) => a.variant.sortOrder - b.variant.sortOrder || a.variant.sku.localeCompare(b.variant.sku))
@@ -158,7 +159,8 @@ export async function loadCampaign(db: DbClient, id: string): Promise<PreorderCa
   if (!campaign) throw new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đợt đặt trước')
   const [stats, orders] = await Promise.all([
     campaignStats(db, [id]),
-    // Đơn chưa hủy của đợt theo thứ tự cọc, cũng là thứ tự chia hàng về (ADR 0013); đơn chờ cọc sau cùng.
+    // Uncancelled orders of the campaign in deposit order, which is also the arrival allocation order (ADR 0013);
+    // pending deposits last.
     db.order.findMany({
       where: { preorderCampaignId: id, status: { not: 'cancelled' } },
       include: { lines: { orderBy: { position: 'asc' } } },

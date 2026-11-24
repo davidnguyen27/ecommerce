@@ -1,44 +1,44 @@
 import { randomUUID } from 'node:crypto'
 import type { PaymentPurpose, PaymentSource } from '../generated/prisma/client.ts'
 
-/** Yêu cầu tạo link thanh toán cho một đơn. */
+/** Request to create a payment link for an order. */
 export type PaymentLinkRequest = {
-  /** Mã đơn khách thấy. */
+  /** Order code the customer sees. */
   orderCode: number
-  /** Khoản link thu: trả đủ, cọc hay phần còn lại. Một đơn có thể có nhiều link. */
+  /** What the link collects: full, deposit or remaining balance. An order can have several links. */
   purpose: PaymentPurpose
-  /** VND, số tiền link đòi. */
+  /** VND the link asks for. */
   amount: number
-  /** Mô tả khách thấy ở trang thanh toán. */
+  /** Description shown on the payment page. */
   description: string
-  /** Trang khách quay về sau khi thanh toán (hay bỏ ngang). */
+  /** Page the customer returns to after paying (or abandoning). */
   returnUrl: string
-  /** Link hết hạn cùng lúc với hạn giữ hàng. */
+  /** The link expires with the reservation. */
   expiresAt: Date
-  /** IP của khách đặt mua (VNPAY đòi `vnp_IpAddr`). */
+  /** Client IP (VNPAY requires `vnp_IpAddr`). */
   clientIp: string
 }
 
-/** Link vừa tạo: trang khách tới để trả tiền, và mã đơn bên cổng để truy vấn sau (`payment_link.gateway_reference`). */
+/** A new link: the page to pay on, and the gateway reference for later queries (`payment_link.gateway_reference`). */
 export type PaymentLink = { checkoutUrl: string; gatewayReference: string }
 
-/** Một khoản tiền đã về cho đơn, theo cổng thanh toán. */
+/** Money received for an order, per the gateway. */
 export type PaymentTransaction = {
-  /** Mã tham chiếu giao dịch, duy nhất; dùng để không ghi một khoản hai lần. */
+  /** Unique transaction reference; keeps a payment from being recorded twice. */
   reference: string
   amount: number
   paidAt: Date
-  /** Bản ghi gốc của cổng, lưu làm payload của giao dịch. */
+  /** The gateway's raw record, stored as the transaction payload. */
   payload?: object
 }
 
-/** Trạng thái thanh toán của một đơn khi hỏi cổng. */
+/** An order's payment status when queried at the gateway. */
 export type PaymentInfo = {
   status: 'pending' | 'paid' | 'failed'
   transactions: PaymentTransaction[]
 }
 
-/** Một giao dịch đã về, như đã lưu (`payment_transaction`): đủ để cổng biết có hoàn được không và hoàn thế nào. */
+/** A received transaction as stored (`payment_transaction`): enough for the gateway to tell if and how to refund it. */
 export type StoredTransaction = {
   reference: string
   amount: number
@@ -46,80 +46,80 @@ export type StoredTransaction = {
   payload: unknown
 }
 
-/** Yêu cầu hoàn một phần hay toàn bộ một giao dịch gốc qua cổng (ADR 0014). */
+/** Request to refund part or all of an original transaction via the gateway (ADR 0014). */
 export type RefundRequest = {
-  /** Id khoản hoàn; cổng dùng làm mã yêu cầu nên không trùng giữa các lần gọi. */
+  /** Refund id; the gateway uses it as the request id, so calls never collide. */
   refundId: string
   orderCode: number
-  /** VND, > 0, không vượt phần chưa hoàn của giao dịch. */
+  /** VND, > 0, at most the transaction's unrefunded part. */
   amount: number
-  /** Hoàn hết giao dịch (chưa từng hoàn qua cổng và số tiền bằng giao dịch) hay một phần. */
+  /** Full refund (never refunded via gateway and amount equals the transaction) or partial. */
   full: boolean
   transaction: StoredTransaction
-  /** Id nhân viên thực hiện. */
+  /** Acting staff id. */
   createdBy: string
 }
 
 /**
- * Kết quả cổng trả ngay: đã hoàn, cổng đang xử lý (chốt tay sau, ADR 0014), hoặc bị từ chối. `message` là lý do đọc được,
- * `payload` là dữ liệu gốc lưu vào khoản hoàn.
+ * Immediate gateway result: refunded, processing (settled by hand later, ADR 0014) or rejected. `message` is a
+ * readable reason, `payload` the raw data stored on the refund.
  */
 export type RefundResult = { status: 'succeeded' | 'processing' | 'rejected'; message: string; payload: object }
 
-/** Cổng không trả lời, trả lỗi hoặc trả dữ liệu không tin được; checkout đổi thành 502. */
+/** No reply, an error or untrustworthy data from the gateway; checkout turns it into 502. */
 export class PaymentGatewayError extends Error {
   override name = 'PaymentGatewayError'
 }
 
 /**
- * Cổng thanh toán (ADR 0010). Bản thật là VNPAY (`vnpay.ts`), chọn ở `gateway-from-env.ts`; local dùng cổng giả
- * lập; test dùng bản trong bộ nhớ. Kiểm chữ ký IPN không nằm ở đây: đó là hàm thuần trên khóa bí mật.
+ * Payment gateway (ADR 0010). The real one is VNPAY (`vnpay.ts`), picked in `gateway-from-env.ts`; locally a
+ * simulator; in tests an in-memory fake. IPN signature checks live elsewhere: they are pure functions of the secret.
  */
 export interface PaymentGateway {
-  /** Tạo link thanh toán; lỗi thì ném để đơn không được tạo. */
+  /** Creates a payment link; throws on error so the order is not created. */
   createLink(request: PaymentLinkRequest): Promise<PaymentLink>
-  /** Hỏi cổng các khoản đã về cho đơn mang mã `gatewayReference`. */
+  /** Asks the gateway what was paid for the order with reference `gatewayReference`. */
   getPayment(gatewayReference: string): Promise<PaymentInfo>
-  /** Hủy link của đơn; lỗi chỉ cần log, không chặn việc hủy đơn. */
+  /** Cancels the order's link; errors need only be logged, they never block the cancel. */
   cancelLink(gatewayReference: string): Promise<void>
-  /** Giao dịch này có hoàn qua chính cổng này được không (giao dịch giả lập không hoàn qua VNPAY được, và ngược lại). */
+  /** Whether this gateway can refund the transaction (simulated ones not via VNPAY, and vice versa). */
   canRefund(transaction: StoredTransaction): boolean
-  /** Gửi lệnh hoàn; cổng không trả lời hay trả dữ liệu không tin được thì ném `PaymentGatewayError`. */
+  /** Sends a refund command; no reply or untrustworthy data throws `PaymentGatewayError`. */
   refund(request: RefundRequest): Promise<RefundResult>
 }
 
 const PENDING: PaymentInfo = { status: 'pending', transactions: [] }
 
 /**
- * Mã đơn bên cổng của cổng giả: link trả đủ là `String(orderCode)` như M3; link khác thêm mục đích và một số phân biệt,
- * để mọi link của một đơn khác mã nhau.
+ * Fake gateway reference: a full-payment link is `String(orderCode)` as in M3; other links add the purpose and a
+ * counter, so every link of an order differs.
  */
 function fakeReference(request: PaymentLinkRequest, distinct: number | string) {
   return request.purpose === 'full' ? String(request.orderCode) : `${request.orderCode}-${request.purpose}-${distinct}`
 }
 
 /**
- * Bản giả cho test: ghi lại link đã tạo, đã hủy; trạng thái truy vấn do test đặt; giả lập được lỗi. Mã đơn bên cổng
- * theo `fakeReference`, số phân biệt đếm từ 1 theo đơn và mục đích.
+ * Test fake: records created and cancelled links; query status set by tests; can simulate errors. References follow
+ * `fakeReference`, counters from 1 per order and purpose.
  */
 export class InMemoryPaymentGateway implements PaymentGateway {
   readonly created: PaymentLinkRequest[] = []
   readonly cancelled: string[] = []
-  /** Trạng thái truy vấn theo mã đơn bên cổng. */
+  /** Query status by gateway reference. */
   readonly payments = new Map<string, PaymentInfo>()
-  /** Đặt `true` để mọi lần tạo link sau đó đều lỗi, như cổng không trả lời. */
+  /** Set `true` to make every later link creation fail, as if the gateway did not reply. */
   failCreate = false
-  /** Đặt `true` để mọi lần truy vấn sau đó đều lỗi. */
+  /** Set `true` to make every later query fail. */
   failGetPayment = false
-  /** Đặt `true` để mọi lần hủy link sau đó đều lỗi. */
+  /** Set `true` to make every later link cancel fail. */
   failCancel = false
-  /** Đặt `false` để mọi giao dịch đều không hoàn qua cổng được (chỉ hoàn thủ công). */
+  /** Set `false` so no transaction is refundable via the gateway (manual refunds only). */
   allowRefund = true
-  /** Chạy sau khi nhận lệnh hoàn, trước khi trả kết quả: test chen thao tác vào lúc cổng đang xử lý. */
+  /** Runs after receiving a refund command, before replying: lets tests interleave while the gateway is processing. */
   beforeRefundResult?: (request: RefundRequest) => Promise<void>
-  /** Các lệnh hoàn đã nhận. */
+  /** Refund commands received. */
   readonly refunds: RefundRequest[] = []
-  /** Kết quả cho các lệnh hoàn sau đó, lấy lần lượt; hết thì là `succeeded`. Phần tử `'error'` giả lập cổng không trả lời. */
+  /** Results for later refund commands, in order; then `succeeded`. An `'error'` entry simulates no reply. */
   readonly refundResults: (RefundResult['status'] | 'error')[] = []
 
   async createLink(request: PaymentLinkRequest) {
@@ -155,13 +155,13 @@ export class InMemoryPaymentGateway implements PaymentGateway {
   }
 }
 
-/** Đường dẫn trang cổng giả lập trên web. */
+/** Path of the simulator page on the website. */
 export const SIMULATOR_PATH = '/thanh-toan-gia-lap'
 
 /**
- * Cổng giả lập cho local và smoke, khi chưa có khóa VNPAY (spec "Thanh toán"): link trỏ tới trang
- * `/thanh-toan-gia-lap` của chính website, mang mã đơn, mã link (`ref`), số tiền, hạn và trang quay về trong query. Truy vấn luôn là
- * chưa trả: tiền giả lập về qua nút "Giả lập đã thanh toán", ghi nhận thẳng.
+ * Local and smoke simulator when there are no VNPAY keys (spec "Thanh toán"): links point to the website's own
+ * `/thanh-toan-gia-lap` page with order code, link ref, amount, expiry and return page in the query. Queries always say
+ * unpaid: simulated money arrives via the "Giả lập đã thanh toán" button, recorded directly.
  */
 export class SimulatorPaymentGateway implements PaymentGateway {
   constructor(private readonly siteUrl: string) {}
@@ -183,14 +183,14 @@ export class SimulatorPaymentGateway implements PaymentGateway {
 
   async cancelLink() {}
 
-  /** Chỉ giao dịch giả lập: tiền thật hay tiền sandbox không hoàn bằng nút giả lập. */
+  /** Simulated transactions only: real or sandbox money is not refunded by the simulator. */
   canRefund(transaction: StoredTransaction) {
     return transaction.source === 'simulator'
   }
 
   /**
-   * Hoàn giả lập để local và bản demo chạy đủ các nhánh (spec M6a): chữ số cuối của số tiền là `1` thì cổng đang xử lý,
-   * `2` thì bị từ chối, còn lại thì đã hoàn.
+   * Simulated refunds so local and demo cover every branch (spec M6a): amount ending in `1` is processing, `2`
+   * rejected, anything else refunded.
    */
   async refund(request: RefundRequest): Promise<RefundResult> {
     const last = request.amount % 10

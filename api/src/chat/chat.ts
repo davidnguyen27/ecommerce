@@ -14,15 +14,15 @@ import { AppError } from '../http/errors.ts'
 import { vnDate } from '../reports/period.ts'
 import { HISTORY_LIMIT } from './prompt.ts'
 
-/** Token của một lần gọi model, theo model đã trả lời. */
+/** Tokens of one model call, by the model that answered. */
 export type ModelUsage = { model: string; input: number; output: number }
 
-/** `chat_message.products`: sản phẩm chatbot đã gợi ý trong tin đó. */
+/** `chat_message.products`: products the chatbot suggested in that message. */
 export const StoredProducts = z.array(z.object({ slug: z.string(), name: z.string() }))
 
-/** Im quá chừng này thì tin tiếp theo mở cuộc mới (spec M8). */
+/** After this much silence the next message opens a new conversation (spec M8). */
 export const CONVERSATION_IDLE_MS = 24 * 60 * 60_000
-/** Cuộc trò chuyện có tin cuối quá chừng này bị job dọn xóa (spec M8). */
+/** Conversations whose last message is older than this are deleted by the cleanup job (spec M8). */
 export const CONVERSATION_RETENTION_MS = 90 * 24 * 60 * 60_000
 
 const DEFAULT_SETTINGS: ChatbotSettings = { enabled: false, responseTimeNote: '' }
@@ -32,7 +32,7 @@ export async function readChatbotSettings(db: DbClient): Promise<ChatbotSettings
   return row ? { enabled: row.enabled, responseTimeNote: row.responseTimeNote } : DEFAULT_SETTINGS
 }
 
-/** Vì sao chatbot không trả lời được lúc này, hay `null` nếu được. */
+/** Why the chatbot cannot answer now, or `null` if it can. */
 export function unavailableReason(settings: ChatbotSettings, llm: LlmClient | undefined): ChatUnavailableReason | null {
   if (!settings.enabled) return 'disabled'
   if (!llm) return 'unconfigured'
@@ -64,9 +64,9 @@ export async function conversationView(db: DbClient, id: string, now = new Date(
 }
 
 /**
- * Ghi tin của khách vào cuộc đang dùng, hay vào cuộc mới khi không có mã, không thấy, hay cuộc đã im quá 24 giờ. Khóa
- * dòng cuộc trò chuyện để hai tin gửi cùng lúc không vượt giới hạn 30 tin. Trả cuộc đang dùng, tin vừa ghi và các tin
- * gần nhất để gửi cho model.
+ * Stores the customer's message in the current conversation, or a new one when there is no id, it is not found, or it
+ * has been silent over 24 h. Locks the conversation row so two concurrent messages cannot pass the 30-message limit.
+ * Returns the conversation, the new message and the recent messages for the model.
  */
 export async function appendCustomerMessage(
   tx: DbClient,
@@ -113,8 +113,8 @@ export async function appendCustomerMessage(
 }
 
 /**
- * Cộng các lần gọi model của một lượt vào `chat_usage_day`: mỗi lần gọi thật (không tính model bị bỏ qua) là một lượt;
- * token chỉ có ở model đã trả lời.
+ * Adds a turn's model calls to `chat_usage_day`: each real call (skipped models excluded) counts once; tokens come only
+ * from the model that answered.
  */
 export async function recordUsage(db: DbClient, attempts: readonly LlmAttempt[], usage: ModelUsage | null, at: Date) {
   const day = vnDate(at)
@@ -135,10 +135,10 @@ export async function recordUsage(db: DbClient, attempts: readonly LlmAttempt[],
   }
 }
 
-/** Xóa cuộc trò chuyện có tin cuối quá 90 ngày (tin nhắn xóa theo), trừ cuộc đã chuyển nhân viên. Job dọn gọi mỗi đêm. */
+/** Deletes conversations idle over 90 days (messages too), except handed-off ones. Run nightly by the cleanup job. */
 export async function deleteOldConversations(db: DbClient, now = new Date()) {
   const { count } = await db.chatConversation.deleteMany({
-    // Cuộc đã chuyển thành yêu cầu hỗ trợ được giữ theo yêu cầu.
+    // Conversations turned into support requests are kept with the request.
     where: { lastMessageAt: { lte: new Date(now.getTime() - CONVERSATION_RETENTION_MS) }, supportRequestId: null },
   })
   return count

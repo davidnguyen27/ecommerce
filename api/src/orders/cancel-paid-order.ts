@@ -22,13 +22,12 @@ import { issueOrderLookupUrl, recordOrderEvent } from './orders.ts'
 const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, message)
 
 /**
- * Nhân viên hủy một đơn đã nhận tiền (GLOSSARY "Hủy đơn", spec M6a) trong transaction của `audited()`: khóa đơn
- * `FOR UPDATE` (cùng khóa với ghi nhận thanh toán, xử lý giao hàng, hoàn tiền), kiểm đơn đang xử lý, đã trả đủ hoặc đã
- * cọc, chưa bàn giao vận chuyển. Nhả hàng đang giữ, đặt đơn `cancelled` (lý do `staff` kèm `cancel_cause`), tạo một
- * khoản hoàn chờ thực hiện khi số hoàn > 0, ghi sự kiện, audit và xếp email "Đơn đã hủy".
- *
- * Số hoàn: 0 tới số còn hoàn được; thấp hơn thì ghi chú bắt buộc; không nhập được hàng thì phải hoàn đủ. Sai thì 400.
- * Trạng thái thanh toán giữ nguyên (ADR 0014). Lượt mã giảm giá tự trống vì lượt tính trên đơn chưa hủy (M5).
+ * Staff cancel of a paid order (GLOSSARY "Hủy đơn", spec M6a) in the `audited()` transaction: locks the order (same
+ * lock as payment, fulfillment and refunds) and checks it is processing, paid or deposited, and not handed over.
+ * Releases reservations, sets `cancelled` (reason `staff` with `cancel_cause`), creates a pending refund when the
+ * amount is > 0, records the event and audit, and queues the "Đơn đã hủy" email.
+ * Refund: 0 up to the refundable amount; less needs a note; supply failure needs a full refund. Otherwise 400. Payment
+ * status is unchanged (ADR 0014). Voucher uses free up since uses count only uncancelled orders (M5).
  */
 export async function cancelPaidOrder(
   tx: Prisma.TransactionClient,
@@ -49,7 +48,8 @@ export async function cancelPaidOrder(
   if (locked.status !== 'processing' || !(['paid', 'deposit_paid'] as PaymentStatus[]).includes(locked.paymentStatus)) {
     throw conflict('Chỉ hủy được đơn đang xử lý đã nhận tiền; đơn chưa thanh toán dùng nút hủy thường')
   }
-  // `returned`: giao thất bại và kho đã nhận hàng hoàn về, không còn hàng giữ cho đơn. `failed` thì nhận hàng về trước.
+  // `returned`: delivery failed and the warehouse got the goods back, nothing is reserved. `failed` must be returned
+  // first.
   if (!(['not_prepared', 'preparing', 'returned'] as FulfillmentStatus[]).includes(locked.fulfillmentStatus)) {
     throw conflict('Đơn đã bàn giao vận chuyển, không hủy được; giao thất bại thì nhận hàng hoàn về trước')
   }
@@ -59,7 +59,7 @@ export async function cancelPaidOrder(
   if (refundAmount > refundable) {
     throw invalidField('refundAmount', `Số tiền hoàn vượt số còn hoàn được ${vnd(refundable)}`)
   }
-  // Chỉ đơn đặt trước có phần còn lại phải trả; với đơn thường, khách sẽ đọc lý do vô nghĩa ở email và trang đơn.
+  // Only pre-orders have a remaining balance; for regular orders the customer would read a meaningless reason.
   if (input.cause === 'remainder_overdue' && locked.kind !== 'preorder') {
     throw invalidField('cause', 'Đơn thường không có phần còn lại phải trả; chọn lý do khác')
   }
@@ -70,8 +70,8 @@ export async function cancelPaidOrder(
     throw invalidField('note', 'Hoàn ít hơn số còn hoàn được thì cần ghi lý do')
   }
 
-  // Hàng đặt trước đang giữ cho đơn (đã về đủ hay mới về một phần) đi tiếp cho đơn chờ kế tiếp theo thứ tự cọc (ADR 0013),
-  // nên nhớ số đã nhả trước khi nhả.
+  // Pre-order stock held for this order (fully or partly arrived) passes to the next waiting order by deposit order
+  // (ADR 0013), so remember what is released before releasing it.
   const released =
     locked.kind === 'preorder'
       ? await tx.orderLine.findMany({
@@ -98,9 +98,9 @@ export async function cancelPaidOrder(
     { type: 'staff', staffId },
     { reason: 'staff', cause: input.cause, refundAmount: Number(refundAmount) },
   )
-  // Sau khi đơn đã `cancelled`: `planArrivals` chỉ chọn đơn đặt trước đang chờ, nên không chia lại cho chính đơn này.
-  // `reallocate: false` (hủy hàng loạt khi đợt không nhập được hàng): phần đã giữ thành hàng sẵn, không chuyền qua các
-  // đơn cùng đợt sắp bị hủy.
+  // The order is now `cancelled`, so `planArrivals` (waiting pre-orders only) never reallocates to it. `reallocate:
+  // false` (bulk cancel when a campaign cannot be supplied): held stock becomes regular stock instead of passing to
+  // orders about to be cancelled.
   const plans =
     reallocate && released.length
       ? await planArrivals(
@@ -138,7 +138,7 @@ export async function cancelPaidOrder(
       ...(reallocated.length && { reallocated, arrivedOrderCodes }),
     },
   })
-  // Yêu cầu hủy của khách (M6b) xong cùng lúc với việc hủy.
+  // The customer's cancel requests (M6b) are resolved with the cancel.
   const resolvedRequestCodes = await resolveCancelRequests(tx, orderId)
   if (resolvedRequestCodes.length) {
     await recordOrderEvent(
@@ -154,8 +154,8 @@ export async function cancelPaidOrder(
 }
 
 /**
- * Email "Đơn đã hủy": lý do theo cách nói với khách, số tiền sẽ hoàn, phần không hoàn (mất cọc, khấu trừ) kèm nhắc chính
- * sách đã áp dụng cho đơn, và link tra cứu có token mới. `refundable` là số còn hoàn được lúc hủy.
+ * "Đơn đã hủy" email: the reason as told to customers, the refund amount, the non-refunded part (forfeited deposit,
+ * deduction) with a pointer to the order's policy, and a lookup link with a new token. `refundable` is as of cancel.
  */
 async function queueCancelledEmail(
   tx: Prisma.TransactionClient,
@@ -174,7 +174,7 @@ async function queueCancelledEmail(
       : `Đơn này không được hoàn tiền theo ${policy} đã áp dụng cho đơn.`,
     ...(refundAmount > 0n && kept > 0n ? [`Phần không hoàn: ${vnd(kept)}, theo ${policy} đã áp dụng cho đơn.`] : []),
   ]
-  // Bản nháp, chờ chủ doanh nghiệp duyệt nội dung.
+  // Draft, awaiting the owner's approval of the wording.
   await emails.sendEmail(tx, {
     to: order.email,
     subject: `Đơn hàng #${order.code} đã bị hủy`,

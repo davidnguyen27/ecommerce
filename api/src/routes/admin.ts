@@ -33,14 +33,14 @@ import { adminStockRoutes } from './admin-stock.ts'
 import { adminStockReceiptRoutes } from './admin-stock-receipts.ts'
 import { adminShippingFeeRoutes } from './admin-shipping-fees.ts'
 
-/** Các route quản trị; đã đi qua `requireAuth` audience staff và `loadStaff`. */
+/** Admin routes; behind `requireAuth` for the staff audience and `loadStaff`. */
 export function adminRoutes(
   prisma: Db,
   storage: Storage,
   payments: PaymentGateway,
-  /** Hàng đợi thư và địa chỉ website: email giao hàng (ticket 09) và khôi phục đơn khi đối soát (ticket 10). */
+  /** Mail queue and website URL: delivery emails (ticket 09) and reconciliation restores (ticket 10). */
   mail: FulfillmentMail & ReconciliationDeps,
-  /** Model của chatbot, để trang quản trị hiện trạng thái từng model (M8). */
+  /** The chatbot model, so the admin page can show each model's status (M8). */
   llm?: LlmClient,
 ) {
   return (
@@ -57,7 +57,8 @@ export function adminRoutes(
       .use('/categories', adminCategoryRoutes(prisma))
       .use('/attribute-schemas', adminAttributeSchemaRoutes(prisma))
       .use('/commitment-types', adminCommitmentTypeRoutes(prisma))
-      // Trước `/products`: ảnh, chứng từ và cam kết có quyền riêng (`media.upload`), không đi qua quyền chung của router sản phẩm.
+      // Before `/products`: images, documents and commitments have their own permissions (`media.upload`), not the
+      // product router's shared guard.
       .use('/products/:id/images', adminProductImageRoutes(prisma, storage))
       .use('/products/:id', adminProductPublishingRoutes(prisma, storage))
       .use('/products/:id/documents', adminProductDocumentRoutes(prisma, storage))
@@ -75,7 +76,7 @@ export function adminRoutes(
       .use('/vouchers', adminVoucherRoutes(prisma))
       .use('/support-requests', adminSupportRoutes(prisma, storage, mail))
       .use('/return-windows', adminReturnWindowRoutes(prisma))
-      // Trước router báo cáo M7: router đó đòi `report.view` cho mọi đường bên dưới.
+      // Before the M7 report router: it requires `report.view` for everything below it.
       .use('/reports/chatbot', adminChatbotReportRoutes(prisma))
       .use('/reports', adminReportRoutes(prisma))
       .use('/chatbot', adminChatbotRoutes(prisma, llm))

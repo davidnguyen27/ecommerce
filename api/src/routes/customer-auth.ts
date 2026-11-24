@@ -23,14 +23,16 @@ const CUSTOMER_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 export type CustomerAuthDeps = {
   prisma: Db
   emails: EmailQueue
-  /** Gốc URL của website, dùng để dựng link trong email. */
+  /** Website base URL, for links in emails. */
   siteUrl: string
   sessions: CustomerSessions
 }
 
 export type CustomerSessions = ReturnType<typeof customerSessions>
 
-/** Phiên của miền khách; refresh token nằm ở `${mountPath}/refresh`. Dùng chung cho mọi route cần mở phiên. */
+/**
+ * Customer-domain sessions; the refresh token lives at `${mountPath}/refresh`. Shared by every route that opens one.
+ */
 export function customerSessions(prisma: Db, secret: Uint8Array, mountPath: string) {
   return createSessions({
     prisma,
@@ -44,7 +46,7 @@ export function customerSessions(prisma: Db, secret: Uint8Array, mountPath: stri
   })
 }
 
-/** Đăng ký, xác minh email, quên mật khẩu, đăng nhập, refresh, đăng xuất của khách. Không đòi access token. */
+/** Customer sign-up, email verification, forgot password, sign-in, refresh, sign-out. No access token required. */
 export function customerAuthRoutes(deps: CustomerAuthDeps) {
   const { prisma, sessions } = deps
 
@@ -56,7 +58,7 @@ export function customerAuthRoutes(deps: CustomerAuthDeps) {
 
       const customer = await prisma
         .$transaction(async (tx) => {
-          // Đọc phiên bản trong cùng transaction, để lời đồng ý trỏ đúng bản hiện hành lúc tạo tài khoản.
+          // Read the version in the same transaction, so consent points at the version current at sign-up.
           const policy = await findCurrentPrivacyPolicy(tx)
           if (!policy) {
             throw new AppError(
@@ -72,7 +74,7 @@ export function customerAuthRoutes(deps: CustomerAuthDeps) {
           return created
         })
         .catch((err: unknown) => {
-          // Chỉ báo trùng, không nói thêm gì về tài khoản đã có.
+          // Only say it is taken, nothing more about the existing account.
           throw isUniqueViolation(err) ? new AppError(409, ErrorCode.CONFLICT, 'Email này đã được đăng ký') : err
         })
 
@@ -95,7 +97,7 @@ export function customerAuthRoutes(deps: CustomerAuthDeps) {
       if (customer) {
         await prisma.$transaction((tx) => sendPasswordResetEmail(tx, deps.emails, deps.siteUrl, customer))
       }
-      // Cùng một phản hồi dù email có tài khoản hay không.
+      // The same response whether or not the email has an account.
       res.status(202).end()
     })
     .post('/reset-password', async (req, res) => {

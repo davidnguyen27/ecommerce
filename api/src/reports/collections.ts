@@ -25,8 +25,8 @@ const REFUNDED = {
 } as const
 
 /**
- * Tiền thu của kỳ (GLOSSARY "Tiền thu", ADR 0016): giao dịch cổng báo về theo `paidAt`, trừ khoản hoàn đã xong theo
- * `completedAt`. Kèm các số tại thời điểm xem.
+ * Period collections (GLOSSARY "Tiền thu", ADR 0016): gateway transactions by `paidAt`, minus completed refunds by
+ * `completedAt`. Plus point-in-time figures.
  */
 export async function collectionsReport(db: DbClient, period: Period): Promise<CollectionsReport> {
   const paidAt = Prisma.sql`t."paid_at"`
@@ -62,10 +62,10 @@ export async function collectionsReport(db: DbClient, period: Period): Promise<C
   return { from: period.from, to: period.to, groupBy: period.groupBy, rows: items, total, snapshot }
 }
 
-/** Các số tại thời điểm xem: không có lịch sử theo kỳ (spec M7). */
+/** Point-in-time figures: no per-period history (spec M7). */
 async function collectionsSnapshot(db: DbClient): Promise<CollectionsSnapshot> {
   const [held, outstanding, refunding, reconciliation] = await Promise.all([
-    // Tiền đang giữ của đơn đặt trước chưa giao: cọc, và cả phần còn lại nếu khách đã trả mà hàng chưa giao.
+    // Money held for undelivered pre-orders: deposits, plus remainders paid before delivery.
     db.$queryRaw<{ count: number; amount: bigint }[]>`
       SELECT count(*)::int AS "count", coalesce(sum(h."held"), 0)::bigint AS "amount"
       FROM (

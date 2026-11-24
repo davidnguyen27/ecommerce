@@ -15,24 +15,24 @@ import type { SearchCriteria } from '../catalog/search.ts'
 import { findPublishedVersion, listPublishedPages } from '../content/pages.ts'
 import type { Db } from '../db.ts'
 
-// Công cụ của chatbot (spec M8 "Công cụ"): chỉ đọc, và chỉ đọc những gì web khách đã hiện. Sản phẩm đi qua đúng các hàm
-// của trang sản phẩm công khai, nên không lộ bản nháp, số tồn, giá vốn hay chứng từ. Kết quả gửi cho model viết gọn để
-// tiết kiệm token (ADR 0017).
+// Chatbot tools (spec M8 "Công cụ"): read-only, and only what the customer website already shows. Products go through
+// the public product page functions, so drafts, stock counts, costs and documents never leak. Results sent to the
+// model are terse to save tokens (ADR 0017).
 
 export type ToolDeps = { prisma: Db; storage: Storage }
 
-/** Kết quả một lời gọi công cụ: phần gửi lại cho model, và phần khung chat dùng (thẻ, đề nghị chuyển). */
+/** A tool call's result: what goes back to the model, and what the chat UI uses (cards, handoff offer). */
 export type ToolOutcome = { output: unknown; cards?: ProductCard[]; handoffSummary?: string }
 
-/** Số sản phẩm tối đa mỗi lần tìm (spec M8). */
+/** Max products per search (spec M8). */
 export const SEARCH_LIMIT = 5
-/** Key thuộc tính màu trong schema của các nhóm hàng (dữ liệu hiện có). */
+/** Color attribute key in product type schemas (current data). */
 const COLOR_KEY = 'mau'
 const DESCRIPTION_LIMIT = 400
 const USAGE_CARE_LIMIT = 200
 const POLICY_LIMIT = 4000
 
-// Schema tối thiểu: mỗi khóa thừa (`additionalProperties`, `required` rỗng) tốn token ở mọi lần gọi, nhất là với qwen.
+// Minimal schemas: every extra key (`additionalProperties`, empty `required`) costs tokens on every call, esp. qwen.
 const object = (properties: Record<string, unknown>, required?: string[]) => ({
   type: 'object',
   properties,
@@ -40,8 +40,8 @@ const object = (properties: Record<string, unknown>, required?: string[]) => ({
 })
 
 /**
- * Mô tả từng công cụ gửi cho model; mỗi tên phải có hàm chạy trong `RUNNERS` và ngược lại (typecheck). Tiếng Anh, gọn:
- * gửi kèm mọi lần gọi model (xem `SYSTEM_PROMPT`).
+ * Tool descriptions sent to the model; each name must have a runner in `RUNNERS` and vice versa (typecheck). English
+ * and terse: sent with every call (see `SYSTEM_PROMPT`).
  */
 const TOOL_DEFINITIONS: Record<ChatToolName, Omit<LlmTool, 'name'>> = {
   search_products: {
@@ -51,7 +51,7 @@ const TOOL_DEFINITIONS: Record<ChatToolName, Omit<LlmTool, 'name'>> = {
       productType: { type: 'string', enum: ProductType.options },
       brand: { type: 'string' },
       color: { type: 'string' },
-      // Nam, Nữ đã gồm Unisex khi lọc (ADR 0004); cho chọn Unisex thì model hay tự thêm và loại mất hàng Nam, Nữ.
+      // Nam and Nữ already include Unisex (ADR 0004); offering Unisex made the model add it and drop Nam/Nữ items.
       gender: { type: 'string', enum: ['Nam', 'Nữ'] },
       minPrice: { type: 'integer' },
       maxPrice: { type: 'integer' },
@@ -74,7 +74,7 @@ const TOOL_DEFINITIONS: Record<ChatToolName, Omit<LlmTool, 'name'>> = {
 
 export const CHAT_TOOLS: LlmTool[] = Object.entries(TOOL_DEFINITIONS).map(([name, tool]) => ({ name, ...tool }))
 
-/** Tình trạng bằng chữ thường: mã như `in_stock` thì model hay chép nguyên vào câu trả lời. */
+/** Status in plain words: codes like `in_stock` get copied verbatim into answers. */
 const AVAILABILITY_TEXT: Record<VariantAvailability, string> = {
   in_stock: 'in stock',
   out_of_stock: 'out of stock',
@@ -87,13 +87,15 @@ const cut = (text: string, limit: number) => (text.length > limit ? `${text.slic
 const str = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
 const int = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : undefined)
 
-/** Tên thuộc tính thay cho key, để model đọc được ("Màu" thay vì `color`). */
+/** Attribute names instead of keys, so the model can read them ("Màu" rather than `color`). */
 function labelled(product: PublicProduct, values: Record<string, unknown>) {
   const labelOf = new Map(product.attributeSchema.map((a) => [a.key, a.label]))
   return Object.fromEntries(Object.entries(values).map(([key, value]) => [labelOf.get(key) ?? key, value]))
 }
 
-/** Sản phẩm viết gọn cho model: không ảnh, không id biến thể, không URL (prompt nêu cách dựng link); mô tả cắt ngắn. */
+/**
+ * Terse product for the model: no images, variant ids or URLs (the prompt says how to build links); short description.
+ */
 export function productForModel(product: PublicProduct) {
   return {
     slug: product.slug,
@@ -102,14 +104,15 @@ export function productForModel(product: PublicProduct) {
     description: cut(product.description, DESCRIPTION_LIMIT),
     usageCare: cut(product.usageCare, USAGE_CARE_LIMIT),
     attributes: labelled(product, product.attributes),
-    // Một dòng mỗi biến thể ("Đen / 41: 3490000 in_stock"): object có nhãn lặp lại ở mọi biến thể tốn token gấp mấy lần.
+    // One line per variant ("Đen / 41: 3490000 in_stock"): objects repeating labels per variant cost several times
+    // more.
     variants: product.variants.map((variant) => {
       const preorder = variant.preorder
         ? ` (cọc ${variant.preorder.depositPercent}%, dự kiến ${variant.preorder.deliveryFrom} – ${variant.preorder.deliveryTo})`
         : ''
       return `${Object.values(variant.attributes).join(' / ')}: ${variant.price} ${AVAILABILITY_TEXT[variant.availability]}${preorder}`
     }),
-    // "none" thay cho null: chạy thử thì gpt-oss bỏ qua null và tự đoán size "theo bảng đo chuẩn EU".
+    // "none" instead of null: in trials gpt-oss ignored null and guessed sizes "theo bảng đo chuẩn EU".
     sizeChart: product.sizeChart ?? 'none',
     originStatement: product.originStatement,
     commitments: product.commitments.map((c) => ({ type: c.type, statement: c.statement })),
@@ -126,7 +129,7 @@ async function searchProducts({ prisma, storage }: ToolDeps, args: Args): Promis
       where: { OR: [{ slug: brandName.toLowerCase() }, { name: { equals: brandName, mode: 'insensitive' } }] },
       select: { slug: true },
     })
-    // Thương hiệu không khớp tên nào thì tìm như một từ khóa, thay vì trả rỗng.
+    // A brand that matches no name is searched as a keyword instead of returning nothing.
     if (brand) brandSlug = brand.slug
     else text = [brandName, text].filter(Boolean).join(' ')
   }
@@ -142,8 +145,8 @@ async function searchProducts({ prisma, storage }: ToolDeps, args: Args): Promis
   }
   let { items } = await searchProductCards(prisma, storage, criteria, undefined, 1, SEARCH_LIMIT)
   let note: string | undefined
-  // Từ khóa chỉ khớp tên, thương hiệu, mã (tên sản phẩm phần lớn tiếng Anh): không khớp mà còn bộ lọc khác thì bỏ từ
-  // khóa, để "túi đi làm dưới 7 triệu" vẫn ra túi trong ngân sách thay vì rỗng.
+  // Keywords only match name, brand and code (names are mostly English): with no match but other filters, drop the
+  // keyword so "túi đi làm dưới 7 triệu" still finds bags in budget instead of nothing.
   const otherFilters =
     criteria.brandSlug || type || criteria.minPrice || criteria.maxPrice || criteria.attributes.length
   if (items.length === 0 && text && otherFilters) {
@@ -167,8 +170,8 @@ async function searchProducts({ prisma, storage }: ToolDeps, args: Args): Promis
 }
 
 /**
- * Bộ lọc màu và giới tính theo schema của nhóm hàng. Màu là thuộc tính `mau`, chỉ lọc được khi biết nhóm hàng; giá trị
- * lưu viết hoa chữ đầu ("Đen"). Giới tính lọc được ở mọi nhóm hàng (Nam, Nữ gồm cả Unisex).
+ * Color and gender filters from the product type schema. Color is the `mau` attribute, filterable only when the type
+ * is known; values are capitalized ("Đen"). Gender works on every type (Nam and Nữ include Unisex).
  */
 async function attributeFilters(prisma: Db, type: ProductType | undefined, args: Args) {
   const color = str(args.color)
@@ -176,8 +179,8 @@ async function attributeFilters(prisma: Db, type: ProductType | undefined, args:
     (option) => option !== GENDER_UNISEX && option.toLowerCase() === str(args.gender)?.toLowerCase(),
   )
   if (!gender && !(color && type)) return []
-  // Chưa biết nhóm hàng thì chỉ lọc giới tính, mà giới tính có ở mọi nhóm hàng với cùng định nghĩa (ADR 0004): nạp
-  // schema nhóm nào cũng được, như trang tìm kiếm của web.
+  // With no product type, filter only by gender, which every type defines the same way (ADR 0004): any type's schema
+  // works, as on the website search page.
   const schema = await loadAttributeSchema(prisma, type ?? ProductType.enum.footwear)
   const filters: SearchCriteria['attributes'] = []
   const genderDefinition = schema.attributes.find((a) => a.key === GENDER_KEY)
@@ -190,8 +193,8 @@ async function attributeFilters(prisma: Db, type: ProductType | undefined, args:
 }
 
 /**
- * Chi tiết theo slug; không có slug (hay slug sai) mà có tên thì lấy sản phẩm khớp tên nhất. Câu như "túi Coach Tabby có
- * bảo hành không" khỏi phải tìm trước rồi mới xem chi tiết: bớt một lượt gọi model.
+ * Details by slug; without a (valid) slug but with a name, takes the best name match. A question like "túi Coach Tabby
+ * có bảo hành không" then needs no prior search: one less model call.
  */
 async function getProduct({ prisma, storage }: ToolDeps, args: Args): Promise<ToolOutcome> {
   const slug = str(args.slug)
@@ -204,7 +207,7 @@ async function getProduct({ prisma, storage }: ToolDeps, args: Args): Promise<To
   return { output: product ? productForModel(product) : { error: 'Not found; try search_products' } }
 }
 
-/** Slug các trang chính sách đã xuất bản, cho dòng "Policy slugs" của prompt (thay công cụ liệt kê, bớt một lượt gọi). */
+/** Published policy page slugs, for the prompt's "Policy slugs" line (instead of a listing tool: one less call). */
 export async function policySlugs(prisma: Db) {
   return (await listPublishedPages(prisma)).filter((page) => page.kind === 'policy').map((page) => page.slug)
 }
@@ -234,7 +237,7 @@ function handoff(args: Args): ToolOutcome {
 
 type ToolRunner = (deps: ToolDeps, args: Args) => Promise<ToolOutcome> | ToolOutcome
 
-/** Hàm chạy của từng công cụ, theo tên model gọi. */
+/** Runner for each tool, by the name the model calls. */
 const RUNNERS = {
   search_products: searchProducts,
   get_product: getProduct,
@@ -244,7 +247,7 @@ const RUNNERS = {
 
 export type ChatToolName = keyof typeof RUNNERS
 
-/** Chạy một lời gọi công cụ. Tham số hỏng hay công cụ lạ thì báo lỗi cho model, không ném. */
+/** Runs one tool call. Bad arguments or unknown tools report an error to the model instead of throwing. */
 export async function runTool(deps: ToolDeps, call: LlmToolCall): Promise<ToolOutcome> {
   let args: Args
   try {

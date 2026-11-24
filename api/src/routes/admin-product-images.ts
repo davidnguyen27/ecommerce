@@ -47,7 +47,7 @@ const stored = (image: ProductImage): StoredImage => ({
   widths: image.widths,
 })
 
-/** Trường nghiệp vụ của ảnh ghi vào audit. */
+/** Image business fields recorded in audit. */
 function auditFields(image: ImageWithVariants) {
   const { productId, storageKey, contentType, width, height, alt, sortOrder } = image
   return { productId, storageKey, contentType, width, height, alt, sortOrder, variantIds: variantIdsOf(image) }
@@ -69,8 +69,8 @@ const imagesOf = (db: DbClient, productId: string) =>
   db.productImage.findMany({ where: { productId }, include: WITH_VARIANTS, orderBy: [...SORT_ORDER] })
 
 /**
- * Xử lý ảnh, đẩy lên storage rồi nối vào sau các ảnh của sản phẩm, gắn sẵn với `variantIds` (biến thể của chính
- * sản phẩm đó, nơi gọi đã kiểm). Lỗi khi ghi DB thì xóa file vừa đẩy lên.
+ * Processes the image, uploads it, then appends it after the product's images, tied to `variantIds` (variants of
+ * that product, checked by the caller). A DB error deletes the uploaded files.
  */
 async function appendImage(
   prisma: Db,
@@ -112,18 +112,18 @@ async function appendImage(
   })
 }
 
-/** Tên file ảnh hàng loạt: `<SKU>.<đuôi>` hoặc `<SKU>_<n>.<đuôi>`. */
+/** Bulk image file names: `<SKU>.<ext>` or `<SKU>_<n>.<ext>`. */
 const BULK_FILE_NAME = /^(.+?)\.[A-Za-z0-9]+$/
 
 /**
- * Ảnh hàng loạt, mount tại `/images`: mỗi request một file, tên file cho biết SKU. Cần `media.upload`.
- * Thứ tự giữa các ảnh do trình duyệt gửi lần lượt (đã sắp theo SKU và số thứ tự); API chỉ nối vào sau.
+ * Bulk images, mounted at `/images`: one file per request, the file name gives the SKU. Needs `media.upload`. The
+ * browser sends images in order (sorted by SKU and number); the API only appends.
  */
 export function adminBulkImageRoutes(prisma: Db, storage: Storage) {
   return Router().post('/by-sku', requirePermission('media.upload'), receiveImage, async (req, res) => {
     const file = uploadedFile(req)
     const stem = BULK_FILE_NAME.exec(req.file!.originalname)?.[1]?.trim().toUpperCase() ?? ''
-    // SKU được phép có dấu gạch dưới: thử cả tên trước, rồi mới bỏ phần `_<n>` ở cuối.
+    // SKUs may contain underscores: try the whole name first, then strip a trailing `_<n>`.
     const candidates = [stem, stem.replace(/_\d+$/, '')].filter((sku, i, all) => sku && all.indexOf(sku) === i)
     const variants = await prisma.productVariant.findMany({
       where: { sku: { in: candidates } },
@@ -148,9 +148,9 @@ export function adminBulkImageRoutes(prisma: Db, storage: Storage) {
 }
 
 /**
- * Ảnh của một sản phẩm, mount tại `/products/:id/images`. Xem cần quyền xem sản phẩm hoặc `media.upload`;
- * tải lên, sửa, sắp xếp, xóa cần `media.upload`. Thao tác ghi khóa dòng sản phẩm để thứ tự và việc gắn biến thể
- * không bị hai request cùng lọt qua.
+ * Images of a product, mounted at `/products/:id/images`. Viewing needs product view permission or `media.upload`;
+ * upload, edit, reorder, delete need `media.upload`. Writes lock the product row so ordering and variant links cannot
+ * be passed by two requests at once.
  */
 export function adminProductImageRoutes(prisma: Db, storage: Storage) {
   return (
@@ -165,12 +165,12 @@ export function adminProductImageRoutes(prisma: Db, storage: Storage) {
         const { id } = parse(ProductParams, req.params)
         const { alt } = parse(UploadProductImageFields, req.body)
         const file = uploadedFile(req)
-        // Kiểm sản phẩm trước khi xử lý ảnh, để không đẩy file lên storage cho sản phẩm không có.
+        // Check the product before processing, so nothing is uploaded for a missing product.
         await loadProduct(prisma, id)
         const created = await appendImage(prisma, storage, req, { productId: id, file, alt, variantIds: [] })
         res.status(201).json(toAdminImage(storage, created))
       })
-      // Khai báo trước `/:imageId` để `order` không bị hiểu là id ảnh.
+      // Declared before `/:imageId` so `order` is not read as an image id.
       .put('/order', requirePermission('media.upload'), async (req, res) => {
         const { id } = parse(ProductParams, req.params)
         const { imageIds } = parse(ReorderProductImagesRequest, req.body)
@@ -256,15 +256,15 @@ export function adminProductImageRoutes(prisma: Db, storage: Storage) {
           })
           return { deleted: image, live: liveImages(draft).some((i) => i.key === image.storageKey) }
         })
-        // Xóa file sau khi commit: rollback thì ảnh vẫn còn đủ file. Ảnh khách còn thấy ở phiên bản đang xuất bản
-        // thì giữ file; lần xuất bản lại hoặc lưu trữ sau đó mới xóa.
+        // Delete files after commit: on rollback the image keeps all its files. Images still in the published version
+        // keep their files; a later republish or archive deletes them.
         if (!live) await deleteImageFilesQuietly(storage, req, stored(deleted))
         res.status(204).end()
       })
   )
 }
 
-/** Ảnh thuộc đúng sản phẩm trên URL; ảnh của sản phẩm khác coi như không có. */
+/** An image of exactly the product in the URL; another product's counts as missing. */
 async function findImage(db: DbClient, productId: string, imageId: string) {
   const image = await db.productImage.findUnique({ where: { id: imageId }, include: WITH_VARIANTS })
   if (!image || image.productId !== productId) throw imageNotFound()

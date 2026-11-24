@@ -12,8 +12,8 @@ import { executeManualRefund, retryRefund, settleRefund } from '../payments/refu
 import type { CustomerMail } from '../jobs/jobs.ts'
 
 /**
- * Thực hiện hoàn tiền (ADR 0014), mount tại `/refunds`; mọi thao tác cần `payment.refund`. Mỗi thao tác trả lại chi tiết
- * đơn để trang quản trị thay đơn đang hiện bằng response. Xem khoản hoàn nằm trong chi tiết đơn (`order.view`).
+ * Refund execution (ADR 0014), mounted at `/refunds`; everything needs `payment.refund`. Each action returns the order
+ * detail for the admin page to swap in. Refunds are viewed in the order detail (`order.view`).
  */
 export function adminRefundRoutes(prisma: Db, storage: Storage, payments: PaymentGateway, mail: CustomerMail) {
   const respond = async (res: Response, code: number) => {

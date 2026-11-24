@@ -4,8 +4,8 @@ import type { Category, Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 
 /**
- * Xếp hàng các thao tác đổi hình dạng cây (tạo, đổi cha, xóa) trong transaction,
- * để hai lần đổi cha cùng lúc không cùng lọt kiểm tra rồi tạo thành vòng lặp.
+ * Serializes tree-shape changes (create, reparent, delete) in the transaction, so two concurrent reparents cannot both
+ * pass the check and form a cycle.
  */
 export async function lockTree(tx: Prisma.TransactionClient) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('catalog.category.tree'))`
@@ -17,8 +17,8 @@ const parentRejected = (status: 400 | 409, message: string) =>
   ])
 
 /**
- * Kiểm tra `parentId` làm cha được cho danh mục `child`: cha tồn tại, cùng nhóm hàng (ADR 0004),
- * và không nằm trong nhánh của chính `child`. Gọi sau `lockTree`.
+ * Checks `parentId` can parent `child`: it exists, has the same product type (ADR 0004), and is not inside `child`'s
+ * subtree. Call after `lockTree`.
  */
 export async function assertValidParent(
   tx: Prisma.TransactionClient,
@@ -33,7 +33,7 @@ export async function assertValidParent(
   }
   if (child.id === undefined) return
 
-  // Đi ngược từ cha mới lên gốc; gặp chính danh mục đang sửa nghĩa là cha mới nằm trong nhánh của nó.
+  // Walk up from the new parent; meeting the edited category means the parent is inside its subtree.
   const cycle = await tx.$queryRaw<unknown[]>`
     WITH RECURSIVE up AS (
       SELECT id, parent_id FROM category WHERE id = ${parentId}::uuid
@@ -47,8 +47,8 @@ export async function assertValidParent(
 export type VisibleCategory = Category & { children: VisibleCategory[] }
 
 /**
- * Cây danh mục khách thấy, gốc là đủ năm nhóm hàng theo thứ tự cố định.
- * Danh mục ẩn bị bỏ cùng cả nhánh con, vì khách không còn đường nào đi tới nhánh đó.
+ * The category tree customers see, rooted at the five product types in fixed order. Hidden categories drop with their
+ * subtree, since customers can no longer reach it.
  */
 export async function loadVisibleTree(db: DbClient) {
   const categories = await db.category.findMany({ where: { hidden: false }, orderBy: { name: 'asc' } })
@@ -66,7 +66,7 @@ export async function loadVisibleTree(db: DbClient) {
   }))
 }
 
-/** Danh mục khách thấy theo slug, kèm đường dẫn từ gốc xuống; `null` khi không có hoặc bị ẩn. */
+/** A visible category by slug, with its path from the root; `null` when missing or hidden. */
 export function findVisible(
   tree: Awaited<ReturnType<typeof loadVisibleTree>>,
   slug: string,
