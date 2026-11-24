@@ -5,28 +5,28 @@ import { createTestApp } from './test-app.ts'
 
 export const OWNER = { email: 'chu@example.com', password: 'mat-khau-dai-du-manh', name: 'Chủ Cửa Hàng' }
 
-/** Mật khẩu của nhân viên tạo bằng `createStaff`. */
+/** Password of staff created with `createStaff`. */
 export const STAFF_PASSWORD = 'mat-khau-nhan-vien-123'
 
 export type Request = Awaited<ReturnType<typeof createTestApp>>['request']
 
 export const bearer = (token: string) => ({ Authorization: `Bearer ${token}` })
 
-/** App trên DB sạch, đã có owner tạo bằng lệnh seed. */
+/** An app on a clean DB, with the owner created by the seed command. */
 export async function appWithOwner(options?: Parameters<typeof createTestApp>[0]) {
   const app = await createTestApp(options)
   await seedOwner(app.prisma, OWNER)
   return app
 }
 
-/** Đăng nhập kênh mobile để nhận cả hai token qua body. */
+/** Signs in on the mobile channel to get both tokens in the body. */
 export async function login(request: Request, email: string, password: string) {
   const res = await request.post('/api/admin/auth/login').set('X-Client', 'mobile').send({ email, password })
   expect(res.status).toBe(200)
   return res.body as { accessToken: string; refreshToken: string }
 }
 
-/** Owner tạo một nhân viên qua API rồi đăng nhập bằng tài khoản đó. */
+/** The owner creates a staff member via the API, then signs in with that account. */
 export async function createStaff(request: Request, ownerToken: string, roles: StaffRole[], email = 'nv@example.com') {
   const res = await request
     .post('/api/admin/staff')

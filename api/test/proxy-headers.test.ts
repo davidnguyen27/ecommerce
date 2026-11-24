@@ -3,7 +3,7 @@ import { trustProxyFromEnv } from '../src/app.ts'
 import { shop } from './support/shop.ts'
 import { createTestApp } from './support/test-app.ts'
 
-// Bản deploy đặt API sau hai tầng proxy (Netlify → load balancer của Render) và một CDN (ADR 0011).
+// The deploy puts the API behind two proxies (Netlify → Render's load balancer) and a CDN (ADR 0011).
 
 describe('API sau CDN', () => {
   it('response API mặc định không cho cache, kể cả route công khai', async () => {
@@ -17,7 +17,7 @@ describe('API sau CDN', () => {
 })
 
 describe('IP khách sau proxy', () => {
-  // Khách → Netlify (ghi IP khách vào X-Forwarded-For) → load balancer (nối IP của Netlify) → API.
+  // Customer → Netlify (writes the client IP into X-Forwarded-For) → load balancer (appends Netlify's IP) → API.
   const XFF = '203.0.113.7, 198.51.100.9'
 
   it('TRUST_PROXY=2: IP khách là địa chỉ đầu tiên trong chuỗi hai tầng proxy', async () => {
@@ -34,7 +34,7 @@ describe('IP khách sau proxy', () => {
 
     await checkout().set('X-Forwarded-For', XFF)
 
-    // Kết nối test đi từ loopback (được tin), proxy tiếp theo là địa chỉ công khai (không tin): dừng ở đó.
+    // The test connection comes from loopback (trusted); the next proxy is a public address (untrusted): stop there.
     expect(payments.created[0]!.clientIp).toBe('198.51.100.9')
   })
 

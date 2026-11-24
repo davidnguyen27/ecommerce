@@ -6,14 +6,14 @@ import { bearer } from './support/staff.ts'
 const DAY = 24 * 60 * 60_000
 const at = (days: number) => new Date(Date.now() + days * DAY).toISOString()
 
-// 1 đôi AM-41 giá 2.100.000, cọc 30%, phí giao 30.000. Mã TET2027 giảm 10% (tối đa 500.000) = 210.000:
-// tiền hàng sau giảm 1.890.000, cọc 30% = 567.000, tổng 1.920.000, còn lại 1.353.000.
+// 1 pair of AM-41 at 2,100,000, 30% deposit, 30,000 shipping. Voucher TET2027 at 10% (max 500,000) = 210,000:
+// goods after discount 1,890,000, 30% deposit = 567,000, total 1,920,000, remainder 1,353,000.
 const DISCOUNT = 210_000
 const DEPOSIT = 567_000
 const TOTAL = 1_920_000
 const REMAINING = 1_353_000
 
-/** Cửa hàng đặt trước có đợt đang mở cho AM-41 và hàm tạo mã qua API quản trị. */
+/** A pre-order shop with an open AM-41 campaign and a helper to create vouchers via the admin API. */
 async function voucherPreorderShop() {
   const app = await preorderShop()
   const campaignId = await app.open([{ variantId: app.v41.id, allocation: 5 }])

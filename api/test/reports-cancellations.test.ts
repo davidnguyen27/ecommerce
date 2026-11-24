@@ -5,7 +5,7 @@ import { ADDRESS, shop } from './support/shop.ts'
 import { bearer, createStaff, type Request } from './support/staff.ts'
 
 const DAY = 24 * 60 * 60_000
-/** Ngày lịch theo giờ Việt Nam, `days` ngày tính từ hôm nay. */
+/** Vietnam-time calendar day, `days` days from today. */
 const vnDate = (days = 0) => new Date(Date.now() + 7 * 60 * 60_000 + days * DAY).toISOString().slice(0, 10)
 
 const cancellations = async (request: Request, token: string) => {
@@ -101,14 +101,14 @@ describe('báo cáo hủy đơn và hoàn tiền', () => {
       return (res.body.refunds as { id: string }[])[0]!.id
     }
 
-    // Đặt trước: đơn của fixture đã cọc; đơn thứ hai đã cọc rồi hủy vì không nhập được hàng.
+    // Pre-order: the fixture's order is deposited; a second one is deposited then cancelled for supply failure.
     const { preorderCampaignId } = await app.prisma.order.findUniqueOrThrow({ where: { code: app.code } })
     const second = await app.placed(preorderCampaignId!, { address: contact() })
     app.payments.payments.set(`${second.code}-deposit-1`, paid([DEPOSIT, 'FT-DEP-2']))
     expect((await refresh(second)).body.paymentStatus).toBe('deposit_paid')
     await cancelPaid(second.code, 'supply_failed', DEPOSIT)
 
-    // Hàng sẵn: một đơn đã trả bị hủy vì khách đổi ý và đã hoàn xong; một đơn đã trả tạo từ hôm trước.
+    // In stock: one paid order cancelled by a change of mind and fully refunded; one paid order created the day before.
     const changedMind = await standard(true)
     const refundId = await cancelPaid(changedMind.code, 'changed_mind', 2_030_000)
     const manual = await request

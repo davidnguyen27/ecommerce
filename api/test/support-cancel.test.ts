@@ -6,7 +6,10 @@ import { bearer, createStaff } from './support/staff.ts'
 const TOTAL = 2_030_000
 const SHIPMENT = { carrier: 'Giao Hàng Nhanh', trackingNumber: 'GHN1' }
 
-/** Cửa hàng có cổng giả lập; `order({ paid })` đặt một đơn vãng lai, trả đủ nếu cần; `ask` gửi yêu cầu qua link đơn. */
+/**
+ * A shop with the simulator; `order({ paid })` places a guest order, paid if asked; `ask` sends a request via the order
+ * link.
+ */
 async function cancelShop() {
   const app = await shop({ simulator: true })
   const { request, token, checkout } = app

@@ -26,8 +26,8 @@ type AdminView = {
 }
 
 /**
- * Cửa hàng có AM-40 (2.000.000, còn 3). `delivered()` đặt đơn vãng lai một đôi rồi giao xong. `ask` gửi yêu cầu bảo hành
- * qua link đơn; `milestone`/`outcome` là thao tác của nhân viên bán hàng.
+ * A shop with AM-40 (2,000,000, 3 left). `delivered()` places a guest order of one pair and delivers it. `ask` sends a
+ * warranty request via the order link; `milestone`/`outcome` are sales clerk actions.
  */
 async function warrantyShop() {
   const app = await shop({ simulator: true })
@@ -95,10 +95,10 @@ describe('gửi yêu cầu bảo hành', () => {
     })
     expect((await view(code)).hasWarrantyCommitment).toBe(true)
 
-    // Quá số lượng của dòng, hay nhiều dòng: không gửi được.
+    // More than the line quantity, or several lines: cannot submit.
     const tooMany = await ask(placed, 2)
     expect(tooMany.status).toBe(400)
-    // Đơn chưa giao (chưa thanh toán): 409.
+    // Order not delivered (unpaid): 409.
     const notDelivered = await checkout({
       lines: [{ variantId: v40.id, quantity: 1, price: 2_000_000 }],
       address: { ...ADDRESS, email: 'moi@example.com', phone: '0900000099' },
@@ -118,7 +118,7 @@ describe('mốc và kết quả bảo hành', () => {
     expect((await admin(code, 'warranty-milestone', { milestone: 'sent' })).status).toBe(409)
     expect((await admin(code, 'warranty-milestone', { milestone: 'returned', ...BACK })).status).toBe(409)
     expect((await admin(code, 'warranty-outcome', { outcome: 'repaired' })).status).toBe(409)
-    // Kho không có quyền ghi mốc.
+    // The warehouse cannot record milestones.
     expect((await admin(code, 'warranty-milestone', { milestone: 'received' }, warehouse.accessToken)).status).toBe(403)
     expect((await admin(code, 'warranty-milestone', { milestone: 'returned' })).status).toBe(400)
 
@@ -164,7 +164,7 @@ describe('mốc và kết quả bảo hành', () => {
     const { delivered, ask, admin, view, stock, warehouse } = await warrantyShop()
     const placed = await delivered()
     const code = (await ask(placed)).body.code as number
-    // Chưa nhận hàng của khách thì chưa đổi mới được.
+    // Cannot replace before receiving the customer's item.
     expect((await admin(code, 'warranty-outcome', { outcome: 'replaced' })).status).toBe(409)
     expect((await admin(code, 'warranty-milestone', { milestone: 'received' })).status).toBe(200)
     const before = await stock()
@@ -205,7 +205,7 @@ describe('mốc và kết quả bảo hành', () => {
       receivedAt: expect.any(String),
       returnRefund: { suggested: 2_000_000 },
     })
-    // Hàng lỗi ghi hỏng, không nhập lại tồn.
+    // The defective item is written off, not restocked.
     expect(await stock()).toEqual(before)
     const proposed = await admin(followCode, 'refund', { refundAmount: 2_000_000 })
     expect(proposed.status).toBe(200)

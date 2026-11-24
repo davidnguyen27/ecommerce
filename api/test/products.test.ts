@@ -8,7 +8,7 @@ async function post(request: Request, token: string, path: string, body: Record<
   return res.body as { id: string }
 }
 
-/** Owner đã đăng nhập, có sẵn thương hiệu Nike, danh mục Giày dép > Sneaker và Nước hoa > Nước hoa nam. */
+/** Signed-in owner, with brand Nike, categories Giày dép > Sneaker and Nước hoa > Nước hoa nam. */
 async function catalog() {
   const app = await appWithOwner()
   const { accessToken: token } = await login(app.request, OWNER.email, OWNER.password)
@@ -231,7 +231,7 @@ describe('sửa sản phẩm', () => {
   })
 })
 
-/** Catalog kèm một sản phẩm giày nháp. */
+/** Catalog with one draft shoe product. */
 async function sneakerCatalog() {
   const app = await catalog()
   const product = await post(
@@ -588,7 +588,7 @@ describe('giá', () => {
     const { request, prisma, token: ownerToken, product } = await sneakerCatalog()
     const variant = await addVariant(request, ownerToken, product.id, { ...BLACK_40, price: 3_500_000 })
     const staff = await createStaff(request, ownerToken, ['sales'])
-    // Mọi role hiện có đều có một trong hai quyền; dựng nhân viên không role để thử đúng cổng của route.
+    // Every current role has one of the two permissions; build staff without a role to hit the route's real gate.
     await prisma.staff.update({ where: { id: staff.id }, data: { roles: [] } })
 
     const res = await editVariant(request, staff.accessToken, product.id, variant.body.id, {
@@ -635,19 +635,19 @@ describe('đổi schema và xóa danh mục khi đã có sản phẩm', () => {
     await addVariant(request, token, product.id, BLACK_40)
     const schema = await footwearSchema(request, token)
 
-    // Bớt giá trị EU của hệ size: chỉ Air Max 90 đang dùng.
+    // Drop EU values from the size system: only Air Max 90 uses them.
     const fewerOptions = await putFootwear(
       request,
       token,
       schema.map((a) => (a.key === 'he_size' ? { ...a, options: ['US', 'UK', 'VN'] } : a)),
     )
-    // Bỏ thuộc tính màu: biến thể của Air Max 90 đang có màu.
+    // Remove the color attribute: Air Max 90's variants have colors.
     const removed = await putFootwear(
       request,
       token,
       schema.filter((a) => a.key !== 'mau'),
     )
-    // Chất liệu thành bắt buộc: Air Force 1 chưa khai báo.
+    // Material becomes required: Air Force 1 has not set it.
     const required = await putFootwear(
       request,
       token,

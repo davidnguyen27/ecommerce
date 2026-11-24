@@ -27,13 +27,13 @@ function refreshMobile(request: Request, refreshToken: string) {
   return request.post('/api/admin/auth/refresh').set('X-Client', 'mobile').send({ refreshToken })
 }
 
-/** Set-Cookie của refresh token, ví dụ `staff_refresh=abc; Path=...; HttpOnly`. */
+/** Set-Cookie of the refresh token, e.g. `staff_refresh=abc; Path=...; HttpOnly`. */
 function refreshSetCookie(res: Response): string | undefined {
   const header = res.headers['set-cookie'] as unknown as string[] | undefined
   return header?.find((cookie) => cookie.startsWith(`${REFRESH_COOKIE}=`))
 }
 
-/** Giá trị gửi lại trong header `Cookie`, như trình duyệt làm. */
+/** The value sent back in the `Cookie` header, as browsers do. */
 function refreshCookie(res: Response): string {
   const cookie = refreshSetCookie(res)
   if (!cookie) throw new Error('Response không đặt cookie refresh token')

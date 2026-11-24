@@ -5,7 +5,7 @@ import { OWNER, bearer, createStaff } from './support/staff.ts'
 
 const SHIPMENT = { carrier: 'Giao Hàng Nhanh', trackingNumber: 'GHN123456' }
 
-/** Chờ đủ `count` thư có tiêu đề chứa `subject` qua hàng đợi job, rồi đợi thêm để bắt thư gửi trùng. */
+/** Waits for `count` emails with `subject` in the title via the job queue, then a bit more to catch duplicates. */
 async function mails(mailer: InMemoryMailer, subject: string, count = 1) {
   const found = await vi.waitFor(
     () => {
@@ -18,7 +18,7 @@ async function mails(mailer: InMemoryMailer, subject: string, count = 1) {
   return found
 }
 
-/** Cửa hàng có cổng giả lập; `handedOverOrder` đặt hai đôi AM-40, trả đủ, chuẩn bị và bàn giao. */
+/** A shop with the simulator; `handedOverOrder` orders two pairs of AM-40, pays, prepares and hands over. */
 async function delivery() {
   const app = await shop({ simulator: true })
   const { request, token, checkout, v40 } = app
@@ -123,7 +123,7 @@ describe('đã giao và giao thất bại', () => {
 
   it('sai cạnh trạng thái thì 409: chưa bàn giao, đã giao rồi, đã thất bại rồi', async () => {
     const { handedOverOrder, deliver, fail, post, checkout, request, token, v40 } = await delivery()
-    // Đơn chỉ mới chuẩn bị (tồn ba đôi: đơn bàn giao lấy hai, đơn này một).
+    // An order only prepared (stock of three: the handed-over order took two, this one one).
     const placed = await checkout({ lines: [{ variantId: v40.id, quantity: 1, price: 2_000_000 }] })
     const preparing = placed.body.code as number
     await request.post('/api/payments/simulator/paid').send({ orderCode: preparing, amount: 2_030_000 })

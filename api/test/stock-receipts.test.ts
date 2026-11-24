@@ -120,7 +120,7 @@ describe('phiếu nhập kho', () => {
     expect(audit.body.items).toHaveLength(2)
     expect(audit.body.items[0]).toMatchObject({
       action: 'stock.receipt.create',
-      // Lô 1 đã nhập 5 đôi AM90-40.
+      // Batch 1 received 5 pairs of AM90-40.
       after: { supplierName: 'Lô 2', lines: [{ sku: 'AM90-40', quantity: 10, onHandAfter: 15 }] },
     })
   })

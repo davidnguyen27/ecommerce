@@ -1,13 +1,13 @@
 import { createHmac } from 'node:crypto'
 import { VNPAY_HASH_SECRET } from './test-app.ts'
 
-/** `vnp_TxnRef` như đặt mua gửi VNPAY cho đơn tạo lúc 2026-11-02 10:15:00 giờ Việt Nam. */
+/** `vnp_TxnRef` as checkout sends VNPAY for an order created at 2026-11-02 10:15:00 Vietnam time. */
 export const txnRefOf = (orderCode: number) => `${orderCode}T20261102101500`
 
-/** Mã giao dịch VNPAY giả cho một đơn. */
+/** A fake VNPAY transaction number for an order. */
 export const transactionNoOf = (orderCode: number) => String(14000000 + orderCode)
 
-/** Tham số IPN VNPAY gửi khi khách trả thành công, đủ các trường tài liệu liệt kê; `params` ghi đè từng trường. */
+/** IPN params VNPAY sends on a successful payment, every field the docs list; `params` overrides fields. */
 export function ipnParams(orderCode: number, amount: number, params: Record<string, string> = {}) {
   return {
     vnp_TmnCode: 'TESTTMN1',
@@ -15,7 +15,7 @@ export function ipnParams(orderCode: number, amount: number, params: Record<stri
     vnp_BankCode: 'NCB',
     vnp_BankTranNo: 'VNP' + transactionNoOf(orderCode),
     vnp_CardType: 'ATM',
-    // 2026-11-02 10:15:30 giờ Việt Nam.
+    // 2026-11-02 10:15:30 Vietnam time.
     vnp_PayDate: '20261102101530',
     vnp_OrderInfo: `Thanh toan don hang ${orderCode}`,
     vnp_TransactionNo: transactionNoOf(orderCode),
@@ -27,8 +27,8 @@ export function ipnParams(orderCode: number, amount: number, params: Record<stri
 }
 
 /**
- * Query IPN như VNPAY gửi: thêm `vnp_SecureHash` = HMAC-SHA512 (hex) trên các tham số sắp theo tên, encode kiểu
- * `urlencode` của PHP (khoảng trắng thành `+`), nối bằng `&`. Viết riêng ở đây để không ký bằng chính code đang test.
+ * The IPN query as VNPAY sends it: adds `vnp_SecureHash` = HMAC-SHA512 (hex) over params sorted by name, encoded like
+ * PHP's `urlencode` (spaces as `+`), joined with `&`. Written here so we never sign with the code under test.
  */
 export function signedIpn(params: Record<string, string>, secret = VNPAY_HASH_SECRET) {
   const data = Object.keys(params)

@@ -50,7 +50,7 @@ describe('trang quản trị chatbot', () => {
       (await request.post('/api/chat/handoff').send({ conversationId: handed, name: 'Lan', email: 'lan@example.com' }))
         .status,
     ).toBe(201)
-    // Không có API đổi thời điểm: dời tin cuối của một cuộc về 23:30 giờ VN ngày 1/11.
+    // No API changes timestamps: move a conversation's last message to 23:30 Vietnam time on 1/11.
     await prisma.chatConversation.update({
       where: { id: answered },
       data: { lastMessageAt: new Date('2026-11-01T16:30:00Z') },

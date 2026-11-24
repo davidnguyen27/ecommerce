@@ -16,7 +16,7 @@ const photo = () =>
 
 type Variant = { sku: string; size: string; price: number }
 
-/** Owner đã đăng nhập; `add` tạo sản phẩm giày đã xuất bản và trả id các biến thể theo SKU. */
+/** Signed-in owner; `add` creates a published shoe product and returns variant ids by SKU. */
 async function shop() {
   const app = await appWithOwner()
   const { accessToken: token } = await login(app.request, OWNER.email, OWNER.password)

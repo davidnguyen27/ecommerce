@@ -5,8 +5,8 @@ import { bearer, createStaff } from './support/staff.ts'
 const TOTAL = 2_030_000
 
 /**
- * Cửa hàng có cổng giả lập và một kế toán. `cancelledThenPaid` dựng đơn khách tự hủy rồi tiền mới về (cần đối soát
- * `paid_after_cancel`).
+ * A shop with the simulator and an accountant. `cancelledThenPaid` builds an order the customer cancels before money
+ * arrives (reconciliation `paid_after_cancel`).
  */
 async function reconciliation() {
   const app = await shop({ simulator: true })
@@ -44,7 +44,7 @@ async function reconciliation() {
       history: { action: string; data: unknown }[]
     }
   }
-  /** Id các mục cần đối soát của đơn, theo thứ tự tiền về. */
+  /** Ids of the order's reconciliation items, in arrival order. */
   const itemIds = async (code: number) =>
     (await detail(code)).payments.flatMap((p) => (p.reconciliation ? [p.reconciliation.id] : []))
   const restore = (id: string, as = accountant.accessToken) =>
@@ -163,7 +163,7 @@ describe('khôi phục đơn', () => {
     expect(mails).toHaveLength(1)
     expect(mails[0]!.text).toContain('/don-hang/')
 
-    // Đã khôi phục thì không khôi phục lần nữa.
+    // Already restored: no second restore.
     expect((await restore(id!)).status).toBe(409)
   })
 
@@ -186,7 +186,7 @@ describe('khôi phục đơn', () => {
   it('không còn đủ hàng thì 409 theo dòng, đơn vẫn hủy, mục vẫn mở', async () => {
     const { cancelledThenPaid, place, itemIds, restore, detail, v40 } = await reconciliation()
     const code = await cancelledThenPaid()
-    // Đơn khác giữ hết 3 đôi AM-40.
+    // Another order holds all 3 pairs of AM-40.
     await place(3)
     const [id] = await itemIds(code)
 
@@ -260,7 +260,7 @@ describe('đã xử lý ngoài hệ thống', () => {
       }),
     ])
 
-    // Đóng rồi thì không đóng lại.
+    // Closed already: cannot close again.
     expect((await resolve(id!, { note: 'lần hai' })).status).toBe(409)
   })
 })

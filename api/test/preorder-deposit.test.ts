@@ -9,7 +9,7 @@ import { ipnParams, signedIpn, txnRefOf } from './support/vnpay.ts'
 
 const MINUTE = 60_000
 const inMinutes = (minutes: number) => new Date(Date.now() + minutes * MINUTE)
-/** 30% của 2.100.000 (1 đôi AM-41). */
+/** 30% of 2,100,000 (1 pair of AM-41). */
 const DEPOSIT = 630_000
 
 const paidInfo = (amount: number, reference: string): PaymentInfo => ({
@@ -17,7 +17,7 @@ const paidInfo = (amount: number, reference: string): PaymentInfo => ({
   transactions: [{ reference, amount, paidAt: new Date('2026-11-16T03:20:00Z') }],
 })
 
-/** Chờ thư có tiêu đề chứa `subject` qua hàng đợi job. */
+/** Waits for an email with `subject` in the title via the job queue. */
 async function mailsAbout(mailer: InMemoryMailer, subject: string, count = 1) {
   return vi.waitFor(
     () => {
@@ -29,13 +29,13 @@ async function mailsAbout(mailer: InMemoryMailer, subject: string, count = 1) {
   )
 }
 
-/** Cửa hàng có đợt đang mở (AM-41 `allocation` suất) và một đơn đặt trước 1 đôi AM-41 đang chờ cọc. */
+/** A shop with an open campaign (AM-41 `allocation`) and one pending-deposit pre-order of 1 pair of AM-41. */
 async function pendingPreorder(allocation = 5) {
   const app = await preorderShop()
   const campaignId = await app.open([{ variantId: app.v41.id, allocation }])
   const { code, token: orderToken } = await app.placed(campaignId)
   const order = () => app.request.get(`/api/orders/${code}`).query({ token: orderToken })
-  /** Cổng báo khoản cọc đã về qua link cọc của đơn; trang kết quả hỏi cổng (`refresh=1`). */
+  /** The gateway reports the deposit through the order's deposit link; the result page queries it (`refresh=1`). */
   const payDeposit = async (amount = DEPOSIT, reference = `FT-${code}`, orderCode = code) => {
     app.payments.payments.set(`${orderCode}-deposit-1`, paidInfo(amount, reference))
     const res = await app.request.get(`/api/orders/${orderCode}`).query({ token: orderToken, refresh: '1' })
@@ -76,7 +76,7 @@ describe('ghi nhận cọc', () => {
     expect(mail!.text).toContain('1.500.000')
     expect(mail!.text).toContain('10/12/2026 – 20/12/2026')
     expect(mail!.text).toContain('trong 7 ngày')
-    // Hỏi cổng lần nữa: khoản đã ghi thì bỏ qua, không gửi thư thứ hai.
+    // Query the gateway again: a recorded payment is skipped, no second email.
     await app.request.get(`/api/orders/${app.code}`).query({ token: app.orderToken, refresh: '1' })
     expect((await app.detail()).payments).toEqual([
       expect.objectContaining({ purpose: 'deposit', reconciliation: null }),
@@ -88,7 +88,7 @@ describe('ghi nhận cọc', () => {
 
   it('IPN của VNPAY cho link cọc: trả 00, đơn đã cọc; IPN lặp trả 02 và chỉ ghi một giao dịch', async () => {
     const app = await pendingPreorder()
-    // Dựng link cọc mang mã dạng VNPAY như cổng thật trả, để IPN tự ký trỏ đúng link.
+    // Build a deposit link with a VNPAY-style ref as the real gateway returns, so a self-signed IPN points at it.
     await app.prisma.paymentLink.updateMany({
       where: { gatewayReference: `${app.code}-deposit-1` },
       data: { gatewayReference: txnRefOf(app.code) },
@@ -211,7 +211,7 @@ describe('cọc về sau khi đơn đã hủy', () => {
   it('đợt đã hết suất thì không khôi phục được (409), đơn vẫn hủy', async () => {
     const app = await pendingPreorder(1)
     expect((await app.request.post(`/api/orders/${app.code}/cancel`).query({ token: app.orderToken })).status).toBe(200)
-    // Khách khác lấy suất cuối trong lúc đơn đã hủy.
+    // Another customer took the last allocation while the order was cancelled.
     await app.placed(app.campaignId, { address: { ...ADDRESS, email: 'b@example.com' } })
     await app.payDeposit()
     const flagged = (await app.detail()).payments[0]!.reconciliation!

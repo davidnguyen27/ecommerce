@@ -5,8 +5,8 @@ import { bearer, createStaff } from './support/staff.ts'
 const TOTAL = 2_030_000
 
 /**
- * Bảng điều khiển đọc hai số đếm bằng chính API danh sách với `pageSize=1` rồi lấy `total`:
- * hàng chờ soạn (mặc định của `/api/admin/orders`) và mục cần đối soát (mặc định `open`).
+ * The dashboard reads two counts via the list APIs with `pageSize=1` and takes `total`: the packing queue (default of
+ * `/api/admin/orders`) and reconciliation items (default `open`).
  */
 const COUNTS = ['/api/admin/orders', '/api/admin/reconciliation'] as const
 
@@ -24,7 +24,7 @@ describe('số đếm ở bảng điều khiển', () => {
       expect(res.status).toBe(204)
     }
 
-    // Kho có 3 đôi AM-40: hủy đơn trước để trả lại chỗ giữ hàng.
+    // Stock has 3 pairs of AM-40: cancel the order first to free the reservation.
     const cancelled = await order()
     const cancel = await request.post(`/api/orders/${cancelled.code}/cancel`).query({ token: cancelled.token })
     expect(cancel.status).toBe(200)
@@ -49,7 +49,7 @@ describe('số đếm ở bảng điều khiển', () => {
   it('thiếu order.view thì 403', async () => {
     const { request, token, prisma } = await shop({ simulator: true })
     const staff = await createStaff(request, token, ['sales'], 'khong-quyen@example.com')
-    // Mọi vai trò hiện có đều có order.view; nhân viên chưa được gán vai trò nào thì không có.
+    // Every current role has order.view; staff without a role do not.
     await prisma.staff.update({ where: { id: staff.id }, data: { roles: [] } })
 
     for (const path of COUNTS) {

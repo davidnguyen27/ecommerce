@@ -27,7 +27,7 @@ function sneaker(brandId: string, categoryId: string, overrides: Record<string, 
   }
 }
 
-/** Owner đã đăng nhập; có thương hiệu Nike, danh mục Giày dép > Sneaker > Chạy bộ và sản phẩm nháp Air Max 90 chưa có gì. */
+/** Signed-in owner; brand Nike, category Giày dép > Sneaker > Chạy bộ and an empty draft Air Max 90. */
 async function catalog() {
   const app = await appWithOwner()
   const { accessToken: token } = await login(app.request, OWNER.email, OWNER.password)
@@ -66,7 +66,7 @@ function setStatus(request: Request, token: string, productId: string, status: s
   return request.put(`/api/admin/products/${productId}/status`).set(bearer(token)).send({ status })
 }
 
-/** Sản phẩm đủ điều kiện xuất bản: hai biến thể đang bán có giá và một ảnh. */
+/** A product ready to publish: two priced variants on sale and an image. */
 async function readyToPublish() {
   const app = await catalog()
   const variants = `/api/admin/products/${app.product.id}/variants`
@@ -360,7 +360,7 @@ describe('chi tiết sản phẩm cho khách', () => {
 
     await setStatus(request, token, product.id, 'published')
 
-    // Slug cũ trả slug hiện tại để website chuyển hướng (ticket 14).
+    // An old slug returns the current one so the website redirects (ticket 14).
     expect((await request.get('/api/products/air-max-90')).body.slug).toBe('air-max-90-se')
     const after = await request.get('/api/products/air-max-90-se')
     expect(after.body.name).toBe('Air Max 90 SE')

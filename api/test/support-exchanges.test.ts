@@ -18,8 +18,9 @@ type AdminView = {
 }
 
 /**
- * Cửa hàng có AM-40 (2.000.000, còn 3) và AM-41 cùng sản phẩm. `sameprice(onHand)` đưa AM-41 về cùng giá và đặt tồn để
- * đổi được. `delivered()` đặt đơn vãng lai 2 đôi AM-40 rồi giao xong. `ask` gửi yêu cầu đổi qua link đơn.
+ * A shop with AM-40 (2,000,000, 3 left) and AM-41 of the same product. `sameprice(onHand)` sets AM-41 to the same price
+ * and stock so it is exchangeable. `delivered()` places a guest order of 2 pairs of AM-40 and delivers it. `ask` sends
+ * an exchange request via the order link.
  */
 async function exchangeShop() {
   const app = await shop({ simulator: true })
@@ -75,7 +76,7 @@ async function exchangeShop() {
     const item = (res.body.items as { sku: string; onHand: number; reserved: number }[]).find((i) => i.sku === sku)!
     return { onHand: item.onHand, reserved: item.reserved }
   }
-  /** Chấp nhận rồi kho nhận đủ hàng cũ về (nhập lại tồn). */
+  /** Accept, then the warehouse receives all the old items (restocked). */
   const acceptAndReceive = async (code: number) => {
     expect((await admin(code, 'decide', { decision: 'accepted', message: 'Gửi về giúp shop' })).status).toBe(200)
     const lines = (await view(code)).lines.map((l) => ({ lineId: l.id, restocked: l.quantity, writtenOff: 0 }))
@@ -91,20 +92,20 @@ describe('gửi yêu cầu đổi hàng', () => {
       await exchangeShop()
     const placed = await delivered()
 
-    // AM-41 giá 2.100.000, còn hàng.
+    // AM-41 at 2,100,000, in stock.
     await setStock(v41, 'AM-41', 5)
     const pricier = await ask(placed)
     expect(pricier.status).toBe(409)
     expect(pricier.body.error.message).toContain('khác giá')
 
-    // Cùng giá nhưng hết hàng.
+    // Same price but out of stock.
     expect((await editVariant(v41, 'AM-41', '41', { price: 2_000_000 })).status).toBe(200)
     await setStock(v41, 'AM-41', 0)
     const empty = await ask(placed)
     expect(empty.status).toBe(409)
     expect(empty.body.error.message).toContain('không còn đủ hàng')
 
-    // Biến thể của sản phẩm khác.
+    // A variant of another product.
     const other = await request
       .post('/api/admin/products')
       .set(bearer(token))
@@ -124,11 +125,11 @@ describe('gửi yêu cầu đổi hàng', () => {
     expect(crossed.status).toBe(409)
     expect(crossed.body.error.message).toContain('cùng sản phẩm')
 
-    // Trùng biến thể đang giữ.
+    // The same variant already held.
     const same = await ask(placed, [{ variantId: v40.id, quantity: 1, toVariantId: v40.id }])
     expect(same.status).toBe(409)
 
-    // Ngừng bán (không còn trong phiên bản đang xuất bản).
+    // Discontinued (no longer in the published version).
     await setStock(v41, 'AM-41', 5)
     expect((await editVariant(v41, 'AM-41', '41', { price: 2_000_000, status: 'discontinued' })).status).toBe(200)
     const republish = await request
@@ -187,7 +188,7 @@ describe('xử lý yêu cầu đổi', () => {
     )
     expect(received.status).toBe(200)
     expect(received.body.returnRefund).toBeNull()
-    // Bán hàng không bàn giao được.
+    // Sales cannot hand over.
     expect((await admin(code, 'exchange-ship', SHIPMENT)).status).toBe(403)
 
     const shipped = await admin(code, 'exchange-ship', SHIPMENT, warehouse.accessToken)
@@ -262,7 +263,7 @@ describe('xử lý yêu cầu đổi', () => {
     expect(list.body.items.map((i: { code: number }) => i.code)).toEqual([code])
     const detail = await request.get(`/api/admin/support-requests/${code}`).set(bearer(token))
     expect(detail.body.exchangeOverdueAt).toEqual(expect.any(String))
-    // Không tự hủy, không nhả hàng.
+    // No auto-cancel, no release.
     expect(detail.body.status).toBe('in_progress')
   })
 })
@@ -276,7 +277,7 @@ describe('trả hay đổi tiếp sau khi đã đổi', () => {
     const { code } = (await ask(placed)).body as { code: number }
     await acceptAndReceive(code)
     expect((await admin(code, 'exchange-ship', SHIPMENT, warehouse.accessToken)).status).toBe(200)
-    // Giá AM-41 đổi sau đó không ảnh hưởng số hoàn.
+    // A later AM-41 price change does not affect the refund.
     expect((await editVariant(v41, 'AM-41', '41', { price: 2_100_000 })).status).toBe(200)
 
     const ret = await ask(placed, [{ variantId: v40.id, quantity: 1, reason: 'wrong_fit' }], 'return')
@@ -294,7 +295,7 @@ describe('trả hay đổi tiếp sau khi đã đổi', () => {
     await sameprice(2)
     const placed = await delivered(1)
     const { code } = (await ask(placed)).body as { code: number }
-    // Chưa giao hàng đổi: dòng vẫn bị chiếm, không gửi thêm được.
+    // The exchange is not delivered yet: the line is still taken, no more requests.
     expect((await ask(placed)).status).toBe(409)
     await acceptAndReceive(code)
     expect((await admin(code, 'exchange-ship', SHIPMENT, warehouse.accessToken)).status).toBe(200)

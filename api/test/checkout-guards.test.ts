@@ -104,7 +104,7 @@ describe('giới hạn tần suất đặt mua', () => {
 
   it('quá 5 lần đặt mua trong một giờ từ một IP thì 429; IP khác vẫn đặt được', async () => {
     const { checkout, v40 } = await shop()
-    // Giá cũ: mỗi lần đều 409 và không giữ hàng, nhưng vẫn tính là một lần đặt mua.
+    // Stale price: every attempt is a 409 and reserves nothing, but still counts as a checkout attempt.
     const stale = { lines: [{ variantId: v40.id, quantity: 1, price: 1_000_000 }] }
     for (let i = 0; i < 5; i++) expect((await checkout(stale).set('X-Forwarded-For', '203.0.113.1')).status).toBe(409)
 
@@ -125,7 +125,7 @@ describe('giới hạn tần suất đặt mua', () => {
     expect((await checkout().set('X-Forwarded-For', '203.0.113.3')).status).toBe(201)
   })
 
-  /** Đặt mua mỗi lần từ một IP khác, để chỉ giới hạn theo email và số điện thoại có tác dụng. */
+  /** Checkout from a different IP each time, so only the email and phone limits apply. */
   async function shopWithStock() {
     const app = await shop()
     const more = await app.request
@@ -167,7 +167,7 @@ describe('giới hạn tần suất đặt mua', () => {
     for (let i = 0; i < 3; i++) placed.push(await place())
     expect((await place()).status).toBe(429)
 
-    // Thanh toán (ticket 05) và hết hạn (ticket 06) chưa có đường HTTP trên nhánh này, nên dựng trạng thái bằng prisma.
+    // Payment (ticket 05) and expiry (ticket 06) had no HTTP path on that branch, so the state is set with prisma.
     await prisma.order.update({
       where: { code: placed[0]!.body.code },
       data: { status: 'processing', paymentStatus: 'paid', reservedUntil: null },

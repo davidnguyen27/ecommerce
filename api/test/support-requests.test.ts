@@ -13,8 +13,8 @@ type PublicRequest = {
 }
 
 /**
- * Cửa hàng của `shop()` có một nhân viên bán hàng (xử lý yêu cầu) và một nhân viên kho (chỉ xem). `placed()` đặt một
- * đơn như khách vãng lai, trả mã đơn và token tra cứu; `guest(placed)` gọi API yêu cầu của đơn qua token.
+ * `shop()` with a sales clerk (handles requests) and a warehouse clerk (view only). `placed()` places a guest order and
+ * returns its code and lookup token; `guest(placed)` calls the order's request API with the token.
  */
 async function supportShop() {
   const app = await shop()
@@ -189,7 +189,7 @@ describe('nhân viên xử lý', () => {
     const done = await admin().reply(code, { status: 'resolved' })
     expect(done.body).toMatchObject({ status: 'resolved', resolvedAt: expect.any(String) })
     await waitMail('khach1@example.com', /đã được xử lý xong/)
-    // Ghi chú nội bộ không gửi email: một thư xác nhận, một thư trả lời, một thư kết thúc.
+    // Internal notes send no email: one confirmation, one reply, one closing email.
     expect(mails('khach1@example.com', /YC/)).toHaveLength(3)
 
     expect((await guest(order).say(code, 'Còn nữa')).status).toBe(409)

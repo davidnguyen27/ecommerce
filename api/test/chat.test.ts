@@ -6,7 +6,7 @@ import { OWNER, appWithOwner, bearer, createStaff, login, type Request } from '.
 
 const DAY = 24 * 60 * 60_000
 
-/** App có owner; chatbot được owner bật qua API trừ khi `enabled: false`. */
+/** App with an owner; the owner turns the chatbot on via the API unless `enabled: false`. */
 async function chatApp(options: { llm?: LlmClient; enabled?: boolean } = {}) {
   const app = await appWithOwner({ llm: options.llm })
   const { accessToken } = await login(app.request, OWNER.email, OWNER.password)
@@ -24,7 +24,7 @@ function ask(request: Request, content: string, conversationId?: string, ip = '2
   return request.post('/api/chat/messages').set('X-Forwarded-For', ip).send({ content, conversationId })
 }
 
-/** Tin khách và chatbot model nhận được, bỏ system message. */
+/** Customer and chatbot messages the model received, system messages dropped. */
 const dialogue = (messages: LlmMessage[]) => messages.filter((m) => m.role !== 'system').map((m) => m.content)
 
 describe('trạng thái chatbot', () => {
@@ -97,9 +97,9 @@ describe('hỏi chatbot', () => {
     await ask(request, 'Do you ship to Hanoi?', first.body.conversationId)
 
     const messages = llm.requests[1]!.messages
-    // System prompt, kèm slug các trang chính sách nếu có.
+    // System prompt, with policy page slugs if any.
     expect(messages[0]).toEqual({ role: 'system', content: expect.stringContaining(SYSTEM_PROMPT) })
-    // Tin cuối tiếng Anh: lời nhắc trả lời tiếng Anh.
+    // Last message in English: the English reply reminder.
     expect(messages.at(-1)).toEqual({ role: 'system', content: ENGLISH_REMINDER })
     expect(dialogue(messages)).toEqual(['Có túi đen không?', 'Có ạ.', 'Do you ship to Hanoi?'])
   })
@@ -110,7 +110,7 @@ describe('hỏi chatbot', () => {
     let conversationId: string | undefined
     for (let i = 1; i <= 6; i++) conversationId = (await ask(request, `Câu ${i}`, conversationId)).body.conversationId
 
-    // Cuộc có 11 tin (6 câu hỏi, 5 câu trả lời): tin đầu "Câu 1" bị bỏ.
+    // A conversation with 11 messages (6 questions, 5 answers): the first, "Câu 1", is dropped.
     expect(dialogue(llm.requests.at(-1)!.messages)).toEqual([
       'Trợ lý thử: Câu 1',
       ...[2, 3, 4, 5].flatMap((i) => [`Câu ${i}`, `Trợ lý thử: Câu ${i}`]),
@@ -121,7 +121,7 @@ describe('hỏi chatbot', () => {
   it('cuộc đã im quá 24 giờ thì tin tiếp theo mở cuộc mới; mã lạ hay không thấy cũng mở cuộc mới', async () => {
     const { request, prisma } = await chatApp({ llm: new ScriptedLlm() })
     const old = (await ask(request, 'Câu hôm qua')).body.conversationId as string
-    // Không có API đổi thời điểm: dời tin cuối của cuộc về 25 giờ trước.
+    // No API changes timestamps: move the conversation's last message 25 hours back.
     await prisma.chatConversation.update({
       where: { id: old },
       data: { lastMessageAt: new Date(Date.now() - DAY - 3600_000) },
@@ -149,7 +149,7 @@ describe('giới hạn', () => {
   it('tin thứ 31 trong một cuộc thì 429; cuộc mới vẫn hỏi được', async () => {
     const { request, prisma } = await chatApp({ llm: new ScriptedLlm() })
     const conversationId = (await ask(request, 'Câu 1')).body.conversationId as string
-    // Gửi đủ 30 tin tốn 60 lượt ghi; đặt thẳng bộ đếm của cuộc là 30.
+    // Sending 30 messages costs 60 writes; set the conversation counter to 30 directly.
     await prisma.chatConversation.update({ where: { id: conversationId }, data: { customerMessageCount: 30 } })
 
     const blocked = await ask(request, 'Câu 31', conversationId)
@@ -275,7 +275,7 @@ describe('cài đặt chatbot', () => {
   })
 })
 
-// Job dọn không có endpoint; gọi thẳng hàm job rồi kiểm qua HTTP.
+// The cleanup job has no endpoint; call the job function directly, then check via HTTP.
 describe('xóa cuộc trò chuyện cũ', () => {
   it('cuộc có tin cuối quá 90 ngày bị xóa, cuộc mới hơn được giữ', async () => {
     const { request, prisma } = await chatApp({ llm: new ScriptedLlm() })
