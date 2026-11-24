@@ -2,7 +2,10 @@ import type { ErrorRequestHandler, RequestHandler } from 'express'
 import { ErrorCode, type ApiErrorBody, type FieldError } from '@ecommerce/shared'
 import { Prisma } from '../generated/prisma/client.ts'
 
-/** Lỗi có chủ đích; error handler chuyển nó thành body lỗi thống nhất. */
+/**
+ * Lỗi có chủ đích; error handler chuyển nó thành body lỗi thống nhất. `retryAfter` (giây) thành header `Retry-After`,
+ * để nơi ném 429 không cần `res` của Express.
+ */
 export class AppError extends Error {
   constructor(
     readonly status: number,
@@ -10,6 +13,7 @@ export class AppError extends Error {
     message: string,
     readonly fields?: FieldError[],
     readonly details?: Record<string, unknown>,
+    readonly retryAfter?: number,
   ) {
     super(message)
   }
@@ -52,6 +56,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
       requestId: String(req.id),
     },
   }
+  if (error.retryAfter !== undefined) res.setHeader('Retry-After', String(error.retryAfter))
   res.status(error.status).json(body)
 }
 

@@ -1,4 +1,3 @@
-import type { Response } from 'express'
 import { ErrorCode } from '@ecommerce/shared'
 import type { DbClient } from '../db.ts'
 import { AppError } from '../http/errors.ts'
@@ -8,12 +7,11 @@ export const MAX_PENDING_ORDERS_PER_CONTACT = 3
 
 /**
  * Chặn giữ hàng ác ý: email hay số điện thoại đã có đủ `MAX_PENDING_ORDERS_PER_CONTACT` đơn chờ thanh toán còn hạn
- * giữ hàng thì 429, `Retry-After` là lúc đơn sớm nhất hết hạn. Gọi trong transaction đặt mua, trước khi tạo đơn.
- * `email` chữ thường và `phone` dạng `0xxxxxxxxx`, như đã lưu trên đơn.
+ * giữ hàng thì 429, `retryAfter` là số giây tới lúc đơn sớm nhất hết hạn. Gọi trong transaction đặt mua, trước khi tạo
+ * đơn. `email` chữ thường và `phone` dạng `0xxxxxxxxx`, như đã lưu trên đơn.
  */
 export async function enforcePendingOrderLimit(
   tx: DbClient,
-  res: Response,
   contact: { email: string; phone: string },
   now = new Date(),
 ) {
@@ -44,7 +42,6 @@ export async function enforcePendingOrderLimit(
       `${label} này đang có ${pending.length} đơn đang chờ thanh toán. ` +
       'Hãy thanh toán hoặc chờ đơn cũ hết hạn rồi đặt lại.'
     const retryAfter = Math.ceil((pending[0]!.reservedUntil!.getTime() - now.getTime()) / 1000)
-    res.setHeader('Retry-After', String(Math.max(retryAfter, 1)))
-    throw new AppError(429, ErrorCode.RATE_LIMITED, message, [{ path, message }])
+    throw new AppError(429, ErrorCode.RATE_LIMITED, message, [{ path, message }], undefined, Math.max(retryAfter, 1))
   }
 }
