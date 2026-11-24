@@ -1,5 +1,5 @@
 import { ErrorCode } from '@ecommerce/shared'
-import type { Request } from 'express'
+import type { Logger } from 'pino'
 import type { DbClient } from '../db.ts'
 import type { PaymentPurpose } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
@@ -29,12 +29,19 @@ export async function livePolicyVersions(db: DbClient, variants: Iterable<CartVa
 
 /**
  * Tạo link thanh toán ở cổng cho đơn vừa tạo và lưu mã bên cổng (ghi nhận tiền về, `refresh=1`, job hết hạn). Gọi sau
- * cùng trong transaction đặt mua hay đặt trước: cổng lỗi thì 502 và cả đơn rollback. Trang quay về không mang token:
- * cổng không được thấy link xem và hủy đơn.
+ * cùng trong transaction đặt mua hay đặt trước: cổng lỗi thì log qua `log` rồi 502, và cả đơn rollback. Trang quay về
+ * không mang token: cổng không được thấy link xem và hủy đơn.
+ *
+ * `clientIp` là `req.ip` nguyên dạng: hàm tự bỏ tiền tố IPv4-mapped và dùng `127.0.0.1` khi không có.
  */
 export async function createOrderPaymentLink(
   tx: DbClient,
-  { payments, siteUrl, req }: { payments: PaymentGateway; siteUrl: string; req: Request },
+  {
+    payments,
+    siteUrl,
+    clientIp,
+    log,
+  }: { payments: PaymentGateway; siteUrl: string; clientIp: string | undefined; log: Logger },
   order: { id: string; code: number },
   link: { purpose: PaymentPurpose; amount: number; description: string; expiresAt: Date },
 ) {
@@ -47,10 +54,10 @@ export async function createOrderPaymentLink(
       returnUrl: paymentResultUrl(siteUrl, order.code).toString(),
       expiresAt: link.expiresAt,
       // `trust proxy` (app.ts) cho IP thật sau Caddy; bỏ tiền tố IPv4-mapped của Node.
-      clientIp: (req.ip ?? '127.0.0.1').replace(/^::ffff:/, ''),
+      clientIp: (clientIp || '127.0.0.1').replace(/^::ffff:/, ''),
     })
     .catch((err: unknown) => {
-      req.log.error({ err, orderCode: order.code }, 'Không tạo được link thanh toán')
+      log.error({ err, orderCode: order.code }, 'Không tạo được link thanh toán')
       throw new AppError(502, ErrorCode.BAD_GATEWAY, 'Chưa tạo được thanh toán, thử lại')
     })
   await tx.paymentLink.create({

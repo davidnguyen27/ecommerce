@@ -43,12 +43,17 @@ export async function createRemainderLink(
         if (!order.arrivedAt) throw conflict('Hàng chưa về đủ, chưa trả phần còn lại được')
 
         const expiresAt = new Date(Date.now() + RESERVATION_MINUTES * 60_000)
-        const checkoutUrl = await createOrderPaymentLink(tx, deps, order, {
-          purpose: 'remainder',
-          amount: Number(remainingOf(order)),
-          description: `Thanh toán phần còn lại đơn hàng #${order.code}`,
-          expiresAt,
-        })
+        const checkoutUrl = await createOrderPaymentLink(
+          tx,
+          { ...deps, clientIp: deps.req.ip, log: deps.req.log },
+          order,
+          {
+            purpose: 'remainder',
+            amount: Number(remainingOf(order)),
+            description: `Thanh toán phần còn lại đơn hàng #${order.code}`,
+            expiresAt,
+          },
+        )
         let token: string | null = null
         if (issueToken) {
           token = newOpaqueToken()

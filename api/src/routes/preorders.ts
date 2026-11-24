@@ -285,12 +285,17 @@ export function preorderRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
             })
           }
 
-          const checkoutUrl = await createOrderPaymentLink(tx, { payments, siteUrl, req }, order, {
-            purpose: 'deposit',
-            amount: depositAmount,
-            description: `Đặt cọc đơn hàng #${order.code}`,
-            expiresAt: reservedUntil,
-          })
+          const checkoutUrl = await createOrderPaymentLink(
+            tx,
+            { payments, siteUrl, clientIp: req.ip, log: req.log },
+            order,
+            {
+              purpose: 'deposit',
+              amount: depositAmount,
+              description: `Đặt cọc đơn hàng #${order.code}`,
+              expiresAt: reservedUntil,
+            },
+          )
           return { code: order.code, token, checkoutUrl, reservedUntil: reservedUntil.toISOString() }
         },
         // Gọi cổng thanh toán nằm trong transaction nên cần lâu hơn mặc định 5 giây.

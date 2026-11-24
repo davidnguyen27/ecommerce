@@ -254,12 +254,17 @@ export function checkoutRoutes({ prisma, storage, payments, siteUrl, jwtSecret, 
           }
 
           // Gọi cổng sau cùng, khi mọi thứ khác đã ghi được; cổng lỗi thì cả đơn rollback.
-          const checkoutUrl = await createOrderPaymentLink(tx, { payments, siteUrl, req }, order, {
-            purpose: 'full',
-            amount: total,
-            description: `Thanh toán đơn hàng #${order.code}`,
-            expiresAt: reservedUntil,
-          })
+          const checkoutUrl = await createOrderPaymentLink(
+            tx,
+            { payments, siteUrl, clientIp: req.ip, log: req.log },
+            order,
+            {
+              purpose: 'full',
+              amount: total,
+              description: `Thanh toán đơn hàng #${order.code}`,
+              expiresAt: reservedUntil,
+            },
+          )
 
           return { code: order.code, token, checkoutUrl, reservedUntil: reservedUntil.toISOString() }
         },
