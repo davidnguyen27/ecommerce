@@ -1,7 +1,7 @@
-// Smoke check toàn stack: dựng docker compose ở một project riêng, seed dữ liệu qua API rồi đọc HTML thật mà khách nhận.
-// Bắt những lỗi typecheck và test API không thấy, ví dụ layout không được render.
-// Chạy: pnpm smoke            (xong thì xóa stack và volume)
-//       pnpm smoke --keep     (giữ stack để mở trình duyệt xem, tại http://localhost:8081)
+// Full-stack smoke check: brings up docker compose in its own project, seeds data via the API, then reads the real HTML
+// customers get. Catches what typecheck and API tests miss, e.g. a layout not rendering.
+// Run: pnpm smoke            (removes the stack and volumes afterwards)
+//      pnpm smoke --keep     (keeps the stack to browse at http://localhost:8081)
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 
@@ -11,22 +11,23 @@ const BASE = `http://localhost:${HTTP_PORT}`
 const KEEP = process.argv.includes('--keep')
 const OWNER = { email: 'smoke@example.com', password: 'mat-khau-smoke-test', name: 'Smoke' }
 
-// Cổng riêng để chạy được cạnh stack dev; DB nằm trong volume riêng của project này nên không đụng dữ liệu dev.
+// Own ports so it runs beside the dev stack; the DB is in this project's own volume, so dev data is untouched.
 const env = {
   ...process.env,
   HTTP_PORT,
   HTTPS_PORT: '8444',
-  // Windows có lúc giữ riêng một dải cổng (Hyper-V), có thể trùm 55432: đặt SMOKE_POSTGRES_PORT để đổi.
+  // Windows sometimes reserves a port range (Hyper-V) that may cover 55432: set SMOKE_POSTGRES_PORT to change it.
   POSTGRES_PORT: process.env.SMOKE_POSTGRES_PORT ?? '55432',
   JWT_SECRET: randomBytes(32).toString('base64url'),
-  // Không theo .env local: bỏ SeaweedFS (sẽ tranh cổng 9000 với stack dev), giữ file trong bộ nhớ.
+  // Ignore the local .env: no SeaweedFS (it would fight the dev stack for port 9000), files kept in memory.
   COMPOSE_PROFILES: '',
   STORAGE_PROVIDER: 'memory',
-  // Luôn cổng giả lập, kể cả khi .env local có khóa VNPAY: smoke không được tạo đơn ở VNPAY.
+  // Always the simulator, even if the local .env has VNPAY keys: smoke must never create orders at VNPAY.
   VNPAY_TMN_CODE: '',
   VNPAY_HASH_SECRET: '',
   PAYMENT_SIMULATOR: 'allow',
-  // Chatbot dùng model giả, kể cả khi .env local có khóa: smoke và E2E không gọi Groq hay OpenRouter (ADR 0017).
+  // The chatbot uses the fake model even with keys in the local .env: smoke and E2E never call Groq or OpenRouter (ADR
+  // 0017).
   GROQ_API_KEY: '',
   OPENROUTER_API_KEY: '',
   LLM_CHAIN: 'fake',
@@ -127,10 +128,10 @@ async function seed() {
   })
 }
 
-/** Ảnh PNG 1×1, đủ để API sinh các cỡ ảnh. */
+/** A 1×1 PNG, enough for the API to build image widths. */
 const PIXEL_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
 
-/** Sản phẩm đã xuất bản ở danh mục con, hai biến thể, một ảnh, gắn chính sách đổi trả. */
+/** A published product in a subcategory, two variants, one image, with the returns policy. */
 async function seedPublishedProduct(token: string, categoryId: string, policyPageId: string) {
   const brand = await api('/api/admin/brands', { method: 'POST', token, body: { name: 'Nike', slug: 'nike' } })
   const product = await api('/api/admin/products', {
@@ -156,7 +157,7 @@ async function seedPublishedProduct(token: string, categoryId: string, policyPag
     token,
     body: { sku: 'AM90-TRANG-41', attributes: { mau: 'Trắng', size: '41' }, price: 3_200_000 },
   })
-  // Đen còn hàng, Trắng hết hàng (M2): trang sản phẩm hiện cả hai trạng thái.
+  // Black in stock, White out of stock (M2): the product page shows both states.
   await api('/api/admin/stock/adjustments', {
     method: 'POST',
     token,
@@ -172,7 +173,7 @@ async function seedPublishedProduct(token: string, categoryId: string, policyPag
   if (!upload.ok) throw new Error(`Tải ảnh trả ${upload.status}: ${await upload.text()}`)
   await api(`${base}/policies`, { method: 'PUT', token, body: { pageIds: [policyPageId] } })
 
-  // Cam kết bảo hành dựa trên một chứng từ (ticket 13), hiện tách khỏi thông tin nguồn gốc công bố.
+  // A warranty commitment based on a document (ticket 13), shown apart from the origin statement.
   const pdf = new FormData()
   pdf.append('file', new Blob([Buffer.from('%PDF-1.7\n%%EOF\n')], { type: 'application/pdf' }), 'hoa-don.pdf')
   const document = await fetch(`${BASE}${base}/documents`, {
@@ -197,19 +198,19 @@ type Check = {
   status: number
   contains: string[]
   excludes?: string[]
-  /** Header phản hồi phải chứa đoạn chữ này (tên header viết thường). */
+  /** The response header must contain this text (lowercase header name). */
   headers?: Record<string, string>
 }
 
-// Lời tự khẳng định nguồn gốc mà không có chứng từ là rủi ro pháp lý (ADR 0005). Trang sản phẩm được miễn vì cam kết
-// có bằng chứng ở đó được phép dùng các chữ này.
+// Unbacked origin claims are a legal risk (ADR 0005). Product pages are exempt since evidenced commitments there may
+// use these words.
 const UNFOUNDED_CLAIMS = ['chính hãng', 'đại lý ủy quyền', 'phân phối độc quyền', 'trực tiếp nhập khẩu']
 const mayClaim = (path: string) => path.startsWith('/san-pham/')
 
 const canonical = (path: string) => `<link rel="canonical" href="${BASE}${path}">`
 const NOINDEX = '<meta name="robots" content="noindex, follow">'
 
-// HTML khách nhận khi render SSR. Trang quản trị là SPA nên chỉ kiểm được shell, nội dung cần trình duyệt.
+// HTML customers get from SSR. Admin is an SPA, so only its shell can be checked; content needs a browser.
 const CHECKS: Check[] = [
   {
     path: '/',
@@ -220,20 +221,20 @@ const CHECKS: Check[] = [
       'alt="Đã thông báo Bộ Công Thương"',
       '<summary>Danh mục</summary>',
       'href="/tai-khoan"',
-      // Biểu tượng giỏ; số món chỉ có sau khi mount nên HTML từ server không có.
+      // The cart icon; the item count exists only after mount, so server HTML lacks it.
       'href="/gio-hang"',
       'Giày dép',
       'href="/danh-muc/sneaker-co-thap"',
       'role="search"',
-      // Menu Nam / Nữ là trang tìm kiếm có lọc giới tính (ADR 0004).
+      // The Nam / Nữ menu is the search page filtered by gender (ADR 0004).
       'href="/tim-kiem?attr.gioi_tinh=Nam"',
     ],
   },
-  // Tìm không dấu, tìm theo SKU, lọc giới tính (Nam gồm cả Unisex, sản phẩm smoke là Nam), facets theo nhóm hàng.
+  // Search without diacritics, by SKU, gender filter (Nam includes Unisex; the smoke product is Nam), facets by type.
   {
     path: '/tim-kiem?q=air+max',
     status: 200,
-    // Kết quả tìm kiếm không được index (trùng nội dung).
+    // Search results are not indexed (duplicate content).
     contains: ['>Kết quả cho “air max”</h1>', 'href="/san-pham/air-max-90"', '1 sản phẩm', '<footer', NOINDEX],
   },
   { path: '/tim-kiem?q=am90-trang', status: 200, contains: ['href="/san-pham/air-max-90"'] },
@@ -246,7 +247,7 @@ const CHECKS: Check[] = [
   {
     path: '/danh-muc/sneaker?attr.size=41&sort=price_asc',
     status: 200,
-    // URL có bộ lọc: noindex, canonical về trang danh mục gốc.
+    // Filtered URLs: noindex, canonical to the base category page.
     contains: [
       'href="/san-pham/air-max-90"',
       'name="attr.size"',
@@ -259,7 +260,7 @@ const CHECKS: Check[] = [
   {
     path: '/danh-muc/sneaker',
     status: 200,
-    // Sản phẩm ở danh mục con cũng hiện ở danh mục cha; giá "từ" là giá thấp nhất.
+    // Products in subcategories also show in the parent; the "từ" price is the lowest.
     contains: [
       '<h1>Sneaker</h1>',
       'href="/danh-muc/sneaker-co-thap"',
@@ -289,13 +290,13 @@ const CHECKS: Check[] = [
       `<meta property="og:url" content="${BASE}/san-pham/air-max-90">`,
       '<meta property="og:image" content="',
       '<meta name="description" content="Air Max 90 của Nike, giá từ 3.200.000 ₫.">',
-      // Biến thể đang chọn (Đen) còn hàng; lựa chọn Trắng hiện "Hết hàng".
+      // The selected variant (Black) is in stock; the White option shows "Hết hàng".
       'data-testid="availability"',
       'Còn hàng',
       'Hết hàng',
       'data-testid="add-to-cart"',
       'Thêm vào giỏ',
-      // Dữ liệu cấu trúc: khoảng giá VND của hai biến thể đang bán, còn hàng vì Đen còn, thương hiệu, ảnh.
+      // Structured data: VND price range of the two variants on sale, in stock since Black is, brand, image.
       '<script type="application/ld+json">',
       '"@type":"Product"',
       '"brand":{"@type":"Brand","name":"Nike"}',
@@ -305,7 +306,7 @@ const CHECKS: Check[] = [
     excludes: ['noindex'],
     headers: { 'cache-control': 's-maxage=60' },
   },
-  // Trang biến thể dùng chung canonical với trang sản phẩm.
+  // Variant pages share the product page's canonical.
   {
     path: '/san-pham/air-max-90?sku=AM90-TRANG-41',
     status: 200,
@@ -354,29 +355,29 @@ const CHECKS: Check[] = [
     contains: ['<h1>Đăng nhập</h1>', 'autocomplete="current-password"', 'href="/quen-mat-khau"'],
   },
   { path: '/quen-mat-khau', status: 200, contains: ['<h1>Quên mật khẩu</h1>', 'name="email"'] },
-  // Token chỉ được dùng khi gửi form, nên mở link với token bất kỳ vẫn thấy form.
+  // The token is only used when the form is submitted, so opening the link with any token still shows the form.
   {
     path: '/dat-lai-mat-khau?token=bat-ky',
     status: 200,
     contains: ['<h1>Đặt lại mật khẩu</h1>', 'autocomplete="new-password"'],
   },
-  // Phiên khách chỉ có ở trình duyệt, nên HTML từ server chỉ có khung trang.
+  // The customer session exists only in the browser, so server HTML is just the page frame.
   { path: '/tai-khoan', status: 200, contains: ['<h1>Tài khoản</h1>', 'Đang tải'] },
   { path: '/tai-khoan/don-hang/100000', status: 200, contains: ['Đơn hàng #100000', 'Đang tải', NOINDEX] },
-  // Giỏ hàng ở localStorage của trình duyệt, nên HTML từ server chỉ có khung trang.
+  // The cart is in browser localStorage, so server HTML is just the page frame.
   { path: '/gio-hang', status: 200, contains: ['<h1>Giỏ hàng</h1>', 'Đang tải', NOINDEX] },
-  // Đặt mua và đơn qua token là dữ liệu cá nhân: HTML từ server chỉ có khung trang.
+  // Checkout and token orders are personal data: server HTML is just the page frame.
   { path: '/dat-mua', status: 200, contains: ['<h1>Đặt mua</h1>', 'Đang tải', NOINDEX] },
-  // Đặt trước không qua giỏ hàng (ADR 0012); thông tin nhận hàng là dữ liệu cá nhân nên chỉ có khung trang.
+  // Pre-orders skip the cart (ADR 0012); shipping info is personal data, so only the frame.
   {
     path: '/dat-truoc/00000000-0000-4000-8000-000000000000',
     status: 200,
     contains: ['<h1>Đặt trước</h1>', 'Đang tải', NOINDEX],
   },
   { path: '/don-hang/100000?token=sai', status: 200, contains: ['Đơn hàng #100000', 'Đang tải', NOINDEX] },
-  // Trang kết quả cổng đưa khách quay về: URL không có token, token nằm ở sessionStorage của trình duyệt.
+  // The page the gateway returns customers to: no token in the URL, it is in the browser's sessionStorage.
   { path: '/don-hang/100000?ket-qua=1', status: 200, contains: ['Đơn hàng #100000', 'Đang tải', NOINDEX] },
-  // Stack của smoke không có khóa VNPAY nên dùng cổng giả lập.
+  // The smoke stack has no VNPAY keys, so it uses the simulator.
   {
     path: '/thanh-toan-gia-lap?orderCode=100000&amount=2030000',
     status: 200,
@@ -396,7 +397,7 @@ const CHECKS: Check[] = [
     contains: ['<div id="__nuxt">'],
     headers: { 'cache-control': 'no-store', 'x-robots-tag': 'noindex' },
   },
-  // Sitemap chỉ có nội dung đã xuất bản, đang hiển thị; URL tuyệt đối theo SITE_URL.
+  // The sitemap holds only published, visible content; absolute URLs per SITE_URL.
   {
     path: '/sitemap.xml',
     status: 200,
@@ -420,7 +421,7 @@ const CHECKS: Check[] = [
 async function runChecks(): Promise<number> {
   let failures = 0
   for (const check of CHECKS) {
-    // Gửi Accept như trình duyệt; không có thì Nuxt trả trang lỗi dạng JSON.
+    // Send Accept like browsers do; without it Nuxt returns a JSON error page.
     const res = await fetch(BASE + check.path, { headers: { Accept: 'text/html' } })
     const html = await res.text()
     const problems = [
@@ -449,7 +450,7 @@ try {
 
 function teardown() {
   if (KEEP) return console.log(`Stack vẫn chạy tại ${BASE}. Xóa bằng: docker compose -p ${PROJECT} down -v`)
-  // Dọn dẹp lỗi thì chỉ báo, để không che lỗi gốc của bước trước.
+  // Cleanup errors are only reported, so they never hide the earlier step's original error.
   try {
     compose('down', '-v')
   } catch {

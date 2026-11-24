@@ -1,5 +1,5 @@
-// Bổ sung dữ liệu mà seed của smoke không có nhưng luồng mua hàng cần. Chạy lại trên cùng stack vẫn được:
-// bước nào đã có thì bỏ qua.
+// Adds data the smoke seed lacks but the purchase flow needs. Safe to rerun on the same stack: existing steps are
+// skipped.
 import { PREORDER_POLICY_SLUG, PRIVACY_POLICY_SLUG } from '@ecommerce/shared'
 import { resetRateLimits } from './rate-limit.ts'
 import { ACCOUNTANT, AdminApi, BASE_URL, PROVINCE_CODE, SALES, SHIPPING_FEE, SKU, WAREHOUSE } from './stack.ts'
@@ -7,19 +7,18 @@ import { ACCOUNTANT, AdminApi, BASE_URL, PROVINCE_CODE, SALES, SHIPPING_FEE, SKU
 export default async function globalSetup() {
   const health = await fetch(`${BASE_URL}/healthz`).catch(() => null)
   if (!health?.ok) throw new Error(`Không thấy stack ở ${BASE_URL}; dựng bằng: pnpm smoke --keep`)
-  // Chạy lại trên cùng stack không vướng giới hạn đặt mua của lượt trước.
+  // Reruns on the same stack do not hit the previous run's checkout limit.
   resetRateLimits()
   const api = await AdminApi.owner()
 
-  // Chưa cấu hình phí giao thì cửa hàng chưa nhận đơn. Tỉnh khác dùng mức mặc định cao hơn để thấy phí theo tỉnh.
+  // Without shipping config the shop takes no orders. Other provinces use a higher default to show per-province fees.
   await api.send('PUT', '/api/admin/shipping-fees', {
     defaultFee: SHIPPING_FEE + 20_000,
     freeShippingThreshold: null,
     provinceFees: [{ provinceCode: PROVINCE_CODE, fee: SHIPPING_FEE }],
   })
 
-  // Khách vãng lai phải đồng ý chính sách bảo mật đã xuất bản thì mới đặt được; đặt trước cần thêm chính sách đặt
-  // trước đã xuất bản.
+  // Guests can only order once a privacy policy is published; pre-orders also need a published pre-order policy.
   const pages = (await api.pages()).items
   for (const policy of [
     { slug: PRIVACY_POLICY_SLUG, title: 'Chính sách bảo mật', body: 'Dữ liệu dùng để giao hàng.' },
@@ -40,7 +39,7 @@ export default async function globalSetup() {
     }
   }
 
-  // Mỗi lượt bán một cái; còn ít hơn một cái có thể bán (chạy lại nhiều lần) thì kiểm kê lên lại.
+  // One unit sold per run; with less than one sellable (after many reruns), stocktake it back up.
   const stock = await api.stockOf(SKU)
   if (stock.onHand - stock.reserved < 1) {
     await api.send('POST', '/api/admin/stock/adjustments', {

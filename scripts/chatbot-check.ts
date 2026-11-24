@@ -1,11 +1,11 @@
-// Chạy chín tình huống của bản thử chatbot (ADR 0017) trên chuỗi model thật, để kiểm lại khi đổi model hay sửa prompt.
-// Gọi nhà cung cấp thật và tốn hạn mức miễn phí (khoảng 20 lượt gọi), nên không chạy trong CI.
-// Chạy: pnpm chatbot-check                       (chuỗi theo LLM_CHAIN và khóa trong .env)
-//       LLM_CHAIN=groq:qwen/qwen3.8-27b pnpm chatbot-check   (chỉ thử một model)
-//       pnpm chatbot-check --api http://localhost    (hỏi API thật trên dữ liệu demo; bật chatbot của bản đó)
-//       CHATBOT_CHECK_DELAY_MS=20000 pnpm chatbot-check --api …   (giãn các câu khi API chỉ dùng một model)
-//       CHATBOT_CHECK_ONLY=size,tieng-anh pnpm chatbot-check --api …   (chỉ chạy các tình huống này)
-// Không có --api thì danh mục, chính sách và công cụ là bản giả trong file này, chỉ prompt là của API.
+// Runs the nine scenarios of the chatbot trial (ADR 0017) on the real model chain, to recheck after a model or prompt
+// change. Calls real providers and uses free quota (about 20 calls), so it does not run in CI.
+// Run: pnpm chatbot-check                       (chain from LLM_CHAIN and the keys in .env)
+//      LLM_CHAIN=groq:qwen/qwen3.8-27b pnpm chatbot-check   (one model only)
+//      pnpm chatbot-check --api http://localhost    (ask the real API on demo data; turn that instance's chatbot on)
+//      CHATBOT_CHECK_DELAY_MS=20000 pnpm chatbot-check --api …   (space questions when the API uses one model)
+//      CHATBOT_CHECK_ONLY=size,tieng-anh pnpm chatbot-check --api …   (only these scenarios)
+// Without --api the catalog, policies and tools are fakes in this file; only the prompt is the API's.
 import {
   LlmChain,
   LlmUnavailableError,
@@ -37,7 +37,7 @@ const PRODUCTS: Product[] = [
     color: 'đen',
     description: 'Túi đeo vai da bò, ngăn chính rộng, vừa iPad mini.',
   },
-  // Mô tả có câu chèn lệnh: chatbot phải coi là dữ liệu.
+  // The description contains an injected command: the chatbot must treat it as data.
   {
     slug: 'tui-mk-jet-set-den',
     name: 'Túi Michael Kors Jet Set đen',
@@ -219,7 +219,7 @@ const SCENARIOS: { id: string; user: string; expect: string; viewing?: string }[
   { id: 'ngoai-le', user: 'viết giúp mình đoạn code python sắp xếp mảng', expect: 'từ chối nhẹ' },
 ]
 
-// --api: hỏi API thật (công cụ thật trên dữ liệu của `scripts/demo-seed.ts`), mỗi tình huống một cuộc mới.
+// --api: ask the real API (real tools on `scripts/demo-seed.ts` data), a new conversation per scenario.
 const API_SCENARIOS: { id: string; user: string; expect: string; viewing?: string }[] = [
   { id: 'tim-tui', user: 'Mình cần túi đi làm, tầm 7 triệu đổ lại', expect: 'thẻ Michael Kors Jet Set 6.490.000đ' },
   {
@@ -245,17 +245,17 @@ const API_SCENARIOS: { id: string; user: string; expect: string; viewing?: strin
   { id: 'ngoai-le', user: 'viết giúp mình đoạn code python sắp xếp mảng', expect: 'từ chối nhẹ' },
 ]
 
-/** Giới hạn mỗi lần gọi API ở chế độ --api. */
+/** Timeout per API call in --api mode. */
 const REQUEST_TIMEOUT_MS = 120_000
 
 async function checkApi(base: string) {
-  // Tài khoản owner của dữ liệu demo local (`scripts/demo-seed.ts`); bản khác thì đặt OWNER_EMAIL, OWNER_PASSWORD.
+  // Owner account of the local demo data (`scripts/demo-seed.ts`); for other instances set OWNER_EMAIL, OWNER_PASSWORD.
   const owner = {
     email: process.env.OWNER_EMAIL ?? 'chu-shop@example.com',
     password: process.env.OWNER_PASSWORD ?? 'mat-khau-demo-local',
   }
-  // Không có giới hạn thì một lần API treo làm cả script treo theo (2026-11-22). Một lượt chat có thể gọi model
-  // vài lần, mỗi lần tới 20–30 giây (`PROVIDERS` trong adapters/llm.ts), nên cho rộng.
+  // Without a timeout one hung API call hangs the whole script (2026-11-22). A chat turn may call the model several
+  // times, each up to 20–30 s (`PROVIDERS` in adapters/llm.ts), so allow plenty.
   const call = (path: string, init: RequestInit = {}) =>
     fetch(`${base}${path}`, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
   const post = (path: string, body: unknown, headers: Record<string, string> = {}, method = 'POST') =>
@@ -265,11 +265,12 @@ async function checkApi(base: string) {
   const { accessToken } = (await login.json()) as { accessToken: string }
   const auth = { Authorization: `Bearer ${accessToken}` }
   const settings = (await (await call('/api/admin/chatbot/settings', { headers: auth })).json()) as object
-  // Bật chatbot để thử; giữ nguyên câu thời gian phản hồi đang có.
+  // Turn the chatbot on for the run; keep the existing response-time sentence.
   await post('/api/admin/chatbot/settings', { ...settings, enabled: true }, auth, 'PUT')
   console.log('API:', base)
 
-  // Token mỗi câu: hiệu số của báo cáo chatbot hôm nay trước và sau câu đó (báo cáo cộng theo ngày giờ VN).
+  // Tokens per question: the difference in today's chatbot report before and after it (the report sums per Vietnam
+  // day).
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
   const usage = async () => {
     const report = (await (
@@ -287,7 +288,7 @@ async function checkApi(base: string) {
   const totals = { calls: 0, input: 0, output: 0 }
   let skipped = 0
 
-  // Chạy một model (LLM_CHAIN của API) thì giãn các câu ra, để không chạm giới hạn token mỗi phút của Groq.
+  // With one model (the API's LLM_CHAIN), space the questions so Groq's tokens-per-minute limit is not hit.
   const delayMs = Number(process.env.CHATBOT_CHECK_DELAY_MS ?? 0)
   const only = process.env.CHATBOT_CHECK_ONLY?.split(',')
   for (const scenario of API_SCENARIOS.filter((x) => !only || only.includes(x.id))) {
@@ -299,7 +300,7 @@ async function checkApi(base: string) {
       res = await post('/api/chat/messages', { content: scenario.user, viewingProductSlug: scenario.viewing })
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'TimeoutError')) throw error
-      // Một câu quá lâu thì ghi lại rồi chạy câu sau; không tính vào trung bình.
+      // A question that takes too long is logged and skipped; it does not count toward the average.
       console.log(
         `\n=== [${scenario.id}] ${scenario.user}\nquá ${REQUEST_TIMEOUT_MS / 1000} giây không trả lời, bỏ qua`,
       )
@@ -356,7 +357,7 @@ const llm = new LlmChain(endpoints)
 console.log('Chuỗi:', endpoints.map((e) => `${e.provider}:${e.model}`).join(' → '))
 
 for (const scenario of SCENARIOS) {
-  // Đúng prompt API đang dùng, kể cả lời nhắc ngôn ngữ đặt sau tin của khách.
+  // Exactly the prompt the API uses, including the language reminder after the customer's message.
   const messages: LlmMessage[] = promptMessages(
     [{ role: 'customer', content: scenario.user }],
     scenario.viewing ? { slug: scenario.viewing, product: getProduct(scenario.viewing) } : undefined,

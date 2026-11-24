@@ -1,16 +1,16 @@
-// Dữ liệu mẫu để xem website ở local: chính sách, thông tin pháp lý, đủ năm nhóm hàng, sản phẩm đã xuất bản kèm ảnh.
-// Đi qua API thật như nhân viên nhập liệu. Ảnh là ảnh minh họa tự sinh, không phải ảnh của hãng.
-// Cần stack local đang chạy với S3 (COMPOSE_PROFILES=local, xem .env.example), DB chưa có dữ liệu demo.
-// Chạy: node scripts/demo-seed.ts
+// Sample data to browse the website locally: policies, legal info, all five product types, published products with
+// images. Goes through the real API like staff entering data. Images are generated illustrations, not brand images.
+// Needs the local stack running with S3 (COMPOSE_PROFILES=local, see .env.example) and a DB without demo data.
+// Run: node scripts/demo-seed.ts
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { PRIVACY_POLICY_SLUG } from '../shared/src/content.ts'
 
-// Bản deploy (ADR 0011): DEMO_SEED_BASE_URL=https://<site>.netlify.app, kèm OWNER_EMAIL/OWNER_PASSWORD của chủ shop đã
-// tạo trước bằng `seed:owner` trên DB đó.
+// Deploy (ADR 0011): DEMO_SEED_BASE_URL=https://<site>.netlify.app, with OWNER_EMAIL/OWNER_PASSWORD of the owner
+// created beforehand with `seed:owner` on that DB.
 const BASE = process.env.DEMO_SEED_BASE_URL ?? `http://localhost:${process.env.HTTP_PORT ?? '80'}`
 const LOCAL = new URL(BASE).hostname === 'localhost'
-/** Bản deploy công khai không dùng mật khẩu demo nằm trong repo: tài khoản lấy từ biến môi trường. */
+/** The public deploy never uses the demo password in the repo: the account comes from environment variables. */
 function remoteOwner() {
   const { OWNER_EMAIL: email, OWNER_PASSWORD: password } = process.env
   if (!email || !password) throw new Error('Seed vào bản deploy cần OWNER_EMAIL và OWNER_PASSWORD của chủ shop')
@@ -19,10 +19,10 @@ function remoteOwner() {
 const OWNER = LOCAL
   ? { email: 'chu-shop@example.com', password: 'mat-khau-demo-local', name: 'Chủ shop' }
   : remoteOwner()
-/** Chỉ in mật khẩu demo của máy local, không in mật khẩu bản deploy. */
+/** Prints the demo password only for local, never the deploy's. */
 const loginHint = () => `Đăng nhập quản trị: ${OWNER.email}${LOCAL ? ` / ${OWNER.password}` : ''}`
 
-// sharp là dependency của api, không có ở gốc repo.
+// sharp is an api dependency, not available at the repo root.
 const sharp = createRequire(new URL('../api/package.json', import.meta.url))('sharp') as typeof import('sharp')
 
 type Json = Record<string, unknown>
@@ -51,7 +51,7 @@ async function upload(path: string, token: string, method: string, file: Blob, n
 
 const escapeXml = (text: string) => text.replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`)
 
-/** Ảnh minh họa 4:5 nền màu, ghi tên hãng và tên sản phẩm. */
+/** A 4:5 illustration on a colored background, with brand and product name. */
 async function placeholderImage(brand: string, title: string, color: string): Promise<Blob> {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500">
     <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
@@ -90,10 +90,10 @@ type DemoProduct = {
   usageCare: string
   attributes: Json
   variants: Variant[]
-  /** Mỗi ảnh một màu; ảnh có `color` thì gắn vào các biến thể cùng màu. */
+  /** One color per image; images with `color` link to the variants of that color. */
   images: { color?: string; tint: string }[]
   groundShippingOnly?: boolean
-  /** Có chứng từ nhập khẩu và cam kết bảo hành chính hãng. */
+  /** Has an import document and an official warranty commitment. */
   warranty?: string
 }
 
@@ -110,7 +110,7 @@ const BRANDS = [
   { name: 'Chanel', slug: 'chanel', description: 'Nhà mốt và nước hoa Pháp.' },
 ]
 
-/** Danh mục: cha theo nhóm hàng, rồi danh mục con. */
+/** Categories: parents by product type, then subcategories. */
 const CATEGORIES: {
   name: string
   slug: string
@@ -367,7 +367,7 @@ const PAGES = [
   },
 ]
 
-/** Phí giao mặc định của demo: chưa có thì khách không đặt mua được ("Cửa hàng chưa sẵn sàng nhận đơn"). */
+/** Demo default shipping fee: without it customers cannot check out ("Cửa hàng chưa sẵn sàng nhận đơn"). */
 async function ensureShippingFee(token: string) {
   const current = await api('/api/admin/shipping-fees', { token })
   if (current.defaultFee !== null) return
@@ -380,8 +380,8 @@ async function ensureShippingFee(token: string) {
 }
 
 /**
- * Mã giảm giá mẫu để thử ở local (M5): `DEMO10` giảm 10%, tối đa 500.000, cho cả hàng sẵn và đặt trước, hết hạn sau một
- * năm. Không tạo ở bản deploy: mã nằm trong repo công khai thì ai cũng dùng được.
+ * Sample voucher for local testing (M5): `DEMO10` gives 10% off up to 500,000, for in-stock and pre-order, expiring in
+ * a year. Not created on the deploy: a code in a public repo is usable by anyone.
  */
 async function ensureDemoVoucher(token: string) {
   if (!LOCAL) return
@@ -410,7 +410,7 @@ async function main() {
   const existing = await fetch(`${BASE}/api/brands/nike`)
   if (existing.ok) {
     console.log('Đã có dữ liệu demo (thương hiệu nike), bỏ qua phần danh mục.')
-    // Dữ liệu demo cũ (trước M3) chưa có phí giao: bổ sung để đặt mua được.
+    // Old demo data (before M3) has no shipping fee: add it so checkout works.
     const token = String((await api('/api/admin/auth/login', { method: 'POST', body: OWNER })).accessToken)
     await ensureShippingFee(token)
     await ensureDemoVoucher(token)
@@ -418,7 +418,7 @@ async function main() {
     return
   }
 
-  // Local: tạo chủ shop demo trong container. Bản deploy: chủ shop đã tạo trước bằng seed:owner trên DB đó.
+  // Local: create the demo owner in the container. Deploy: the owner was created beforehand with seed:owner on that DB.
   if (LOCAL) {
     execFileSync(
       'docker',
@@ -521,7 +521,7 @@ async function main() {
 
     for (const image of product.images) {
       const title = product.name.replace(`${brandName} `, '') + (image.color ? ` - ${image.color}` : '')
-      // Font dùng để vẽ ảnh có thể thiếu dấu tiếng Việt, nên ghi không dấu.
+      // The font used for images may lack Vietnamese diacritics, so write without them.
       const plain = title.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D')
       const file = await placeholderImage(brandName, plain, image.tint)
       const uploaded = await upload(`${base}/images`, token, 'POST', file, 'anh.png')
