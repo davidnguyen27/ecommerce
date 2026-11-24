@@ -11,7 +11,7 @@ const files = ref<File[]>([])
 const outcomes = ref<Outcome[]>([])
 const running = ref(false)
 
-/** `<SKU>_<n>.jpg` → SKU và số thứ tự; không có `_<n>` thì là 0. API tự xử lý SKU có dấu gạch dưới. */
+/** `<SKU>_<n>.jpg` → SKU and sequence number; without `_<n>` it is 0. The API handles SKUs with underscores. */
 function orderKey(file: File) {
   const stem = file.name.replace(/\.[^.]+$/, '').toUpperCase()
   const match = /^(.*)_(\d+)$/.exec(stem)
@@ -19,7 +19,7 @@ function orderKey(file: File) {
 }
 
 function pickFiles(event: Event) {
-  // API nối mỗi ảnh vào sau ảnh có sẵn, nên gửi theo SKU rồi theo số thứ tự để ảnh của một SKU đúng thứ tự.
+  // The API appends each image after the existing ones, so send by SKU then number to keep each SKU's order.
   files.value = [...((event.target as HTMLInputElement).files ?? [])].sort((a, b) => {
     const ka = orderKey(a)
     const kb = orderKey(b)
@@ -31,7 +31,7 @@ function pickFiles(event: Event) {
 async function uploadAll() {
   running.value = true
   outcomes.value = []
-  // Gửi lần lượt từng file: mỗi file độc lập, file lỗi không chặn các file khác.
+  // Send files one at a time: each is independent, and a failed file does not block the others.
   for (const file of files.value) {
     const body = new FormData()
     body.append('file', file)

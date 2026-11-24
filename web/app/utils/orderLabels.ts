@@ -21,7 +21,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   unpaid: 'Chưa thanh toán',
-  // Đã cọc không có nghĩa là đã trả đủ (GLOSSARY "Tiền cọc").
+  // Deposited does not mean fully paid (GLOSSARY "Tiền cọc").
   deposit_paid: 'Đã cọc',
   paid: 'Đã thanh toán',
 }
@@ -35,7 +35,7 @@ export const FULFILLMENT_STATUS_LABELS: Record<FulfillmentStatus, string> = {
   returned: 'Hàng đã hoàn về kho',
 }
 
-/** Giá trị thuộc tính biến thể nối bằng " · ", không kèm đơn vị (dòng giỏ, dòng đơn không có schema thuộc tính). */
+/** Variant attribute values joined with " · ", without units (cart and order lines have no attribute schema). */
 export const variantAttributesText = (attributes: Record<string, unknown> | null) =>
   attributes
     ? Object.values(attributes)
@@ -49,7 +49,7 @@ export const CANCEL_REASON_LABELS: Record<OrderCancelReason, string> = {
   staff: 'Nhân viên hủy',
 }
 
-/** Lý do nhân viên hủy đơn đã nhận tiền, như nhân viên thấy. */
+/** Why staff cancelled a paid order, as staff see it. */
 export const CANCEL_CAUSE_LABELS: Record<OrderCancelCause, string> = {
   changed_mind: 'Khách đổi ý',
   remainder_overdue: 'Quá hạn trả phần còn lại',
@@ -58,7 +58,7 @@ export const CANCEL_CAUSE_LABELS: Record<OrderCancelCause, string> = {
   other: 'Khác',
 }
 
-/** Sự kiện trong lịch sử đơn (`OrderEventKind` ở API). Loại chưa có ở đây thì hiện nguyên mã. */
+/** Order history events (`OrderEventKind` in the API). Kinds missing here show as is. */
 const ORDER_EVENT_LABELS: Record<string, string> = {
   created: 'Đặt mua',
   paid: 'Đã nhận đủ tiền',
@@ -112,7 +112,7 @@ export const RECONCILIATION_REASON_LABELS: Record<ReconciliationReason, string> 
   extra_payment: 'Trả thừa',
 }
 
-/** Trạng thái một khoản hoàn (ADR 0014). */
+/** A refund's status (ADR 0014). */
 export const REFUND_STATUS_LABELS: Record<RefundStatus, string> = {
   pending: 'Chờ hoàn',
   processing: 'Cổng đang xử lý',

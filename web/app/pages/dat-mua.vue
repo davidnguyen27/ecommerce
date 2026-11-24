@@ -11,7 +11,8 @@ import {
 } from '@ecommerce/shared'
 import { Truck } from 'lucide-vue-next'
 
-// Giỏ ở localStorage và thông tin nhận hàng là dữ liệu cá nhân: trang chỉ có khung khi SSR, mọi thứ nạp sau khi mount.
+// The cart in localStorage and shipping info are personal data: SSR renders only the frame, everything loads after
+// mount.
 const cart = useCart()
 const quote = ref<CheckoutQuote | null>(null)
 const quoteError = ref<string | null>(null)
@@ -31,14 +32,14 @@ async function refreshQuote() {
     quote.value = null
     return
   }
-  // Đổi tỉnh/thành liên tiếp: chỉ nhận báo giá của lần gọi cuối.
+  // Rapid province changes: only accept the quote of the last call.
   const call = ++latest
   try {
     const { provinceCode, email, phone } = form.value
     const body: CheckoutQuoteRequest = {
       lines,
       ...(provinceCode && { provinceCode }),
-      // Email, số điện thoại để kiểm lượt mỗi khách; chưa nhập xong thì server bỏ qua.
+      // Email and phone for per-customer voucher uses; incomplete values are ignored by the server.
       ...(voucherCode.value && { voucherCode: voucherCode.value, email, phone }),
     }
     const result = CheckoutQuote.parse(await $fetch('/api/checkout/quote', { method: 'POST', body }))
@@ -50,13 +51,15 @@ async function refreshQuote() {
   }
 }
 watch(cart.ready, refreshQuote, { immediate: true })
-// `useShippingForm` xóa phường/xã khi đổi tỉnh/thành; ở đây chỉ tính lại phí giao.
+// `useShippingForm` clears the ward when the province changes; here we only recompute the fee.
 watch(
   () => form.value.provinceCode,
   () => void refreshQuote(),
 )
 
-/** Thay đổi server báo khi đặt mua (409), theo variant id; giỏ đổi thì khách đã xử lý, bỏ đi. */
+/**
+ * Changes the server reported at checkout (409), by variant id; once the cart changes the customer has handled them.
+ */
 const conflicts = ref(new Map<string, CheckoutLineChange>())
 watch(
   cart.lines,
@@ -67,7 +70,7 @@ watch(
   { deep: true },
 )
 
-/** Đặt tiếp không dùng mã sau khi mã không còn dùng được lúc đặt. */
+/** Continue without the voucher after it stopped applying at order time. */
 async function submitWithoutVoucher() {
   await removeVoucher()
   if (canSubmit.value) await submit()
@@ -106,7 +109,7 @@ async function submit() {
     const voucher = quote.value?.voucher
     const body: CheckoutRequest = {
       lines: cart.lines.value.map(({ variantId, quantity, price }) => ({ variantId, quantity, price })),
-      // Chỉ gửi mã đang áp được, kèm tiền giảm khách đã thấy.
+      // Send only an applicable voucher, with the discount the customer saw.
       ...(voucher?.applied && { voucherCode: voucher.code, discount: voucher.discount }),
       ...contactPayload(),
       ...(!signedIn.value && { acceptPrivacyPolicy: acceptPrivacyPolicy.value }),
@@ -116,14 +119,14 @@ async function submit() {
     rememberOrderToken(result.code, result.token)
     window.location.assign(result.checkoutUrl)
   } catch (err) {
-    // Phiên đăng nhập hết hạn giữa chừng: đặt như khách vãng lai, cần tick đồng ý.
+    // The session expired midway: order as a guest, which needs the consent tick.
     if (isUnauthorized(err)) signedIn.value = false
     const details = CheckoutConflictDetails.safeParse(apiErrorDetails(err))
     if (details.success) {
-      // Giá, ngừng bán hay hết hàng đã đổi: hiện thay đổi từng dòng, khách phải xác nhận lại.
+      // Price, discontinued or stock changed: show per-line changes; the customer must confirm again.
       await refreshQuote()
       conflicts.value = new Map(details.data.lines.map((line) => [line.variantId, line.change]))
-      // Mã không còn như khách đã thấy: không tự bỏ mã, khách tự chọn.
+      // The voucher is no longer as seen: do not drop it silently, let the customer choose.
       voucherConflict.value = details.data.voucher ?? null
     }
     error.value = apiErrorMessage(err)

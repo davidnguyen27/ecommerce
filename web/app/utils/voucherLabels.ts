@@ -19,7 +19,7 @@ export const SALE_TYPE_LABELS: Record<OrderKind, string> = {
   preorder: 'Đặt trước',
 }
 
-/** Mức giảm một dòng, ví dụ `10%, tối đa 500.000 ₫` hoặc `200.000 ₫`. */
+/** One-line discount, e.g. `10%, tối đa 500.000 ₫` or `200.000 ₫`. */
 export function voucherValueLabel(voucher: Pick<Voucher, 'kind' | 'amount' | 'percent' | 'maxDiscount'>) {
   return voucher.kind === 'fixed'
     ? formatVnd(voucher.amount ?? 0)

@@ -35,7 +35,7 @@ const form = reactive({
 })
 const definitions = ref<AttributeDefinition[]>([])
 
-// Thuộc tính cấp sản phẩm bắt buộc phải có ngay lúc tạo, nên form sinh theo schema của nhóm hàng của danh mục.
+// Required product attributes must exist at creation, so the form follows the category's product type schema.
 watch(
   () => categories.value.find((c) => c.id === form.categoryId)?.productType,
   async (productType) => {
@@ -48,7 +48,7 @@ watch(
   },
 )
 
-// Tự động sinh slug từ tên sản phẩm nếu slug chưa bị người dùng sửa
+// Generate the slug from the name until the user edits the slug
 watch(
   () => form.name,
   (name) => {
@@ -68,7 +68,7 @@ function slugify(text: string) {
     .replace(/^-+|-+$/g, '')
 }
 
-/** Sản phẩm mới chỉ có thông tin tối thiểu; nội dung và biến thể soạn tiếp ở trình soạn. */
+/** A new product has only the minimum info; content and variants are edited next in the editor. */
 async function create() {
   error.value = null
   fieldErrors.value = []
@@ -90,7 +90,7 @@ if (canEdit) {
   categories.value = AdminCategoryList.parse(await session.adminFetch('/api/admin/categories')).items
 }
 
-// Lọc sản phẩm theo trạng thái và từ khóa tìm kiếm
+// Filter products by status and search keyword
 const filteredProducts = computed(() => {
   return products.value.filter((p) => {
     const matchStatus = filterStatus.value === 'all' || p.status === filterStatus.value

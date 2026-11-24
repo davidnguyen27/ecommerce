@@ -3,7 +3,7 @@ import { PROVINCES } from '@ecommerce/shared'
 import type { Ward } from '@ecommerce/shared/wards'
 import type { InvoiceFields, ShippingFormFields } from '~/composables/useShippingForm'
 
-/** Các ô thông tin nhận hàng, ghi chú và hóa đơn công ty của trang đặt mua và đặt trước (`useShippingForm`). */
+/** Shipping, note and company invoice fields of the checkout and pre-order pages (`useShippingForm`). */
 const form = defineModel<ShippingFormFields>('form', { required: true })
 const invoice = defineModel<InvoiceFields>('invoice', { required: true })
 const invoiceOpen = defineModel<boolean>('invoiceOpen', { required: true })
@@ -53,7 +53,7 @@ defineProps<{ wards: Ward[]; fieldErrors: Map<string, string> }>()
       </label>
     </div>
     <div class="grid gap-5 sm:grid-cols-2">
-      <!-- Label tách khỏi select: bọc thì tên truy cập của ô lẫn chữ của các option. -->
+      <!-- Label kept apart from the select: wrapping it mixes the options' text into the field's accessible name. -->
       <div class="field">
         <label for="checkout-province">Tỉnh/thành</label>
         <select id="checkout-province" v-model="form.provinceCode" class="field-input" name="province" required>

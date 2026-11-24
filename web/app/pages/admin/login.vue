@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import '~/assets/admin.css'
 
-// Màn hình đăng nhập toàn trang; không dùng layout website lẫn layout admin (layout admin cần phiên).
+// Full-page sign-in screen; uses neither the website nor the admin layout (the admin layout needs a session).
 definePageMeta({ layout: false })
 
 const session = useAdminSession()

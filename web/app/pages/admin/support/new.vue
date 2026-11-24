@@ -11,8 +11,8 @@ import {
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'support.handle' })
 
 /**
- * Nhân viên tạo yêu cầu thay cho khách gọi điện hay nhắn tin: gắn với một đơn, hoặc với tài khoản khách theo email.
- * Có đơn thì tạo được thêm hủy (đơn đã nhận tiền, chưa giao đi), trả, đổi, bảo hành (đơn đã giao xong), như khách tự gửi.
+ * Staff create a request for a customer who called or messaged: tied to an order, or to a customer account by email.
+ * With an order, cancel (paid, not shipped), return, exchange and warranty (delivered) are possible, as for customers.
  */
 const session = useAdminSession()
 const route = useRoute()
@@ -26,7 +26,7 @@ const form = reactive({
 const busy = ref(false)
 const error = ref<string | null>(null)
 
-// Đơn đang gắn: tải khi nhập mã, để biết loại nào tạo được và dòng nào chọn được.
+// The linked order: loaded when the code is entered, to know which types and lines are available.
 const order = ref<AdminOrder | null>(null)
 const orderError = ref<string | null>(null)
 async function loadOrder() {

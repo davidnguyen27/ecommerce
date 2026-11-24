@@ -25,7 +25,10 @@ const WARRANTY_LABELS: Record<WarrantyReportOutcome, string> = {
   in_progress: 'Đang xử lý',
 }
 
-/** Bảng số lượng: mỗi dòng một lý do trả (yêu cầu đổi không có lý do thành một dòng riêng), mỗi cột một nhóm hàng. */
+/**
+ * Quantity table: one row per return reason (exchanges without a reason get their own row), one column per product
+ * type.
+ */
 const pivot = computed(() => {
   const lines = report.value?.lines ?? []
   const types = [...new Set(lines.map((l) => l.productType))] as ProductType[]

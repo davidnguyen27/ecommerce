@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Nút "Xuất Excel" của một tab báo cáo: tải `/api/admin/reports/<name>.xlsx` theo bộ lọc đang chọn (qua `adminFetch`
-// để có token), rồi lưu với tên `bao-cao-<slug>-<from>-<to>.xlsx` như API đặt.
+// A report tab's "Xuất Excel" button: downloads `/api/admin/reports/<name>.xlsx` with the current filters (via
+// `adminFetch` for the token), saved as `bao-cao-<slug>-<from>-<to>.xlsx` as the API names it.
 const props = defineProps<{
   name: string
   slug: string

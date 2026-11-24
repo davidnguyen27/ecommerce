@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ATTRIBUTE_FILTER_PREFIX, GENDER_KEY } from '@ecommerce/shared'
 
-// Trang kết quả tìm kiếm; menu Nam / Nữ cũng dẫn về đây với bộ lọc giới tính (ADR 0004).
+// Search results page; the Nam / Nữ menu also lands here with a gender filter (ADR 0004).
 const route = useRoute()
 const text = (name: string) => {
   const value = [route.query[name]].flat()[0]
@@ -15,7 +15,7 @@ const title = computed(() => {
   return gender ? `Sản phẩm ${gender}` : 'Tất cả sản phẩm'
 })
 
-// Kết quả tìm kiếm trùng nội dung với trang sản phẩm, danh mục: không cho index ở mọi URL của trang này.
+// Search results duplicate product and category pages: no indexing on any URL of this page.
 useSeo({ title, description: 'Tìm sản phẩm theo tên, thương hiệu, mã mẫu hoặc SKU.', noindex: true })
 </script>
 

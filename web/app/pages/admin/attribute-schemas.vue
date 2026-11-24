@@ -22,7 +22,7 @@ const TYPE_LABELS: Record<AttributeType, string> = {
 }
 const LEVEL_LABELS: Record<AttributeLevel, string> = { product: 'Sản phẩm', variant: 'Biến thể' }
 
-/** Một dòng đang soạn; giá trị cho phép gõ mỗi dòng một giá trị. */
+/** A row being edited; allowed values are typed one per line. */
 type Draft = {
   key: string
   label: string

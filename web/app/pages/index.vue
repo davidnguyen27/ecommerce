@@ -14,8 +14,8 @@ import {
 
 const { apiBase } = useRuntimeConfig()
 
-// Một lần gọi danh sách sản phẩm cho cả hàng mới về lẫn số sản phẩm theo nhóm hàng (facets).
-// Lỗi API thì chỉ thiếu phần đó, trang chủ vẫn hiện.
+// One product list call covers both new arrivals and per-type counts (facets). On an API error only that part is
+// missing; the home page still shows.
 const { data: latest } = await useAsyncData('home-latest', async () => {
   const body = await $fetch('/api/products', { baseURL: apiBase, query: { sort: 'newest' } })
   return ProductSearchResult.parse(body)

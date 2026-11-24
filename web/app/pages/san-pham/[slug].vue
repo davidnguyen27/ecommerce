@@ -6,7 +6,7 @@ const route = useRoute()
 const { apiBase } = useRuntimeConfig()
 const slug = computed(() => String(route.params.slug))
 
-// Khóa theo slug: đổi biến thể chỉ đổi `?sku=`, không tải lại sản phẩm.
+// Keyed by slug: switching variants only changes `?sku=` without reloading the product.
 const { data, error } = await useAsyncData(`product-${slug.value}`, async () => {
   const body = await $fetch(`/api/products/${encodeURIComponent(slug.value)}`, { baseURL: apiBase })
   return PublicProduct.parse(body)
@@ -20,8 +20,8 @@ const definitionOf = (key: string) => data.value?.attributeSchema.find((d) => d.
 const same = (a: AttributeValue | undefined, b: AttributeValue | undefined) => JSON.stringify(a) === JSON.stringify(b)
 
 /**
- * Biến thể theo `?sku=`; không có hoặc sai thì biến thể đầu tiên còn hàng, rồi biến thể đầu tiên đang nhận đặt trước,
- * hết cả thì biến thể đầu tiên.
+ * Variant from `?sku=`; missing or wrong gives the first in-stock variant, then the first open for pre-order, else the
+ * first variant.
  */
 const selected = computed<Variant>(() => {
   const variants = data.value!.variants
@@ -35,7 +35,7 @@ const selected = computed<Variant>(() => {
 
 const AVAILABILITY_LABELS = { in_stock: 'Còn hàng', preorder: 'Đặt trước', out_of_stock: 'Hết hàng' } as const
 
-/** Thuộc tính cấp biến thể theo thứ tự schema, mỗi thuộc tính kèm các giá trị có ở ít nhất một biến thể. */
+/** Variant attributes in schema order, each with the values present on at least one variant. */
 const choices = computed(() =>
   data
     .value!.attributeSchema.filter((d) => d.level === 'variant')
@@ -51,8 +51,8 @@ const choices = computed(() =>
 )
 
 /**
- * Biến thể có thật mang giá trị này, giữ được nhiều lựa chọn hiện tại nhất (ngang nhau thì ưu tiên còn hàng);
- * nhờ vậy mọi lựa chọn đều dẫn tới một tổ hợp có thật, kể cả khi tổ hợp với lựa chọn hiện tại không có.
+ * The real variant with this value that keeps the most current choices (ties prefer in stock); so every choice leads
+ * to a real combination, even when combining with the current choices does not exist.
  */
 function closest(key: string, value: AttributeValue): Variant {
   const current = selected.value.attributes
@@ -63,7 +63,7 @@ function closest(key: string, value: AttributeValue): Variant {
     .reduce((best, v) => (score(v) > score(best) ? v : best))
 }
 
-// Biến thể ngừng bán không có trong `variants`, nên chỉ còn khóa khi hết hàng hoặc đã đủ số cái tối đa trong giỏ.
+// Discontinued variants are not in `variants`, so it only locks when out of stock or at the per-variant cart maximum.
 const cart = useCart()
 const inCart = computed(() => (cart.ready.value ? cart.quantityOf(selected.value.id) : 0))
 const atLimit = computed(() => inCart.value >= MAX_QUANTITY_PER_VARIANT)
@@ -87,7 +87,7 @@ function addSelected() {
       : `Mỗi biến thể mua tối đa ${MAX_QUANTITY_PER_VARIANT} cái.`
 }
 
-/** Ảnh của biến thể đang chọn trước, rồi tới ảnh chung. */
+/** The selected variant's images first, then shared images. */
 const images = computed(() => {
   const all = data.value!.images
   const own = all.filter((image) => image.skus.includes(selected.value.sku))
@@ -100,12 +100,13 @@ const productAttributes = computed(() =>
     .map((d) => ({ label: d.label, value: formatAttribute(d, data.value!.attributes[d.key]!) })),
 )
 
-// API nhận cả slug cũ (đã đổi rồi xuất bản lại) và trả slug hiện tại: chuyển hướng hẳn để link cũ không mất.
+// The API accepts old slugs (renamed then republished) and returns the current one: redirect for good so old links
+// live.
 if (data.value && data.value.slug !== slug.value) {
   await navigateTo({ path: `/san-pham/${data.value.slug}`, query: route.query }, { redirectCode: 301 })
 }
 
-// Mọi biến thể (`?sku=`) dùng chung một canonical là trang sản phẩm.
+// Every variant (`?sku=`) shares one canonical, the product page.
 const canonicalPath = computed(() => `/san-pham/${data.value?.slug ?? slug.value}`)
 const absolute = useAbsoluteUrl()
 useSeo({
@@ -146,7 +147,7 @@ useHead({
     </nav>
 
     <div class="grid gap-8 lg:grid-cols-12 lg:gap-12">
-      <!-- Điện thoại: vuốt ngang từng ảnh; máy tính: xếp lưới, ảnh đầu to. -->
+      <!-- Phone: swipe through images; desktop: grid with a large first image. -->
       <section
         class="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0 lg:col-span-7 lg:grid lg:grid-cols-2 lg:gap-3 lg:overflow-visible"
         aria-label="Ảnh sản phẩm"
@@ -203,7 +204,7 @@ useHead({
             <template v-if="data.modelCode"> · Mã mẫu: {{ data.modelCode }}</template>
           </p>
 
-          <!-- Mỗi lựa chọn là một link tới `?sku=` của biến thể có thật, nên chọn được cả khi chưa có JavaScript. -->
+          <!-- Each choice links to a real variant's `?sku=`, so choosing works without JavaScript. -->
           <fieldset v-for="choice in choices" :key="choice.definition.key" class="mt-6 border-t border-border pt-5">
             <legend class="float-left mb-3 w-full text-sm">
               <span class="font-semibold">{{ choice.definition.label }}</span>
@@ -232,7 +233,7 @@ useHead({
             </div>
           </fieldset>
 
-          <!-- Biến thể hết hàng sẵn nhưng đang nhận đặt trước: đặt ngay ở trang riêng, không qua giỏ hàng (ADR 0012). -->
+          <!-- Out of stock but open for pre-order: order right away on its own page, outside the cart (ADR 0012). -->
           <div v-if="selected.preorder" class="mt-6 border-t border-border pt-5" data-testid="preorder-offer">
             <p class="text-sm">
               Cọc <strong class="tabular-nums">{{ selected.preorder.depositPercent }}%</strong> khi đặt, trả phần còn

@@ -14,7 +14,8 @@ const session = useAdminSession()
 const canOpen = session.canOpen
 const route = useRoute()
 const canManage = computed(() => session.can('preorder.manage'))
-// Đợt không nhập được hàng (M6a): hủy đơn đã nhận tiền và đóng đợt là hai quyền, cần cả hai.
+// A campaign that cannot be supplied (M6a): cancelling paid orders and closing the campaign are two permissions, both
+// needed.
 const canCancelUnsupplied = computed(() => canManage.value && session.can('order.cancel_paid'))
 const campaign = ref<PreorderCampaign | null>(null)
 const product = ref<AdminProduct | null>(null)
@@ -35,7 +36,8 @@ async function startEditing() {
   editing.value = true
   errors.value = []
   notice.value = null
-  // Thêm biến thể mới vào đợt cần đọc sản phẩm; không có quyền xem sản phẩm thì chỉ sửa được biến thể đã có trong đợt.
+  // Adding variants needs to read the product; without product view permission only existing campaign variants can be
+  // edited.
   if (!product.value && campaign.value && canOpen('/admin/products')) {
     try {
       product.value = AdminProduct.parse(await session.adminFetch(`/api/admin/products/${campaign.value.product.id}`))
@@ -80,7 +82,7 @@ async function close() {
   }
 }
 
-/** Xem trước các đơn chờ hàng sẽ bị hủy; có giá trị thì đang mở khối xác nhận. */
+/** Preview of the waiting orders to be cancelled; when set, the confirm block is open. */
 const unsupplied = ref<UnsuppliedPreview | null>(null)
 const unsuppliedNote = ref('')
 

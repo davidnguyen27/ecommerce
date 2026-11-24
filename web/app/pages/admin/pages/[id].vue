@@ -9,7 +9,7 @@ const session = useAdminSession()
 
 const page = ref<ContentPageDetail | null>(null)
 const versions = ref<ContentPageVersionList['items']>([])
-/** Phiên bản cũ đang mở để đọc lại. */
+/** The old version opened for reading. */
 const viewing = ref<ContentPageVersion | null>(null)
 const draft = reactive({ title: '', body: '' })
 const error = ref<string | null>(null)
@@ -31,7 +31,7 @@ async function load() {
   versions.value = ContentPageVersionList.parse(await session.adminFetch(`/api/admin/pages/${id}/versions`)).items
 }
 
-/** Chạy một thao tác; xong thì hiện thông báo nó trả về, lỗi thì hiện thông báo từ API. */
+/** Runs an action; then shows its returned message, or the API message on error. */
 async function runWithNotice(action: () => Promise<string | null>) {
   error.value = null
   notice.value = null
@@ -52,7 +52,7 @@ function save() {
   })
 }
 
-// Xuất bản bản nháp đã lưu trên máy chủ, nên nút chỉ bấm được khi không còn thay đổi chưa lưu.
+// Publishing uses the draft saved on the server, so the button works only without unsaved changes.
 function publish() {
   return runWithNotice(async () => {
     const version = ContentPageVersion.parse(
@@ -186,7 +186,7 @@ await load()
               line-height: 1.7;
             "
           >
-            <!-- renderMarkdown đã thoát HTML trong nội dung -->
+            <!-- renderMarkdown already escaped HTML in the content -->
             <article class="markdown-preview" v-html="preview" />
           </div>
         </div>
@@ -212,7 +212,7 @@ await load()
               line-height: 1.7;
             "
           >
-            <!-- renderMarkdown đã thoát HTML trong nội dung -->
+            <!-- renderMarkdown already escaped HTML in the content -->
             <article v-html="viewingHtml" />
           </div>
         </div>

@@ -3,7 +3,7 @@ import { AdminChatConversation } from '@ecommerce/shared'
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'chatbot.manage' })
 
-// Một cuộc trò chuyện như khách thấy, kèm model đã trả lời, phiên bản prompt và lỗi của từng lượt (spec M8).
+// One conversation as the customer saw it, with the answering model, prompt version and each turn's error (spec M8).
 const session = useAdminSession()
 const route = useRoute()
 const conversation = ref<AdminChatConversation | null>(null)

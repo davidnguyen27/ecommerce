@@ -5,9 +5,9 @@ export type ShippingFormFields = Required<{ [K in keyof ShippingAddress]: string
 export type InvoiceFields = { [K in keyof InvoiceInfo]: string }
 
 /**
- * Thông tin nhận hàng dùng chung cho đặt mua và đặt trước: địa chỉ, ghi chú, hóa đơn công ty, ô đồng ý chính sách bảo
- * mật (chỉ khách vãng lai). Khách đã đăng nhập được điền sẵn địa chỉ lần đặt trước. Danh mục phường/xã nặng nên chỉ nạp
- * ở trình duyệt. Mọi thứ chỉ chạy sau khi mount: đây là dữ liệu cá nhân, trang chỉ có khung khi SSR.
+ * Shipping info shared by checkout and pre-order: address, note, company invoice, privacy consent box (guests only).
+ * Signed-in customers get their previous address prefilled. The ward list is heavy, so it loads only in the browser.
+ * Everything runs after mount: this is personal data, and SSR renders only the frame.
  */
 export function useShippingForm() {
   const form = ref<ShippingFormFields>({
@@ -20,11 +20,11 @@ export function useShippingForm() {
     note: '',
   })
   const invoice = ref<InvoiceFields>({ companyName: '', taxCode: '', address: '' })
-  // Phần hóa đơn thu gọn mặc định; mở ra khi server báo lỗi ở trường của nó.
+  // The invoice section is collapsed by default; it opens when the server reports an error on its fields.
   const invoiceOpen = ref(false)
   const acceptPrivacyPolicy = ref(false)
 
-  // Khách đã đăng nhập đồng ý chính sách bảo mật lúc đăng ký, nên ô đồng ý chỉ hiện cho khách vãng lai.
+  // Signed-in customers consented at sign-up, so the consent box shows only for guests.
   const session = useCustomerSession()
   const signedIn = ref<boolean | null>(null)
   onMounted(async () => {
@@ -32,7 +32,7 @@ export function useShippingForm() {
     if (signedIn.value) await fillLastAddress()
   })
 
-  /** Khách đã đăng nhập: điền sẵn địa chỉ lần đặt trước, chỉ khi khách chưa gõ gì vào form. */
+  /** Signed-in customers: prefill the previous address, only if they have not typed anything yet. */
   async function fillLastAddress() {
     try {
       const { address } = LastShippingAddress.parse(await session.accountFetch('/api/account/shipping-address'))
@@ -41,11 +41,11 @@ export function useShippingForm() {
       if (!address || !untouched) return
       const { wardCode, ...rest } = address
       Object.assign(form.value, rest)
-      // Đổi tỉnh/thành thì watcher xóa phường/xã; đợi watcher chạy xong rồi mới điền.
+      // Changing the province makes the watcher clear the ward; wait for it before filling.
       await nextTick()
       form.value.wardCode = wardCode
     } catch {
-      // Không điền được thì khách tự nhập như bình thường.
+      // If prefilling fails, the customer just types as usual.
     }
   }
 
@@ -59,14 +59,17 @@ export function useShippingForm() {
     () => (form.value.wardCode = ''),
   )
 
-  /** Địa chỉ, ghi chú và hóa đơn gửi API. Hóa đơn bỏ trống thì không gửi; điền dở thì gửi để server báo trường thiếu. */
+  /**
+   * Address, note and invoice sent to the API. An empty invoice is not sent; a partial one is, so the server reports
+   * gaps.
+   */
   function contactPayload() {
     const { note, ...address } = form.value
     const wantsInvoice = Object.values(invoice.value).some((value) => value.trim() !== '')
     return { address, note, ...(wantsInvoice && { invoice: { ...invoice.value } }) }
   }
 
-  /** Server báo lỗi ở trường hóa đơn thì mở phần hóa đơn để khách thấy. */
+  /** When the server reports an invoice field error, open the invoice section so the customer sees it. */
   function revealErrors(fieldErrors: Map<string, string>) {
     if ([...fieldErrors.keys()].some((path) => path.startsWith('invoice.'))) invoiceOpen.value = true
   }

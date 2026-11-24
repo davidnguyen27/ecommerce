@@ -2,9 +2,9 @@
 import { AdminSupportRequest, type FieldError, type WarrantyOutcome } from '@ecommerce/shared'
 
 /**
- * Khối bảo hành ở trang yêu cầu (spec M6b ticket 06): cảnh báo sản phẩm không có cam kết bảo hành, các mốc nhận hàng →
- * gửi hãng/sửa → trả lại khách, và kết quả. "Đổi mới" và "hoàn tiền" tạo yêu cầu nối tiếp nên hỏi xác nhận trước. Không
- * mốc nào đụng tới tồn. Thao tác xong emit yêu cầu mới do API trả.
+ * Warranty block on the request page (spec M6b ticket 06): a warning when the product has no warranty commitment, the
+ * received → sent/repaired → returned milestones, and the outcome. "Đổi mới" and "hoàn tiền" create a follow-up
+ * request, so they ask first. No milestone touches stock. Emits the new request the API returns.
  */
 const props = defineProps<{ request: AdminSupportRequest }>()
 const emit = defineEmits<{ update: [request: AdminSupportRequest] }>()
@@ -21,7 +21,7 @@ const open = computed(() => !isSupportClosed(props.request.status) && !w.value.o
 const back = reactive({ carrier: '', trackingNumber: '' })
 const outcome = reactive({ value: '' as WarrantyOutcome | '', note: '' })
 
-/** Kết quả chọn được ở mốc hiện tại: sửa xong cần đã trả lại khách; đổi mới, hoàn tiền cần đã nhận hàng. */
+/** Outcomes available at the current milestone: repaired needs returned; replace and refund need received. */
 const outcomes = computed(() =>
   (Object.keys(WARRANTY_OUTCOME_LABELS) as WarrantyOutcome[]).filter((o) =>
     o === 'repaired' ? !!w.value.returnedAt : o === 'rejected' ? true : !!w.value.receivedAt,
@@ -137,7 +137,7 @@ const decide = () => {
     </div>
 
     <template v-if="open && canHandle">
-      <!-- Mốc tiếp theo. -->
+      <!-- Next milestone. -->
       <div style="display: flex; gap: 8px; margin-bottom: 12px">
         <button
           v-if="!w.receivedAt"
@@ -184,7 +184,7 @@ const decide = () => {
         </button>
       </form>
 
-      <!-- Kết quả. -->
+      <!-- Outcome. -->
       <form data-testid="warranty-outcome" @submit.prevent="decide">
         <div class="form-group">
           <label class="form-label" for="warranty-outcome-select">Kết quả</label>

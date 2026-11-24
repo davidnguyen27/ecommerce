@@ -11,9 +11,9 @@ import {
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: ['support.handle', 'order.view'] })
 
 /*
- * Một yêu cầu hỗ trợ ở trang quản trị (spec M6b): chuỗi tin kể cả ghi chú nội bộ, người phụ trách, trạng thái. Người có
- * `support.handle` trả lời, ghi chú, đổi trạng thái, nhận việc; owner giao cho người khác. Phần riêng của từng loại
- * (trả, đổi, bảo hành) do các ticket sau thêm vào trang này.
+ * A support request in admin (spec M6b): the thread with internal notes, assignee, status. `support.handle` holders
+ * reply, note, change status and take it; the owner assigns to others. Type-specific parts (return, exchange,
+ * warranty) were added to this page by later tickets.
  */
 const session = useAdminSession()
 const route = useRoute()
@@ -59,7 +59,7 @@ async function send() {
     status: reply.status || undefined,
   })
   if (!ok) return
-  // Ảnh gắn vào tin vừa gửi (tin cuối là của chính nhân viên); chỉ khi có tin.
+  // Images attach to the message just sent (the last one, the staff member's own); only when there is a message.
   const own = hadMessage ? request.value!.messages.at(-1)!.id : null
   Object.assign(reply, { message: '', internal: false, status: '' })
   if (!own || images.value.length === 0) return
@@ -85,14 +85,14 @@ watch(request, (r) => (assignee.value = r?.assignee?.id ?? ''), { immediate: tru
 const assign = () => act('assign', { staffId: assignee.value || null })
 
 const closed = computed(() => (request.value ? isSupportClosed(request.value.status) : true))
-// Người nhận được giao: owner và bán hàng (có `support.handle`), tài khoản chưa khóa.
+// Possible assignees: owner and sales (with `support.handle`), unlocked accounts.
 const assignable = computed(() =>
   staff.value.filter((s) => !s.locked && s.roles.some((role) => role === 'owner' || role === 'sales')),
 )
 const authorOf = (m: AdminSupportRequest['messages'][number]) =>
   m.author === 'staff' ? (m.staff?.name ?? 'Nhân viên') : m.author === 'customer' ? 'Khách' : 'Hệ thống'
 
-// Yêu cầu hủy (ticket 03): mở form hủy đơn của M6a ngay tại đây; hủy xong thì yêu cầu tự đóng nên nạp lại.
+// Cancel requests (ticket 03): open the M6a cancel form right here; the request closes itself on cancel, so reload.
 const canCancelPaid = computed(() => session.can('order.cancel_paid'))
 const cancelOrder = ref<AdminOrder | null>(null)
 const cancelBlocked = ref<string | null>(null)
@@ -163,7 +163,7 @@ if (canAssign.value) {
           </div>
         </div>
 
-        <!-- Cuộc trò chuyện với chatbot trước khi khách xác nhận chuyển (M8). -->
+        <!-- The chatbot conversation before the customer confirmed the handoff (M8). -->
         <section
           v-if="request.chatTranscript"
           class="admin-panel"

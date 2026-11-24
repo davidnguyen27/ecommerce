@@ -1,7 +1,7 @@
 import { CustomerProfile, type ChangePasswordRequest, type RegisterRequest } from '@ecommerce/shared'
 
-// Phiên khách chỉ sống ở trình duyệt: cookie refresh chỉ gửi tới `/api/auth/refresh`, nên server Nuxt
-// không bao giờ biết khách là ai.
+// The customer session lives only in the browser: the refresh cookie is only sent to `/api/auth/refresh`, so the Nuxt
+// server never knows who the customer is.
 const tokens = createTokenSession('/api/auth')
 
 const login = (email: string, password: string) => tokens.start('/login', { email, password })
@@ -13,18 +13,18 @@ async function logout() {
   await navigateTo('/dang-nhap')
 }
 
-/** Gọi `/api/account/*` kèm access token; chưa có thì refresh trước, không được thì coi là chưa đăng nhập. */
+/** Calls `/api/account/*` with the access token; refreshes first if missing, and counts as signed out if that fails. */
 async function accountFetch(path: string, options?: Parameters<typeof tokens.authorizedFetch>[1]): Promise<unknown> {
   if (tokens.accessToken.value === null && !(await tokens.refresh())) throw new Error('Chưa đăng nhập')
   return tokens.authorizedFetch(path, options)
 }
 
-/** Khách đã đăng nhập chưa; chưa có access token thì thử refresh. Không ném lỗi. */
+/** Whether the customer is signed in; refreshes if there is no access token. Never throws. */
 async function signedIn(): Promise<boolean> {
   return tokens.accessToken.value !== null || tokens.refresh()
 }
 
-/** Gọi API mở cho cả khách vãng lai (ví dụ đặt mua): đã đăng nhập thì kèm access token, chưa thì gửi không kèm. */
+/** Calls APIs open to guests too (e.g. checkout): sends the access token when signed in, nothing otherwise. */
 async function optionalAuthFetch(path: string, options?: Parameters<typeof tokens.authorizedFetch>[1]) {
   return (await signedIn()) ? tokens.authorizedFetch(path, options) : $fetch(path, options)
 }
@@ -33,7 +33,7 @@ async function loadProfile(): Promise<CustomerProfile> {
   return CustomerProfile.parse(await accountFetch('/api/account/me'))
 }
 
-/** Đổi mật khẩu; mọi thiết bị khác bị đăng xuất, trình duyệt này nhận phiên mới. */
+/** Changes the password; every other device is signed out, this browser gets a new session. */
 async function changePassword(input: ChangePasswordRequest) {
   tokens.accept(await accountFetch('/api/account/password', { method: 'POST', headers: tokens.webClient, body: input }))
 }

@@ -3,7 +3,7 @@ import type { AdminProductDetail, FieldError } from '@ecommerce/shared'
 
 type Target = 'published' | 'archived' | 'draft'
 
-/** Trạng thái xuất bản và các nút vòng đời; lỗi chặn xuất bản do API trả, trang chuyển xuống qua `blockers`. */
+/** Publication status and lifecycle buttons; publish blockers come from the API, passed down via `blockers`. */
 defineProps<{ product: AdminProductDetail; blockers: FieldError[]; canEdit: boolean }>()
 const emit = defineEmits<{ changeStatus: [status: Target, message: string] }>()
 </script>

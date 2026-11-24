@@ -8,9 +8,9 @@ import {
 } from '@ecommerce/shared'
 
 /**
- * Form mở hoặc sửa đợt đặt trước. Biến thể lấy từ sản phẩm (khi người dùng xem được sản phẩm) cộng với biến thể đã có
- * trong đợt. Khi đợt đã có đơn thì khóa mức cọc, số ngày trả phần còn lại và việc bỏ biến thể đã có đơn; đợt đã đóng
- * thì khóa hạn đóng. Server vẫn kiểm lại mọi điều này.
+ * Form to open or edit a pre-order campaign. Variants come from the product (when the user can view it) plus those
+ * already in the campaign. With orders, deposit percent, remainder days and dropping ordered variants are locked; a
+ * closed campaign locks its closing time. The server rechecks all of it.
  */
 const props = defineProps<{
   product: AdminProduct | null
@@ -81,7 +81,7 @@ watch(
 )
 
 const errorAt = (path: string) => props.errors?.find((f) => f.path === path)?.message
-/** Lỗi theo dòng biến thể: server đánh số theo danh sách biến thể đã chọn, không theo bảng. */
+/** Errors per variant row: the server numbers them by the chosen variants list, not the table. */
 const rowError = (row: Row, field: 'variantId' | 'allocation') => {
   const index = rows.value.filter((r) => r.selected).indexOf(row)
   return index >= 0 ? errorAt(`variants.${index}.${field}`) : undefined
@@ -98,7 +98,7 @@ function submit() {
     supplyNote: form.supplyNote,
     variants,
     ...(!hasOrders.value && { depositPercent: form.depositPercent, remainderDays: form.remainderDays }),
-    // Ô giờ chỉ tới phút: không động vào thì không gửi, để server không coi là đổi hạn.
+    // The time field only goes to the minute: if untouched, do not send it, so the server does not see a change.
     ...(form.closesAt !== initialClosesAt && { closesAt: new Date(form.closesAt).toISOString() }),
   }
   emit('submit', body)
