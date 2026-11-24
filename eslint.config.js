@@ -32,17 +32,17 @@ export default tseslint.config(
     },
   },
   {
-    // Nuxt tự import các composable như useRuntimeConfig, defineNuxtConfig.
+    // Nuxt auto-imports composables like useRuntimeConfig, defineNuxtConfig.
     files: ['web/**/*.{ts,vue}'],
     rules: { 'no-undef': 'off' },
   },
   {
-    // Tên file trong pages/ và layouts/ là route; app.vue, error.vue là tên Nuxt.
+    // File names in pages/ and layouts/ are routes; app.vue, error.vue are Nuxt names.
     files: ['web/app/{pages,layouts}/**/*.vue', 'web/app/{app,error}.vue'],
     rules: { 'vue/multi-word-component-names': 'off' },
   },
   {
-    // Ô nhập nào cũng phải có nhãn đọc được bằng trình đọc màn hình: label bọc ngoài, label for/id, hoặc aria-label.
+    // Every input needs a screen-reader-readable label: a wrapping label, label for/id, or aria-label.
     files: ['web/**/*.vue'],
     plugins: { 'vuejs-accessibility': pluginVueA11y },
     rules: {

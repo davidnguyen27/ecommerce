@@ -1,17 +1,18 @@
-# Web bản demo trên Netlify (ADR 0011, docs/deploy.md). Trong dashboard Netlify: Package directory = `web`, Base
-# directory để trống (gốc repo), để pnpm thấy cả workspace. Đường dẫn ở đây tính từ gốc repo.
-# Biến môi trường đặt trong dashboard: NUXT_API_BASE (URL API trên Render, cho SSR), NUXT_PUBLIC_SITE_URL (URL site).
+# Demo web on Netlify (ADR 0011, docs/deploy.md). In the Netlify dashboard: Package directory = `web`, Base directory
+# empty (repo root), so pnpm sees the whole workspace. Paths here are relative to the repo root.
+# Env vars set in the dashboard: NUXT_API_BASE (API URL on Render, for SSR), NUXT_PUBLIC_SITE_URL (site URL).
 
 [build]
   command = "pnpm --filter @ecommerce/web... build"
   publish = "web/dist"
 
 [build.environment]
-  # Phiên bản Node lấy từ .nvmrc, pnpm từ `packageManager` của package.json gốc. Tài liệu Nuxt trên Netlify: pnpm cần hoist.
+  # Node version from .nvmrc, pnpm from the root package.json `packageManager`. Nuxt on Netlify docs: pnpm needs hoisting.
   PNPM_FLAGS = "--shamefully-hoist"
 
-# Trình duyệt gọi /api/... cùng origin như sau Caddy: cookie refresh (host-only, SameSite=Strict) vẫn chạy, không cần
-# CORS. Netlify chờ API tối đa 26 giây. Đổi host nếu Render cấp URL khác tên service trong render.yaml.
+# The browser calls /api/... same-origin as behind Caddy: the refresh cookie (host-only, SameSite=Strict) still works,
+# no CORS needed. Netlify waits up to 26 s for the API. Change the host if Render assigns a URL different from the
+# service name in render.yaml.
 [[redirects]]
   from = "/api/*"
   to = "https://atelier-demo-api.onrender.com/api/:splat"
