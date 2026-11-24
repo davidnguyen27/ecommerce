@@ -5,28 +5,29 @@ import { dateVN, vnd, voucherLines } from '../orders/format.ts'
 import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../orders/orders.ts'
 import { reserveStock } from '../stock/stock.ts'
 
-/** Phần hàng về của một biến thể giữ cho một dòng đơn đặt trước. */
+/** Part of a variant's arrived stock reserved for one pre-order line. */
 export type Allocation = {
   lineId: string
   orderId: string
   orderCode: number
   take: number
-  /** Sau phần này dòng được giữ đủ số lượng. */
+  /** After this part the line is fully reserved. */
   fills: boolean
 }
 
-/** Kết quả chia hàng về của một biến thể: phần giữ cho đơn đặt trước, theo thứ tự cọc, và phần dư thành hàng sẵn. */
+/**
+ * Allocation of one variant's arrival: parts reserved for pre-orders in deposit order, and the rest as regular stock.
+ */
 export type ArrivalPlan = { variantId: string; received: number; allocations: Allocation[]; toStock: number }
 
 const DAY = 24 * 60 * 60_000
 
 /**
- * Lập kế hoạch chia hàng về (ADR 0013): với mỗi biến thể nhập về, lần lượt các dòng đơn đặt trước đã cọc còn thiếu hàng,
- * theo lúc cọc rồi mã đơn, mỗi dòng nhận tới đủ phần còn thiếu; hết hàng thì dừng, còn dư thì thành hàng sẵn. Đơn chờ cọc
- * không được chia. Mọi phiếu nhập đều chia, không cần gắn với đợt.
- *
- * `lock` dùng trong transaction ghi phiếu nhập, sau khi `changeStock` đã khóa các biến thể: khóa thêm các dòng đơn được
- * chia `FOR UPDATE`. Không `lock` thì là xem trước, không ghi gì và có thể lệch nếu có đơn cọc xen vào.
+ * Plans the allocation of arrived stock (ADR 0013): for each received variant, deposited pre-order lines still short,
+ * by deposit time then order code, each take up to what they lack; it stops when stock runs out, and any rest becomes
+ * regular stock. Pending-deposit orders get nothing. Every receipt allocates, campaign-linked or not.
+ * `lock` is for the receipt transaction, after `changeStock` locked the variants: also locks the allocated order lines.
+ * Without `lock` it is a preview: writes nothing and may drift if a deposit lands meanwhile.
  */
 export async function planArrivals(
   db: DbClient,
@@ -65,15 +66,16 @@ export async function planArrivals(
 }
 
 /**
- * Hàng được chia từ đâu, ghi vào sự kiện đơn: một phiếu nhập, hoặc phần hàng đã giữ của một đơn đặt trước vừa bị hủy
- * (M6a).
+ * Where allocated stock came from, recorded in the order event: a receipt, or the stock held by a just-cancelled
+ * pre-order (M6a).
  */
 export type ArrivalSource = { receiptId: string } | { fromOrderCode: number }
 
 /**
- * Áp kế hoạch chia hàng trong transaction ghi phiếu nhập, hoặc khi hủy một đơn đặt trước đang giữ hàng: cộng số đang
- * giữ của dòng đơn và của biến thể (hàng đã có trong tồn và không còn giữ cho ai nên vẫn `reserved <= on_hand`). Đơn nào mọi dòng đã được giữ đủ thì thành hàng đã về: có lúc về, hạn trả phần
- * còn lại (`remainder_days` ngày sau), sự kiện đơn và email "Hàng đã về". Trả mã các đơn vừa về đủ.
+ * Applies an allocation plan in the receipt transaction, or when cancelling a pre-order holding stock: adds to the
+ * line's and the variant's reserved counts (the stock is on hand and held for no one, so `reserved <= on_hand` holds).
+ * Orders with every line fully reserved become arrived: arrival time, remaining-balance deadline (`remainder_days`
+ * later), an order event and the "Hàng đã về" email. Returns the codes of orders that just arrived.
  */
 export async function applyArrivals(
   tx: Prisma.TransactionClient,
@@ -86,7 +88,8 @@ export async function applyArrivals(
   for (const plan of plans) {
     const reserved = plan.allocations.reduce((sum, a) => sum + a.take, 0)
     if (reserved === 0) continue
-    // Qua module kho, cùng đường khóa với `changeStock`. Tồn vừa được cộng đủ số hàng về, phần chia không vượt số đó.
+    // Through the stock module, on the same lock path as `changeStock`. Stock was just increased by the arrival, so
+    // allocations never exceed it.
     const reservation = await reserveStock(tx, [{ variantId: plan.variantId, quantity: reserved }])
     if (!reservation.ok) throw new Error(`Không giữ được ${reserved} cho đơn đặt trước của biến thể ${plan.variantId}`)
     for (const allocation of plan.allocations) {
@@ -126,7 +129,7 @@ export async function applyArrivals(
 
 type OrderWithLines = Prisma.OrderGetPayload<{ include: { lines: true } }>
 
-/** Email "Hàng đã về": phần còn lại phải trả, hạn trả, link trang đơn (có token mới). Bản nháp chờ chủ doanh nghiệp duyệt. */
+/** "Hàng đã về" email: remaining balance, deadline, order page link (new token). Draft awaiting owner approval. */
 async function queueArrivedEmail(
   tx: DbClient,
   { emails, siteUrl }: { emails: EmailQueue; siteUrl: string },

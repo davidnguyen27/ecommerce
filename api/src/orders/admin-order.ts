@@ -7,8 +7,8 @@ import { refundedViaGateway, summarizeRefunds } from '../payments/refunds.ts'
 import { ORDER_VIEW_INCLUDE, orderNotFound, parseOrderCode, toPublicOrder } from './orders.ts'
 
 /**
- * Chi tiết đơn cho trang quản trị theo mã (chuỗi từ URL). Route xử lý đơn (chuẩn bị, bàn giao, đã giao…) trả lại đúng
- * dạng này sau khi đổi trạng thái, để trang chi tiết thay đơn đang hiện bằng response.
+ * Admin order detail by code (string from the URL). Order action routes (prepare, hand over, deliver…) return this
+ * same shape after a change, so the detail page swaps in the response.
  */
 export async function loadAdminOrder(
   db: DbClient,
@@ -45,7 +45,7 @@ export async function loadAdminOrder(
   })
   if (!order) throw orderNotFound()
 
-  // ADR 0014: đã nhận tính từ giao dịch, đã hoàn và đang hoàn tính từ các khoản hoàn; trạng thái thanh toán không đổi.
+  // ADR 0014: received comes from transactions, refunded and refunding from refunds; payment status is unchanged.
   const totals = summarizeRefunds(
     order.paymentTransactions.reduce((sum, t) => sum + t.amount, 0n),
     order.refunds,
@@ -62,7 +62,7 @@ export async function loadAdminOrder(
       return { type: 'customer', id: event.customer?.id ?? null, email: event.customer?.email ?? null }
     return { type: 'system' }
   }
-  // Chỉ sự kiện đơn: thao tác nào của nhân viên cũng ghi một sự kiện kèm người làm, audit của nó xem ở Nhật ký kiểm toán.
+  // Order events only: every staff action records an event with its actor; its audit is in the audit log.
   const history: OrderHistoryEntry[] = order.events.map((event) => ({
     action: event.kind,
     actor: eventActor(event),

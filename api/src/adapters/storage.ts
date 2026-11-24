@@ -3,8 +3,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import type { Logger } from 'pino'
 
 /**
- * `public`: ảnh sản phẩm, logo thương hiệu, phục vụ qua CDN.
- * `private`: chứng từ nguồn hàng, chỉ mở được qua URL ký có hạn.
+ * `public`: product images and brand logos, served via CDN.
+ * `private`: supplier documents, opened only via expiring signed URLs.
  */
 export type Bucket = 'public' | 'private'
 
@@ -15,12 +15,12 @@ export type PutObject = {
   contentType: string
 }
 
-/** Lưu trữ file. Production dùng R2; test dùng bản trong bộ nhớ. */
+/** File storage. Production uses R2; tests use the in-memory one. */
 export interface Storage {
   put(object: PutObject): Promise<void>
-  /** URL công khai qua CDN của một file trong bucket `public`. */
+  /** Public CDN URL of a file in the `public` bucket. */
   publicUrl(key: string): string
-  /** URL ký có hạn tới một file trong bucket `private`; bucket `public` không cần URL ký. */
+  /** Expiring signed URL to a file in the `private` bucket; `public` needs none. */
   signedUrl(key: string, expiresInSeconds: number): Promise<string>
   delete(bucket: Bucket, key: string): Promise<void>
 }
@@ -47,16 +47,16 @@ export class InMemoryStorage implements Storage {
 }
 
 export type R2Config = {
-  /** Endpoint S3 của tài khoản, `https://<account_id>.r2.cloudflarestorage.com`. */
+  /** The account's S3 endpoint, `https://<account_id>.r2.cloudflarestorage.com`. */
   endpoint: string
   accessKeyId: string
   secretAccessKey: string
   buckets: Record<Bucket, string>
-  /** Gốc URL CDN (custom domain) gắn với bucket public, ví dụ `https://cdn.shop.vn`. */
+  /** CDN base URL (custom domain) of the public bucket, e.g. `https://cdn.shop.vn`. */
   publicBaseUrl: string
 }
 
-/** Cloudflare R2 qua API tương thích S3. */
+/** Cloudflare R2 via its S3-compatible API. */
 export class R2Storage implements Storage {
   private readonly client: S3Client
 
@@ -65,7 +65,7 @@ export class R2Storage implements Storage {
       region: 'auto',
       endpoint: config.endpoint,
       credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
-      // Bucket nằm trong path, không trong tên miền: R2 nhận cả hai kiểu, MinIO ở local chỉ nhận kiểu này.
+      // Bucket in the path, not the host: R2 accepts both, local MinIO only this one.
       forcePathStyle: true,
     })
   }
@@ -77,7 +77,7 @@ export class R2Storage implements Storage {
         Key: key,
         Body: body,
         ContentType: contentType,
-        // Key public không bao giờ bị ghi đè (mỗi ảnh một tiền tố mới), nên CDN giữ mãi được.
+        // Public keys are never overwritten (new prefix per image), so the CDN can cache forever.
         ...(bucket === 'public' && { CacheControl: 'public, max-age=31536000, immutable' }),
       }),
     )
@@ -98,8 +98,8 @@ export class R2Storage implements Storage {
 }
 
 /**
- * Chọn storage theo `STORAGE_PROVIDER`: `r2` (cần `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
- * `R2_PUBLIC_BUCKET`, `R2_PRIVATE_BUCKET`, `MEDIA_PUBLIC_URL`) hoặc `memory` cho local (mất khi khởi động lại).
+ * Picks storage from `STORAGE_PROVIDER`: `r2` (needs `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+ * `R2_PUBLIC_BUCKET`, `R2_PRIVATE_BUCKET`, `MEDIA_PUBLIC_URL`) or `memory` for local (lost on restart).
  */
 export function storageFromEnv(env: NodeJS.ProcessEnv, logger: Logger): Storage {
   switch (env.STORAGE_PROVIDER) {

@@ -7,7 +7,7 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
 
-/** Chỉ có endpoint đọc: audit log không sửa hay xóa được qua API. */
+/** Read-only: the audit log cannot be edited or deleted through the API. */
 export function adminAuditRoutes(prisma: Db) {
   return Router()
     .use(requirePermission('audit.view'))

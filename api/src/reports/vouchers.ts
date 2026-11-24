@@ -17,8 +17,8 @@ type Row = {
 }
 
 /**
- * Hiệu quả mã giảm giá (spec M7): đơn có mã, tạo trong kỳ, chưa hủy. Kỳ theo ngày tạo đơn vì câu hỏi là mã kéo được
- * bao nhiêu đơn, không phải doanh thu đã giao.
+ * Voucher performance (spec M7): uncancelled orders with a voucher created in the period. By order creation date,
+ * since the question is how many orders a voucher brought in, not delivered revenue.
  */
 export async function voucherReport(db: DbClient, period: Period): Promise<VoucherReport> {
   const rows = await db.$queryRaw<Row[]>`

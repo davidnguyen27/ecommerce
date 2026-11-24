@@ -7,7 +7,7 @@ export type Mail = {
   html?: string
 }
 
-/** Gửi email. Production dùng nhà cung cấp transactional; test đọc thư từ bản trong bộ nhớ. */
+/** Sends email. Production uses a transactional provider; tests read from the in-memory one. */
 export interface Mailer {
   send(mail: Mail): Promise<void>
 }
@@ -20,7 +20,7 @@ export class InMemoryMailer implements Mailer {
   }
 }
 
-/** Chỉ cho môi trường local: ghi thư ra log thay vì gửi, để mở được link xác minh khi phát triển. */
+/** Local only: logs mail instead of sending, so verification links can be opened during development. */
 export class LogMailer implements Mailer {
   constructor(private readonly logger: Logger) {}
 
@@ -29,7 +29,7 @@ export class LogMailer implements Mailer {
   }
 }
 
-/** Gửi qua API của Resend (https://resend.com/docs/api-reference/emails/send-email). */
+/** Sends via the Resend API (https://resend.com/docs/api-reference/emails/send-email). */
 export class ResendMailer implements Mailer {
   constructor(
     private readonly apiKey: string,
@@ -43,12 +43,12 @@ export class ResendMailer implements Mailer {
       body: JSON.stringify({ from: this.from, to: [mail.to], subject: mail.subject, text: mail.text, html: mail.html }),
       signal: AbortSignal.timeout(15_000),
     })
-    // Ném lỗi để job gửi email được thử lại.
+    // Throw so the email job is retried.
     if (!res.ok) throw new Error(`Resend trả ${res.status}: ${await res.text()}`)
   }
 }
 
-/** Chọn mailer theo `MAIL_PROVIDER`: `resend` (cần `RESEND_API_KEY`, `MAIL_FROM`) hoặc `log` cho local. */
+/** Picks the mailer from `MAIL_PROVIDER`: `resend` (needs `RESEND_API_KEY`, `MAIL_FROM`) or `log` for local. */
 export function mailerFromEnv(env: NodeJS.ProcessEnv, logger: Logger): Mailer {
   switch (env.MAIL_PROVIDER) {
     case 'resend': {

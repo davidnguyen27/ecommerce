@@ -5,8 +5,9 @@ import { listPublishedPages } from '../content/pages.ts'
 import type { Db } from '../db.ts'
 
 /**
- * Nội dung khách mở được, để website dựng sitemap.xml. Đọc mỗi lần gọi nên đổi ngay khi xuất bản hoặc lưu trữ.
- * Danh mục, thương hiệu ẩn thì 404 nên không có; sản phẩm chỉ phụ thuộc trạng thái của chính nó (GLOSSARY "Ẩn").
+ * What customers can open, for the website sitemap.xml. Read on each call, so it changes as soon as something is
+ * published or archived. Hidden categories and brands are 404 and absent; products depend only on their own status
+ * (GLOSSARY "Ẩn").
  */
 export function publicSitemapRoutes(prisma: Db) {
   return Router().get('/', async (_req, res) => {

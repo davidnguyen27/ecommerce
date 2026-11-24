@@ -53,7 +53,7 @@ const requestCode = (code: string) => {
   return Number(code)
 }
 
-/** Cuộc trò chuyện với chatbot đã chuyển thành yêu cầu (M8); chỉ người có `support.handle` đọc được qua yêu cầu. */
+/** Chatbot conversation turned into a request (M8); readable through the request only with `support.handle`. */
 async function chatTranscript(prisma: Db, requestId: string) {
   const conversation = await prisma.chatConversation.findUnique({
     where: { supportRequestId: requestId },
@@ -63,13 +63,13 @@ async function chatTranscript(prisma: Db, requestId: string) {
 }
 
 /**
- * Yêu cầu hỗ trợ ở trang quản trị (spec M6b), mount tại `/support-requests`. Xem cần `support.handle` hoặc
- * `order.view`; trả lời, ghi chú, đổi trạng thái, nhận việc, tạo hộ cần `support.handle`; giao cho người khác chỉ owner
- * (`staff.manage`). Mọi thao tác ghi đi qua `audited()` và trả lại chi tiết yêu cầu.
+ * Admin support requests (spec M6b), mounted at `/support-requests`. Viewing needs `support.handle` or `order.view`;
+ * reply, note, status, take and create-on-behalf need `support.handle`; assigning to others is owner-only
+ * (`staff.manage`). Every write goes through `audited()` and returns the request detail.
  */
 export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerMail) {
-  // Bản chép chatbot là lời khách nói với chatbot, như tin nhắn với nhân viên chăm sóc: chỉ `support.handle` đọc (spec
-  // M8). Kho, kế toán (`order.view`) mở yêu cầu vẫn không thấy.
+  // The chatbot transcript is the customer talking to the chatbot, like messages with support: only `support.handle`
+  // reads it (spec M8). Warehouse and accounting (`order.view`) opening the request do not see it.
   const load = async (code: number, req: Request) => {
     const request = await prisma.supportRequest.findUnique({ where: { code }, include: SUPPORT_INCLUDE })
     if (!request) throw notFound()
@@ -109,7 +109,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
           prisma.supportRequest.findMany({
             where,
             include: SUPPORT_INCLUDE,
-            // Việc cũ trước: khách chờ lâu nhất được xử lý trước.
+            // Oldest first: the customer waiting longest is served first.
             orderBy: [{ createdAt: 'asc' }, { code: 'asc' }],
             ...pageWindow(query),
           }),
@@ -123,7 +123,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         }
         res.json(body)
       })
-      // Biến thể đổi được của từng dòng một đơn, cho trang tạo hộ yêu cầu đổi.
+      // Exchangeable variants per line of one order, for the create-on-behalf exchange page.
       .get('/exchange-options', requirePermission('support.handle'), async (req, res) => {
         const orderCode = typeof req.query.orderCode === 'string' ? Number(req.query.orderCode) : NaN
         const order = Number.isInteger(orderCode)
@@ -181,7 +181,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         await audited(prisma, req, (tx, audit) => claimSupportRequest(tx, audit, code, staffId))
         res.json(await load(code, req))
       })
-      // Ảnh gắn vào tin của chính nhân viên (spec M6b ticket 02).
+      // Images attach to the staff member's own message (spec M6b ticket 02).
       .post(
         '/:code/messages/:messageId/attachments',
         requirePermission('support.handle'),
@@ -215,7 +215,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
           res.status(201).json(await load(code, req))
         },
       )
-      // Trả hàng (ticket 04): chấp nhận/từ chối, kho nhận hàng về, đề xuất hoàn.
+      // Returns (ticket 04): accept/reject, warehouse receiving, refund proposal.
       .post('/:code/decide', requirePermission('support.handle'), async (req, res) => {
         const input = parse(DecideSupportRequest, req.body)
         const code = requestCode(String(req.params.code))
@@ -230,7 +230,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         await audited(prisma, req, (tx, audit) => receiveSupportReturn(tx, audit, code, staffId, input))
         res.json(await load(code, req))
       })
-      // Đổi hàng: kho bàn giao biến thể mới sau khi đã nhận hàng cũ (ADR 0015).
+      // Exchanges: the warehouse hands over the new variant after receiving the old one (ADR 0015).
       .post('/:code/exchange-ship', requirePermission('order.fulfill'), async (req, res) => {
         const input = parse(ShipExchangeRequest, req.body)
         const code = requestCode(String(req.params.code))
@@ -238,7 +238,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         await audited(prisma, req, (tx, audit) => shipExchange(tx, mail, audit, code, staffId, input))
         res.json(await load(code, req))
       })
-      // Bảo hành: mốc và kết quả (spec M6b ticket 06). Không mốc nào đụng tới tồn.
+      // Warranty: milestones and outcome (spec M6b ticket 06). No milestone touches stock.
       .post('/:code/warranty-milestone', requirePermission('support.handle'), async (req, res) => {
         const input = parse(RecordWarrantyMilestone, req.body)
         const code = requestCode(String(req.params.code))

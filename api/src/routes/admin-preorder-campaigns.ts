@@ -42,8 +42,8 @@ const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, mess
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy đợt đặt trước')
 
 /**
- * Biến thể thêm vào đợt phải thuộc sản phẩm của đợt và đang bán. Biến thể đã có trong đợt từ trước thì không kiểm lại:
- * ngừng bán sau khi mở đợt chỉ làm biến thể đó ngừng nhận đặt (ticket 03).
+ * Variants added to a campaign must belong to its product and be on sale. Variants already in the campaign are not
+ * rechecked: discontinuing one after opening only stops its pre-orders (ticket 03).
  */
 async function checkNewVariants(
   db: DbClient,
@@ -73,8 +73,8 @@ const mustBeFuture = (closesAt: string, now: Date) => {
 }
 
 /**
- * Đợt đặt trước, mount tại `/preorder-campaigns`. Xem cần `order.view`; mở, sửa, đóng cần `preorder.manage`.
- * Không có endpoint xóa: đợt đã mở là lời hẹn với khách, chỉ đóng được.
+ * Pre-order campaigns, mounted at `/preorder-campaigns`. Viewing needs `order.view`; open, edit, close need
+ * `preorder.manage`. No delete: an opened campaign is a promise to customers and can only be closed.
  */
 export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQueue; siteUrl: string }) {
   return (
@@ -120,8 +120,8 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
         }
         res.json(body)
       })
-      // Trước `/:id`: "Đặt trước cần xử lý" (ticket 10). Đơn quá hạn trả phần còn lại, và đợt gặp sự cố nhập hàng mà còn
-      // đơn đã cọc chưa trả đủ.
+      // Before `/:id`: "Đặt trước cần xử lý" (ticket 10). Orders with an overdue remaining balance, and campaigns with
+      // a supply problem that still have deposited orders not fully paid.
       .get('/attention', requirePermission('order.view'), async (_req, res) => {
         const [overdue, issues] = await Promise.all([
           prisma.order.findMany({
@@ -130,7 +130,8 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
             orderBy: [{ remainderDueAt: 'asc' }, { code: 'asc' }],
           }),
           prisma.preorderCampaign.findMany({
-            // Mọi đơn đã cọc mà chưa trả đủ, kể cả đơn đã về hàng: khách của đợt gặp sự cố đều cần được liên hệ.
+            // Every deposited order not fully paid, arrived ones too: all customers of a troubled campaign need
+            // contacting.
             where: { supplyStatus: 'issue', orders: { some: DEPOSITED_PREORDER } },
             include: {
               product: { select: { name: true } },
@@ -170,7 +171,7 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
         mustBeFuture(input.closesAt, now)
 
         const id = await audited(prisma, req, async (tx, audit) => {
-          // Khóa sản phẩm: hai người cùng mở đợt cho một sản phẩm thì người sau thấy đợt của người trước.
+          // Lock the product: of two people opening a campaign for one product, the second sees the first's campaign.
           const [product] = await tx.$queryRaw<{ status: string }[]>`
           SELECT "status" FROM "product" WHERE "id" = ${input.productId}::uuid FOR UPDATE`
           if (!product) throw invalidField('productId', 'Không tìm thấy sản phẩm')
@@ -213,7 +214,8 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
         const now = new Date()
 
         await audited(prisma, req, async (tx, audit) => {
-          // Khóa đợt rồi các dòng suất, theo thứ tự biến thể: đặt trước (ticket 04) khóa dòng suất khi kiểm còn suất.
+          // Lock the campaign, then its allocation rows in variant order: pre-ordering (ticket 04) locks allocation
+          // rows too.
           const [locked] = await tx.$queryRaw<{ id: string }[]>`
           SELECT "id" FROM "preorder_campaign" WHERE "id" = ${id}::uuid FOR UPDATE`
           if (!locked) throw notFound()
@@ -230,7 +232,7 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
           const before: Record<string, Prisma.InputJsonValue> = {}
           const after: Record<string, Prisma.InputJsonValue> = {}
           const data: Prisma.PreorderCampaignUpdateInput = {}
-          /** Ghi nhận một trường đổi vào before/after; trả `false` khi không gửi hoặc giữ nguyên giá trị. */
+          /** Records a changed field in before/after; `false` when not sent or unchanged. */
           const change = (key: string, from: Prisma.InputJsonValue, to: Prisma.InputJsonValue | undefined) => {
             if (to === undefined || JSON.stringify(from) === JSON.stringify(to)) return false
             before[key] = from
@@ -256,7 +258,7 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
             data.deliveryTo = new Date(deliveryTo)
           const closesAt = input.closesAt && new Date(input.closesAt).toISOString()
           if (change('closesAt', campaign.closesAt.toISOString(), closesAt)) {
-            // Đổi hạn của đợt đã đóng là mở lại đợt, ngoài phạm vi M4.
+            // Changing the closing time of a closed campaign would reopen it, out of M4 scope.
             if (!isCampaignOpen(campaign, now)) throw conflict('Đợt đã đóng, không đổi được hạn đóng')
             mustBeFuture(input.closesAt!, now)
             data.closesAt = new Date(input.closesAt!)
@@ -307,11 +309,12 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
             }
           }
 
-          // Không đổi gì thì không ghi gì, kể cả audit.
+          // Nothing changed: write nothing, audit included.
           if (Object.keys(after).length === 0) return
           await tx.preorderCampaign.update({ where: { id }, data })
           for (const write of variantWrites) await write()
-          // Đổi thời gian giao dự kiến thì báo khách đã cọc chưa về hàng; các thay đổi khác không gửi thư (ticket 09).
+          // A delivery change notifies deposited customers whose stock has not arrived; other changes send no email
+          // (ticket 09).
           const notified =
             'deliveryFrom' in after || 'deliveryTo' in after
               ? await notifyDeliveryChange(tx, mail, id, {
@@ -338,7 +341,7 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
           SELECT "closed_at" AS "closedAt", "closes_at" AS "closesAt"
           FROM "preorder_campaign" WHERE "id" = ${id}::uuid FOR UPDATE`
           if (!campaign) throw notFound()
-          // Đã đóng (tay hay tới hạn) thì không làm gì.
+          // Already closed (by hand or by time): do nothing.
           if (!isCampaignOpen(campaign)) return
           const closedAt = new Date()
           await tx.preorderCampaign.update({ where: { id }, data: { closedAt } })
@@ -357,7 +360,7 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: { emails: EmailQue
         const body: UnsuppliedPreview = await previewUnsupplied(prisma, id)
         res.json(body)
       })
-      // Hủy đơn đã nhận tiền và đóng đợt là hai quyền khác nhau: cần cả hai.
+      // Cancelling paid orders and closing the campaign are separate permissions: both are needed.
       .post(
         '/:id/cancel-unsupplied',
         requirePermission('order.cancel_paid'),

@@ -10,12 +10,12 @@ import {
 import type { Db } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 
-/** Một bộ lọc thuộc tính: sản phẩm khớp khi có ít nhất một trong các giá trị. */
+/** One attribute filter: a product matches with at least one of the values. */
 type AttributeFilter = { definition: AttributeDefinition; values: string[] }
 
 export type SearchCriteria = {
   text?: string
-  /** Danh mục và mọi danh mục con; rỗng là không có sản phẩm nào. */
+  /** A category and all its descendants; empty means no products. */
   categoryIds?: string[]
   brandSlug?: string
   productType?: ProductType
@@ -24,15 +24,15 @@ export type SearchCriteria = {
   attributes: AttributeFilter[]
 }
 
-/** Bộ lọc được bỏ qua khi đếm facet của chính nó, để khách thấy các lựa chọn khác. */
+/** A filter is skipped when counting its own facet, so customers still see the other options. */
 type Except = { attribute?: string; price?: boolean; productType?: boolean }
 
-/** Tiền tố SKU ngắn hơn mức này thì chỉ khớp chính xác, để từ khóa như "da" không kéo mọi SKU bắt đầu bằng DA lên đầu. */
+/** SKU prefixes shorter than this match exactly only, so "da" does not pull every DA… SKU to the top. */
 const SKU_PREFIX_MIN = 3
 
 const FROM = Prisma.sql`FROM "product_search" s JOIN "product_version" v ON v."id" = s."version_id"`
 
-/** Lọc Nam hoặc Nữ thì gồm cả Unisex (ADR 0004). */
+/** Filtering Nam or Nữ includes Unisex (ADR 0004). */
 function filterValues({ definition, values }: AttributeFilter) {
   if (definition.key !== GENDER_KEY) return values
   return values.some((v) => v !== GENDER_UNISEX) ? [...new Set([...values, GENDER_UNISEX])] : values
@@ -48,7 +48,7 @@ function skuPatterns(text: string) {
   return { exact: `% ${sku} %`, prefix: sku.length >= SKU_PREFIX_MIN ? `% ${sku}%` : `% ${sku} %` }
 }
 
-/** Điều kiện trên một biến thể đang bán (`x`, phần tử của `snapshot.variants`): giá và thuộc tính cấp biến thể. */
+/** Condition on one variant on sale (`x`, an element of `snapshot.variants`): price and variant attributes. */
 function variantConditions(c: SearchCriteria, except: Except) {
   const conditions: Prisma.Sql[] = []
   if (!except.price && c.minPrice !== undefined) conditions.push(Prisma.sql`(x->>'price')::bigint >= ${c.minPrice}`)
@@ -83,7 +83,7 @@ function conditions(c: SearchCriteria, except: Except = {}) {
   }
   const variant = variantConditions(c, except)
   if (variant.length) {
-    // Giá và thuộc tính cấp biến thể phải khớp trên cùng một biến thể.
+    // Price and variant attributes must match on the same variant.
     where.push(Prisma.sql`EXISTS (
       SELECT 1 FROM jsonb_array_elements(v."snapshot"->'variants') x WHERE ${Prisma.join(variant, ' AND ')}
     )`)
@@ -100,7 +100,7 @@ function orderBy(c: SearchCriteria, sort: ProductSort | undefined) {
     const { exact, prefix } = skuPatterns(c.text)
     order.push(Prisma.sql`CASE WHEN s."skus" LIKE ${exact} THEN 2 WHEN s."skus" LIKE ${prefix} THEN 1 ELSE 0 END DESC`)
   }
-  // Còn hàng trước hết hàng, đọc tồn trừ số đang giữ của các biến thể trong phiên bản đang xuất bản (ADR 0006, 0007).
+  // In stock first, from on-hand minus reserved of the live version's variants (ADR 0006, 0007).
   order.push(Prisma.sql`EXISTS (
     SELECT 1 FROM jsonb_array_elements(v."snapshot"->'variants') x
     JOIN "product_variant" pv ON pv."id" = (x->>'id')::uuid
@@ -118,7 +118,7 @@ function orderBy(c: SearchCriteria, sort: ProductSort | undefined) {
   return Prisma.join(order, ', ')
 }
 
-/** Một trang id phiên bản đang xuất bản khớp điều kiện, theo thứ tự hiển thị, kèm tổng số. */
+/** One page of matching live version ids in display order, with the total. */
 export async function searchPage(
   db: Db,
   c: SearchCriteria,
@@ -136,7 +136,7 @@ export async function searchPage(
   return { versionIds: rows.map((r) => r.id), total: count!.total }
 }
 
-/** Số sản phẩm theo từng giá trị của một thuộc tính, khi giữ mọi bộ lọc trừ chính nó. */
+/** Product count per value of one attribute, keeping every filter except its own. */
 async function attributeFacet(db: Db, c: SearchCriteria, definition: AttributeDefinition): Promise<AttributeFacet> {
   const except = { attribute: definition.key }
   const where = conditions(c, except)
@@ -162,7 +162,7 @@ async function attributeFacet(db: Db, c: SearchCriteria, definition: AttributeDe
 
 const collator = new Intl.Collator('vi', { numeric: true })
 
-/** Giá trị enum theo thứ tự trong schema; còn lại theo chữ, số so theo giá trị (size 9 trước 10). */
+/** Enum values in schema order; others alphabetically, numbers by value (size 9 before 10). */
 function sortValues(definition: AttributeDefinition, rows: { value: string; count: number }[]) {
   const options = 'options' in definition ? definition.options : []
   const rank = (value: string) => (options.includes(value) ? options.indexOf(value) : options.length)
@@ -171,7 +171,7 @@ function sortValues(definition: AttributeDefinition, rows: { value: string; coun
     .sort((a, b) => rank(a.value) - rank(b.value) || collator.compare(a.value, b.value))
 }
 
-/** Facets của kết quả: nhóm hàng, các thuộc tính lọc được, khoảng giá. */
+/** Result facets: product types, filterable attributes, price range. */
 export async function searchFacets(db: Db, c: SearchCriteria, definitions: AttributeDefinition[]) {
   const [types, price, attributes] = await Promise.all([
     db.$queryRaw<{ productType: ProductType; count: number }[]>`

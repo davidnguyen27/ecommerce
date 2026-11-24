@@ -1,11 +1,11 @@
 import { Prisma } from '../generated/prisma/client.ts'
 import { inPeriod, type Period } from './period.ts'
 
-// Đoạn SQL dùng chung của các báo cáo.
+// SQL fragments shared by reports.
 
 /**
- * CTE `"root"` (`id`, `origin`): mỗi khoản hoàn kèm nguồn của khoản gốc đầu chuỗi tạo lại. Khoản `retry` mang nguồn của
- * khoản nó thay, để báo cáo chỉ chia theo hủy, đối soát, trả hàng.
+ * CTE `"root"` (`id`, `origin`): each refund with the origin of the first refund in its retry chain. A `retry` refund
+ * carries the origin of the one it replaced, so reports split only by cancel, reconciliation and return.
  */
 export const REFUND_ROOTS = Prisma.sql`
   WITH RECURSIVE "root" AS (
@@ -15,8 +15,8 @@ export const REFUND_ROOTS = Prisma.sql`
   )`
 
 /**
- * Điều kiện "đơn giao tới khách trong kỳ" (ADR 0016) trên sự kiện đơn `e` và đơn `o`: đơn hoàn tất có sự kiện
- * `delivered` trong kỳ; ngày giao là lúc ghi sự kiện đó.
+ * Condition "order delivered in the period" (ADR 0016) on order event `e` and order `o`: a completed order with a
+ * `delivered` event in the period; that event's time is the delivery date.
  */
 export const deliveredInPeriod = (period: Period) =>
   Prisma.sql`e."kind" = 'delivered' AND o."status" = 'completed' AND ${inPeriod(Prisma.sql`e."created_at"`, period)}`

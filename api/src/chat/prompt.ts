@@ -1,14 +1,15 @@
 import type { LlmMessage } from '../adapters/llm.ts'
 import { looksEnglish } from './intent.ts'
 
-// System prompt của chatbot (spec M8 "Vòng lặp gọi công cụ"). Chỉ import kiểu và `intent.ts` (không phụ thuộc gì): `scripts/chatbot-check.ts`
-// import file này chạy thẳng bằng node, để kiểm đúng prompt đang dùng.
+// Chatbot system prompt (spec M8 "Vòng lặp gọi công cụ"). Imports only types and `intent.ts` (dependency-free):
+// `scripts/chatbot-check.ts` imports this file under plain node to test the live prompt.
 
-/** Tăng mỗi khi sửa `SYSTEM_PROMPT`; ghi vào từng tin của chatbot để owner biết câu trả lời theo bản nào. */
+/** Bump on every `SYSTEM_PROMPT` change; stored on each chatbot message so the owner knows which version answered. */
 export const PROMPT_VERSION = 3
 
-// Viết bằng tiếng Anh, gọn: prompt và mô tả công cụ gửi kèm mọi lần gọi model, tiếng Việt có dấu tốn token gấp mấy lần
-// (đo 2026-11-21: khoảng 2.800 token vào mỗi câu với bản tiếng Việt; ADR 0017). Câu khách đọc nguyên văn giữ tiếng Việt.
+// English and terse: the prompt and tool descriptions go with every call, and Vietnamese with diacritics costs several
+// times the tokens (measured 2026-11-21: ~2,800 input tokens per question in Vietnamese; ADR 0017). Customer-facing
+// sentences stay Vietnamese.
 export const SYSTEM_PROMPT = `You are the shopping assistant of a Vietnamese store selling imported fashion (bags, shoes, watches, clothing, fragrance). Be brief. In Vietnamese, call yourself "mình" and the customer "bạn".
 - Search with productType, color (Vietnamese, e.g. "Đen"), gender, maxPrice; text only for model or brand names. "Cheaper" means maxPrice just below the compared product's price; never invent a budget.
 - Before answering about a product's warranty, origin, sizes, colors or stock, call get_product (by name if you lack the slug). Warranty comes only from commitments; none means no warranty commitment.
@@ -24,9 +25,10 @@ export const SYSTEM_PROMPT = `You are the shopping assistant of a Vietnamese sto
 - If the customer asks for staff, complains, wants origin verified, or tools lack the answer: call handoff first. It sends nothing; then invite them to press the confirm button below. Never say it was sent or transferred.`
 
 /**
- * Nhắc ngôn ngữ đặt ngay sau tin của khách, chọn theo tin cuối của khách (`looksEnglish`). Nằm trong system prompt hay
- * viết chung một câu cho hai ngôn ngữ thì model hay quên khi danh mục và chính sách đều tiếng Việt (ticket 01, và
- * chatbot-check 2026-11-21 với qwen). Chỉ chọn một trong hai câu cố định: lời khách không đi vào system message.
+ * Language reminder placed right after the customer's message, chosen from their last message (`looksEnglish`). In the
+ * system prompt, or as one sentence for both languages, the model often forgot it when catalog and policies were
+ * Vietnamese (ticket 01, chatbot-check 2026-11-21 with qwen). Only one of two fixed sentences: customer text never
+ * enters a system message.
  */
 export const ENGLISH_REMINDER = 'The customer wrote in English: reply only in English, with no Vietnamese words.'
 export const VIETNAMESE_REMINDER = 'Trả lời bằng tiếng Việt, không dùng chữ Hán.'
@@ -35,30 +37,29 @@ export function languageReminder(customerText: string) {
   return looksEnglish(customerText) ? ENGLISH_REMINDER : VIETNAMESE_REMINDER
 }
 
-/** Lời nhắc ngôn ngữ: `runTurn` giữ đúng một lời nhắc, luôn ở cuối. */
+/** Language reminder: `runTurn` keeps exactly one, always last. */
 export const isLanguageReminder = (message: LlmMessage | undefined) =>
   message?.role === 'system' && (message.content === ENGLISH_REMINDER || message.content === VIETNAMESE_REMINDER)
 
-/** Câu trả lời cũ trong lịch sử dài hơn chừng này thì cắt: model chỉ cần nhớ ý, không cần cả danh sách đã liệt kê. */
+/** Older answers in history longer than this are cut: the model needs the gist, not the full lists. */
 export const OLD_REPLY_LIMIT = 300
 
-/** Số tin gần nhất gửi cho model (spec M8, ADR 0017: tiết kiệm token). */
+/** Number of recent messages sent to the model (spec M8, ADR 0017: saves tokens). */
 export const HISTORY_LIMIT = 10
 
 export type HistoryMessage = { role: 'customer' | 'assistant'; content: string }
 
-/** Sản phẩm khách đang xem: slug và kết quả `get_product` của nó. */
+/** The product being viewed: slug and its `get_product` result. */
 export type ViewingProduct = { slug: string; product: unknown }
 
-/** Mã của lời gọi `get_product` dựng sẵn cho sản phẩm đang xem. */
+/** Id of the prebuilt `get_product` call for the viewed product. */
 export const VIEWING_CALL_ID = 'viewing_product'
 
 /**
- * Tin gửi cho model: system prompt kèm slug các trang chính sách, tối đa `HISTORY_LIMIT` tin gần nhất (tin cuối là tin của
- * khách đang hỏi; câu trả lời cũ cắt ngắn), sản phẩm khách đang xem (nếu có), rồi lời nhắc ngôn ngữ.
- *
- * Sản phẩm đang xem đi vào như một lần gọi `get_product` đã chạy sẵn, không vào system message: mô tả sản phẩm do
- * nhân viên soạn, có thể chứa câu như lệnh, nên luôn nằm ở vai trò công cụ, là dữ liệu (spec M8 "Công cụ").
+ * Messages for the model: system prompt with policy slugs, up to `HISTORY_LIMIT` recent messages (the last is the
+ * customer's question; older answers cut short), the viewed product if any, then the language reminder.
+ * The viewed product enters as an already-run `get_product` call, not a system message: staff-written descriptions
+ * may contain command-like text, so they always stay in the tool role, as data (spec M8 "Công cụ").
  */
 export function promptMessages(
   history: readonly HistoryMessage[],
@@ -66,7 +67,7 @@ export function promptMessages(
   policySlugs: readonly string[] = [],
 ): LlmMessage[] {
   return [
-    // Chỉ slug (chữ thường, số, gạch nối), không tiêu đề: nội dung nhân viên soạn chỉ đi vào kết quả công cụ.
+    // Slugs only (lowercase, digits, hyphens), no titles: staff-written content only enters tool results.
     {
       role: 'system',
       content: policySlugs.length

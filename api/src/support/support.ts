@@ -34,19 +34,20 @@ import { planReturnLines, returnWindowSnapshot } from './returns.ts'
 import { planWarrantyLine, warrantyOf } from './warranty.ts'
 
 /**
- * Yêu cầu hỗ trợ (GLOSSARY, spec M6b): việc khách nhờ cửa hàng xử lý, gồm chuỗi tin, người phụ trách và trạng thái
- * `new` → `in_progress` ⇄ `waiting_customer` → `resolved` hoặc `rejected` (kết thúc, không mở lại). Mọi thay đổi chạy
- * dưới khóa dòng yêu cầu `FOR UPDATE`; tạo yêu cầu khóa đơn (hay tài khoản) để đếm yêu cầu đang mở cho đúng.
+ * Support requests (GLOSSARY "Yêu cầu hỗ trợ", spec M6b): what a customer asks the shop to handle, with a message
+ * thread, an assignee and status `new` → `in_progress` ⇄ `waiting_customer` → `resolved` or `rejected` (final, never
+ * reopened). Every change runs under the request row lock; creation locks the order (or account) to count open
+ * requests correctly.
  */
 
-/** Tối đa số yêu cầu chưa kết thúc trên một đơn, hay trên một tài khoản với yêu cầu không gắn đơn (số tạm). */
+/** Max unfinished requests per order, or per account for requests without an order (provisional). */
 export const MAX_OPEN_REQUESTS = 3
 
 export const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy yêu cầu')
 export const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, message)
 export const isClosed = (status: SupportRequestStatus) => SUPPORT_CLOSED_STATUSES.includes(status)
 
-/** Đủ để dựng yêu cầu như khách hay nhân viên thấy. */
+/** Enough to build a request as customers or staff see it. */
 export const SUPPORT_INCLUDE = {
   order: { select: { code: true } },
   assignee: { select: ACTOR_SELECT },
@@ -106,7 +107,7 @@ function summary(request: SupportForView): PublicSupportSummary {
 
 type ViewMessage = SupportForView['messages'][number]
 
-/** Ảnh của một tin kèm URL ký 5 phút (bucket private), chỉ dựng khi trả cho người đã được phép xem yêu cầu. */
+/** A message's images with 5-minute signed URLs (private bucket), built only for viewers allowed to see the request. */
 async function attachmentsOf(storage: Storage, message: ViewMessage): Promise<SupportAttachmentView[]> {
   return Promise.all(
     message.attachments.map(async (a) => ({
@@ -119,7 +120,7 @@ async function attachmentsOf(storage: Storage, message: ViewMessage): Promise<Su
   )
 }
 
-/** Yêu cầu như khách thấy: không có ghi chú nội bộ (cả ảnh của ghi chú), người phụ trách hay tên nhân viên. */
+/** A request as customers see it: no internal notes (nor their images), assignee or staff names. */
 export async function toPublicSupport(storage: Storage, request: SupportForView): Promise<PublicSupportRequest> {
   return {
     ...summary(request),
@@ -153,7 +154,7 @@ export async function toPublicSupport(storage: Storage, request: SupportForView)
 
 export const toPublicSupportSummary = summary
 
-/** Lần giao hàng đổi (ADR 0015), khi đã bàn giao. */
+/** The exchange delivery (ADR 0015), once handed over. */
 function exchangeShipmentOf(request: SupportForView) {
   const { exchangeCarrier, exchangeTrackingNumber, exchangeHandedOverAt } = request
   return exchangeCarrier && exchangeTrackingNumber && exchangeHandedOverAt
@@ -168,7 +169,7 @@ function exchangeShipmentOf(request: SupportForView) {
 export function toAdminSupportSummary(request: SupportForView): AdminSupportSummary {
   return {
     ...summary(request),
-    // Nhân viên thấy cả ghi chú nội bộ, nên tin cuối là tin cuối bất kỳ.
+    // Staff see internal notes too, so the last message is the last of any kind.
     lastMessageAt: (request.messages.at(-1)?.createdAt ?? request.createdAt).toISOString(),
     contactEmail: request.contactEmail,
     contactName: request.contactName,
@@ -192,7 +193,7 @@ export async function toAdminSupport(storage: Storage, request: SupportForView):
       quantity: l.quantity,
       reason: l.reason,
       toSku: l.exchangeVariant?.sku ?? null,
-      // Biến thể khách đang giữ lúc gửi (lần đổi gần nhất đã giao, hay biến thể gốc): kho nhận về đúng biến thể này.
+      // The variant held at submit (latest delivered exchange, or the original): the warehouse receives this one.
       heldVariantId: l.heldVariantId,
       heldSku: l.heldVariant.sku,
       restockedQuantity: l.restockedQuantity,
@@ -208,7 +209,7 @@ export async function toAdminSupport(storage: Storage, request: SupportForView):
     exchangeShipment: exchangeShipmentOf(request),
     exchangeOverdueAt: request.exchangeOverdueAt?.toISOString() ?? null,
     warranty: warrantyOf(request),
-    // Route điền (cần đọc cam kết của sản phẩm).
+    // Filled by the route (needs the product's commitments).
     hasWarrantyCommitment: null,
     followUps: request.followUps,
     returnWindow:
@@ -219,7 +220,7 @@ export async function toAdminSupport(storage: Storage, request: SupportForView):
             overdueDays: request.overdueDays,
           }
         : null,
-    // Route điền khi đã nhận hàng mà chưa đề xuất hoàn (cần đọc thêm DB).
+    // Filled by the route once goods are received without a proposed refund (needs more DB reads).
     returnRefund: null,
     chatTranscript: null,
     refunds: request.refunds.map((r) => ({ id: r.id, amount: Number(r.amount), status: r.status })),
@@ -237,7 +238,10 @@ export async function toAdminSupport(storage: Storage, request: SupportForView):
   }
 }
 
-/** Tài khoản khách của yêu cầu không gắn đơn; tên liên hệ lấy từ địa chỉ nhận hàng gần nhất (tài khoản không có tên). */
+/**
+ * The customer account of a request without an order; contact name from the latest shipping address (accounts have
+ * none).
+ */
 export type SupportCustomer = { id: string; email: string; name: string | null }
 
 export async function findSupportCustomer(db: DbClient, where: Prisma.CustomerWhereUniqueInput) {
@@ -251,7 +255,7 @@ export async function findSupportCustomer(db: DbClient, where: Prisma.CustomerWh
   return { id: customer.id, email: customer.email, name } satisfies SupportCustomer
 }
 
-/** Ai tạo yêu cầu: khách (đăng nhập hay cầm link đơn), nhân viên tạo hộ, hay hệ thống. */
+/** Who creates the request: the customer (signed in or with an order link), staff on their behalf, or the system. */
 export type SupportCreator =
   { type: 'customer' } | { type: 'staff'; staffId: string } | { type: 'system' } | { type: 'chatbot' }
 
@@ -259,22 +263,22 @@ export type NewSupportRequest = {
   kind: SupportRequestKind
   subject: string
   message: string
-  /** Đơn của yêu cầu; khách và email liên hệ lấy từ đơn. */
+  /** The request's order; customer and contact email come from it. */
   order?: { id: string; code: number; email: string; recipientName: string; customerId: string | null }
-  /** Tài khoản khách, khi yêu cầu không gắn đơn. */
+  /** The customer account, when the request has no order. */
   customer?: SupportCustomer
-  /** Chỉ tên và email: khách vãng lai chưa có đơn được chatbot chuyển nhân viên (M8). Chỉ loại `other`. */
+  /** Name and email only: a guest without an order handed off by the chatbot (M8). Type `other` only. */
   contact?: { name: string; email: string }
   previousRequestCode?: number
-  /** Trả hàng: các dòng theo biến thể, số lượng, lý do (ticket 04). */
+  /** Returns: lines by variant, quantity, reason (ticket 04). */
   lines?: readonly { variantId: string; quantity: number; reason?: SupportReturnReason; toVariantId?: string }[]
   creator: SupportCreator
 }
 
 /**
- * Tạo yêu cầu cùng tin đầu tiên, rồi xếp email "đã nhận yêu cầu". Khóa đơn (hay tài khoản) `FOR UPDATE` rồi đếm yêu cầu
- * chưa kết thúc: đủ `MAX_OPEN_REQUESTS` thì 409. Yêu cầu trước đó phải của cùng đơn (hay tài khoản) và đã kết thúc.
- * Trả yêu cầu vừa tạo.
+ * Creates the request with its first message, then queues the "request received" email. Locks the order (or account)
+ * and counts unfinished requests: at `MAX_OPEN_REQUESTS` it is 409. A previous request must belong to the same order
+ * (or account) and be finished. Returns the new request.
  */
 export async function createSupportRequest(tx: DbClient, mail: CustomerMail, input: NewSupportRequest) {
   const { order, customer, contact } = input
@@ -305,7 +309,7 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
       )
     }
   } else if (customer) await tx.$queryRaw`SELECT "id" FROM "customer" WHERE "id" = ${customer.id}::uuid FOR UPDATE`
-  // Liên hệ không có dòng nào để khóa: khóa theo email, để hai lần chuyển cùng lúc không vượt giới hạn yêu cầu mở.
+  // A contact has no row to lock: lock by email, so two concurrent handoffs cannot exceed the open request limit.
   else await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`support_contact:${contact!.email}`}))`
 
   const open = await tx.supportRequest.count({
@@ -326,11 +330,11 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
     previousRequestId = previous.id
   }
 
-  // Trả hàng: dòng hợp lệ, số lượng còn trả được (dưới khóa đơn), hạn đổi trả chụp lúc gửi.
+  // Returns: valid lines, returnable quantities (under the order lock), return window snapshotted at submit.
   const goodsKind = input.kind === 'return' || input.kind === 'exchange' ? input.kind : null
   const returnLines = goodsKind ? await planReturnLines(tx, order!.id, goodsKind, input.lines ?? []) : []
   const window = goodsKind ? await returnWindowSnapshot(tx, order!.id, returnLines) : null
-  // Bảo hành: đúng một dòng, không chiếm số còn trả/đổi được của dòng.
+  // Warranty: exactly one line, not taking from the returnable/exchangeable quantity.
   const warrantyLine = input.kind === 'warranty' ? await planWarrantyLine(tx, order!.id, input.lines ?? []) : null
 
   const staffId = input.creator.type === 'staff' ? input.creator.staffId : null
@@ -345,7 +349,7 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
       createdBy: input.creator.type,
       createdByStaffId: staffId,
       previousRequestId,
-      // Chatbot chỉ tạo yêu cầu; tin đầu là lời khách gõ trong form chuyển.
+      // The chatbot only creates the request; the first message is what the customer typed in the handoff form.
       messages: {
         create: {
           author: input.creator.type === 'chatbot' ? 'customer' : input.creator.type,
@@ -377,7 +381,7 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
   return request
 }
 
-/** Khóa dòng yêu cầu `FOR UPDATE` rồi đọc lại dưới khóa. */
+/** Locks the request row, then rereads it under the lock. */
 export async function lockSupportRequest(tx: DbClient, where: Prisma.SupportRequestWhereInput) {
   const found = await tx.supportRequest.findFirst({ where, select: { id: true } })
   if (!found) throw notFound()
@@ -386,8 +390,8 @@ export async function lockSupportRequest(tx: DbClient, where: Prisma.SupportRequ
 }
 
 /**
- * Khách gửi tin vào yêu cầu của mình (`where` đã giới hạn theo tài khoản hay theo đơn của token). Yêu cầu đã kết thúc
- * thì 409. Đang chờ khách thì về đang xử lý. Không gửi email cho nhân viên (spec M6b).
+ * The customer posts to their request (`where` is already scoped to the account or the token's order). Finished
+ * requests give 409. Waiting on the customer moves it back in progress. No email to staff (spec M6b).
  */
 export async function addCustomerMessage(tx: DbClient, where: Prisma.SupportRequestWhereInput, body: string) {
   const request = await lockSupportRequest(tx, where)
@@ -401,9 +405,9 @@ export async function addCustomerMessage(tx: DbClient, where: Prisma.SupportRequ
 }
 
 /**
- * Nhân viên trả lời, ghi chú nội bộ, và/hoặc chuyển trạng thái. Phải có tin hoặc trạng thái mới; yêu cầu đã kết thúc
- * thì 409. Email: tin gửi khách thì gửi email trả lời (kèm trạng thái kết thúc nếu có); chỉ kết thúc thì gửi email
- * kết thúc; ghi chú nội bộ không gửi gì. Audit `support.reply`, `support.note`, `support.status`.
+ * Staff reply, add an internal note and/or change status. A message or new status is required; finished requests give
+ * 409. Email: a customer message sends a reply email (with the final status if any); a status-only finish sends the
+ * finish email; internal notes send nothing. Audit `support.reply`, `support.note`, `support.status`.
  */
 export async function staffReply(
   tx: DbClient,
@@ -417,7 +421,7 @@ export async function staffReply(
   if (input.internal && !input.message) throw invalidField('message', 'Ghi chú nội bộ cần nội dung')
   const request = await lockSupportRequest(tx, { code })
   if (isClosed(request.status)) throw conflict('Yêu cầu đã kết thúc, không đổi được nữa')
-  // Không có tin và trạng thái không đổi: không ghi gì (CODING_STANDARDS "Ghi dữ liệu ở API quản trị").
+  // No message and no status change: write nothing (CODING_STANDARDS "Ghi dữ liệu ở API quản trị").
   if (!input.message && input.status === request.status) return request
 
   if (input.message) {
@@ -435,7 +439,7 @@ export async function staffReply(
       throw conflict('Đã nhận hàng cũ của khách: bàn giao hàng đổi trước khi kết thúc yêu cầu')
     }
   }
-  // Đổi hàng đóng trước khi nhận hàng cũ: nhả hàng đang giữ cho biến thể mới (ADR 0015).
+  // An exchange closed before the old item arrived: release the stock reserved for the new variant (ADR 0015).
   if (closing && request.kind === 'exchange' && !request.exchangeHandedOverAt) await releaseExchange(tx, request.id)
   await tx.supportRequest.update({
     where: { id: request.id },
@@ -470,8 +474,8 @@ export async function staffReply(
 }
 
 /**
- * Nhân viên nhận yêu cầu về mình: chỉ khi chưa ai nhận (hay đã là của mình). Yêu cầu mới thành đang xử lý. Yêu cầu đã
- * có người khác nhận thì 409: owner giao lại bằng `assignSupportRequest`.
+ * Staff take a request: only if unassigned (or already theirs). New requests move in progress. Assigned to someone
+ * else gives 409: the owner reassigns with `assignSupportRequest`.
  */
 export async function claimSupportRequest(tx: DbClient, audit: Audit, code: number, staffId: string) {
   const request = await lockSupportRequest(tx, { code })
@@ -493,8 +497,8 @@ export async function claimSupportRequest(tx: DbClient, audit: Audit, code: numb
 }
 
 /**
- * Owner giao yêu cầu cho một nhân viên (hay bỏ giao với `null`). Người được giao phải còn hoạt động và có
- * `support.handle`. Không đổi gì thì không ghi audit.
+ * The owner assigns a request to a staff member (or unassigns with `null`). The assignee must be active with
+ * `support.handle`. No change, no audit.
  */
 export async function assignSupportRequest(tx: DbClient, audit: Audit, code: number, assigneeId: string | null) {
   const request = await lockSupportRequest(tx, { code })
@@ -518,16 +522,16 @@ export async function assignSupportRequest(tx: DbClient, audit: Audit, code: num
   return tx.supportRequest.findUniqueOrThrow({ where: { id: request.id }, include: SUPPORT_INCLUDE })
 }
 
-/** Ảnh chỉ gắn được vào tin của chính mình, trong khoảng này sau khi gửi tin (spec M6b ticket 02). */
+/** Images attach only to your own message, within this time after sending (spec M6b ticket 02). */
 export const ATTACH_WINDOW_MS = 30 * 60_000
 
-/** Ai gắn ảnh: khách (tin của khách), hay một nhân viên (tin của chính nhân viên đó). */
+/** Who attaches: the customer (customer messages) or a staff member (their own messages). */
 export type AttachmentAuthor = { type: 'customer' } | { type: 'staff'; staffId: string }
 
 /**
- * Ghi một ảnh đã lưu vào tin `messageId` của yêu cầu (`where` giới hạn theo người xem). Dưới khóa dòng yêu cầu: yêu cầu
- * chưa kết thúc; tin của chính người gắn, gửi chưa quá 30 phút; tin chưa đủ 5 ảnh và yêu cầu chưa đủ 20 ảnh. Sai thì
- * 404 (tin lạ) hay 409; nơi gọi xóa file đã lưu khi lỗi. Trả id yêu cầu.
+ * Records a stored image on message `messageId` (`where` scoped to the viewer). Under the request row lock: request not
+ * finished; the attacher's own message, sent at most 30 minutes ago; under 5 images per message and 20 per request.
+ * Otherwise 404 (unknown message) or 409; the caller deletes the stored file on error. Returns the request id.
  */
 export async function recordAttachment(
   tx: DbClient,
@@ -556,8 +560,9 @@ export async function recordAttachment(
 }
 
 /**
- * Đơn vừa được hủy (`cancelPaidOrder`): mọi yêu cầu hủy đang mở của đơn thành `resolved` kèm một tin hệ thống, trong
- * cùng transaction. Không gửi email: khách đã nhận email "Đơn đã hủy" (spec M6b ticket 03). Trả mã các yêu cầu đã đóng.
+ * The order was just cancelled (`cancelPaidOrder`): every open cancel request of the order becomes `resolved` with a
+ * system message, in the same transaction. No email: the customer already got "Đơn đã hủy" (spec M6b ticket 03).
+ * Returns the closed request codes.
  */
 export async function resolveCancelRequests(tx: DbClient, orderId: string) {
   const open = await tx.supportRequest.findMany({

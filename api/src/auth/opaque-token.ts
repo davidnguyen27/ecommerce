@@ -1,11 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto'
 
-/** Token ngẫu nhiên 256 bit, an toàn để đặt trong URL. */
+/** Random 256-bit token, safe in URLs. */
 export function newOpaqueToken(): string {
   return randomBytes(32).toString('base64url')
 }
 
-// Token ngẫu nhiên 256 bit nên SHA-256 là đủ, không cần hàm băm chậm như mật khẩu.
+// A random 256-bit token makes SHA-256 enough; no slow password hash needed.
 export function hashOpaqueToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }

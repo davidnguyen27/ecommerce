@@ -4,11 +4,11 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { conflictField } from '../http/errors.ts'
 
 /**
- * Những biến thể còn hàng trong `variantIds`. Khách chỉ thấy còn hay hết, đọc trực tiếp từ tồn chứ không từ
- * phiên bản xuất bản (ADR 0006), và không bao giờ thấy số lượng.
+ * Variants in `variantIds` that are in stock. Customers only see in/out of stock, read straight from stock rather than
+ * the published version (ADR 0006), and never see quantities.
  */
 export async function inStockIds(db: DbClient, variantIds: readonly string[]): Promise<Set<string>> {
-  // Hàng đang giữ cho đơn không còn bán được (ADR 0007).
+  // Stock reserved for orders is no longer sellable (ADR 0007).
   const rows = await db.$queryRaw<{ id: string }[]>`
     SELECT "id"::text AS id FROM "product_variant"
     WHERE "id" = ANY(${[...variantIds]}::uuid[]) AND "on_hand" - "reserved" > 0`
@@ -16,8 +16,8 @@ export async function inStockIds(db: DbClient, variantIds: readonly string[]): P
 }
 
 /**
- * Những dòng giỏ mua được đủ số lượng: tồn trừ số đang giữ không ít hơn số khách muốn mua. Như `inStockIds`, chỉ trả
- * id, không bao giờ trả số lượng.
+ * Cart lines buyable in full: on-hand minus reserved covers the quantity wanted. Like `inStockIds`, returns ids only,
+ * never quantities.
  */
 export async function enoughStockIds(
   db: DbClient,
@@ -32,10 +32,10 @@ export async function enoughStockIds(
   return new Set(rows.map((r) => r.id))
 }
 
-/** Biến thể đang bị khóa để đổi tồn hoặc giữ hàng. */
+/** A variant locked to change stock or reserve. */
 export type LockedVariant = { id: string; sku: string; productId: string; onHand: number; reserved: number }
 
-/** Khóa các biến thể `FOR UPDATE` theo thứ tự id, để nhiều request trên cùng nhóm biến thể không deadlock. */
+/** Locks variants by id order, so requests on overlapping variants do not deadlock. */
 async function lockVariants(tx: Prisma.TransactionClient, variantIds: readonly string[]) {
   const ids = [...new Set(variantIds)].sort()
   const rows = await tx.$queryRaw<LockedVariant[]>`
@@ -45,8 +45,8 @@ async function lockVariants(tx: Prisma.TransactionClient, variantIds: readonly s
 }
 
 /**
- * Mã các đơn đang giữ hàng của biến thể: đơn hàng sẵn chưa thanh toán hay đã trả mà chưa bàn giao, và đơn đặt trước đã
- * được giữ một phần hay toàn bộ từ hàng về.
+ * Codes of orders holding the variant: unpaid in-stock orders or paid ones not handed over, and pre-orders partly or
+ * fully reserved from arrivals.
  */
 export async function ordersHoldingVariant(db: DbClient, variantId: string): Promise<number[]> {
   const orders = await db.order.findMany({
@@ -57,13 +57,13 @@ export async function ordersHoldingVariant(db: DbClient, variantId: string): Pro
   return orders.map((o) => o.code)
 }
 
-/** Số cái cần giữ (hoặc nhả) của một biến thể. */
+/** Units of one variant to reserve (or release). */
 export type Reservation = { variantId: string; quantity: number }
 
 /**
- * Giữ hàng cho một đơn (ADR 0007), cùng đường khóa với `changeStock`. Mọi dòng phải đủ `on_hand - reserved`; thiếu
- * ở bất kỳ dòng nào thì không giữ dòng nào và trả id các biến thể thiếu, để nơi gọi báo lỗi theo dòng rồi rollback.
- * Không ghi sổ xuất nhập: hàng chưa rời kho.
+ * Reserves stock for an order (ADR 0007), on the same lock path as `changeStock`. Every line needs enough
+ * `on_hand - reserved`; if any is short nothing is reserved and the short variant ids are returned, so the caller can
+ * report per line and roll back. No ledger rows: the goods have not left.
  */
 export async function reserveStock(
   tx: Prisma.TransactionClient,
@@ -84,7 +84,7 @@ export async function reserveStock(
   return { ok: true }
 }
 
-/** Nhả hàng đã giữ (hủy, hết hạn), cùng đường khóa với `changeStock`. Không ghi sổ xuất nhập. */
+/** Releases reserved stock (cancel, expiry), on the same lock path as `changeStock`. No ledger rows. */
 export async function releaseStock(tx: Prisma.TransactionClient, lines: readonly Reservation[]) {
   await lockVariants(
     tx,
@@ -95,33 +95,32 @@ export async function releaseStock(tx: Prisma.TransactionClient, lines: readonly
   }
 }
 
-/** Một thay đổi tồn; `path` là trường của request để báo lỗi khi tồn không đủ. */
+/** One stock change; `path` is the request field to report a shortage on. */
 export type StockChange = {
   variantId: string
-  /** Có dấu, khác 0. */
+  /** Signed, non-zero. */
   quantity: number
   kind: StockMovementKind
   reason?: StockAdjustmentReason
   note?: string
-  /** Phiếu nhập; bắt buộc với loại `receipt` (check constraint). */
+  /** Receipt; required for kind `receipt` (check constraint). */
   receiptId?: string
-  /** Đơn của dòng xuất bán hay hàng hoàn về; bắt buộc với loại `sale`, `return` (check constraint). */
+  /** The sale's or return's order; required for kinds `sale` and `return` (check constraint). */
   orderId?: string
-  /** Yêu cầu hỗ trợ của hàng trả về hay hàng đổi giao đi (M6b). */
+  /** Support request of returned goods or exchange goods sent out (M6b). */
   supportRequestId?: string
   /**
-   * Số đang giữ nhả cùng lúc với thay đổi này (dương): bàn giao vận chuyển trừ tồn và số giữ của đơn cùng nhau, nên
-   * chốt "tồn không thấp hơn số đang giữ" tính trên số giữ còn lại.
+   * Reserved units released along with this change (positive): handover deducts on-hand and the order's reservation
+   * together, so the "on-hand not below reserved" check uses what remains reserved.
    */
   releaseReserved?: number
   path: string
 }
 
 /**
- * Đường duy nhất để đổi tồn: khóa các biến thể `FOR UPDATE` theo thứ tự id (nhiều request trên cùng nhóm biến thể
- * không deadlock), để `plan` quyết định thay đổi dựa trên tồn đã khóa, rồi cập nhật tồn và ghi sổ xuất nhập.
- * Gọi trong transaction của `audited()`; tồn âm, hoặc tồn thấp hơn số còn giữ sau `releaseReserved`, thì ném 409 và
- * transaction rollback.
+ * The only way to change stock: locks variants by id order (no deadlocks), lets `plan` decide based on the locked
+ * stock, then updates stock and writes the ledger. Call in the `audited()` transaction; negative stock, or stock below
+ * what stays reserved after `releaseReserved`, throws 409 and rolls back.
  */
 export async function changeStock(
   tx: Prisma.TransactionClient,
@@ -130,7 +129,7 @@ export async function changeStock(
   plan: (locked: ReadonlyMap<string, LockedVariant>) => StockChange[] | Promise<StockChange[]>,
 ) {
   const { ids, locked } = await lockVariants(tx, variantIds)
-  // `plan` có thể đọc thêm DB (ví dụ biến thể đã có dòng sổ chưa); đọc lúc này là đã dưới khóa.
+  // `plan` may read more (e.g. whether the variant has ledger rows); reads here are under the lock.
   const changes = await plan(locked)
 
   const onHand = new Map([...locked.values()].map((row) => [row.id, row.onHand]))
@@ -139,7 +138,7 @@ export async function changeStock(
   for (const change of changes) {
     const variant = locked.get(change.variantId)
     if (!ids.includes(change.variantId)) throw new Error(`Biến thể ${change.variantId} chưa được khóa`)
-    // Biến thể đã bị xóa giữa lúc đọc ngoài transaction và lúc khóa.
+    // The variant was deleted between the read outside the transaction and the lock.
     if (!variant) throw conflictField(change.path, 'Biến thể không còn tồn tại, hãy tải lại trang')
     const after = onHand.get(variant.id)! + change.quantity
     const reservedAfter = reserved.get(variant.id)! - (change.releaseReserved ?? 0)
@@ -147,7 +146,7 @@ export async function changeStock(
     if (after < 0) {
       throw conflictField(change.path, `Tồn của ${variant.sku} không đủ: hiện còn ${onHand.get(variant.id)}`)
     }
-    // Hàng đang giữ cho đơn đã thuộc về khách; hạ tồn xuống dưới số đó phải xử lý các đơn trước (ADR 0007).
+    // Reserved stock already belongs to customers; going below it means handling those orders first (ADR 0007).
     if (change.quantity < 0 && after < reservedAfter) {
       const orderCodes = await ordersHoldingVariant(tx, variant.id)
       throw conflictField(

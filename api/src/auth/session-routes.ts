@@ -22,31 +22,31 @@ export type SessionOptions = {
   prisma: Db
   secret: Uint8Array
   audience: AuthAudience
-  /** Hạn tuyệt đối của phiên tính từ lúc đăng nhập; refresh không kéo dài thêm. */
+  /** Absolute session lifetime from sign-in; refresh does not extend it. */
   sessionTtlMs: number
-  /** Đường dẫn đầy đủ của endpoint refresh; cookie chỉ được gửi tới đây. */
+  /** Full path of the refresh endpoint; the cookie is only sent there. */
   refreshPath: string
-  /** Chỉ trả tài khoản được phép đăng nhập; tài khoản bị khóa trả `null`. */
+  /** Returns only accounts allowed to sign in; locked accounts give `null`. */
   findCredentials(email: string): Promise<{ id: string; passwordHash: string } | null>
-  /** Kiểm lại lúc refresh, phòng khi tài khoản bị khóa giữa chừng một lần rotation. */
+  /** Rechecked on refresh, in case the account was locked mid-rotation. */
   isActive(subjectId: string): Promise<boolean>
 }
 
 const ClientHeader = z.object({ 'x-client': AuthClient })
 
-// Email không tồn tại vẫn chạy verify một lần, để thời gian phản hồi không lộ email nào có thật.
-// Băm sẵn lúc nạp module, để cả request đầu tiên cũng chỉ tốn đúng một lần verify.
+// Unknown emails still run one verify, so response time does not reveal which emails exist.
+// Hashed at module load, so even the first request costs exactly one verify.
 const dummyHash = hashPassword('khong-co-tai-khoan')
 
-/** Kênh của request theo header `X-Client`; thiếu hoặc sai thì 400. */
+/** Request channel from the `X-Client` header; missing or invalid gives 400. */
 export function clientOf(req: Request): AuthClient {
   return parse(ClientHeader, req.headers)['x-client']
 }
 
 /**
- * Phiên đăng nhập của một miền xác thực. `routes` gồm `POST /login`, `POST /refresh` và
- * `DELETE /refresh` (đăng xuất); `start` mở phiên cho route khác, ví dụ ngay sau khi đăng ký.
- * Header `X-Client` chọn kênh: `web` giữ refresh token trong cookie, `mobile` gửi qua body.
+ * Sessions for one auth domain. `routes` has `POST /login`, `POST /refresh` and `DELETE /refresh` (sign-out);
+ * `start` opens a session for other routes, e.g. right after sign-up. `X-Client` picks the channel: `web` keeps the
+ * refresh token in a cookie, `mobile` in the body.
  */
 export function createSessions(options: SessionOptions) {
   const { prisma, secret, audience } = options
@@ -74,7 +74,7 @@ export function createSessions(options: SessionOptions) {
     res.status(status).json(body)
   }
 
-  /** Mở một phiên mới cho `subjectId` và trả token theo kênh của request. */
+  /** Opens a new session for `subjectId` and returns tokens for the request's channel. */
   async function start(req: Request, res: Response, subjectId: string, status = 200) {
     const client = clientOf(req)
     await sendTokens(res, client, await issueRefreshToken(prisma, audience, subjectId, options.sessionTtlMs), status)
@@ -83,10 +83,10 @@ export function createSessions(options: SessionOptions) {
   const routes = Router()
     .use(cookieParser())
     .post('/login', async (req, res) => {
-      // Kiểm header kênh trước khi tốn một lần verify mật khẩu.
+      // Check the channel header before spending a password verify.
       clientOf(req)
       const { email, password } = parse(LoginRequest, req.body)
-      // Đếm cả lần đăng nhập đúng, và đếm trước khi verify để kẻ dò mật khẩu không tốn thêm CPU của mình.
+      // Count successful sign-ins too, and count before verifying so password guessers cannot burn our CPU.
       await enforceRateLimits(prisma, [
         { limit: RATE_LIMITS.loginPerEmail, subject: `${audience}:${normalizeEmail(email)}` },
         { limit: RATE_LIMITS.loginPerIp, subject: `${audience}:${String(req.ip)}` },

@@ -5,7 +5,7 @@ import { hashOpaqueToken, newOpaqueToken } from './opaque-token.ts'
 
 export type IssuedRefreshToken = { subjectId: string; refreshToken: string; expiresAt: Date }
 
-/** Mở một family mới cho một lần đăng nhập. */
+/** Opens a new family for one sign-in. */
 export async function issueRefreshToken(
   prisma: Db,
   audience: AuthAudience,
@@ -21,8 +21,8 @@ export async function issueRefreshToken(
 }
 
 /**
- * Đổi token cũ lấy token mới cùng family và cùng hạn. Token đã dùng mà bị dùng lại
- * thì thu hồi cả family. Trả `null` khi token không dùng được.
+ * Swaps the old token for a new one in the same family with the same expiry. Reusing a used token revokes the whole
+ * family. Returns `null` when the token is unusable.
  */
 export async function rotateRefreshToken(
   prisma: Db,
@@ -35,7 +35,7 @@ export async function rotateRefreshToken(
 
   const next = newOpaqueToken()
   const rotated = await prisma.$transaction(async (tx) => {
-    // Đánh dấu đã dùng có điều kiện, để hai request cùng lúc không rotate được cùng một token.
+    // Conditional mark-as-used, so two concurrent requests cannot rotate the same token.
     const claimed = await tx.refreshToken.updateMany({
       where: { id: current.id, usedAt: null, revokedAt: null },
       data: { usedAt: now },
@@ -63,7 +63,7 @@ export async function rotateRefreshToken(
   return { subjectId: current.subjectId, refreshToken: next, expiresAt: current.expiresAt }
 }
 
-/** Thu hồi mọi phiên của một người, ví dụ khi khóa tài khoản hoặc đổi role. */
+/** Revokes every session of a user, e.g. on lock or role change. */
 export async function revokeAllRefreshTokens(db: DbClient, audience: AuthAudience, subjectId: string) {
   await db.refreshToken.updateMany({
     where: { audience, subjectId, revokedAt: null },
@@ -71,7 +71,7 @@ export async function revokeAllRefreshTokens(db: DbClient, audience: AuthAudienc
   })
 }
 
-/** Thu hồi một token; token lạ hoặc đã thu hồi thì bỏ qua. */
+/** Revokes one token; unknown or already revoked tokens are ignored. */
 export async function revokeRefreshToken(prisma: Db, audience: AuthAudience, refreshToken: string) {
   await prisma.refreshToken.updateMany({
     where: { tokenHash: hashOpaqueToken(refreshToken), audience, revokedAt: null },

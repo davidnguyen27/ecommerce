@@ -4,7 +4,7 @@ import type { DbClient } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { usedAllocations } from './campaigns.ts'
 
-/** Đợt đang mở của biến thể, các trường chụp vào đơn đặt trước. */
+/** The variant's open campaign, with the fields snapshotted onto pre-orders. */
 export type OpenCampaign = {
   id: string
   depositPercent: number
@@ -14,20 +14,19 @@ export type OpenCampaign = {
 }
 
 export type PreorderCheck = {
-  /** Biến thể như khách thấy (phiên bản đang xuất bản); `variant` là `null` khi không còn bán. */
+  /** The variant as customers see it (live version); `variant` is `null` when no longer on sale. */
   found: CartVariant
-  /** Đợt đang mở có biến thể này, kể cả khi đã hết suất; `null` khi không có. */
+  /** The open campaign containing this variant, even when allocation is used up; `null` if none. */
   campaign: OpenCampaign | null
-  /** Lý do không đặt trước được `quantity` cái lúc này; `null` khi đặt được. */
+  /** Why `quantity` cannot be pre-ordered now; `null` when it can. */
   problem: Extract<PreorderChange['kind'], 'in_stock' | 'campaign' | 'sold_out' | 'discontinued'> | null
 }
 
 /**
- * Biến thể có đặt trước được `quantity` cái lúc này không (GLOSSARY "Đang nhận đặt trước"): còn bán, hết hàng sẵn, thuộc
- * đợt đang mở và còn đủ suất. Như `preorderOffers` nhưng cho một biến thể và một số lượng.
- *
- * `lock` dùng trong transaction đặt trước: khóa dòng biến thể rồi dòng suất `FOR UPDATE`, nên hai khách tranh suất cuối
- * chạy lần lượt, và sửa suất (ticket 02, khóa dòng suất) không chen vào giữa lúc kiểm và lúc tạo đơn.
+ * Whether `quantity` of the variant can be pre-ordered now (GLOSSARY "Đang nhận đặt trước"): on sale, no regular stock,
+ * in an open campaign with enough allocation. Like `preorderOffers`, for one variant and quantity.
+ * `lock` is for the pre-order transaction: locks the variant row then the allocation row, so two customers racing for
+ * the last allocation run in turn, and allocation edits (ticket 02) cannot slip in between check and order.
  */
 export async function checkPreorder(
   db: DbClient,
@@ -35,7 +34,7 @@ export async function checkPreorder(
   quantity: number,
   { lock = false, now = new Date() }: { lock?: boolean; now?: Date } = {},
 ): Promise<PreorderCheck> {
-  // Dòng biến thể rồi dòng suất, cùng thứ tự với mọi nơi khác khóa cả hai.
+  // Variant row then allocation row, the same order as everywhere that locks both.
   const forUpdate = (of: Prisma.Sql) => (lock ? Prisma.sql`FOR UPDATE ${of}` : Prisma.empty)
   const [live] = await db.$queryRaw<{ available: number }[]>`
     SELECT "on_hand" - "reserved" AS available FROM "product_variant" WHERE "id" = ${variantId}::uuid
@@ -59,7 +58,7 @@ export async function checkPreorder(
       }
     : null
 
-  // Còn một cái hàng sẵn là không đặt trước: khách mua ngay.
+  // One unit of regular stock means no pre-order: the customer buys now.
   if (live.available > 0) return { found, campaign, problem: 'in_stock' }
   if (!row || !campaign) return { found, campaign, problem: 'campaign' }
   const used = (await usedAllocations(db, [campaign.id])).get(campaign.id)?.get(variantId) ?? 0

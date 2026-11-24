@@ -1,22 +1,22 @@
-/** Một dòng đơn như hàm tính giảm cần: phạm vi xét theo thương hiệu và chuỗi danh mục của sản phẩm. */
+/** An order line as the discount function needs it: scope uses the product's brand and category chain. */
 export type DiscountLine = {
   variantId: string
   brandId: string
-  /** Danh mục của sản phẩm cùng mọi tổ tiên của nó, thứ tự không quan trọng. */
+  /** The product's category and all its ancestors, in any order. */
   categoryPath: readonly string[]
-  /** Giá bán VND. */
+  /** Sale price in VND. */
   price: bigint
   quantity: number
 }
 
-/** Các điều kiện tính tiền của mã; thời hạn, trạng thái và lượt do nơi gọi kiểm. */
+/** The voucher's pricing conditions; validity, status and uses are checked by the caller. */
 export type DiscountRule = (
   { kind: 'fixed'; amount: bigint } | { kind: 'percent'; percent: number; maxDiscount: bigint }
 ) & {
   minSubtotal: bigint
-  /** Trống là không giới hạn theo thương hiệu. */
+  /** Empty means no brand restriction. */
   brandIds: readonly string[]
-  /** Trống là không giới hạn theo danh mục; một danh mục gồm cả con cháu. */
+  /** Empty means no category restriction; a category includes its descendants. */
   categoryIds: readonly string[]
 }
 
@@ -26,7 +26,7 @@ export type DiscountResult =
   | { ok: false; reason: 'below_minimum'; shortfall: bigint }
 
 const STEP = 1000n
-/** Trần giảm 50% theo Nghị định 81/2018 (spec M5, chờ chủ DN xác nhận). */
+/** 50% discount cap per Decree 81/2018 (spec M5, pending owner confirmation). */
 const CAP_PERCENT = 50n
 
 const floorToStep = (amount: bigint) => (amount / STEP) * STEP
@@ -38,8 +38,8 @@ export function inScope(line: DiscountLine, rule: DiscountRule): boolean {
 }
 
 /**
- * Tiền giảm của một mã cho các dòng đơn (GLOSSARY "Mã giảm giá"), dùng chung cho báo giá và tạo đơn để hai bên không
- * bao giờ tính lệch nhau. Mọi số tính trên tiền hàng của các dòng thuộc phạm vi.
+ * A voucher's discount for the order lines (GLOSSARY "Mã giảm giá"), shared by quote and placement so they never
+ * disagree. Everything is computed on the goods of in-scope lines.
  */
 export function computeDiscount(lines: readonly DiscountLine[], rule: DiscountRule): DiscountResult {
   const scoped = lines
@@ -55,10 +55,10 @@ export function computeDiscount(lines: readonly DiscountLine[], rule: DiscountRu
       ? rule.amount
       : min(floorToStep((scopeSubtotal * BigInt(rule.percent)) / 100n), rule.maxDiscount)
   const discount = min(raw, floorToStep((scopeSubtotal * CAP_PERCENT) / 100n))
-  // Làm tròn xuống 1.000 có thể ra 0 (tỷ lệ nhỏ trên tiền hàng nhỏ): đơn không được giảm gì thì không chiếm lượt.
+  // Rounding down to 1,000 can give 0 (small percent on small goods): an order with no discount takes no use.
   if (discount === 0n) return { ok: false, reason: 'not_applicable' }
 
-  // Chia theo tỷ lệ tiền hàng, làm tròn xuống tới đồng; phần lẻ vào dòng lớn nhất (bằng nhau thì dòng đầu).
+  // Split by goods share, rounded down to the dong; the remainder goes to the largest line (ties: the first).
   const shares = new Map(scoped.map(({ line, subtotal }) => [line.variantId, (discount * subtotal) / scopeSubtotal]))
   const largest = scoped.reduce((best, item) => (item.subtotal > best.subtotal ? item : best))
   const allocated = [...shares.values()].reduce((sum, share) => sum + share, 0n)

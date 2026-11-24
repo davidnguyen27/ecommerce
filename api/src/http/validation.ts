@@ -4,10 +4,10 @@ import { AppError } from './errors.ts'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-/** Chuỗi là uuid: mã từ URL không đúng dạng thì coi như không thấy, thay vì để Postgres báo lỗi kiểu. */
+/** The string is a uuid: a malformed id from the URL counts as not found instead of a Postgres type error. */
 export const isUuid = (value: string) => UUID.test(value)
 
-/** Kiểm dữ liệu vào theo schema; sai thì ném lỗi 400 kèm lỗi theo từng trường. */
+/** Validates input against the schema; throws 400 with per-field errors. */
 export function parse<T extends z.ZodType>(schema: T, input: unknown): z.output<T> {
   const result = schema.safeParse(input)
   if (result.success) return result.data

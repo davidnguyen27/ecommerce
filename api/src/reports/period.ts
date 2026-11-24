@@ -1,18 +1,18 @@
 import type { ReportGroupBy, ReportQuery } from '@ecommerce/shared'
 import { Prisma } from '../generated/prisma/client.ts'
 
-/** Lịch của báo cáo; Việt Nam không đổi giờ mùa hè nên mốc ngày luôn là UTC+7. */
+/** Report calendar; Vietnam has no DST, so day boundaries are always UTC+7. */
 export const REPORT_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 const OFFSET_MS = 7 * 60 * 60_000
 const DAY = 24 * 60 * 60_000
 
-/** Kỳ đã đổi ra mốc UTC: `[start, end)`, cùng danh sách nhãn ngày/tháng của kỳ theo thứ tự. */
+/** A period as UTC bounds `[start, end)`, with its day/month labels in order. */
 export type Period = { from: string; to: string; groupBy: ReportGroupBy; start: Date; end: Date; buckets: string[] }
 
-/** Đầu ngày lịch `YYYY-MM-DD` theo giờ Việt Nam. */
+/** Start of calendar day `YYYY-MM-DD` in Vietnam time. */
 export const startOfDay = (date: string) => new Date(Date.parse(date) - OFFSET_MS)
 
-/** Ngày lịch `YYYY-MM-DD` theo giờ Việt Nam của một thời điểm. */
+/** Vietnam-time calendar day `YYYY-MM-DD` of a timestamp. */
 export const vnDate = (at: Date) => new Date(at.getTime() + OFFSET_MS).toISOString().slice(0, 10)
 
 export function periodOf(query: ReportQuery): Period {
@@ -26,16 +26,16 @@ export function periodOf(query: ReportQuery): Period {
 }
 
 /**
- * Mốc thời điểm để so với cột `TIMESTAMP` không múi giờ. Prisma lưu các cột này theo giờ UTC, nên mốc cũng đổi về UTC
- * không múi giờ, không phụ thuộc `TimeZone` của phiên DB.
+ * A bound to compare with zone-less `TIMESTAMP` columns. Prisma stores them in UTC, so bounds convert to zone-less UTC
+ * too, independent of the DB session's `TimeZone`.
  */
 export const utcBound = (date: Date) => Prisma.sql`(${date.toISOString()}::timestamptz AT TIME ZONE 'UTC')`
 
-/** Điều kiện "cột thời điểm nằm trong kỳ" `[start, end)`. */
+/** Condition "timestamp column within `[start, end)`". */
 export const inPeriod = (column: Prisma.Sql, period: Period) =>
   Prisma.sql`${column} >= ${utcBound(period.start)} AND ${column} < ${utcBound(period.end)}`
 
-/** Nhãn ngày (`YYYY-MM-DD`) hay tháng (`YYYY-MM`) theo giờ Việt Nam của một cột thời điểm. */
+/** Vietnam-time day (`YYYY-MM-DD`) or month (`YYYY-MM`) label of a timestamp column. */
 export const bucketOf = (column: Prisma.Sql, period: Period) =>
   Prisma.sql`to_char((${column} AT TIME ZONE 'UTC') AT TIME ZONE ${Prisma.raw(`'${REPORT_TIME_ZONE}'`)}, ${
     period.groupBy === 'day' ? 'YYYY-MM-DD' : 'YYYY-MM'

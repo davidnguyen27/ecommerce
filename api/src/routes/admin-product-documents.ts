@@ -26,7 +26,7 @@ const DocumentParams = z.object({ id: z.uuid(), documentId: z.uuid() })
 
 const documentNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy chứng từ')
 
-/** Trường nghiệp vụ của chứng từ ghi vào audit. */
+/** Document business fields recorded in audit. */
 function auditFields(document: ProductDocument) {
   const { productId, storageKey, fileName, contentType, sizeBytes } = document
   return { productId, storageKey, fileName, contentType, sizeBytes }
@@ -43,9 +43,9 @@ function toAdminDocument(document: ProductDocument): AdminProductDocument {
 }
 
 /**
- * Chứng từ nguồn hàng của một sản phẩm, mount tại `/products/:id/documents`. Mọi thao tác cần `document.view`:
- * chứng từ là tài liệu của đối tác, chỉ người được xem mới tải lên, mở hay xóa. File nằm trên bucket private,
- * chỉ mở được qua URL ký có hạn, và mỗi lần cấp URL đều ghi audit.
+ * Supplier documents of a product, mounted at `/products/:id/documents`. Everything needs `document.view`: documents
+ * belong to partners, so only viewers can upload, open or delete. Files sit in the private bucket, opened only via
+ * expiring signed URLs, and each URL issued is audited.
  */
 export function adminProductDocumentRoutes(prisma: Db, storage: Storage) {
   return (
@@ -64,7 +64,7 @@ export function adminProductDocumentRoutes(prisma: Db, storage: Storage) {
       .post('/', receiveDocument, async (req, res) => {
         const { id } = parse(ProductParams, req.params)
         const file = uploadedDocument(req)
-        // Kiểm sản phẩm trước, để không đẩy file lên storage cho sản phẩm không có.
+        // Check the product first, so nothing is uploaded for a missing product.
         await loadProduct(prisma, id)
 
         const documentId = randomUUID()
@@ -96,7 +96,7 @@ export function adminProductDocumentRoutes(prisma: Db, storage: Storage) {
         const body: AdminProductDocument = toAdminDocument(created)
         res.status(201).json(body)
       })
-      // POST vì mỗi lần cấp URL là một lần xem chứng từ, phải ghi audit.
+      // POST because issuing a URL is viewing the document, which is audited.
       .post('/:documentId/url', async (req, res) => {
         const { id, documentId } = parse(DocumentParams, req.params)
         const document = await findDocument(prisma, id, documentId)
@@ -116,7 +116,8 @@ export function adminProductDocumentRoutes(prisma: Db, storage: Storage) {
       .delete('/:documentId', async (req, res) => {
         const { id, documentId } = parse(DocumentParams, req.params)
         const deleted = await audited(prisma, req, async (tx, audit) => {
-          // Cùng khóa với việc tạo, sửa cam kết: chứng từ không bị xóa giữa lúc cam kết đang trỏ tới nó.
+          // Same lock as creating and editing commitments: a document cannot be deleted while a commitment points to
+          // it.
           await lockProduct(tx, id)
           const document = await findDocument(tx, id, documentId)
           const citing = await tx.productCommitment.findMany({
@@ -141,14 +142,14 @@ export function adminProductDocumentRoutes(prisma: Db, storage: Storage) {
           })
           return document
         })
-        // Xóa file sau khi commit: rollback thì chứng từ vẫn còn file.
+        // Delete the file after commit: on rollback the document keeps its file.
         await deleteDocumentFileQuietly(storage, req, deleted.storageKey)
         res.status(204).end()
       })
   )
 }
 
-/** Chứng từ thuộc đúng sản phẩm trên URL; chứng từ của sản phẩm khác coi như không có. */
+/** A document of exactly the product in the URL; another product's counts as missing. */
 async function findDocument(db: DbClient, productId: string, documentId: string) {
   const document = await db.productDocument.findUnique({ where: { id: documentId } })
   if (!document || document.productId !== productId) throw documentNotFound()

@@ -17,9 +17,9 @@ import { findVisible, loadVisibleTree } from './categories.ts'
 import { ProductSnapshot, cheapestVariant } from './publication.ts'
 import { searchPage, type SearchCriteria } from './search.ts'
 
-// Sản phẩm như khách thấy, dùng chung cho trang web (`routes/public-products.ts`) và công cụ của chatbot (M8): chỉ
-// sản phẩm đã xuất bản, chỉ đọc phiên bản đang xuất bản. Ngoại lệ duy nhất là còn hàng hay hết, đọc trực tiếp từ tồn
-// (ADR 0006), cùng việc đang nhận đặt trước hay không, đọc trực tiếp từ đợt đặt trước (M4).
+// Products as customers see them, shared by the website (`routes/public-products.ts`) and chatbot tools (M8): only
+// published products, read from the published version. Exceptions: in-stock status is read from stock (ADR 0006) and
+// pre-order availability from campaigns (M4).
 
 function toCard(
   storage: Storage,
@@ -42,7 +42,7 @@ function toCard(
   }
 }
 
-/** Một trang thẻ sản phẩm khớp điều kiện, theo thứ tự hiển thị, kèm tổng số. */
+/** One page of matching product cards in display order, with the total. */
 export async function searchProductCards(
   prisma: Db,
   storage: Storage,
@@ -53,7 +53,7 @@ export async function searchProductCards(
 ) {
   const { versionIds, total } = await searchPage(prisma, criteria, sort, page, pageSize)
   const versions = await prisma.productVersion.findMany({ where: { id: { in: versionIds } }, include: { brand: true } })
-  // Phiên bản kèm snapshot đã parse, theo id phiên bản.
+  // Versions with parsed snapshots, by version id.
   const parsedById = new Map(versions.map((v) => [v.id, { version: v, snapshot: ProductSnapshot.parse(v.snapshot) }]))
   const variantIds = [...parsedById.values()].flatMap(({ snapshot }) => snapshot.variants.map((v) => v.id))
   const [stocked, offers] = await Promise.all([inStockIds(prisma, variantIds), preorderOffers(prisma, variantIds)])
@@ -71,12 +71,12 @@ export async function searchProductCards(
 }
 
 /**
- * Sản phẩm đã xuất bản theo slug, hay `null`. Slug cũ (đã đổi rồi xuất bản lại) vẫn trả sản phẩm, kèm slug hiện tại để
- * website chuyển hướng 301. Ẩn thương hiệu, danh mục không làm sản phẩm biến mất (GLOSSARY "Ẩn").
+ * A published product by slug, or `null`. An old slug (renamed then republished) still resolves, with the current slug
+ * for a 301. Hidden brands or categories do not hide the product (GLOSSARY "Ẩn").
  */
 export async function findPublicProduct(prisma: Db, storage: Storage, slug: string): Promise<PublicProduct | null> {
   const include = { liveVersion: { include: { brand: true, category: true } } } as const
-  // Slug đang có sản phẩm dùng thì ưu tiên sản phẩm đó; nhiều sản phẩm từng dùng thì lấy lần xuất bản gần nhất.
+  // A product currently using the slug wins; otherwise the most recent publish among past users.
   const product =
     (await prisma.product.findFirst({ where: { liveVersion: { is: { slug } } }, include })) ??
     (await prisma.product.findFirst({
@@ -118,7 +118,7 @@ export async function findPublicProduct(prisma: Db, storage: Storage, slug: stri
     groundShippingOnly: snapshot.groundShippingOnly,
     attributeSchema: schema.attributes,
     variants: snapshot.variants.map(({ id, sku, attributes, price, compareAtPrice }) => {
-      // Còn hàng sẵn thì không bao giờ là đặt trước; `preorderOffers` cũng đã loại các biến thể đó.
+      // In stock is never pre-order; `preorderOffers` already excludes those variants.
       const inStock = stocked.has(id)
       const preorder = inStock ? null : (offers.get(id) ?? null)
       const availability: VariantAvailability = inStock ? 'in_stock' : preorder ? 'preorder' : 'out_of_stock'
@@ -135,7 +135,7 @@ export async function findPublicProduct(prisma: Db, storage: Storage, slug: stri
   }
 }
 
-/** Id của danh mục theo slug và mọi danh mục con cháu, kể cả đang ẩn; slug không có thì rỗng. */
+/** Ids of the category with this slug and all descendants, hidden ones included; unknown slug gives none. */
 export async function subtreeIds(prisma: Db, slug: string) {
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     WITH RECURSIVE down AS (

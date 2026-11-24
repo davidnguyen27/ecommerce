@@ -9,8 +9,8 @@ import { releaseStock } from '../stock/stock.ts'
 import { recordOrderEvent, type OrderEventActor } from './orders.ts'
 
 /**
- * Ai hủy và vì sao. Hết hạn có `overdueAt` khi do job chạy: chỉ hủy nếu hạn giữ hàng đã qua tính tới lúc đó;
- * nút "Giả lập hết hạn" bỏ trống để hủy ngay.
+ * Who cancels and why. Expiry from a job carries `overdueAt`: cancel only if the reservation had expired by then; the
+ * "Giả lập hết hạn" button leaves it empty to cancel at once.
  */
 export type Cancellation =
   | { reason: 'expired'; overdueAt?: Date }
@@ -18,8 +18,8 @@ export type Cancellation =
   | { reason: 'staff'; staffId: string }
 
 /**
- * `cancelled`: vừa hủy. `already_cancelled`: đã hủy từ trước, không đổi gì. `not_pending`: đơn đã trả (không hủy được
- * ở mốc này). `not_due`: chưa tới hạn giữ hàng (chỉ khi có `overdueAt`).
+ * `cancelled`: just cancelled. `already_cancelled`: cancelled before, nothing changed. `not_pending`: already paid (not
+ * cancellable here). `not_due`: reservation not expired yet (only with `overdueAt`).
  */
 export type CancelOutcome = 'cancelled' | 'already_cancelled' | 'not_pending' | 'not_due'
 
@@ -37,9 +37,9 @@ function actorOf(cancellation: Cancellation): OrderEventActor {
 }
 
 /**
- * Hủy đơn chưa thanh toán trong transaction của nơi gọi (admin cần ghi audit cùng transaction): khóa đơn `FOR UPDATE`
- * như `recordPayment` nên tiền về cùng lúc thì một bên thấy kết quả của bên kia; nhả giữ hàng, ghi sự kiện đơn.
- * Chạy lại trên đơn đã hủy thì không đổi gì. Hủy link thanh toán làm sau khi commit (`cancelPaymentLink`).
+ * Cancels an unpaid order in the caller's transaction (admin audits in the same one): locks the order like
+ * `recordPayment`, so a concurrent payment and cancel each see the other's result; releases the reservation and records
+ * an event. Rerunning on a cancelled order changes nothing. Payment links are cancelled after commit.
  */
 export async function cancelInTransaction(
   tx: Prisma.TransactionClient,
@@ -61,7 +61,8 @@ export async function cancelInTransaction(
     return 'not_due'
   }
 
-  // Đơn đặt trước chờ cọc chỉ chiếm suất, không giữ hàng nên không có gì để nhả; suất tự trống ra (ADR 0013).
+  // A pending pre-order only holds allocation, not stock, so there is nothing to release; the allocation frees itself
+  // (ADR 0013).
   await releaseOrderReservations(tx, orderId)
   await tx.order.update({
     where: { id: orderId },
@@ -71,7 +72,7 @@ export async function cancelInTransaction(
   return 'cancelled'
 }
 
-/** Nhả đúng số đang giữ của từng dòng đơn và đưa số giữ của dòng về 0. Gọi dưới khóa đơn. */
+/** Releases each line's reserved quantity and sets it to 0. Call under the order lock. */
 export async function releaseOrderReservations(tx: Prisma.TransactionClient, orderId: string) {
   const lines = await tx.orderLine.findMany({
     where: { orderId, reservedQuantity: { gt: 0 } },
@@ -86,8 +87,8 @@ export async function releaseOrderReservations(tx: Prisma.TransactionClient, ord
 }
 
 /**
- * Hủy mọi link thanh toán của đơn vừa hủy (chọn bằng `PAYMENT_LINK_REFERENCES`); đơn chưa có link thì không làm gì.
- * Lỗi chỉ log rồi hủy link kế tiếp: đơn đã hủy, tiền về sau đó thành cần đối soát.
+ * Cancels every payment link of a just-cancelled order (picked by `PAYMENT_LINK_REFERENCES`); no links, no-op. Errors
+ * are logged and the next link is tried: the order is cancelled, so later money needs reconciliation.
  */
 export async function cancelPaymentLinks(
   { payments, logger }: Omit<CancelDeps, 'prisma'>,
@@ -102,7 +103,7 @@ export async function cancelPaymentLinks(
   }
 }
 
-/** Hàm hủy dùng chung cho hết hạn, khách hủy và nhân viên hủy (không cần audit). */
+/** Shared cancel for expiry, customer and staff cancels (no audit). */
 export async function cancelOrder(deps: CancelDeps, orderId: string, cancellation: Cancellation) {
   const outcome = await deps.prisma.$transaction((tx) => cancelInTransaction(tx, orderId, cancellation))
   if (outcome === 'cancelled') {
@@ -115,13 +116,14 @@ export async function cancelOrder(deps: CancelDeps, orderId: string, cancellatio
   return outcome
 }
 
-/** Hủy vì hết hạn cần ghi nhận được tiền cổng báo về. */
+/** Expiry cancels must be able to record money the gateway reports. */
 export type ExpireDeps = CancelDeps & Pick<RecordPaymentDeps, 'emails' | 'siteUrl'>
 
 /**
- * Hủy đơn vì hết hạn giữ hàng (job hẹn giờ, job quét, nút giả lập). Có `overdueAt` thì chỉ hủy nếu hạn đã qua tính tới
- * lúc đó; không có thì hủy ngay. Trước khi hủy hỏi cổng một lần (ADR 0009: merchant tự truy vấn khi không thấy
- * callback): đã trả thì ghi nhận và đơn không bị hủy; cổng lỗi thì log rồi vẫn hủy, tiền về sau thành cần đối soát.
+ * Cancels an order whose reservation expired (timed job, sweep job, simulate button). With `overdueAt`, only if expired
+ * by then; otherwise at once. Asks the gateway once first (ADR 0009: merchant queries when no callback arrives): if
+ * paid, records it and keeps the order; if the gateway errors, logs and cancels anyway (later money needs
+ * reconciliation).
  */
 export async function expireOrder(deps: ExpireDeps, orderId: string, overdueAt?: Date) {
   const order = await deps.prisma.order.findUnique({
@@ -140,15 +142,15 @@ export async function expireOrder(deps: ExpireDeps, orderId: string, overdueAt?:
   return cancelOrder(deps, orderId, { reason: 'expired', overdueAt })
 }
 
-/** Nơi gọi qua HTTP: đơn đã trả thì 409. */
+/** For HTTP callers: a paid order gives 409. */
 export function assertCancellable(outcome: CancelOutcome) {
   if (outcome === 'not_pending') {
-    // Đã trả đủ hay đã cọc thì hủy kéo theo hoàn tiền: dùng `cancel-paid` (M6a), cần `order.cancel_paid`.
+    // Paid or deposited orders need a refund on cancel: use `cancel-paid` (M6a), which needs `order.cancel_paid`.
     throw new AppError(409, ErrorCode.CONFLICT, 'Đơn đã thanh toán hoặc đã cọc, không hủy được')
   }
 }
 
-/** Job quét mỗi phút: hủy mọi đơn chờ thanh toán đã quá hạn tính tới `now`, phòng khi job của từng đơn bị mất. */
+/** Sweep job every minute: cancels every pending order overdue by `now`, in case a per-order job was lost. */
 export async function expireOverdueOrders(deps: ExpireDeps, now = new Date()) {
   const overdue = await deps.prisma.order.findMany({
     where: { status: 'pending_payment', reservedUntil: { lte: now } },

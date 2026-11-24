@@ -20,21 +20,21 @@ import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest, notFound, type
 import { queueSupportEmail } from './emails.ts'
 
 /**
- * Trả hàng (GLOSSARY "Trả hàng", spec M6b ticket 04): khách gửi các dòng muốn trả của đơn đã giao; nhân viên chấp nhận
- * hay từ chối; kho nhận hàng về (nhập lại tồn hoặc ghi hỏng, sổ loại `return`); nhân viên đề xuất hoàn (hoàn tiền của
- * M6a, `origin = return`). Đơn vẫn `completed`; lượt mã giảm giá không đổi.
+ * Returns (GLOSSARY "Trả hàng", spec M6b ticket 04): the customer submits lines of a delivered order to return; staff
+ * accept or reject; the warehouse receives them (restock or write off, ledger kind `return`); staff propose a refund
+ * (M6a refunds, `origin = return`). The order stays `completed`; voucher uses are unchanged.
  */
 
 const DAY = 24 * 60 * 60_000
 
-/** Loại yêu cầu chiếm số lượng của dòng đơn: hàng đang (hay đã) được trả, đổi. */
+/** Request types that occupy a line's quantity: goods being (or already) returned or exchanged. */
 const RETURNING_KINDS = ['return', 'exchange'] as const
 
 /**
- * Số còn trả (hay đổi) được của từng dòng đơn: số lượng dòng trừ số đã nằm trong các yêu cầu trả/đổi. Không tính: yêu
- * cầu đã kết thúc mà chưa nhận hàng (từ chối, hay nhân viên đóng khi hàng chưa về), và yêu cầu đổi đã giao hàng mới
- * (khách lại đang giữ hàng, trả hay đổi tiếp được; ADR 0015). Hàng đã nhận về luôn được tính, dù yêu cầu kết thúc thế nào.
- * Gọi dưới khóa đơn.
+ * Quantity still returnable (or exchangeable) per order line: line quantity minus what is in return/exchange requests.
+ * Not counted: requests ended before goods arrived (rejected, or closed by staff), and exchanges whose new item was
+ * delivered (the customer holds goods again; ADR 0015). Goods already received always count, however the request
+ * ended. Call under the order lock.
  */
 export async function returnableQuantities(tx: DbClient, orderId: string) {
   const lines = await tx.orderLine.findMany({ where: { orderId }, select: { id: true, quantity: true } })
@@ -56,7 +56,7 @@ export async function returnableQuantities(tx: DbClient, orderId: string) {
   return new Map(lines.map((l) => [l.id, l.quantity - (used.get(l.id) ?? 0)]))
 }
 
-/** Số khách còn giữ của từng dòng đơn: số lượng dòng trừ số cửa hàng đã nhận về qua yêu cầu trả. */
+/** Quantity the customer still holds per order line: line quantity minus what the shop received back via returns. */
 export async function keptQuantities(tx: DbClient, orderId: string) {
   const lines = await tx.orderLine.findMany({ where: { orderId }, select: { id: true, quantity: true } })
   const returned = await tx.supportRequestLine.findMany({
@@ -72,15 +72,15 @@ export type PlannedReturnLine = {
   orderLineId: string
   quantity: number
   reason: SupportReturnReason | null
-  /** Biến thể khách đang giữ (kho nhận về biến thể này). */
+  /** The variant the customer holds (the warehouse receives this one). */
   heldVariantId: string
-  /** Đổi hàng: biến thể khách nhận. */
+  /** Exchange: the variant the customer gets. */
   exchangeVariantId: string | null
 }
 
 /**
- * Đối chiếu các dòng khách chọn (theo biến thể gốc của dòng đơn) với đơn, kiểm số còn trả/đổi được; với đổi hàng kiểm
- * thêm biến thể đổi sang (ADR 0015). Sai thì 400 hay 409.
+ * Matches the chosen lines (by the line's original variant) against the order and checks returnable quantities; for
+ * exchanges also the target variant (ADR 0015). Otherwise 400 or 409.
  */
 export async function planReturnLines(
   tx: DbClient,
@@ -106,7 +106,8 @@ export async function planReturnLines(
     const heldVariantId = held.get(orderLine.id)!
     if (kind === 'exchange') {
       if (!line.toVariantId) throw invalidField(`lines.${i}`, 'Chọn biến thể muốn đổi sang')
-      // Đổi cả dòng: mọi cái khách đang giữ của dòng cùng một biến thể, nên lần trả hay đổi sau nhận về đúng biến thể.
+      // Whole-line exchange: everything the customer holds of a line is one variant, so the next return or exchange
+      // receives the right one.
       const holding = keptUnits.get(orderLine.id) ?? 0
       if (left !== holding || line.quantity !== holding) {
         throw conflict(
@@ -134,8 +135,8 @@ export async function planReturnLines(
 }
 
 /**
- * Hạn đổi trả chụp lúc gửi (GLOSSARY "Hạn đổi trả"): số ngày nhỏ nhất trong các nhóm hàng của các dòng (nhóm không cấu
- * hình thì không tính; không nhóm nào cấu hình thì `null`), lúc giao (sự kiện `delivered` gần nhất), số ngày đã quá.
+ * Return window snapshotted at submit (GLOSSARY "Hạn đổi trả"): smallest days among the lines' product types
+ * (unconfigured types ignored; none configured gives `null`), delivery time (latest `delivered` event), days overdue.
  */
 export async function returnWindowSnapshot(
   tx: DbClient,
@@ -163,8 +164,8 @@ export async function returnWindowSnapshot(
 }
 
 /**
- * Số hoàn gợi ý của một yêu cầu trả: Σ (giá × số trả − phần giảm của dòng × số trả / số lượng dòng, làm tròn xuống tới
- * đồng). Không gồm phí giao (spec M6b).
+ * Suggested refund for a return: Σ (price × returned − line discount × returned / line quantity, rounded down to the
+ * dong). Shipping excluded (spec M6b).
  */
 export async function suggestedReturnRefund(tx: DbClient, requestId: string) {
   const lines = await tx.supportRequestLine.findMany({
@@ -180,7 +181,7 @@ export async function suggestedReturnRefund(tx: DbClient, requestId: string) {
   )
 }
 
-/** Yêu cầu trả đã nhận hàng mà chưa đề xuất hoàn: số hoàn gợi ý và số còn hoàn được của đơn, cho trang quản trị. */
+/** Received returns without a proposed refund: suggested and refundable amounts, for the admin page. */
 export async function returnRefundHint(db: DbClient, request: SupportForView) {
   if (request.kind !== 'return' || !request.receivedAt || isClosed(request.status) || !request.orderId) return null
   const [suggested, totals] = [await suggestedReturnRefund(db, request.id), await refundTotals(db, request.orderId)]
@@ -188,8 +189,8 @@ export async function returnRefundHint(db: DbClient, request: SupportForView) {
 }
 
 /**
- * Nhân viên chấp nhận hay từ chối yêu cầu trả (đổi, bảo hành), kèm tin cho khách: chấp nhận thì yêu cầu đang xử lý, gửi
- * email hướng dẫn; từ chối thì yêu cầu kết thúc, gửi email lý do. Đã quyết rồi thì 409. Trả mã yêu cầu.
+ * Staff accept or reject a return (exchange, warranty) with a message: accepting moves it in progress and emails
+ * instructions; rejecting ends it and emails the reason. Already decided gives 409. Returns the request code.
  */
 export async function decideSupportRequest(
   tx: DbClient,
@@ -206,7 +207,7 @@ export async function decideSupportRequest(
   if (request.decision) throw conflict('Yêu cầu đã được quyết định')
   const now = new Date()
   const accepted = input.decision === 'accepted'
-  // Đổi hàng: chấp nhận thì kiểm lại và giữ hàng biến thể mới ngay, để không bị bán mất (ADR 0015).
+  // Exchanges: on accept, recheck and reserve the new variant right away so it is not sold (ADR 0015).
   if (accepted && request.kind === 'exchange') await reserveExchange(tx, request)
   await tx.supportMessage.create({ data: { requestId: request.id, author: 'staff', staffId, body: input.message } })
   await tx.supportRequest.update({
@@ -217,7 +218,7 @@ export async function decideSupportRequest(
       decidedAt: now,
       status: accepted ? 'in_progress' : 'rejected',
       resolvedAt: accepted ? null : now,
-      // Người quyết định nhận việc nếu chưa ai nhận.
+      // The deciding staff member takes the request if nobody has.
       assigneeId: request.assigneeId ?? staffId,
     },
   })
@@ -234,9 +235,10 @@ export async function decideSupportRequest(
 }
 
 /**
- * Kho nhận hàng khách gửi về cho yêu cầu trả (ticket 05 dùng lại cho đổi hàng): mỗi dòng của yêu cầu có đúng một mục,
- * nhập lại tồn + ghi hỏng = số lượng dòng (sai thì 400). Phần nhập lại qua `changeStock` loại `return`, trỏ về đơn và yêu
- * cầu, vào biến thể khách đang giữ; phần hỏng không ghi sổ (hàng đã rời tồn lúc bàn giao). Chỉ sau khi chấp nhận, một lần.
+ * Warehouse receives goods for a return (reused for exchanges in ticket 05): exactly one entry per request line,
+ * restocked + written off = line quantity (else 400). Restocked goods go through `changeStock` kind `return`, pointing
+ * at order and request, into the held variant; write-offs get no ledger row (they left stock at handover). Only after
+ * acceptance, once.
  */
 export async function receiveSupportReturn(
   tx: DbClient,
@@ -263,7 +265,7 @@ export async function receiveSupportReturn(
         `${line.orderLine.sku}: số nhập lại tồn cộng số ghi hỏng phải bằng ${line.quantity}`,
       )
     }
-    // Biến thể khách đang giữ lúc gửi: biến thể gốc, hay biến thể nhận được ở lần đổi trước.
+    // The variant held at submit time: the original, or the one from a previous exchange.
     return { line, entry, variantId: line.heldVariantId, index }
   })
 
@@ -315,9 +317,9 @@ export async function receiveSupportReturn(
 }
 
 /**
- * Đề xuất hoàn cho yêu cầu trả đã nhận hàng về: số hoàn trong [0, còn hoàn được của đơn]; thấp hơn gợi ý thì ghi chú bắt
- * buộc. Hoàn > 0 thì tạo khoản hoàn chờ kế toán thực hiện (`origin = return`, ADR 0014). Yêu cầu xong, khách nhận email
- * kèm số tiền. Khóa đơn trước rồi mới khóa yêu cầu, cùng thứ tự với hủy đơn. Trả mã yêu cầu.
+ * Proposes the refund for a received return: amount in [0, order refundable]; below the suggestion needs a note. A
+ * positive amount creates a refund awaiting accounting (`origin = return`, ADR 0014). The request resolves and the
+ * customer is emailed the amount. Locks the order before the request, the same order as cancel. Returns the code.
  */
 export async function proposeReturnRefund(
   tx: DbClient,
@@ -379,7 +381,7 @@ export async function proposeReturnRefund(
   return code
 }
 
-/** Hạn đổi trả của đủ năm nhóm hàng; nhóm chưa cấu hình là `null`. */
+/** Return windows of all five product types; unconfigured types are `null`. */
 export async function loadReturnWindows(db: DbClient): Promise<ReturnWindowItem[]> {
   const rows = await db.returnWindow.findMany()
   return ProductTypes.options.map((productType: ProductType) => ({
@@ -388,7 +390,7 @@ export async function loadReturnWindows(db: DbClient): Promise<ReturnWindowItem[
   }))
 }
 
-/** Lưu hạn đổi trả: `null` là bỏ cấu hình nhóm đó. Không đổi gì thì không ghi audit. */
+/** Saves return windows: `null` clears that type. No change, no audit. */
 export async function saveReturnWindows(tx: DbClient, audit: Audit, items: readonly ReturnWindowItem[]) {
   const before = await loadReturnWindows(tx)
   const changed = items.filter((i) => before.find((b) => b.productType === i.productType)?.days !== i.days)
@@ -406,7 +408,7 @@ export async function saveReturnWindows(tx: DbClient, audit: Audit, items: reado
   await audit({
     action: 'return_window.update',
     entityType: 'return_window',
-    // Một bảng cấu hình chung, như phí giao: id cố định.
+    // One shared config row, like shipping fees: fixed id.
     entityId: 'return_window',
     before: { items: before },
     after: { items: await loadReturnWindows(tx) },

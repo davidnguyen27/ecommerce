@@ -19,7 +19,7 @@ import { parse } from '../http/validation.ts'
 
 const CommitmentParams = z.object({ id: z.uuid(), commitmentId: z.uuid() })
 
-/** Trường nghiệp vụ của cam kết ghi vào audit. */
+/** Commitment business fields recorded in audit. */
 function auditFields(commitment: CommitmentWithEvidence) {
   const { productId, typeId, statement } = commitment
   return { productId, typeId, statement, documentIds: documentIdsOf(commitment) }
@@ -28,8 +28,8 @@ function auditFields(commitment: CommitmentWithEvidence) {
 const typeTaken = () => conflictField('typeId', 'Sản phẩm đã có cam kết thuộc loại này')
 
 /**
- * Kiểm loại cam kết có trong danh sách và mọi chứng từ thuộc chính sản phẩm; trả danh sách chứng từ đã bỏ trùng.
- * Chạy sau `lockProduct`, nên chứng từ không bị xóa giữa lúc kiểm và lúc ghi.
+ * Checks the commitment type exists and every document belongs to the product; returns the deduplicated documents.
+ * Runs after `lockProduct`, so documents cannot be deleted between check and write.
  */
 async function assertEvidence(tx: Prisma.TransactionClient, productId: string, input: CommitmentRequest) {
   if (!(await tx.commitmentType.findUnique({ where: { id: input.typeId } }))) {
@@ -46,8 +46,8 @@ async function assertEvidence(tx: Prisma.TransactionClient, productId: string, i
 }
 
 /**
- * Cam kết có bằng chứng của một sản phẩm, mount tại `/products/:id/commitments`. Ai soạn sản phẩm cũng xem được;
- * tạo, sửa, gỡ cần `commitment.edit`. Ghi khóa dòng sản phẩm, cùng khóa với việc xóa chứng từ.
+ * Evidenced commitments of a product, mounted at `/products/:id/commitments`. Anyone editing products can view;
+ * create, edit, remove need `commitment.edit`. Writes lock the product row, the same lock as document deletion.
  */
 export function adminProductCommitmentRoutes(prisma: Db) {
   return Router({ mergeParams: true })
@@ -135,7 +135,7 @@ export function adminProductCommitmentRoutes(prisma: Db) {
     })
 }
 
-/** Cam kết thuộc đúng sản phẩm trên URL; cam kết của sản phẩm khác coi như không có. */
+/** A commitment of exactly the product in the URL; another product's counts as missing. */
 async function findCommitment(tx: Prisma.TransactionClient, productId: string, commitmentId: string) {
   const commitment = await tx.productCommitment.findUnique({
     where: { id: commitmentId },

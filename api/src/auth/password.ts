@@ -1,6 +1,6 @@
 import { hash, verify } from '@node-rs/argon2'
 
-// `Algorithm` của thư viện là const enum, không import được khi bật verbatimModuleSyntax.
+// The library's `Algorithm` is a const enum, which cannot be imported under verbatimModuleSyntax.
 const ARGON2ID = 2
 
 export function hashPassword(password: string): Promise<string> {

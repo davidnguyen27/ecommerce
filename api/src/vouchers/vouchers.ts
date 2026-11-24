@@ -4,7 +4,7 @@ import type { DbClient } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
 
-/** Trạng thái hiển thị của mã; đã tắt thắng mọi thứ khác. */
+/** A voucher's display status; disabled beats everything else. */
 export function voucherStatus(
   voucher: { disabledAt: Date | null; startsAt: Date; endsAt: Date },
   now = new Date(),
@@ -15,7 +15,7 @@ export function voucherStatus(
   return 'active'
 }
 
-/** Điều kiện Prisma theo trạng thái, cùng định nghĩa với `voucherStatus`. */
+/** Prisma condition per status, matching `voucherStatus`. */
 export function voucherStatusWhere(status: VoucherStatus, now = new Date()): Prisma.VoucherWhereInput {
   switch (status) {
     case 'disabled':
@@ -30,8 +30,8 @@ export function voucherStatusWhere(status: VoucherStatus, now = new Date()): Pri
 }
 
 /**
- * Số lượt đã dùng của từng mã (GLOSSARY "Lượt dùng"): số đơn chưa hủy có mã đó. Tính khi cần, không lưu bộ đếm; mã chưa
- * có đơn thì không có trong kết quả (tức là 0).
+ * Uses per voucher (GLOSSARY "Lượt dùng"): uncancelled orders with that voucher. Computed on demand, not stored;
+ * vouchers without orders are absent (i.e. 0).
  */
 export async function usedRedemptions(db: DbClient, voucherIds: readonly string[]) {
   const used = new Map<string, number>()
@@ -46,8 +46,8 @@ export async function usedRedemptions(db: DbClient, voucherIds: readonly string[
 }
 
 /**
- * Số lượt một khách đã dùng một mã: đơn chưa hủy có email trùng (đơn lưu email chữ thường) **hoặc** số điện thoại trùng.
- * Thiếu cả hai thì không đếm được, trả 0; nơi gọi quyết định có cần kiểm hay không.
+ * Uses of a voucher by one customer: uncancelled orders with the same email (stored lowercase) **or** the same phone.
+ * With neither, nothing can be counted and it returns 0; the caller decides whether to check.
  */
 export async function customerRedemptions(
   db: DbClient,

@@ -3,16 +3,16 @@ import multer from 'multer'
 import { ErrorCode } from '@ecommerce/shared'
 import { AppError } from '../http/errors.ts'
 
-/** Lỗi trên trường multipart `file`. */
+/** Error on the multipart field `file`. */
 export const fileError = (status: number, message: string) =>
   new AppError(status, ErrorCode.VALIDATION_ERROR, message, [{ path: 'file', message }])
 
-/** Nhận một file multipart ở trường `file` vào bộ nhớ; quá `maxBytes` thì 413 với `tooLargeMessage`. */
+/** Receives one multipart file in field `file` into memory; over `maxBytes` gives 413 with `tooLargeMessage`. */
 export function receiveFile(maxBytes: number, tooLargeMessage: string): RequestHandler {
   const parseSingleFile = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: maxBytes, files: 1, fields: 10, fieldSize: 10_000 },
-    // Tên file tiếng Việt gửi từ trình duyệt là UTF-8.
+    // Vietnamese file names from browsers are UTF-8.
     defParamCharset: 'utf8',
   }).single('file')
 
@@ -30,7 +30,7 @@ export function receiveFile(maxBytes: number, tooLargeMessage: string): RequestH
   }
 }
 
-/** File đã nhận qua `receiveFile`; thiếu thì 400 với `missingMessage`. */
+/** The file received via `receiveFile`; missing gives 400 with `missingMessage`. */
 export function requiredFile(req: Request, missingMessage: string): Express.Multer.File {
   if (!req.file) throw fileError(400, missingMessage)
   return req.file
