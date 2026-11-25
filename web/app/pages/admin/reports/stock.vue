@@ -63,7 +63,7 @@ watch(period, search)
 
 <template>
   <div>
-    <ReportExportButton name="stock" slug="xuat-nhap-ton" :query="exportQuery" />
+    <AdminReportExportButton name="stock" slug="xuat-nhap-ton" :query="exportQuery" />
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <span>{{ error }}</span>
     </div>
