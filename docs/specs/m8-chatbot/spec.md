@@ -2,9 +2,9 @@
 
 **Status:** resolved
 
-Người dùng duyệt ngày 2026-11-21. Ticket ở `.scratch/m8-chatbot/issues/`. Sau review toàn nhánh, spec được cập nhật theo các quyết định trong ticket (JSON thay SSE, đường dẫn chuyển nhân viên, trang báo cáo riêng, cột của `chat_conversation`, đếm hết lượt).
+Người dùng duyệt ngày 2026-11-21. Ticket ở `docs/specs/m8-chatbot/issues/`. Sau review toàn nhánh, spec được cập nhật theo các quyết định trong ticket (JSON thay SSE, đường dẫn chuyển nhân viên, trang báo cáo riêng, cột của `chat_conversation`, đếm hết lượt).
 
-Nguồn: `docs/project-overview.md` (mục 2, 3, 4, 7, 8.2, 10), Out of Scope của spec M6b (`.scratch/m6b-ho-tro-doi-tra/spec.md`) và M7 (`.scratch/m7-bao-cao/spec.md`), buổi làm rõ requirement ngày 2026-11-20 (29 câu) và vòng bổ sung sau bản thử (Q30–Q33); người dùng chấp nhận mọi đề xuất. Đây là mốc cuối của lộ trình M0 → M8 trong giai đoạn 1 (mở bán). Quyết định kiến trúc: `docs/adr/0017-chatbot-dung-model-mien-phi-qua-chuoi-du-phong.md` (mới, kèm kết quả bản thử). Thuật ngữ mới trong GLOSSARY, mục **Chatbot**: Chatbot, Cuộc trò chuyện, Chuyển nhân viên. Mục **Yêu cầu hỗ trợ** được mở rộng cho khách vãng lai không có đơn.
+Nguồn: `docs/project-overview.md` (mục 2, 3, 4, 7, 8.2, 10), Out of Scope của spec M6b (`docs/specs/m6b-ho-tro-doi-tra/spec.md`) và M7 (`docs/specs/m7-bao-cao/spec.md`), buổi làm rõ requirement ngày 2026-11-20 (29 câu) và vòng bổ sung sau bản thử (Q30–Q33); người dùng chấp nhận mọi đề xuất. Đây là mốc cuối của lộ trình M0 → M8 trong giai đoạn 1 (mở bán). Quyết định kiến trúc: `docs/adr/0017-chatbot-dung-model-mien-phi-qua-chuoi-du-phong.md` (mới, kèm kết quả bản thử). Thuật ngữ mới trong GLOSSARY, mục **Chatbot**: Chatbot, Cuộc trò chuyện, Chuyển nhân viên. Mục **Yêu cầu hỗ trợ** được mở rộng cho khách vãng lai không có đơn.
 
 ## Problem Statement
 

@@ -1,6 +1,6 @@
 # Third-party integrations
 
-Read this before choosing an external service: a payment gateway, a shipping carrier, an email or SMS provider. Choosing one by reading its docs has failed twice here: ZaloPay's sandbox could only be paid through an app that needs a hand-issued test account, and VNPAY's sandbox `querydr` answers `99` to every request (ADR 0009, ADR 0010, `.scratch/m3-mua-hang/issues/16-*`). Each switch rewrote code, ADR, spec and tickets.
+Read this before choosing an external service: a payment gateway, a shipping carrier, an email or SMS provider. Choosing one by reading its docs has failed twice here: ZaloPay's sandbox could only be paid through an app that needs a hand-issued test account, and VNPAY's sandbox `querydr` answers `99` to every request (ADR 0009, ADR 0010, `docs/specs/m3-mua-hang/issues/16-*`). Each switch rewrote code, ADR, spec and tickets.
 
 ## Spike before the ADR
 

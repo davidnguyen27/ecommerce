@@ -3,7 +3,7 @@
 Repo: D:\my_project\ecommerce. Integration branch: `spec/m3-mua-hang` (checked out in the main repo dir; never commit there yourself unless you are the merger).
 
 ## Read first (context pointers, don't skip)
-- Spec: `.scratch/m3-mua-hang/spec.md`; your ticket: `.scratch/m3-mua-hang/issues/NN-*.md`. Also read the tickets it is blocked by, especially their "Quyết định khi triển khai" sections: they record API names, table names and choices you build on.
+- Spec: `docs/specs/m3-mua-hang/spec.md`; your ticket: `docs/specs/m3-mua-hang/issues/NN-*.md`. Also read the tickets it is blocked by, especially their "Quyết định khi triển khai" sections: they record API names, table names and choices you build on.
 - `CODING_STANDARDS.md` (binding; the code review checks it), `GLOSSARY.md` (section "Mua hàng", "Giữ hàng", "Xuất bán"), `docs/adr/0007-*`, `docs/adr/0008-*`, and the other ADRs.
 - Reference implementations, end to end (migration, shared zod schemas, admin + public routes, HTTP tests, admin SPA page, smoke checks):
   - `git show 382ecf8` (M2 ticket 01: stock ledger, `changeStock` locking, append-only trigger);
@@ -14,7 +14,7 @@ Repo: D:\my_project\ecommerce. Integration branch: `spec/m3-mua-hang` (checked o
 ## Worktree setup
 1. Confirm your branch contains the integration tip: `git merge-base --is-ancestor spec/m3-mua-hang HEAD`; if not, `git reset --hard spec/m3-mua-hang`.
 2. `pnpm install --frozen-lockfile` (worktrees have no node_modules). Adding a dependency is allowed when the ticket needs it; commit the lockfile.
-3. Docker Desktop must be running; API tests use Testcontainers (`cd api && pnpm vitest run test/<file>`). On Windows, a rare `Connection terminated due to connection timeout` is a known Docker Desktop port-forwarding hiccup (see `.scratch/m0-m1-nen-mong-danh-muc/implement-spec/progress.md`): rerun that file once; don't "fix" it in code. Any other failure is real.
+3. Docker Desktop must be running; API tests use Testcontainers (`cd api && pnpm vitest run test/<file>`). On Windows, a rare `Connection terminated due to connection timeout` is a known Docker Desktop port-forwarding hiccup (see `docs/specs/m0-m1-nen-mong-danh-muc/implement-spec/progress.md`): rerun that file once; don't "fix" it in code. Any other failure is real.
 
 ## How to build
 - Call the Skill tool with `tdd`. The seams are pre-agreed in the spec's "Testing Decisions" (HTTP via supertest on real Postgres; in-memory payment gateway; job functions called directly with a future `now`). Do not ask the user to confirm seams; there is no user in the loop.

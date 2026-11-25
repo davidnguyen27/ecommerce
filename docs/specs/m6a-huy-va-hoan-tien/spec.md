@@ -2,7 +2,7 @@
 
 **Status:** resolved
 
-Nguồn: `docs/project-overview.md` (mục 2, 5, 6.1, 9, 10, 11), Out of Scope của spec M3 (`.scratch/m3-mua-hang/spec.md`), M4 (`.scratch/m4-dat-truoc/spec.md`) và M5 (`.scratch/m5-ma-giam-gia/spec.md`), và buổi làm rõ requirement ngày 2026-11-17 (25 câu, người dùng chấp nhận mọi đề xuất). M6 trong lộ trình M0 → M8 được tách làm hai: **M6a** (spec này) lo tiền và hàng khi đơn không đi tới cuối; **M6b** lo đổi trả sau khi giao, bảo hành và yêu cầu hỗ trợ, và chạy trên nền của M6a. Quyết định kiến trúc: `docs/adr/0014-hoan-tien-la-truc-rieng.md` (mới), `docs/adr/0010-vnpay-thay-zalopay.md`, `docs/adr/0013-hang-ve-chia-cho-don-dat-truoc-trong-phieu-nhap.md`.
+Nguồn: `docs/project-overview.md` (mục 2, 5, 6.1, 9, 10, 11), Out of Scope của spec M3 (`docs/specs/m3-mua-hang/spec.md`), M4 (`docs/specs/m4-dat-truoc/spec.md`) và M5 (`docs/specs/m5-ma-giam-gia/spec.md`), và buổi làm rõ requirement ngày 2026-11-17 (25 câu, người dùng chấp nhận mọi đề xuất). M6 trong lộ trình M0 → M8 được tách làm hai: **M6a** (spec này) lo tiền và hàng khi đơn không đi tới cuối; **M6b** lo đổi trả sau khi giao, bảo hành và yêu cầu hỗ trợ, và chạy trên nền của M6a. Quyết định kiến trúc: `docs/adr/0014-hoan-tien-la-truc-rieng.md` (mới), `docs/adr/0010-vnpay-thay-zalopay.md`, `docs/adr/0013-hang-ve-chia-cho-don-dat-truoc-trong-phieu-nhap.md`.
 
 ## Problem Statement
 

@@ -2,7 +2,7 @@
 
 **Status:** resolved
 
-Nguồn: `docs/project-overview.md` (mục 4, 5.3, 6.2, 11), Out of Scope của spec M3 (`.scratch/m3-mua-hang/spec.md`) và M4 (`.scratch/m4-dat-truoc/spec.md`), và buổi làm rõ requirement ngày 2026-11-16 (28 câu, người dùng chấp nhận mọi đề xuất). Đây là mốc thứ năm trong lộ trình M0 → M8 của giai đoạn 1 (mở bán). Quyết định kiến trúc có liên quan: `docs/adr/0012-dat-truoc-nam-ngoai-gio-hang.md` (ưu đãi cho đơn đặt trước tính một lần trên đơn). Mốc này không có ADR mới.
+Nguồn: `docs/project-overview.md` (mục 4, 5.3, 6.2, 11), Out of Scope của spec M3 (`docs/specs/m3-mua-hang/spec.md`) và M4 (`docs/specs/m4-dat-truoc/spec.md`), và buổi làm rõ requirement ngày 2026-11-16 (28 câu, người dùng chấp nhận mọi đề xuất). Đây là mốc thứ năm trong lộ trình M0 → M8 của giai đoạn 1 (mở bán). Quyết định kiến trúc có liên quan: `docs/adr/0012-dat-truoc-nam-ngoai-gio-hang.md` (ưu đãi cho đơn đặt trước tính một lần trên đơn). Mốc này không có ADR mới.
 
 ## Problem Statement
 

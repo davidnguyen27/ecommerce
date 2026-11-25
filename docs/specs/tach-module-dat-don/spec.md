@@ -6,7 +6,7 @@ Nguồn: buổi rà soát `api/src` bằng `/codebase-design` ngày 2026-11-24 (
 
 ## Problem Statement
 
-Hôm nay chỉ có hai nơi tạo **đơn hàng**: handler `POST /` của **đặt mua** ([checkout.ts](../../api/src/routes/checkout.ts), khoảng 170 dòng) và của **đặt trước** ([preorders.ts](../../api/src/routes/preorders.ts), khoảng 165 dòng). Hai handler chép nhau gần hết, gồm:
+Hôm nay chỉ có hai nơi tạo **đơn hàng**: handler `POST /` của **đặt mua** ([checkout.ts](../../../api/src/routes/checkout.ts), khoảng 170 dòng) và của **đặt trước** ([preorders.ts](../../../api/src/routes/preorders.ts), khoảng 165 dòng). Hai handler chép nhau gần hết, gồm:
 
 - đồng ý chính sách bảo mật, kiểm phường/xã;
 - giới hạn số đơn chờ thanh toán;
@@ -154,7 +154,7 @@ priceOrder(
 - **`createOrderPaymentLink`:**
   - nhận `{ payments, siteUrl, clientIp, log }` thay vì `{ payments, siteUrl, req }`;
   - việc bỏ tiền tố IPv4-mapped (`::ffff:`) chuyển vào trong hàm hoặc vào chỗ dựng `Placer`, chỉ một nơi;
-  - `createRemainderLink` ([remainder.ts](../../api/src/preorders/remainder.ts)) đổi theo.
+  - `createRemainderLink` ([remainder.ts](../../../api/src/preorders/remainder.ts)) đổi theo.
 - **`routes/checkout.ts` và `routes/preorders.ts`:** handler `POST /` chỉ còn `parse`, giới hạn theo IP, dựng `Placer`, gọi module và trả 201. Các import không còn dùng bị xóa.
 
 ## Testing Decisions

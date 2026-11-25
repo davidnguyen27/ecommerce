@@ -4,7 +4,7 @@
 
 **Status:** resolved
 
-Nguồn: `docs/project-overview.md` (mục 4, 5.1, 5.4, 5.5, 6.1, 10.1), Out of Scope của spec M2 (`.scratch/m2-ton-kho/spec.md`) và phiên làm rõ requirement ngày 2026-10-30 (35 câu, người dùng chấp nhận mọi đề xuất). Đây là mốc thứ ba trong lộ trình M0 → M8 của giai đoạn 1 (mở bán). Quyết định kiến trúc: `docs/adr/0007-giu-hang-khong-tru-ton-hang-roi-ton-khi-ban-giao.md`, `docs/adr/0010-vnpay-thay-zalopay.md` (thay `docs/adr/0009-zalopay-thay-payos.md`, vốn thay `docs/adr/0008-payos-chuyen-khoan-vietqr.md`).
+Nguồn: `docs/project-overview.md` (mục 4, 5.1, 5.4, 5.5, 6.1, 10.1), Out of Scope của spec M2 (`docs/specs/m2-ton-kho/spec.md`) và phiên làm rõ requirement ngày 2026-10-30 (35 câu, người dùng chấp nhận mọi đề xuất). Đây là mốc thứ ba trong lộ trình M0 → M8 của giai đoạn 1 (mở bán). Quyết định kiến trúc: `docs/adr/0007-giu-hang-khong-tru-ton-hang-roi-ton-khi-ban-giao.md`, `docs/adr/0010-vnpay-thay-zalopay.md` (thay `docs/adr/0009-zalopay-thay-payos.md`, vốn thay `docs/adr/0008-payos-chuyen-khoan-vietqr.md`).
 
 ## Problem Statement
 
