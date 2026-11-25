@@ -30,3 +30,7 @@ Ticket này cần người làm: tạo repo GitHub, có VPS, có tài khoản Cl
 - `knip` để báo file và thư viện không dùng (cần cấu hình cho auto-import của Nuxt).
 
 **Ghi chú (2026-11-02):** Phần CI (lint, typecheck, test API bằng Testcontainers và `pnpm smoke` cho mọi push và PR, không retry) đã chuyển sang ticket 13 của M3 (`.scratch/m3-mua-hang/issues/13-ci-github-actions.md`), workflow ở `.github/workflows/ci.yml`. Mục checkbox CI ở trên do ticket đó đảm nhận. Ticket này còn lại: build image, đẩy GHCR, deploy staging/production lên VPS, Caddy hai tên miền, tài liệu deploy và rollback. Smoke admin bằng Playwright thuộc ticket 14 của M3; `knip` vẫn để sau.
+
+## Comments
+
+- 2026-11-25: đã xóa `scripts/setup-infra.sh` (wizard hạ tầng VPS) vì ticket này wontfix. Lấy lại từ lịch sử git nếu sau này lên VPS.
