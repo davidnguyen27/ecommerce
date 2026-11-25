@@ -1,4 +1,4 @@
-import { ProductSnapshot } from '../catalog/publication.ts'
+import { ProductSnapshot } from './publication.ts'
 import type { DbClient } from '../db.ts'
 
 /**

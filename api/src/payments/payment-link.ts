@@ -3,29 +3,8 @@ import type { Logger } from 'pino'
 import type { DbClient } from '../db.ts'
 import type { PaymentPurpose } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
-import { paymentResultUrl, type OrderLineImage } from '../orders/orders.ts'
-import type { PaymentGateway } from '../payments/gateway.ts'
-import type { CartVariant } from './live-variants.ts'
-
-/** The variant's image, else the product's first image. */
-export function storedImageOf({ snapshot, variant }: CartVariant): OrderLineImage | null {
-  const images = snapshot?.images ?? []
-  const image = images.find((i) => variant && i.variantIds.includes(variant.id)) ?? images[0]
-  if (!image) return null
-  const { key, contentType, width, height, widths, alt } = image
-  return { key, contentType, width, height, widths, alt }
-}
-
-/** Published versions of the policy pages linked to the products in the order. */
-export async function livePolicyVersions(db: DbClient, variants: Iterable<CartVariant>) {
-  const pageIds = new Set([...variants].flatMap((v) => (v.variant ? (v.snapshot?.policyPageIds ?? []) : [])))
-  const pages = await db.contentPage.findMany({
-    where: { id: { in: [...pageIds] }, kind: 'policy' },
-    select: { slug: true, versions: { orderBy: { version: 'desc' }, take: 1, select: { id: true, title: true } } },
-    orderBy: { slug: 'asc' },
-  })
-  return pages.flatMap(({ slug, versions }) => versions.map(({ id, title }) => ({ id, slug, title })))
-}
+import { paymentResultUrl } from '../orders/orders.ts'
+import type { PaymentGateway } from './gateway.ts'
 
 /**
  * Creates the gateway payment link and stores its reference. Call last in the transaction: a gateway error is logged,

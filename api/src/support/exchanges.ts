@@ -1,6 +1,6 @@
 import { SUPPORT_CLOSED_STATUSES, type ExchangeOptions, type ShipExchangeRequest } from '@ecommerce/shared'
 import type { Audit } from '../audit/audited.ts'
-import { cartVariants } from '../checkout/live-variants.ts'
+import { cartVariants } from '../catalog/live-variants.ts'
 import type { DbClient } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import type { CustomerMail } from '../jobs/jobs.ts'
