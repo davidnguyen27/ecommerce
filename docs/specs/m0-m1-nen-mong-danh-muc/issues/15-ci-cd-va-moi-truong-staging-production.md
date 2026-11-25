@@ -22,14 +22,14 @@ Ticket này cần người làm: tạo repo GitHub, có VPS, có tài khoản Cl
 - [ ] Sau khi deploy, `/healthz` của cả hai môi trường trả 200
 - [ ] Có tài liệu ngắn về cách deploy và cách rollback (chạy lại với tag image trước)
 
-**Ghi chú (2026-10-28):** Trên Windows + Docker Desktop, test API thỉnh thoảng đỏ với `Connection terminated due to connection timeout` (khoảng 1/14 lượt chạy toàn bộ; chạy lại là qua). Đã chẩn đoán: lớp chuyển cổng của Docker Desktop có lúc đứng 10–40 giây, kết nối mới từ host không tới được container Postgres, trong khi Postgres và worker Node vẫn khỏe. Code app không có lỗi. Quyết định: không sửa trên máy local, dựa vào CI Linux (không có lớp chuyển cổng này). Nếu CI Linux cũng đỏ kiểu này thì đó là lỗi khác, cần chẩn đoán lại. Chi tiết: `.scratch/m0-m1-nen-mong-danh-muc/implement-spec/progress.md`, mục "Chẩn đoán test chập chờn".
+**Ghi chú (2026-10-28):** Trên Windows + Docker Desktop, test API thỉnh thoảng đỏ với `Connection terminated due to connection timeout` (khoảng 1/14 lượt chạy toàn bộ; chạy lại là qua). Đã chẩn đoán: lớp chuyển cổng của Docker Desktop có lúc đứng 10–40 giây, kết nối mới từ host không tới được container Postgres, trong khi Postgres và worker Node vẫn khỏe. Code app không có lỗi. Quyết định: không sửa trên máy local, dựa vào CI Linux (không có lớp chuyển cổng này). Nếu CI Linux cũng đỏ kiểu này thì đó là lỗi khác, cần chẩn đoán lại. Chi tiết: `docs/specs/m0-m1-nen-mong-danh-muc/implement-spec/progress.md`, mục "Chẩn đoán test chập chờn".
 
 **Ghi chú từ retro sau review toàn nhánh (2026-10-30):** CI của ticket này nên chạy thêm:
 - `pnpm smoke`: đã có kiểm tra lời khẳng định nguồn gốc không có căn cứ trên trang khách (ADR 0005), chỉ có tác dụng khi CI chạy nó.
 - Smoke admin bằng trình duyệt (Playwright) trên stack của `pnpm smoke --keep`: đăng nhập owner, sửa và lưu biến thể, xuất bản; đăng nhập `warehouse` và kiểm dashboard không hiện lối tắt danh mục. Hiện smoke chỉ đọc được phần khung của SPA admin.
 - `knip` để báo file và thư viện không dùng (cần cấu hình cho auto-import của Nuxt).
 
-**Ghi chú (2026-11-02):** Phần CI (lint, typecheck, test API bằng Testcontainers và `pnpm smoke` cho mọi push và PR, không retry) đã chuyển sang ticket 13 của M3 (`.scratch/m3-mua-hang/issues/13-ci-github-actions.md`), workflow ở `.github/workflows/ci.yml`. Mục checkbox CI ở trên do ticket đó đảm nhận. Ticket này còn lại: build image, đẩy GHCR, deploy staging/production lên VPS, Caddy hai tên miền, tài liệu deploy và rollback. Smoke admin bằng Playwright thuộc ticket 14 của M3; `knip` vẫn để sau.
+**Ghi chú (2026-11-02):** Phần CI (lint, typecheck, test API bằng Testcontainers và `pnpm smoke` cho mọi push và PR, không retry) đã chuyển sang ticket 13 của M3 (`docs/specs/m3-mua-hang/issues/13-ci-github-actions.md`), workflow ở `.github/workflows/ci.yml`. Mục checkbox CI ở trên do ticket đó đảm nhận. Ticket này còn lại: build image, đẩy GHCR, deploy staging/production lên VPS, Caddy hai tên miền, tài liệu deploy và rollback. Smoke admin bằng Playwright thuộc ticket 14 của M3; `knip` vẫn để sau.
 
 ## Comments
 

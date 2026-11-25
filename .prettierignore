@@ -3,4 +3,4 @@ api/src/generated/
 api/prisma/migrations/
 .agents/
 .claude/
-.scratch/
+docs/specs/

@@ -14,7 +14,7 @@
 - [x] Toàn bộ test M3 (thanh toán, hết hạn, đối soát) vẫn qua, không sửa kỳ vọng
 - [x] Test thêm: đơn tạo trước migration vẫn `refresh=1` và hết hạn đúng (dựng bằng SQL); mã đơn bên cổng trùng giữa hai link bị chặn
 
-Spec: `.scratch/m4-dat-truoc/spec.md` mục "Thanh toán".
+Spec: `docs/specs/m4-dat-truoc/spec.md` mục "Thanh toán".
 
 **Quyết định khi triển khai (2026-11-14):**
 - Migration `20261114000100_payment_links`:

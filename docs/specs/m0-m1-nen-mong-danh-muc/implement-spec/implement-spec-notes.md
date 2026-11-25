@@ -3,7 +3,7 @@
 Repo: D:\my_project\ecommerce. Integration branch: `spec/m0-m1-nen-mong-danh-muc` (checked out in the main repo dir; never commit there yourself unless you are the merger).
 
 ## Read first (context pointers, don't skip)
-- Spec: `.scratch/m0-m1-nen-mong-danh-muc/spec.md`; your ticket: `.scratch/m0-m1-nen-mong-danh-muc/issues/NN-*.md` (also read the tickets it is blocked by, especially their "Quyết định" sections: they record API names and choices you build on).
+- Spec: `docs/specs/m0-m1-nen-mong-danh-muc/spec.md`; your ticket: `docs/specs/m0-m1-nen-mong-danh-muc/issues/NN-*.md` (also read the tickets it is blocked by, especially their "Quyết định" sections: they record API names and choices you build on).
 - `CODING_STANDARDS.md` (binding; the code review checks it), `GLOSSARY.md`, `docs/adr/`.
 - Reference implementation of a whole ticket, end to end (migration, shared zod schemas, admin + public routes, HTTP tests, admin SPA page, SSR customer page, smoke checks): `git show e3aa9f9` (ticket 07). Also `git show ffeee20` (ticket 04).
 

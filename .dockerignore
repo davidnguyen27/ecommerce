@@ -4,6 +4,6 @@
 **/.nuxt
 **/src/generated
 .git
-.scratch
+docs/specs
 .env
 .env.*

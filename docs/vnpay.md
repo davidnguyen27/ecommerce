@@ -86,7 +86,7 @@ VNPAY gửi lại khi nhận mã khác `00`/`02`, tối đa 10 lần, cách nhau
 
 ## Cần kiểm trên sandbox
 
-Tài liệu chưa nói rõ những điểm dưới đây. Kết quả thử ngày 2026-11-12 ghi ở ticket 16 (`.scratch/m3-mua-hang/issues/16-thu-vnpay-sandbox.md`):
+Tài liệu chưa nói rõ những điểm dưới đây. Kết quả thử ngày 2026-11-12 ghi ở ticket 16 (`docs/specs/m3-mua-hang/issues/16-thu-vnpay-sandbox.md`):
 
 - Chữ ký URL thanh toán và chữ ký VNPAY gửi về: **đúng**. VNPAY nhận URL; code dự án kiểm đúng chữ ký thật, sửa số tiền thì không qua.
 - VNPAY nối `vnp_*` vào `vnp_ReturnUrl` có sẵn query bằng `&`: **`ket-qua=1` còn nguyên**.

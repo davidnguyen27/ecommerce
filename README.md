@@ -84,4 +84,4 @@ Giới hạn của bản demo dùng gói miễn phí:
 - [GLOSSARY.md](GLOSSARY.md): thuật ngữ dùng trong code và tài liệu.
 - [docs/adr/](docs/adr/): các quyết định kiến trúc.
 - [CODING_STANDARDS.md](CODING_STANDARDS.md): quy ước viết code.
-- `.scratch/<mốc>/`: spec và ticket của từng mốc M0 đến M8.
+- `docs/specs/<mốc>/`: spec và ticket của từng mốc M0 đến M8.
