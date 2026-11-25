@@ -2,7 +2,7 @@
 
 **Status:** resolved
 
-Nguồn: `project-overview.md` và phiên làm rõ requirement ngày 2026-10-21. Đây là spec đầu tiên trong lộ trình M0 → M9 của giai đoạn 1 (mở bán).
+Nguồn: `docs/project-overview.md` và phiên làm rõ requirement ngày 2026-10-21. Đây là spec đầu tiên trong lộ trình M0 → M9 của giai đoạn 1 (mở bán).
 
 ## Problem Statement
 
@@ -172,7 +172,7 @@ Mốc này **chưa có tồn kho, chưa có mua hàng**. Trang sản phẩm hi�
   - cấp áp dụng `product | variant`;
   - có dùng làm bộ lọc không, thứ tự hiển thị.
 
-  Seed sẵn schema cho 5 nhóm hàng theo bảng ở mục 3.1 của `project-overview.md`.
+  Seed sẵn schema cho 5 nhóm hàng theo bảng ở mục 3.1 của `docs/project-overview.md`.
 
 - Đổi schema khi đã có sản phẩm dùng nó: thêm thuộc tính không bắt buộc thì luôn được. Thêm thuộc tính bắt buộc, xóa thuộc tính hoặc bớt giá trị enum mà đang có sản phẩm vi phạm thì bị từ chối, kèm danh sách sản phẩm bị ảnh hưởng.
 - **Sản phẩm**:

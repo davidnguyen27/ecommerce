@@ -80,7 +80,7 @@ Giới hạn của bản demo dùng gói miễn phí:
 
 ## Tài liệu
 
-- [project-overview.md](project-overview.md): định hướng sản phẩm và nghiệp vụ.
+- [docs/project-overview.md](docs/project-overview.md): định hướng sản phẩm và nghiệp vụ.
 - [GLOSSARY.md](GLOSSARY.md): thuật ngữ dùng trong code và tài liệu.
 - [docs/adr/](docs/adr/): các quyết định kiến trúc.
 - [CODING_STANDARDS.md](CODING_STANDARDS.md): quy ước viết code.

@@ -1,7 +1,7 @@
 # 08: Schema thuộc tính theo nhóm hàng
 
 **What to build:**
-- Mỗi nhóm hàng có một schema thuộc tính riêng, được seed sẵn theo bảng ở mục 3.1 của `project-overview.md`. Ví dụ: giày dép có hệ size, size, màu, chất liệu; nước hoa có dung tích, nồng độ, nhóm hương.
+- Mỗi nhóm hàng có một schema thuộc tính riêng, được seed sẵn theo bảng ở mục 3.1 của `docs/project-overview.md`. Ví dụ: giày dép có hệ size, size, màu, chất liệu; nước hoa có dung tích, nồng độ, nhóm hương.
 - Owner hoặc nhân viên có quyền xem và sửa schema trong trang quản trị.
 - Hệ thống có một bộ kiểm dữ liệu theo schema, trả lỗi theo từng trường. Ticket 09 dùng bộ kiểm này cho sản phẩm và biến thể.
 

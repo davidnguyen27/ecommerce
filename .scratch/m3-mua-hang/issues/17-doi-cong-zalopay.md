@@ -44,7 +44,7 @@ Tài liệu:
 - [x] `docs/zalopay.md` thay `docs/payos.md`: bảng chọn cổng, lấy khóa sandbox (`sbmc.zalopay.vn`) và thật (`mc.zalopay.vn`), tunnel tới callback, những điều cần kiểm trên sandbox
 - [x] Spec M3: mục "Thanh toán", user story 19, 52, 53, mục API, Testing Decisions, Out of Scope, Further Notes nói về ZaloPay; dòng đầu ghi "đổi cổng sang ZaloPay ngày 2026-11-09, ADR 0009"
 - [x] Ticket 12: thêm dòng đầu "Đã được thay bằng ticket 17 (ZaloPay)". Ticket 16: đổi thành thử ZaloPay (sandbox trước, thật sau), đổi tên file `16-thu-zalopay-that.md`
-- [x] `GLOSSARY.md`, `project-overview.md`, `.scratch/m0-m1-nen-mong-danh-muc/spec.md` (dòng nói "thanh toán PayOS"): sửa chữ hoặc thêm ghi chú trỏ ADR 0009
+- [x] `GLOSSARY.md`, `docs/project-overview.md`, `.scratch/m0-m1-nen-mong-danh-muc/spec.md` (dòng nói "thanh toán PayOS"): sửa chữ hoặc thêm ghi chú trỏ ADR 0009
 - [x] Sau khi xong, `grep -ri payos` chỉ còn ở ADR 0008, ADR 0009, ticket 12, ticket 17 và các ghi chú lịch sử
 
 **Quyết định khi triển khai (2026-11-09):**

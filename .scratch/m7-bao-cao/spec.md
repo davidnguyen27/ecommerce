@@ -2,7 +2,7 @@
 
 **Status:** resolved
 
-Nguồn: `project-overview.md` (mục 2, 4, 6.1, 10.2), các mục Out of Scope ghi "M7" ở spec M2–M6b, và buổi làm rõ requirement ngày 2026-11-20 (21 câu, người dùng chấp nhận mọi đề xuất). Quyết định kiến trúc: `docs/adr/0016-doanh-thu-ghi-theo-ngay-giao.md` (mới), `docs/adr/0014-hoan-tien-la-truc-rieng.md`, `docs/adr/0015-doi-hang-khong-tao-don-moi.md`. Thuật ngữ mới trong GLOSSARY, mục **Báo cáo**: Doanh thu, Tiền thu, Hàng trả lại, Tồn đầu/Tồn cuối, Đơn đã xác nhận, Đơn bỏ dở.
+Nguồn: `docs/project-overview.md` (mục 2, 4, 6.1, 10.2), các mục Out of Scope ghi "M7" ở spec M2–M6b, và buổi làm rõ requirement ngày 2026-11-20 (21 câu, người dùng chấp nhận mọi đề xuất). Quyết định kiến trúc: `docs/adr/0016-doanh-thu-ghi-theo-ngay-giao.md` (mới), `docs/adr/0014-hoan-tien-la-truc-rieng.md`, `docs/adr/0015-doi-hang-khong-tao-don-moi.md`. Thuật ngữ mới trong GLOSSARY, mục **Báo cáo**: Doanh thu, Tiền thu, Hàng trả lại, Tồn đầu/Tồn cuối, Đơn đã xác nhận, Đơn bỏ dở.
 
 ## Problem Statement
 

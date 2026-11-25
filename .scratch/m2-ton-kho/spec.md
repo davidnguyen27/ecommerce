@@ -2,7 +2,7 @@
 
 **Status:** resolved
 
-Nguồn: `project-overview.md`, phần Out of Scope của spec M0+M1 (`.scratch/m0-m1-nen-mong-danh-muc/spec.md`) và phiên làm rõ requirement ngày 2026-10-29. Đây là mốc thứ hai trong lộ trình M0 → M8 của giai đoạn 1 (mở bán).
+Nguồn: `docs/project-overview.md`, phần Out of Scope của spec M0+M1 (`.scratch/m0-m1-nen-mong-danh-muc/spec.md`) và phiên làm rõ requirement ngày 2026-10-29. Đây là mốc thứ hai trong lộ trình M0 → M8 của giai đoạn 1 (mở bán).
 
 ## Problem Statement
 
