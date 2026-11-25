@@ -13,3 +13,6 @@ test-results/
 playwright-report/
 # Netlify build output (nitro netlify preset)
 .netlify/
+
+# `npx skills` install dir; Claude Code reads .claude/skills, which holds the committed copies.
+.agents/
