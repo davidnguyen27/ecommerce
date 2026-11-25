@@ -1,7 +1,7 @@
 import { ErrorCode, type CheckoutConflictDetails, type CheckoutRequest } from '@ecommerce/shared'
 import type { z } from 'zod'
-import { cartVariants } from '../checkout/live-variants.ts'
-import { storedImageOf } from '../checkout/order-snapshot.ts'
+import { cartVariants } from '../catalog/live-variants.ts'
+import { storedImageOf } from './order-snapshot.ts'
 import { AppError } from '../http/errors.ts'
 import { reserveStock } from '../stock/stock.ts'
 import type { Plan } from './placement-plan.ts'
@@ -10,7 +10,7 @@ import type { Plan } from './placement-plan.ts'
  * Checkout: every line must be on sale, at the price seen, and in stock. Reports all bad lines at once, in input order;
  * still reserves the valid lines so every short line is found (the 409 rolls the reservation back).
  */
-export const datMua: Plan<z.output<typeof CheckoutRequest>> = {
+export const checkoutPlan: Plan<z.output<typeof CheckoutRequest>> = {
   verb: 'đặt mua',
   saleType: 'standard',
   tooManyAttempts: 'Bạn đã đặt mua quá nhiều lần, vui lòng thử lại sau',

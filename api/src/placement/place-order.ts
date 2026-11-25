@@ -11,16 +11,17 @@ import type { Logger } from 'pino'
 import type { z } from 'zod'
 import type { AppDeps } from '../app.ts'
 import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
-import { createOrderPaymentLink, livePolicyVersions } from '../checkout/order-snapshot.ts'
-import { enforcePendingOrderLimit } from '../checkout/pending-orders.ts'
+import { createOrderPaymentLink } from '../payments/payment-link.ts'
+import { livePolicyVersions } from './order-snapshot.ts'
+import { enforcePendingOrderLimit } from './pending-orders.ts'
 import { findCurrentPrivacyPolicy } from '../content/pages.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
 import { applyVoucherToOrder, voucherSnapshot } from '../vouchers/apply.ts'
-import { datMua } from './dat-mua.ts'
-import { datTruoc } from './dat-truoc.ts'
-import { recordOrderEvent } from './orders.ts'
+import { checkoutPlan } from './checkout-plan.ts'
+import { preorderPlan } from './preorder-plan.ts'
+import { recordOrderEvent } from '../orders/orders.ts'
 import type { Plan, PlacementInput } from './placement-plan.ts'
 import { priceOrder } from './price-order.ts'
 
@@ -46,10 +47,10 @@ export function orderPlacement(deps: PlacementDeps) {
   return {
     /** Checkout: reserves stock for every line, pays the full total. */
     checkout: (input: z.output<typeof CheckoutRequest>, placer: Placer): Promise<CheckoutResult> =>
-      place(deps, placer, datMua, input),
+      place(deps, placer, checkoutPlan, input),
     /** Pre-order: one line, takes campaign allocation (no reservation, ADR 0013), pays the deposit. */
     preorder: (input: z.output<typeof PreorderRequest>, placer: Placer): Promise<CheckoutResult> =>
-      place(deps, placer, datTruoc, input),
+      place(deps, placer, preorderPlan, input),
   }
 }
 

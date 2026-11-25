@@ -1,10 +1,10 @@
 import type { CheckoutRequest, VoucherConflict } from '@ecommerce/shared'
 import type { z } from 'zod'
-import type { CartVariant } from '../checkout/live-variants.ts'
+import type { CartVariant } from '../catalog/live-variants.ts'
 import type { PaymentPurpose, Prisma } from '../generated/prisma/client.ts'
 import type { VoucherLine } from '../vouchers/apply.ts'
 
-// Internal types of order placement (`place-order.ts`): the per-kind part. Used only inside `orders/`.
+// Internal types of order placement (`place-order.ts`): the per-kind part. Used only inside `placement/`.
 
 export type Tx = Prisma.TransactionClient
 
