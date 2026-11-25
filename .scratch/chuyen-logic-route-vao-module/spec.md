@@ -1,6 +1,6 @@
 # Spec: Chuyển logic nghiệp vụ khỏi route quản trị
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Nguồn: buổi review cấu trúc repo ngày 2026-11-25 (mục #1), nối tiếp ứng viên #4 của buổi `/codebase-design` ngày 2026-11-24. Đây là refactor: không đổi hành vi, không đổi contract API, không có migration, không có ADR mới.
 
