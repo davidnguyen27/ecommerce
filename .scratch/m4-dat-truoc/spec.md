@@ -2,7 +2,7 @@
 
 **Status:** resolved
 
-Nguồn: `project-overview.md` (mục 3.2, 4, 5.2, 5.3, 5.4, 5.5, 6.1), Out of Scope của spec M3 (`.scratch/m3-mua-hang/spec.md`) và buổi làm rõ requirement ngày 2026-11-14 (23 câu, người dùng chấp nhận mọi đề xuất). Đây là mốc thứ tư trong lộ trình M0 → M8 của giai đoạn 1 (mở bán). Quyết định kiến trúc: `docs/adr/0012-dat-truoc-nam-ngoai-gio-hang.md`, `docs/adr/0013-hang-ve-chia-cho-don-dat-truoc-trong-phieu-nhap.md`; giữ hàng theo `docs/adr/0007-giu-hang-khong-tru-ton-hang-roi-ton-khi-ban-giao.md`.
+Nguồn: `docs/project-overview.md` (mục 3.2, 4, 5.2, 5.3, 5.4, 5.5, 6.1), Out of Scope của spec M3 (`.scratch/m3-mua-hang/spec.md`) và buổi làm rõ requirement ngày 2026-11-14 (23 câu, người dùng chấp nhận mọi đề xuất). Đây là mốc thứ tư trong lộ trình M0 → M8 của giai đoạn 1 (mở bán). Quyết định kiến trúc: `docs/adr/0012-dat-truoc-nam-ngoai-gio-hang.md`, `docs/adr/0013-hang-ve-chia-cho-don-dat-truoc-trong-phieu-nhap.md`; giữ hàng theo `docs/adr/0007-giu-hang-khong-tru-ton-hang-roi-ton-khi-ban-giao.md`.
 
 ## Problem Statement
 
