@@ -1,6 +1,6 @@
 import { ErrorCode, type PreorderChange, type PreorderConflictDetails, type PreorderRequest } from '@ecommerce/shared'
 import type { z } from 'zod'
-import { storedImageOf } from '../checkout/order-snapshot.ts'
+import { storedImageOf } from './order-snapshot.ts'
 import { findCurrentPreorderPolicy } from '../content/pages.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import { checkPreorder } from '../preorders/check.ts'
@@ -23,7 +23,7 @@ const preorderConflict = (change: PreorderChange) => {
  * Pre-order of one variant, outside the cart (ADR 0012): one line, deposit first. A pending order takes campaign
  * allocation, not stock (ADR 0013). Stops at the first change the customer must review.
  */
-export const datTruoc: Plan<z.output<typeof PreorderRequest>> = {
+export const preorderPlan: Plan<z.output<typeof PreorderRequest>> = {
   verb: 'đặt trước',
   saleType: 'preorder',
   tooManyAttempts: 'Bạn đã đặt quá nhiều lần, vui lòng thử lại sau',

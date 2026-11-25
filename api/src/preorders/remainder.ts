@@ -1,7 +1,7 @@
 import { ErrorCode, RESERVATION_MINUTES, type PayRemainderResult } from '@ecommerce/shared'
 import type { Request } from 'express'
 import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
-import { createOrderPaymentLink } from '../checkout/order-snapshot.ts'
+import { createOrderPaymentLink } from '../payments/payment-link.ts'
 import type { Db } from '../db.ts'
 import { AppError, isUniqueViolation } from '../http/errors.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
