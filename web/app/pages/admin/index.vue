@@ -219,7 +219,7 @@ onMounted(async () => {
               <td>{{ p.brand.name }}</td>
               <td class="admin-table-num">{{ p.variantCount }}</td>
               <td>
-                <ProductStatusBadge :status="p.status" />
+                <AdminProductStatusBadge :status="p.status" />
               </td>
               <td style="font-size: 12px; color: var(--adm-muted); white-space: nowrap">
                 {{ formatDateTime(p.updatedAt) }}

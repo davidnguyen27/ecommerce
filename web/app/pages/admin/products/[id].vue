@@ -186,7 +186,7 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
         </div>
         <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
           <h1 class="admin-page-title" style="margin: 0">{{ product.name }}</h1>
-          <ProductStatusBadge :status="product.status" />
+          <AdminProductStatusBadge :status="product.status" />
           <span class="badge badge-role">
             {{ PRODUCT_TYPE_LABELS[product.productType] }}
           </span>
@@ -335,7 +335,7 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
             <div class="form-grid-2">
               <div v-for="definition in productDefinitions" :key="definition.key" class="form-group">
                 <label class="form-label" :for="`product-attr-${definition.key}`">{{ definition.label }}</label>
-                <AttributeInput
+                <AdminAttributeInput
                   :id="`product-attr-${definition.key}`"
                   v-model="draft.attributes[definition.key]"
                   :definition="definition"
@@ -348,9 +348,9 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
           </fieldset>
         </div>
 
-        <SizeChartEditor v-model="draft.sizeChart" :disabled="!canEdit" @save="saveProduct" />
+        <AdminSizeChartEditor v-model="draft.sizeChart" :disabled="!canEdit" @save="saveProduct" />
 
-        <VariantMatrix
+        <AdminVariantMatrix
           v-model:variants="variants"
           v-model:new-variant="newVariant"
           :definitions="variantDefinitions"
@@ -395,17 +395,17 @@ policyPages.value = PolicyPageOptionList.parse(await session.adminFetch('/api/ad
       </div>
 
       <div>
-        <PublicationPanel
+        <AdminPublicationPanel
           :product="product"
           :blockers="fieldErrors.target === 'status' ? fieldErrors.fields : []"
           :can-edit="canEdit"
           @change-status="changeStatus"
         />
 
-        <ProductImages :product-id="id" :variants="imageVariants" />
+        <AdminProductImages :product-id="id" :variants="imageVariants" />
 
-        <ProductDocuments v-if="canViewDocuments" v-model="documents" :product-id="id" />
-        <ProductCommitments :product-id="id" :documents="documents" />
+        <AdminProductDocuments v-if="canViewDocuments" v-model="documents" :product-id="id" />
+        <AdminProductCommitments :product-id="id" :documents="documents" />
       </div>
     </div>
   </div>
