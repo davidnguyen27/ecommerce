@@ -20,3 +20,7 @@ Ticket này cần người làm: Sentry và khóa age được tạo qua wizard 
 - [ ] Job backup lỗi thì có cảnh báo, qua Sentry hoặc email cho owner
 - [ ] Có tài liệu khôi phục: tải bản backup, giải mã bằng khóa bí mật age, restore vào một DB
 - [ ] Đã diễn tập khôi phục một lần lên staging, ghi lại ngày làm và thời gian mất bao lâu
+
+## Comments
+
+- 2026-11-25: đã xóa `scripts/setup-infra.sh` (wizard hạ tầng VPS) vì ticket này wontfix. Lấy lại từ lịch sử git nếu sau này lên VPS.
