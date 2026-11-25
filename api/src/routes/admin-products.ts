@@ -1,40 +1,29 @@
 import { isDeepStrictEqual } from 'node:util'
 import { Router, type Request } from 'express'
 import { z } from 'zod'
-import {
-  ErrorCode,
-  ProductRequest,
-  VariantRequest,
-  type AdminProductList,
-  type AdminVariant,
-  type AttributeValues,
-  type PolicyPageOptionList,
-} from '@ecommerce/shared'
-import { audited, type Audit } from '../audit/audited.ts'
-import { currentStaff, forbidden, hasPermission, requirePermission } from '../auth/staff-context.ts'
+import { ProductRequest, VariantRequest, type AdminProductList, type PolicyPageOptionList } from '@ecommerce/shared'
+import { audited } from '../audit/audited.ts'
+import { currentStaff, hasPermission, requirePermission } from '../auth/staff-context.ts'
 import { assertAttributes, lockAttributeSchema } from '../catalog/attribute-schemas.ts'
-import {
-  ProductParams,
-  lockProduct,
-  priceAuditFields,
-  productAuditFields,
-  toAdminProduct,
-  toAdminVariant,
-  toNumber,
-  variantAuditFields,
-  variantCreatedAudits,
-} from '../catalog/products.ts'
-import { loadDraft, loadLiveVersion, publishPrice, toAdminProductDetail } from '../catalog/publication.ts'
+import { ProductParams, lockProduct, productAuditFields, toAdminProduct } from '../catalog/products.ts'
+import { loadDraft, toAdminProductDetail } from '../catalog/publication.ts'
+import { createVariant, updateVariant, type VariantActor } from '../catalog/variants.ts'
 import type { Db } from '../db.ts'
-import { Prisma, type ProductVariant } from '../generated/prisma/client.ts'
-import { AppError, conflictField, invalidField, rethrowUnique } from '../http/errors.ts'
+import { Prisma } from '../generated/prisma/client.ts'
+import { conflictField, invalidField, rethrowUnique } from '../http/errors.ts'
 import { parse } from '../http/validation.ts'
 
 const VariantParams = z.object({ id: z.uuid(), variantId: z.uuid() })
 
 /** Slug is the product's only unique constraint besides the primary key. */
 const slugTaken = () => conflictField('slug', 'Slug này đã có sản phẩm khác dùng')
-const skuTaken = () => conflictField('sku', 'SKU này đã có biến thể khác dùng')
+
+/** The signed-in staff member as a variant editor. */
+const variantActor = (req: Request): VariantActor => ({
+  staffId: currentStaff(req).id,
+  canEditCatalog: hasPermission(req, 'catalog.edit'),
+  canEditPrice: hasPermission(req, 'price.edit'),
+})
 
 /**
  * Products and variants. Viewing needs `catalog.edit` or `price.edit` (price-only editors must see variants); editing
@@ -148,166 +137,21 @@ export function adminProductRoutes(prisma: Db) {
       .post('/:id/variants', requirePermission('catalog.edit'), async (req, res) => {
         const { id } = parse(ProductParams, req.params)
         const input = parse(VariantRequest, req.body)
-        const created = await audited(prisma, req, (tx, audit) => createVariant(tx, audit, req, id, input))
+        const created = await audited(prisma, req, (tx, audit) =>
+          createVariant(tx, audit, variantActor(req), id, input),
+        )
         res.status(201).json(created)
       })
       // Price-only editors also use this route to change prices, sending the other fields unchanged.
       .put('/:id/variants/:variantId', requirePermission('catalog.edit', 'price.edit'), async (req, res) => {
         const { id, variantId } = parse(VariantParams, req.params)
         const input = parse(VariantRequest, req.body)
-        const updated = await audited(prisma, req, (tx, audit) => updateVariant(tx, audit, req, id, variantId, input))
+        const updated = await audited(prisma, req, (tx, audit) =>
+          updateVariant(tx, audit, variantActor(req), id, variantId, input),
+        )
         res.json(updated)
       })
   )
-}
-
-type VariantInput = z.output<typeof VariantRequest>
-type LockedProduct = Awaited<ReturnType<typeof lockProduct>>
-type VariantFields = Pick<ProductVariant, 'sku' | 'status' | 'sortOrder'> & { attributes: AttributeValues }
-type VariantPrice = { price: number | null; compareAtPrice: number | null }
-
-/** Creates a variant (the route requires `catalog.edit`); a price also needs `price.edit` and writes `price.change`. */
-async function createVariant(
-  tx: Prisma.TransactionClient,
-  audit: Audit,
-  req: Request,
-  productId: string,
-  input: VariantInput,
-): Promise<AdminVariant> {
-  const product = await lockProduct(tx, productId)
-  const { others, fields } = await resolveFields(tx, product, null, input)
-  const price = { price: input.price ?? null, compareAtPrice: input.compareAtPrice ?? null }
-  const priced = price.price !== null || price.compareAtPrice !== null
-  if (priced && !hasPermission(req, 'price.edit')) throw forbidden()
-  // A new variant is not on the website yet: the published version lacks it.
-  await assertVariant(tx, product, others, null, fields, price, false)
-
-  const created = await tx.productVariant
-    .create({ data: { ...fields, ...price, productId } })
-    .catch(rethrowUnique(skuTaken))
-  await audit(variantCreatedAudits(created))
-  return toAdminVariant(created)
-}
-
-/**
- * Updates a variant. SKU, attributes, status and order need `catalog.edit`; a price different from the current one
- * needs `price.edit`, writes its own `price.change` audit, and for variants on the website goes live at once via a new
- * published version.
- */
-async function updateVariant(
-  tx: Prisma.TransactionClient,
-  audit: Audit,
-  req: Request,
-  productId: string,
-  variantId: string,
-  input: VariantInput,
-): Promise<AdminVariant> {
-  const product = await lockProduct(tx, productId)
-  const before = product.variants.find((v) => v.id === variantId)
-  if (!before) throw new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy biến thể')
-  const { others, fields } = await resolveFields(tx, product, before, input)
-  const price = {
-    price: input.price === undefined ? toNumber(before.price) : input.price,
-    compareAtPrice: input.compareAtPrice === undefined ? toNumber(before.compareAtPrice) : input.compareAtPrice,
-  }
-  const current = variantAuditFields(before)
-  const fieldsChanged = !isDeepStrictEqual(current, { productId, ...fields })
-  const priceChanged =
-    price.price !== toNumber(before.price) || price.compareAtPrice !== toNumber(before.compareAtPrice)
-
-  if (fieldsChanged && !hasPermission(req, 'catalog.edit')) throw forbidden()
-  if (priceChanged && !hasPermission(req, 'price.edit')) throw forbidden()
-  if (!fieldsChanged && !priceChanged) return toAdminVariant(before)
-
-  const live = await loadLiveVersion(tx, product.liveVersionId)
-  const onWebsite = live?.snapshot.variants.some((v) => v.id === before.id) ?? false
-  await assertVariant(tx, product, others, before, fields, price, onWebsite)
-
-  const after = await tx.productVariant
-    .update({ where: { id: before.id }, data: { ...fields, ...price } })
-    .catch(rethrowUnique(skuTaken))
-  if (fieldsChanged) {
-    await audit({
-      action: 'catalog.variant.update',
-      entityType: 'product_variant',
-      entityId: after.id,
-      before: current,
-      after: variantAuditFields(after),
-    })
-  }
-  if (priceChanged) {
-    await audit({
-      action: 'price.change',
-      entityType: 'product_variant',
-      entityId: after.id,
-      before: priceAuditFields(before),
-      after: priceAuditFields(after),
-    })
-    if (live && onWebsite && price.price !== null) {
-      const variant = { id: after.id, price: price.price, compareAtPrice: price.compareAtPrice }
-      const version = await publishPrice(tx, productId, live.snapshot, variant, currentStaff(req).id)
-      await audit({
-        action: 'catalog.product.publish',
-        entityType: 'product',
-        entityId: productId,
-        before: { status: product.status, liveVersion: live.version },
-        after: { status: product.status, liveVersion: version.version },
-      })
-    }
-  }
-  return toAdminVariant(after)
-}
-
-/** Non-price fields after applying `input` to `before` (null on create); attributes are checked under the lock. */
-async function resolveFields(
-  tx: Prisma.TransactionClient,
-  product: LockedProduct,
-  before: ProductVariant | null,
-  input: VariantInput,
-) {
-  const others = product.variants.filter((v) => v.id !== before?.id)
-  const schema = await lockAttributeSchema(tx, product.productType, 'share')
-  const fields: VariantFields = {
-    sku: input.sku,
-    attributes: assertAttributes(schema.attributes, 'variant', input.attributes),
-    status: input.status,
-    sortOrder: input.sortOrder ?? before?.sortOrder ?? Math.max(-1, ...others.map((v) => v.sortOrder)) + 1,
-  }
-  return { others, fields }
-}
-
-/** Business rules of the variant about to be saved; `onWebsite` means it is in the version customers see. */
-async function assertVariant(
-  tx: Prisma.TransactionClient,
-  product: LockedProduct,
-  others: ProductVariant[],
-  before: ProductVariant | null,
-  fields: VariantFields,
-  price: VariantPrice,
-  onWebsite: boolean,
-) {
-  if (price.compareAtPrice !== null && (price.price === null || price.compareAtPrice < price.price)) {
-    throw invalidField('compareAtPrice', 'Giá hãng phải để trống hoặc không thấp hơn giá bán')
-  }
-  if (others.some((v) => isDeepStrictEqual(v.attributes, fields.attributes))) {
-    throw conflictField('attributes', 'Sản phẩm đã có biến thể với tổ hợp thuộc tính này')
-  }
-  // Combinations were checked under the product lock; the only unique left to hit is a SKU just taken by another
-  // product.
-  if (fields.sku !== before?.sku && (await tx.productVariant.findUnique({ where: { sku: fields.sku } }))) {
-    throw skuTaken()
-  }
-  if (product.status !== 'published') return
-  const stillSelling = others.some((v) => v.status === 'active')
-  if (before?.status === 'active' && fields.status !== 'active' && !stillSelling) {
-    throw conflictField(
-      'status',
-      'Đây là biến thể đang bán cuối cùng của sản phẩm đã xuất bản; muốn thôi bán thì lưu trữ sản phẩm',
-    )
-  }
-  if (price.price === null && (fields.status === 'active' || onWebsite)) {
-    throw conflictField('price', 'Biến thể của sản phẩm đã xuất bản phải có giá bán')
-  }
 }
 
 /** The product's category, locked until the transaction ends so it is not deleted midway; missing gives 400. */
