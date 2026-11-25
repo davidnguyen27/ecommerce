@@ -33,6 +33,13 @@ Reviewer đọc file này khi chạy `/code-review`. Chỉ ghi các judgement ca
 - Trang admin hiện link, nút hay số liệu thuộc trang khác thì lọc theo quyền của trang đó, lấy từ `ADMIN_PAGE_PERMISSIONS` (`web/app/utils/adminMenu.ts`: mục menu và trang con), qua `canOpen`, không khai lại quyền tại chỗ.
 - Thay đổi làm đổi HTML khách nhận (layout, chân trang, trang mới) thì thêm hoặc sửa kiểm tra tương ứng trong `scripts/smoke.ts`.
 
+## Commit
+
+- Tiêu đề commit viết tiếng Anh theo Conventional Commits: `<type>(<scope>): <subject>`, tối đa 100 ký tự. `type` là một trong `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`, `chore`, `style`, `revert`. `scope` không bắt buộc; đó là vùng code như `api`, `web`, `orders`, `payments`. Ví dụ: `feat(orders): cancel paid pre-orders`.
+- Chữ tiếng Việt chỉ được nằm trong ngoặc kép, khi đó là nhãn giao diện, ví dụ `feat(catalog): customers see "Đặt trước"`.
+- Tiêu đề PR theo cùng dạng, vì merge commit lấy tiêu đề PR làm body.
+- Hook `commit-msg` (`scripts/check-commit-msg.ts`) chặn tiêu đề sai dạng. Commit do git tự tạo (merge, revert, fixup) thì được bỏ qua.
+
 ## Comment
 
 - Comment tiếng Anh, ngắn, nói lý do hoặc ràng buộc không nhìn thấy từ code, thường một dòng. Mật độ theo các file lân cận. Thuật ngữ nghiệp vụ trích GLOSSARY giữ nguyên tiếng Việt (ví dụ GLOSSARY "Phần còn lại"), cùng chữ khách thấy và dữ liệu mẫu trích trong comment. Cả repo đã chuyển sang comment tiếng Anh (2026-11-24); migration SQL cũ giữ nguyên vì Prisma kiểm checksum.
