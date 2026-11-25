@@ -73,7 +73,7 @@ function setPrice(variant: VariantDraft, field: 'price' | 'compareAtPrice', raw:
             </td>
 
             <td v-for="d in definitions" :key="d.key">
-              <AttributeInput v-model="v.attributes[d.key]" :definition="d" :disabled="!canEdit" />
+              <AdminAttributeInput v-model="v.attributes[d.key]" :definition="d" :disabled="!canEdit" />
               <small v-if="errorAt(v, `attributes.${d.key}`)" class="field-error-msg">
                 {{ errorAt(v, `attributes.${d.key}`) }}
               </small>

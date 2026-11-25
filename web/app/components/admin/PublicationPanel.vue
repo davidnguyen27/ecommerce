@@ -25,7 +25,7 @@ const emit = defineEmits<{ changeStatus: [status: Target, message: string] }>()
         Trạng thái hiển thị công khai:
       </div>
       <div style="display: flex; align-items: center; justify-content: space-between">
-        <ProductStatusBadge :status="product.status" style="font-size: 12px" />
+        <AdminProductStatusBadge :status="product.status" style="font-size: 12px" />
 
         <NuxtLink
           v-if="product.liveVersion"

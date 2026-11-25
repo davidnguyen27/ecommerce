@@ -206,7 +206,7 @@ const counts = computed(() => ({
           <div class="form-grid-2">
             <div v-for="definition in definitions" :key="definition.key" class="form-group">
               <label class="form-label" :for="`new-product-attr-${definition.key}`">{{ definition.label }}</label>
-              <AttributeInput
+              <AdminAttributeInput
                 :id="`new-product-attr-${definition.key}`"
                 v-model="form.attributes[definition.key]"
                 :definition="definition"
@@ -319,7 +319,7 @@ const counts = computed(() => ({
               {{ product.variantCount }}
             </td>
             <td>
-              <ProductStatusBadge :status="product.status" />
+              <AdminProductStatusBadge :status="product.status" />
             </td>
             <td style="text-align: right">
               <NuxtLink :to="`/admin/products/${product.id}`" class="btn btn-secondary btn-sm"> Chi tiết › </NuxtLink>

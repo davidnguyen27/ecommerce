@@ -25,7 +25,7 @@ watch(period, load)
 
 <template>
   <div>
-    <ReportExportButton name="vouchers" slug="ma-giam-gia" :query="period" />
+    <AdminReportExportButton name="vouchers" slug="ma-giam-gia" :query="period" />
     <div v-if="error" class="admin-alert admin-alert-danger" role="alert">
       <span>{{ error }}</span>
     </div>
