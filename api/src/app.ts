@@ -79,9 +79,10 @@ export function createApp(deps: AppDeps) {
       // Every log line in a request carries `reqId` at the top level.
       quietReqLogger: true,
       serializers: {
-        // Receives pino-http's serialized request, not the live one, so changing it does not affect routing.
-        req(req: { url?: string }) {
+        // Receives pino-http's serialized request; its `query` may be the live object, so it is replaced, not mutated.
+        req(req: { url?: string; query?: Record<string, unknown> }) {
           if (req.url) req.url = redactTokens(req.url)
+          if (req.query && 'token' in req.query) req.query = { ...req.query, token: '[redacted]' }
           return req
         },
       },
