@@ -192,6 +192,19 @@ describe('ghi nhận thanh toán khi khách quay về', () => {
     expect(await transactionCount()).toBe(0)
   })
 
+  it('refresh=1 quá số lần cho một đơn thì không hỏi cổng nữa nhưng vẫn trả đơn', async () => {
+    const { code, payments, token, request } = await pendingOrder()
+    for (let i = 0; i < 20; i++) {
+      expect((await request.get(`/api/orders/${code}`).query({ token, refresh: '1' })).status).toBe(200)
+    }
+    payments.payments.set(String(code), paidInfo(TOTAL, 'FT-Q1'))
+
+    const res = await request.get(`/api/orders/${code}`).query({ token, refresh: '1' })
+
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ status: 'pending_payment', paymentStatus: 'unpaid' })
+  })
+
   it('IPN và truy vấn cùng về một khoản: chỉ ghi một lần, email một lần', async () => {
     const { code, order, ipn, payments, token, request, transactionCount, mailer } = await pendingOrder()
     payments.payments.set(String(code), paidInfo(TOTAL, transactionNoOf(code)))

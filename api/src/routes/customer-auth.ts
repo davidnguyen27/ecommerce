@@ -53,6 +53,7 @@ export function customerAuthRoutes(deps: CustomerAuthDeps) {
   return Router()
     .post('/register', async (req, res) => {
       const input = parse(RegisterRequest, req.body)
+      await enforceRateLimits(prisma, [{ limit: RATE_LIMITS.registerPerIp, subject: String(req.ip) }])
       const email = normalizeEmail(input.email)
       const passwordHash = await hashPassword(input.password)
 

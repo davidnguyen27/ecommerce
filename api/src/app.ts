@@ -63,6 +63,11 @@ export function trustProxyFromEnv(value: string | undefined): string | number | 
 
 const REQUEST_ID = /^[\w.-]{1,128}$/
 
+/** Hides `token` query values (order and support lookup links grant access) from logged URLs. */
+export function redactTokens(url: string) {
+  return url.replace(/([?&]token=)[^&#]*/g, '$1[redacted]')
+}
+
 export function createApp(deps: AppDeps) {
   const app = express()
   app.disable('x-powered-by')
@@ -73,6 +78,13 @@ export function createApp(deps: AppDeps) {
       logger: deps.logger,
       // Every log line in a request carries `reqId` at the top level.
       quietReqLogger: true,
+      serializers: {
+        // Receives pino-http's serialized request, not the live one, so changing it does not affect routing.
+        req(req: { url?: string }) {
+          if (req.url) req.url = redactTokens(req.url)
+          return req
+        },
+      },
       genReqId(req, res) {
         const incoming = req.headers['x-request-id']
         const id = typeof incoming === 'string' && REQUEST_ID.test(incoming) ? incoming : randomUUID()
