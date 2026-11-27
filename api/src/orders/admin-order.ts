@@ -1,10 +1,75 @@
-import { type AdminOrder, type OrderHistoryActor, type OrderHistoryEntry } from '@ecommerce/shared'
+import {
+  type AdminOrder,
+  type AdminOrderPage,
+  type AdminOrderQuery,
+  type OrderHistoryActor,
+  type OrderHistoryEntry,
+} from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
 import { ACTOR_SELECT } from '../audit/audited.ts'
 import type { DbClient } from '../db.ts'
+import type { Prisma } from '../generated/prisma/client.ts'
+import { pageWindow } from '../http/pagination.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 import { refundedViaGateway, summarizeRefunds } from '../payments/refunds.ts'
 import { ORDER_VIEW_INCLUDE, orderNotFound, parseOrderCode, toPublicOrder } from './orders.ts'
+
+/** Search box: exact order code, phone (accepts `+84`, spaces, dots, dashes) or email containing the text. */
+function searchWhere(q: string): Prisma.OrderWhereInput {
+  const or: Prisma.OrderWhereInput[] = [{ email: { contains: q.toLowerCase() } }]
+  const digits = q.replace(/[\s.-]/g, '').replace(/^\+?84(?=\d{9}$)/, '0')
+  if (/^\d+$/.test(digits)) or.push({ phone: { contains: digits } })
+  if (/^\d{1,9}$/.test(q)) or.push({ code: Number(q) })
+  return { OR: or }
+}
+
+/** Admin order list: filters, search and paging of the orders page, newest first unless `sort=oldest`. */
+export async function listAdminOrders(db: DbClient, query: AdminOrderQuery): Promise<AdminOrderPage> {
+  const where: Prisma.OrderWhereInput = {
+    ...(query.status !== 'all' && { status: query.status }),
+    ...(query.paymentStatus !== 'all' && { paymentStatus: query.paymentStatus }),
+    ...(query.fulfillmentStatus !== 'all' && { fulfillmentStatus: query.fulfillmentStatus }),
+    ...(query.kind !== 'all' && { kind: query.kind }),
+    ...(query.campaignId && { preorderCampaignId: query.campaignId }),
+    // Remaining balance overdue: the flag means not fully paid yet (paying clears it, ticket 08).
+    ...(query.remainderOverdue !== undefined && {
+      remainderOverdueAt: query.remainderOverdue ? { not: null } : null,
+    }),
+    ...(query.q && searchWhere(query.q)),
+    ...(query.voucherCode && { voucherCode: query.voucherCode.toUpperCase() }),
+    ...(query.refund === 'open' && { refunds: { some: { status: { in: ['pending', 'processing'] } } } }),
+  }
+  const direction = query.sort === 'oldest' ? 'asc' : 'desc'
+  const [orders, total] = await Promise.all([
+    db.order.findMany({
+      where,
+      include: { lines: { select: { quantity: true } } },
+      // Order codes grow with order time, so sorting by code sorts by time and stays stable.
+      orderBy: { code: direction },
+      ...pageWindow(query),
+    }),
+    db.order.count({ where }),
+  ])
+  return {
+    items: orders.map((order) => ({
+      code: order.code,
+      kind: order.kind,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      fulfillmentStatus: order.fulfillmentStatus,
+      createdAt: order.createdAt.toISOString(),
+      total: Number(order.total),
+      itemCount: order.lines.reduce((sum, line) => sum + line.quantity, 0),
+      recipientName: order.recipientName,
+      phone: order.phone,
+      email: order.email,
+      provinceName: order.provinceName,
+    })),
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+  }
+}
 
 /**
  * Admin order detail by code (string from the URL). Order action routes (prepare, hand over, deliver…) return this
