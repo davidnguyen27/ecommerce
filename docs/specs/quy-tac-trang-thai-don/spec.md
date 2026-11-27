@@ -1,6 +1,6 @@
 # Spec: Gom quy tắc trạng thái đơn và việc hủy đơn của nhân viên
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Nguồn: buổi review kiến trúc backend ngày 2026-11-26 (`/codebase-design`), sau khi đánh giá "tách đủ 6 lớp", "OOP nghiêm ngặt" và "tách máy trạng thái khỏi `fulfill-order.ts`" và gác cả ba lại. Đây là refactor: không đổi contract API, không có migration, không có ADR mới. Có một thay đổi hành vi nhỏ ở web, ghi ở ticket 01.
 

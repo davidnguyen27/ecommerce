@@ -1,11 +1,8 @@
 import { Router } from 'express'
 import type { StaffProfile } from '@ecommerce/shared'
-import type { LlmClient } from '../adapters/llm.ts'
-import type { Storage } from '../adapters/storage.ts'
+import type { AppDeps } from '../app.ts'
 import { currentStaff } from '../auth/staff-context.ts'
-import type { Db } from '../db.ts'
 import type { FulfillmentMail } from '../orders/fulfill-order.ts'
-import type { PaymentGateway } from '../payments/gateway.ts'
 import { adminOrderRoutes } from './admin-orders.ts'
 import { adminReconciliationRoutes, type ReconciliationDeps } from './admin-reconciliation.ts'
 import { adminRefundRoutes } from './admin-refunds.ts'
@@ -34,15 +31,10 @@ import { adminStockReceiptRoutes } from './admin-stock-receipts.ts'
 import { adminShippingFeeRoutes } from './admin-shipping-fees.ts'
 
 /** Admin routes; behind `requireAuth` for the staff audience and `loadStaff`. */
-export function adminRoutes(
-  prisma: Db,
-  storage: Storage,
-  payments: PaymentGateway,
-  /** Mail queue and website URL: delivery emails (ticket 09) and reconciliation restores (ticket 10). */
-  mail: FulfillmentMail & ReconciliationDeps,
-  /** The chatbot model, so the admin page can show each model's status (M8). */
-  llm?: LlmClient,
-) {
+export function adminRoutes(deps: Pick<AppDeps, 'prisma' | 'storage' | 'payments' | 'emails' | 'siteUrl' | 'llm'>) {
+  const { prisma, storage, payments, llm } = deps
+  // Mail queue and website URL: delivery emails (ticket 09) and reconciliation restores (ticket 10).
+  const mail: FulfillmentMail & ReconciliationDeps = { emails: deps.emails, siteUrl: deps.siteUrl }
   return (
     Router()
       .get('/me', (req, res) => {
