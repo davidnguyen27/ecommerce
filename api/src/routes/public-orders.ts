@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import type { PayRemainderResult, PublicOrder } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
+import { RATE_LIMITS, withinRateLimit } from '../http/rate-limit.ts'
 import { createRemainderLink } from '../preorders/remainder.ts'
 import { assertCancellable, cancelOrder } from '../orders/cancel-order.ts'
 import { findOrderByToken, toPublicOrder } from '../orders/orders.ts'
@@ -21,7 +22,11 @@ export function publicOrderRoutes({ prisma, storage, emails, siteUrl, payments, 
         let order = await findOrderByToken(prisma, code, token)
 
         // Payment result page: ask the gateway for payments, in case the callback is late or missing.
-        if (req.query.refresh === '1') {
+        // Over the limit the customer still sees the order; only the gateway query is skipped.
+        if (
+          req.query.refresh === '1' &&
+          (await withinRateLimit(prisma, RATE_LIMITS.paymentRefreshPerOrder, String(order.code)))
+        ) {
           try {
             await recordGatewayPayments({ prisma, emails, siteUrl, payments }, order)
             order = await findOrderByToken(prisma, code, token)

@@ -14,11 +14,15 @@ export const RATE_LIMITS = {
   loginPerIp: { name: 'login:ip', max: 50, windowMs: 15 * MINUTE },
   forgotPasswordPerEmail: { name: 'forgot-password:email', max: 3, windowMs: 60 * MINUTE },
   forgotPasswordPerIp: { name: 'forgot-password:ip', max: 20, windowMs: 60 * MINUTE },
+  // Provisional. Each sign-up hashes a password and emails any address; also slows probing which emails have accounts.
+  registerPerIp: { name: 'register:ip', max: 10, windowMs: 60 * MINUTE },
   verificationEmailPerCustomer: { name: 'verification-email:customer', max: 3, windowMs: 60 * MINUTE },
   // Provisional. 409s count too, since every attempt briefly reserves stock.
   checkoutPerIp: { name: 'checkout:ip', max: 5, windowMs: 60 * MINUTE },
   // Each call creates a gateway link; looser than checkout since failed payments get retried.
   payRemainderPerIp: { name: 'pay-remainder:ip', max: 10, windowMs: 60 * MINUTE },
+  // Payment result page asking the gateway (`?refresh=1`); over the limit the order is shown without asking.
+  paymentRefreshPerOrder: { name: 'payment-refresh:order', max: 20, windowMs: 10 * MINUTE },
   // Quotes with a voucher: blocks code guessing (spec M5, provisional).
   voucherCheckPerIp: { name: 'voucher-check:ip', max: 10, windowMs: MINUTE },
   // Support requests (spec M6b, provisional): free text, so limit spam per IP and per request.
@@ -57,4 +61,15 @@ export async function enforceRateLimits(
     if (row && row.hits > limit.max) retryAfter = Math.max(retryAfter, row.retry_after, 1)
   }
   if (retryAfter > 0) throw new AppError(429, ErrorCode.RATE_LIMITED, message, undefined, undefined, retryAfter)
+}
+
+/** Counts one hit like `enforceRateLimits` but returns `false` over the limit instead of throwing 429. */
+export async function withinRateLimit(db: DbClient, limit: RateLimit, subject: string): Promise<boolean> {
+  try {
+    await enforceRateLimits(db, [{ limit, subject }])
+    return true
+  } catch (err) {
+    if (err instanceof AppError && err.status === 429) return false
+    throw err
+  }
 }

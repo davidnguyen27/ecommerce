@@ -8,6 +8,7 @@ const LOGIN_PER_IP = 50
 const FORGOT_PER_EMAIL = 3
 const FORGOT_PER_IP = 20
 const RESEND_PER_CUSTOMER = 3
+const REGISTER_PER_IP = 10
 
 type Audience = 'customer' | 'staff'
 const LOGIN_PATH: Record<Audience, string> = { customer: '/api/auth/login', staff: '/api/admin/auth/login' }
@@ -102,6 +103,19 @@ describe('giới hạn tần suất quên mật khẩu', () => {
 
     expectRateLimited(await forgotFrom(request, '203.0.113.7', CUSTOMER.email))
     expect((await forgotFrom(request, '203.0.113.8', CUSTOMER.email)).status).toBe(202)
+  })
+})
+
+describe('giới hạn tần suất đăng ký', () => {
+  it('quá số lần đăng ký từ một IP thì 429, kể cả email đã có tài khoản; IP khác vẫn đăng ký được', async () => {
+    const { request } = await appReadyForSignUp()
+    const registerFrom = (ip: string, email: string) => register(request, { email }).set('X-Forwarded-For', ip)
+    for (let i = 0; i < REGISTER_PER_IP; i++) {
+      expect((await registerFrom('203.0.113.20', `moi-${i}@example.com`)).status).toBe(201)
+    }
+
+    expectRateLimited(await registerFrom('203.0.113.20', 'moi-0@example.com'))
+    expect((await registerFrom('203.0.113.21', 'khac@example.com')).status).toBe(201)
   })
 })
 

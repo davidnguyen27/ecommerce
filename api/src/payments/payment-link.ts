@@ -9,7 +9,8 @@ import type { PaymentGateway } from './gateway.ts'
 /**
  * Creates the gateway payment link and stores its reference. Call last in the transaction: a gateway error is logged,
  * then 502 rolls the order back. The return URL has no token, so the gateway never sees the view/cancel link.
- * `clientIp` is the raw `req.ip`; normalized here.
+ * `clientIp` is the raw `req.ip`; normalized here. Checkout calls this while holding variant locks, so the gateway
+ * must build the link locally (VNPAY signs the URL) without a network call.
  */
 export async function createOrderPaymentLink(
   tx: DbClient,

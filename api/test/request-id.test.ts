@@ -20,6 +20,18 @@ describe('request id', () => {
     expect(res.headers['x-request-id']).toBe('tu-caddy-123')
   })
 
+  it('log không chứa token của link tra cứu đơn hay yêu cầu hỗ trợ', async () => {
+    // No HTTP path exposes logs, so read them directly.
+    const { request, logs } = await createTestApp()
+
+    await request.get('/api/orders/123').query({ refresh: '1', token: 'bi-mat-cua-khach' })
+    await request.get('/api/support-requests').query({ token: 'bi-mat-ho-tro' })
+
+    const text = JSON.stringify(logs())
+    expect(text).not.toContain('bi-mat')
+    expect(text).toContain('token=[redacted]')
+  })
+
   it('có trong body lỗi để đối chiếu với log', async () => {
     const { request } = await createTestApp()
 
