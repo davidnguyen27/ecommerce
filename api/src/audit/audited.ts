@@ -18,6 +18,12 @@ export type AuditEntry = {
 export type Audit = (entry: AuditEntry | readonly AuditEntry[]) => Promise<void>
 
 /**
+ * An `audited()` transaction already bound to the request, for modules that must also act after commit (e.g. cancel
+ * payment links) without taking `req`. Route: `const run: AuditedRun = (fn) => audited(prisma, req, fn)`.
+ */
+export type AuditedRun = <T>(fn: (tx: Prisma.TransactionClient, audit: Audit) => Promise<T>) => Promise<T>
+
+/**
  * Runs a business change in a transaction and writes the audit in that same transaction, so a rollback drops the
  * audit too. Actor, IP and user agent come from the request. `timeout` (ms) is only for bulk work like import;
  * Prisma's default is 5 s.

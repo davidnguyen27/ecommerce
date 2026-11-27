@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PayRemainderResult, PublicOrder, canRequestCancel } from '@ecommerce/shared'
+import { PayRemainderResult, PublicOrder, canRequestCancel, isDelivered } from '@ecommerce/shared'
 
 // Orders are personal data opened by token: loaded only in the browser, server HTML has nothing of the order.
 // Two entries: the email link (`?token=…`), or the result page when the gateway sends the customer back (`?ket-qua=1`,
@@ -152,9 +152,7 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
         v-if="supportClient"
         :client="supportClient"
         :can-cancel="canRequestCancel(order)"
-        :return-lines="
-          order.status === 'completed' && order.fulfillmentStatus === 'delivered' ? order.lines : undefined
-        "
+        :return-lines="isDelivered(order) ? order.lines : undefined"
         class="mt-8"
       />
     </template>

@@ -389,3 +389,24 @@ export function canRequestCancel(order: {
     (order.fulfillmentStatus === 'not_prepared' || order.fulfillmentStatus === 'preparing')
   )
 }
+
+type OrderState = { status: OrderStatus; paymentStatus: PaymentStatus; fulfillmentStatus: FulfillmentStatus }
+
+/**
+ * Whether staff can cancel a paid order with a refund (spec M6a): processing, paid or deposited, and either not handed
+ * over or a failed delivery already returned to stock. Cancelling keeps `fulfillmentStatus`, so `status` must be checked.
+ */
+export function canCancelPaid(order: OrderState) {
+  return (
+    order.status === 'processing' &&
+    (order.paymentStatus === 'paid' || order.paymentStatus === 'deposit_paid') &&
+    (order.fulfillmentStatus === 'not_prepared' ||
+      order.fulfillmentStatus === 'preparing' ||
+      order.fulfillmentStatus === 'returned')
+  )
+}
+
+/** Delivered and completed: only then can the customer return, exchange or claim warranty (spec M6b). */
+export function isDelivered(order: Pick<OrderState, 'status' | 'fulfillmentStatus'>) {
+  return order.status === 'completed' && order.fulfillmentStatus === 'delivered'
+}

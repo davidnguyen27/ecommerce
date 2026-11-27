@@ -4,6 +4,7 @@ import {
   AdminSupportRequest,
   ExchangeOptions,
   canRequestCancel,
+  isDelivered,
   type AdminCreateSupportRequest,
   type CreatableSupportKind,
 } from '@ecommerce/shared'
@@ -44,7 +45,7 @@ async function loadOrder() {
 onMounted(loadOrder)
 
 const canCancel = computed(() => !!order.value && canRequestCancel(order.value))
-const delivered = computed(() => order.value?.status === 'completed' && order.value.fulfillmentStatus === 'delivered')
+const delivered = computed(() => !!order.value && isDelivered(order.value))
 const lineKind = computed(() =>
   form.kind === 'return' || form.kind === 'exchange' || form.kind === 'warranty' ? form.kind : null,
 )

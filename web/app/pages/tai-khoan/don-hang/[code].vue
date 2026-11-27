@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PayRemainderResult, PublicOrder, canRequestCancel } from '@ecommerce/shared'
+import { PayRemainderResult, PublicOrder, canRequestCancel, isDelivered } from '@ecommerce/shared'
 
 // Account order: the customer session exists only in the browser, so the order loads after mount; server HTML has none
 // of it.
@@ -81,9 +81,7 @@ useSeo({ title: () => `Đơn hàng #${code.value}`, description: 'Thông tin đ�
         :client="supportClient"
         :order-code="Number(code)"
         :can-cancel="canRequestCancel(order)"
-        :return-lines="
-          order.status === 'completed' && order.fulfillmentStatus === 'delivered' ? order.lines : undefined
-        "
+        :return-lines="isDelivered(order) ? order.lines : undefined"
         class="mt-8"
       />
     </template>

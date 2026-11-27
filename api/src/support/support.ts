@@ -1,6 +1,7 @@
 import {
   ErrorCode,
   canRequestCancel,
+  isDelivered,
   type FulfillmentStatus,
   type OrderStatus,
   type PaymentStatus,
@@ -301,7 +302,7 @@ export async function createSupportRequest(tx: DbClient, mail: CustomerMail, inp
       )
     }
     const aboutGoods = input.kind === 'return' || input.kind === 'exchange' || input.kind === 'warranty'
-    if (aboutGoods && !(locked!.status === 'completed' && locked!.fulfillmentStatus === 'delivered')) {
+    if (aboutGoods && !isDelivered(locked!)) {
       throw conflict(
         input.kind === 'warranty'
           ? 'Chỉ báo bảo hành được với đơn đã giao xong'
