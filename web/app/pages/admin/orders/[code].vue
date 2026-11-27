@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AdminOrder, type OrderHistoryEntry } from '@ecommerce/shared'
+import { AdminOrder, canCancelPaid as orderCanCancelPaid, type OrderHistoryEntry } from '@ecommerce/shared'
 
 definePageMeta({ layout: 'admin', middleware: 'admin-auth', permission: 'order.view' })
 
@@ -18,19 +18,10 @@ const notice = ref<string | null>(null)
 const busy = ref(false)
 
 const canFulfill = computed(() => session.can('order.fulfill'))
-// Cancel a paid order (M6a): processing, paid or deposited, not handed over, or a failed delivery already returned.
-const canCancelPaid = computed(() => {
-  const o = order.value
-  return (
-    session.can('order.cancel_paid') &&
-    o !== null &&
-    o.status === 'processing' &&
-    (o.paymentStatus === 'paid' || o.paymentStatus === 'deposit_paid') &&
-    (o.fulfillmentStatus === 'not_prepared' ||
-      o.fulfillmentStatus === 'preparing' ||
-      o.fulfillmentStatus === 'returned')
-  )
-})
+// Cancel a paid order (M6a): same rule as the API, from shared.
+const canCancelPaid = computed(
+  () => session.can('order.cancel_paid') && order.value !== null && orderCanCancelPaid(order.value),
+)
 const cancellingPaid = ref(false)
 const canOpen = session.canOpen
 

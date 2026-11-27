@@ -1,6 +1,7 @@
 import {
   ErrorCode,
   ORDER_CANCEL_CAUSE_CUSTOMER_TEXT,
+  canCancelPaid,
   type CancelPaidOrderRequest,
   type FulfillmentStatus,
   type OrderCancelCause,
@@ -45,13 +46,15 @@ export async function cancelPaidOrder(
       "fulfillment_status"::text AS "fulfillmentStatus", "kind"::text AS kind
     FROM "order" WHERE "id" = ${orderId}::uuid FOR UPDATE`
   if (!locked) throw new Error(`Không có đơn ${orderId}`)
-  if (locked.status !== 'processing' || !(['paid', 'deposit_paid'] as PaymentStatus[]).includes(locked.paymentStatus)) {
-    throw conflict('Chỉ hủy được đơn đang xử lý đã nhận tiền; đơn chưa thanh toán dùng nút hủy thường')
-  }
-  // `returned`: delivery failed and the warehouse got the goods back, nothing is reserved. `failed` must be returned
-  // first.
-  if (!(['not_prepared', 'preparing', 'returned'] as FulfillmentStatus[]).includes(locked.fulfillmentStatus)) {
-    throw conflict('Đơn đã bàn giao vận chuyển, không hủy được; giao thất bại thì nhận hàng hoàn về trước')
+  // The rule lives in `canCancelPaid` (the admin page uses it too); the branches below only pick the message.
+  if (!canCancelPaid(locked)) {
+    const paid = locked.status === 'processing' && ['paid', 'deposit_paid'].includes(locked.paymentStatus)
+    // `returned`: delivery failed and the warehouse got the goods back. `failed` must be returned first.
+    throw conflict(
+      paid
+        ? 'Đơn đã bàn giao vận chuyển, không hủy được; giao thất bại thì nhận hàng hoàn về trước'
+        : 'Chỉ hủy được đơn đang xử lý đã nhận tiền; đơn chưa thanh toán dùng nút hủy thường',
+    )
   }
   const { refundable } = await refundTotals(tx, orderId)
   const refundAmount = BigInt(input.refundAmount)

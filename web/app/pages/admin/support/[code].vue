@@ -3,7 +3,7 @@ import {
   AdminOrder,
   AdminSupportRequest,
   StaffList,
-  canRequestCancel,
+  canCancelPaid as orderCanCancelPaid,
   type AdminSupportReply,
   type StaffSummary,
 } from '@ecommerce/shared'
@@ -100,7 +100,7 @@ async function openCancel() {
   cancelBlocked.value = null
   try {
     const order = AdminOrder.parse(await session.adminFetch(`/api/admin/orders/${request.value!.orderCode}`))
-    if (canRequestCancel(order) || order.fulfillmentStatus === 'returned') cancelOrder.value = order
+    if (orderCanCancelPaid(order)) cancelOrder.value = order
     else cancelBlocked.value = 'Đơn không còn hủy được (đã bàn giao, đã hủy hay chưa nhận tiền). Hãy trả lời khách.'
   } catch (err) {
     error.value = apiErrorMessage(err)
