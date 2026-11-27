@@ -9,15 +9,15 @@ import {
   type AdminOrderPage,
 } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
-import { audited } from '../audit/audited.ts'
+import { audited, type AuditedRun } from '../audit/audited.ts'
 import { currentStaff, requirePermission } from '../auth/staff-context.ts'
 import type { Db } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { pageWindow } from '../http/pagination.ts'
 import { parse } from '../http/validation.ts'
 import { loadAdminOrder } from '../orders/admin-order.ts'
-import { assertCancellable, cancelInTransaction, cancelPaymentLinks } from '../orders/cancel-order.ts'
-import { cancelPaidOrder } from '../orders/cancel-paid-order.ts'
+import { cancelOrderByStaff } from '../orders/cancel-order.ts'
+import { cancelPaidOrderByStaff } from '../orders/cancel-paid-order.ts'
 import {
   deliverOrder,
   failDelivery,
@@ -31,7 +31,6 @@ import {
 } from '../orders/fulfill-order.ts'
 import { orderNotFound, parseOrderCode } from '../orders/orders.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
-import { PAYMENT_LINK_REFERENCES } from '../payments/record-payment.ts'
 
 /** Search box: exact order code, phone (accepts `+84`, spaces, dots, dashes) or email containing the text. */
 function searchWhere(q: string): Prisma.OrderWhereInput {
@@ -47,11 +46,16 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
   const findOrder = async (code: string) => {
     const order = await prisma.order.findUnique({
       where: { code: parseOrderCode(code) },
-      select: { id: true, code: true, paymentLinks: PAYMENT_LINK_REFERENCES },
+      select: { id: true },
     })
     if (!order) throw orderNotFound()
     return order
   }
+  const auditedRun =
+    (req: Request): AuditedRun =>
+    (fn) =>
+      audited(prisma, req, fn)
+  const cancelDeps = (req: Request) => ({ prisma, payments, logger: req.log })
 
   /** Fulfillment transition route: runs in `audited()`, writes the returned audit entry, returns the order detail. */
   const transition =
@@ -125,25 +129,8 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
     .post('/:code/cancel', requirePermission('order.fulfill'), async (req, res) => {
       const code = String(req.params.code)
       const order = await findOrder(code)
-
-      // The customer called to cancel: staff cancel for them, with the same function as expiry and self-cancel, audited
-      // in the same transaction.
-      const outcome = await audited(prisma, req, async (tx, audit) => {
-        const result = await cancelInTransaction(tx, order.id, { reason: 'staff', staffId: currentStaff(req).id })
-        if (result === 'cancelled') {
-          await audit({
-            action: 'order.cancel',
-            entityType: 'order',
-            entityId: order.id,
-            before: { status: 'pending_payment' },
-            after: { status: 'cancelled', cancelReason: 'staff' },
-          })
-        }
-        return result
-      })
-      assertCancellable(outcome)
-      if (outcome === 'cancelled') await cancelPaymentLinks({ payments, logger: req.log }, order)
-      // Already cancelled: return the current order and write nothing.
+      // Already cancelled: returns the current order and writes nothing.
+      await cancelOrderByStaff(cancelDeps(req), auditedRun(req), order.id, currentStaff(req).id)
       const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, code)
       res.json(body)
     })
@@ -151,12 +138,13 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
       const input = parse(CancelPaidOrderRequest, req.body)
       const code = String(req.params.code)
       const order = await findOrder(code)
-      const staffId = currentStaff(req).id
-      await audited(prisma, req, (tx, audit) => cancelPaidOrder(tx, mail, audit, order.id, staffId, input))
-      // Pre-orders may still have a remaining-balance link: cancel it after commit, as for unpaid cancels; money
-      // arriving later needs reconciliation. Cancelling an in-stock order's already-paid link is harmless: errors are
-      // only logged.
-      await cancelPaymentLinks({ payments, logger: req.log }, order)
+      await cancelPaidOrderByStaff(
+        { ...cancelDeps(req), ...mail },
+        auditedRun(req),
+        order.id,
+        currentStaff(req).id,
+        input,
+      )
       const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, code)
       res.json(body)
     })

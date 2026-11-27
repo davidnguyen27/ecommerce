@@ -9,14 +9,14 @@ import {
   type OrderStatus,
   type PaymentStatus,
 } from '@ecommerce/shared'
-import type { Audit } from '../audit/audited.ts'
+import type { Audit, AuditedRun } from '../audit/audited.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, invalidField } from '../http/errors.ts'
 import type { CustomerMail } from '../jobs/jobs.ts'
 import { createRefund, refundTotals } from '../payments/refunds.ts'
 import { applyArrivals, planArrivals } from '../preorders/arrivals.ts'
 import { resolveCancelRequests } from '../support/support.ts'
-import { releaseOrderReservations } from './cancel-order.ts'
+import { cancelOrderPaymentLinks, releaseOrderReservations, type CancelDeps } from './cancel-order.ts'
 import { vnd } from './format.ts'
 import { issueOrderLookupUrl, recordOrderEvent } from './orders.ts'
 
@@ -192,4 +192,20 @@ async function queueCancelledEmail(
       'Nếu cần hỗ trợ, bạn hãy trả lời email này hoặc gọi cho cửa hàng.',
     ].join('\n'),
   })
+}
+
+/**
+ * Staff cancel of a paid order from the admin page: `cancelPaidOrder` in the audited transaction, then cancels payment
+ * links after commit. Pre-orders may still have a remaining-balance link; money arriving later needs reconciliation.
+ * Cancelling an in-stock order's already-paid link is harmless: errors are only logged.
+ */
+export async function cancelPaidOrderByStaff(
+  deps: CancelDeps & CustomerMail,
+  run: AuditedRun,
+  orderId: string,
+  staffId: string,
+  input: CancelPaidOrderRequest,
+) {
+  await run((tx, audit) => cancelPaidOrder(tx, deps, audit, orderId, staffId, input))
+  await cancelOrderPaymentLinks(deps, orderId)
 }

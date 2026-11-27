@@ -1,5 +1,6 @@
 import { ErrorCode } from '@ecommerce/shared'
 import type { Logger } from 'pino'
+import type { AuditedRun } from '../audit/audited.ts'
 import type { Db } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../http/errors.ts'
@@ -41,7 +42,7 @@ function actorOf(cancellation: Cancellation): OrderEventActor {
  * `recordPayment`, so a concurrent payment and cancel each see the other's result; releases the reservation and records
  * an event. Rerunning on a cancelled order changes nothing. Payment links are cancelled after commit.
  */
-export async function cancelInTransaction(
+async function cancelInTransaction(
   tx: Prisma.TransactionClient,
   orderId: string,
   cancellation: Cancellation,
@@ -87,13 +88,15 @@ export async function releaseOrderReservations(tx: Prisma.TransactionClient, ord
 }
 
 /**
- * Cancels every payment link of a just-cancelled order (picked by `PAYMENT_LINK_REFERENCES`); no links, no-op. Errors
- * are logged and the next link is tried: the order is cancelled, so later money needs reconciliation.
+ * Cancels every payment link of a just-cancelled order (picked by `PAYMENT_LINK_REFERENCES`); no links, no-op. Call
+ * after commit. Errors are logged and the next link is tried: the order is cancelled, so later money needs
+ * reconciliation.
  */
-export async function cancelPaymentLinks(
-  { payments, logger }: Omit<CancelDeps, 'prisma'>,
-  order: { code: number; paymentLinks: { gatewayReference: string }[] },
-) {
+export async function cancelOrderPaymentLinks({ prisma, payments, logger }: CancelDeps, orderId: string) {
+  const order = await prisma.order.findUniqueOrThrow({
+    where: { id: orderId },
+    select: { code: true, paymentLinks: PAYMENT_LINK_REFERENCES },
+  })
   for (const { gatewayReference } of order.paymentLinks) {
     try {
       await payments.cancelLink(gatewayReference)
@@ -103,16 +106,33 @@ export async function cancelPaymentLinks(
   }
 }
 
-/** Shared cancel for expiry, customer and staff cancels (no audit). */
+/** Shared cancel for expiry and customer cancels (no audit). */
 export async function cancelOrder(deps: CancelDeps, orderId: string, cancellation: Cancellation) {
   const outcome = await deps.prisma.$transaction((tx) => cancelInTransaction(tx, orderId, cancellation))
-  if (outcome === 'cancelled') {
-    const order = await deps.prisma.order.findUniqueOrThrow({
-      where: { id: orderId },
-      select: { code: true, paymentLinks: PAYMENT_LINK_REFERENCES },
-    })
-    await cancelPaymentLinks(deps, order)
-  }
+  if (outcome === 'cancelled') await cancelOrderPaymentLinks(deps, orderId)
+  return outcome
+}
+
+/**
+ * Staff cancel of an unpaid order (the customer called): the same cancel as expiry and self-cancel, audited in the same
+ * transaction only when something changed. A paid order gives 409; an already cancelled one changes nothing.
+ */
+export async function cancelOrderByStaff(deps: CancelDeps, run: AuditedRun, orderId: string, staffId: string) {
+  const outcome = await run(async (tx, audit) => {
+    const result = await cancelInTransaction(tx, orderId, { reason: 'staff', staffId })
+    if (result === 'cancelled') {
+      await audit({
+        action: 'order.cancel',
+        entityType: 'order',
+        entityId: orderId,
+        before: { status: 'pending_payment' },
+        after: { status: 'cancelled', cancelReason: 'staff' },
+      })
+    }
+    return result
+  })
+  assertCancellable(outcome)
+  if (outcome === 'cancelled') await cancelOrderPaymentLinks(deps, orderId)
   return outcome
 }
 
