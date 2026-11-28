@@ -8,10 +8,8 @@ import {
   type VariantAvailability,
 } from '@ecommerce/shared'
 import type { LlmTool, LlmToolCall } from '../../core/adapters/llm.ts'
-import type { Storage } from '../../core/adapters/storage.ts'
-import { attributeSchemaQuery } from '../attribute-schema/index.ts'
-import { categoryQuery } from '../category/index.ts'
-import { createProductQuery, type SearchCriteria } from '../product/index.ts'
+import type { IAttributeSchemaQuery } from '../attribute-schema/index.ts'
+import type { IProductQuery, SearchCriteria } from '../product/index.ts'
 import { findPublishedVersion, listPublishedPages } from '../content-page/index.ts'
 import type { Db } from '../../core/db.ts'
 
@@ -19,7 +17,12 @@ import type { Db } from '../../core/db.ts'
 // the public product page functions, so drafts, stock counts, costs and documents never leak. Results sent to the
 // model are terse to save tokens (ADR 0017).
 
-export type ToolDeps = { prisma: Db; storage: Storage }
+/** The customer product reads and the attribute schemas, from their modules. */
+export type ToolDeps = {
+  prisma: Db
+  products: Pick<IProductQuery, 'findPublicProduct' | 'searchProductCards'>
+  schemas: Pick<IAttributeSchemaQuery, 'load'>
+}
 
 /** A tool call's result: what goes back to the model, and what the chat UI uses (cards, handoff offer). */
 export type ToolOutcome = { output: unknown; cards?: ProductCard[]; handoffSummary?: string }
@@ -96,10 +99,6 @@ function labelled(product: PublicProduct, values: Record<string, unknown>) {
 /**
  * Terse product for the model: no images, variant ids or URLs (the prompt says how to build links); short description.
  */
-/** Customer product reads; the chatbot has no module wiring yet (ticket 09). */
-const productsOf = (prisma: Db, storage: Storage) =>
-  createProductQuery({ prisma, storage }, { schemas: attributeSchemaQuery, categories: categoryQuery })
-
 export function productForModel(product: PublicProduct) {
   return {
     slug: product.slug,
@@ -124,7 +123,7 @@ export function productForModel(product: PublicProduct) {
   }
 }
 
-async function searchProducts({ prisma, storage }: ToolDeps, args: Args): Promise<ToolOutcome> {
+async function searchProducts({ prisma, products, schemas }: ToolDeps, args: Args): Promise<ToolOutcome> {
   let text = str(args.text)
   const brandName = str(args.brand)
   let brandSlug: string | undefined
@@ -145,18 +144,16 @@ async function searchProducts({ prisma, storage }: ToolDeps, args: Args): Promis
     productType: type,
     minPrice: int(args.minPrice),
     maxPrice: int(args.maxPrice),
-    attributes: await attributeFilters(prisma, type, args),
+    attributes: await attributeFilters(prisma, schemas, type, args),
   }
-  let { items } = await productsOf(prisma, storage).searchProductCards(criteria, undefined, 1, SEARCH_LIMIT)
+  let { items } = await products.searchProductCards(criteria, undefined, 1, SEARCH_LIMIT)
   let note: string | undefined
   // Keywords only match name, brand and code (names are mostly English): with no match but other filters, drop the
   // keyword so "túi đi làm dưới 7 triệu" still finds bags in budget instead of nothing.
   const otherFilters =
     criteria.brandSlug || type || criteria.minPrice || criteria.maxPrice || criteria.attributes.length
   if (items.length === 0 && text && otherFilters) {
-    items = (
-      await productsOf(prisma, storage).searchProductCards({ ...criteria, text: undefined }, undefined, 1, SEARCH_LIMIT)
-    ).items
+    items = (await products.searchProductCards({ ...criteria, text: undefined }, undefined, 1, SEARCH_LIMIT)).items
     note = 'No match for text; these match the other filters.'
   }
   return {
@@ -178,7 +175,7 @@ async function searchProducts({ prisma, storage }: ToolDeps, args: Args): Promis
  * Color and gender filters from the product type schema. Color is the `mau` attribute, filterable only when the type
  * is known; values are capitalized ("Đen"). Gender works on every type (Nam and Nữ include Unisex).
  */
-async function attributeFilters(prisma: Db, type: ProductType | undefined, args: Args) {
+async function attributeFilters(prisma: Db, schemas: ToolDeps['schemas'], type: ProductType | undefined, args: Args) {
   const color = str(args.color)
   const gender = GENDER_OPTIONS.find(
     (option) => option !== GENDER_UNISEX && option.toLowerCase() === str(args.gender)?.toLowerCase(),
@@ -186,7 +183,7 @@ async function attributeFilters(prisma: Db, type: ProductType | undefined, args:
   if (!gender && !(color && type)) return []
   // With no product type, filter only by gender, which every type defines the same way (ADR 0004): any type's schema
   // works, as on the website search page.
-  const schema = await attributeSchemaQuery.load(prisma, type ?? ProductType.enum.footwear)
+  const schema = await schemas.load(prisma, type ?? ProductType.enum.footwear)
   const filters: SearchCriteria['attributes'] = []
   const genderDefinition = schema.attributes.find((a) => a.key === GENDER_KEY)
   if (gender && genderDefinition) filters.push({ definition: genderDefinition, values: [gender] })
@@ -201,15 +198,13 @@ async function attributeFilters(prisma: Db, type: ProductType | undefined, args:
  * Details by slug; without a (valid) slug but with a name, takes the best name match. A question like "túi Coach Tabby
  * có bảo hành không" then needs no prior search: one less model call.
  */
-async function getProduct({ prisma, storage }: ToolDeps, args: Args): Promise<ToolOutcome> {
+async function getProduct({ products }: ToolDeps, args: Args): Promise<ToolOutcome> {
   const slug = str(args.slug)
   const name = str(args.name)
-  let product = slug ? await productsOf(prisma, storage).findPublicProduct(slug) : null
+  let product = slug ? await products.findPublicProduct(slug) : null
   if (!product && name) {
-    const [best] = (
-      await productsOf(prisma, storage).searchProductCards({ text: name, attributes: [] }, undefined, 1, 1)
-    ).items
-    product = best ? await productsOf(prisma, storage).findPublicProduct(best.slug) : null
+    const [best] = (await products.searchProductCards({ text: name, attributes: [] }, undefined, 1, 1)).items
+    product = best ? await products.findPublicProduct(best.slug) : null
   }
   return { output: product ? productForModel(product) : { error: 'Not found; try search_products' } }
 }

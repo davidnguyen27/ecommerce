@@ -2,7 +2,7 @@ import { ErrorCode, ShippingAddress, type CustomerProfile, type LastShippingAddr
 import { hashPassword, verifyPassword } from '../../core/auth/password.ts'
 import type { Db } from '../../core/db.ts'
 import { AppError } from '../../core/errors.ts'
-import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import type { CustomerMail } from '../../core/jobs/queues.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../../core/middleware/rate-limit.ts'
 import { sendVerificationEmail, setCustomerPassword } from '../customer-auth/index.ts'
 import { toCustomerProfile } from './customer.mapper.ts'

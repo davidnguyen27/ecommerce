@@ -41,7 +41,7 @@ export class ProductImportService {
   ) {}
 
   async template() {
-    return buildTemplate(await loadReference(this.prisma))
+    return buildTemplate(await loadReference(this.prisma, this.ports.schemas))
   }
 
   /**
@@ -68,7 +68,7 @@ export class ProductImportService {
   }
 
   async preview(file: ImportFile): Promise<ImportPreview> {
-    const ref = await loadReference(this.prisma)
+    const ref = await loadReference(this.prisma, this.ports.schemas)
     const { rows, errors: structure } = await this.read(file, ref)
     const plan = await planImport(this.prisma, rows, ref)
     return {
@@ -87,7 +87,7 @@ export class ProductImportService {
       ctx,
       async (tx, audit) => {
         await this.repo.lockReferences(tx)
-        const ref = await loadReference(tx)
+        const ref = await loadReference(tx, this.ports.schemas)
         const { rows, errors: structure } = await this.read(file, ref)
         const plan = await planImport(tx, rows, ref)
         const errors = [...structure, ...plan.errors]

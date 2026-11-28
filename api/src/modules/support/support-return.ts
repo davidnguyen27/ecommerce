@@ -8,7 +8,7 @@ import {
 import type { Audit } from '../../core/audit/audited.ts'
 import type { DbClient } from '../../core/db.ts'
 import { invalidField } from '../../core/errors.ts'
-import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import type { CustomerMail } from '../../core/jobs/queues.ts'
 import { vnd } from '../../core/utils/format.ts'
 import { createRefund, lockOrderForRefund, refundTotals } from '../refund/index.ts'
 import { stockLedger } from '../stock/index.ts'

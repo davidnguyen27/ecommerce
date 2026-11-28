@@ -4,7 +4,7 @@ import { hashOpaqueToken, newOpaqueToken } from '../../core/auth/opaque-token.ts
 import type { DbClient } from '../../core/db.ts'
 import { pageWindow } from '../../core/pagination.ts'
 import type { Prisma } from '../../generated/prisma/client.ts'
-// Payment links are the payments module's table; the select shape stays there until it moves (ticket 06).
+// Payment links are the payment module's table; it owns their select shape.
 import { PAYMENT_LINK_REFERENCES } from '../payment/index.ts'
 import { ORDER_VIEW_INCLUDE, orderLookupUrl, parseOrderCode } from './order.constant.ts'
 import type { OrderEventActor, OrderEventKind } from './order.interface.ts'

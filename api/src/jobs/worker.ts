@@ -1,11 +1,12 @@
 import { PgBoss, fromPrisma } from 'pg-boss'
 import type { Logger } from 'pino'
-import type { Mail, Mailer } from '../adapters/mailer.ts'
-import type { Db, DbClient } from '../db.ts'
-import { createOrderService } from '../../modules/order/index.ts'
-import type { PaymentGateway } from '../adapters/payment/gateway.ts'
-import { processRemainderDeadlines } from '../../modules/preorder-campaign/index.ts'
-import { flagOverdueExchanges } from '../../modules/support/index.ts'
+import type { Mail, Mailer } from '../core/adapters/mailer.ts'
+import type { PaymentGateway } from '../core/adapters/payment/gateway.ts'
+import type { Db, DbClient } from '../core/db.ts'
+import type { EmailQueue, OrderExpiryQueue } from '../core/jobs/queues.ts'
+import { createOrderService } from '../modules/order/index.ts'
+import { processRemainderDeadlines } from '../modules/preorder-campaign/index.ts'
+import { flagOverdueExchanges } from '../modules/support/index.ts'
 import { deleteExpiredRecords } from './cleanup.ts'
 
 const SEND_EMAIL = 'send-email'
@@ -14,21 +15,6 @@ const EXPIRE_ORDER = 'expire-order'
 const EXPIRE_OVERDUE_ORDERS = 'expire-overdue-orders'
 const REMAINDER_DEADLINES = 'remainder-deadlines'
 const OVERDUE_EXCHANGES = 'overdue-exchanges'
-
-/** Queues an email; routes only need this part of `Jobs`. */
-/** Customer emails: the mail queue and the website URL for order lookup links. */
-export type CustomerMail = { emails: EmailQueue; siteUrl: string }
-
-export interface EmailQueue {
-  /** Writes the job with `db`; inside a transaction the email is only sent on commit. */
-  sendEmail(db: DbClient, mail: Mail): Promise<void>
-}
-
-/** Schedules the expiry job for a new order; checkout only needs this part of `Jobs`. */
-export interface OrderExpiryQueue {
-  /** Writes the job with `db` (the checkout transaction): a rollback leaves no job. */
-  scheduleOrderExpiry(db: DbClient, orderId: string, at: Date): Promise<void>
-}
 
 /**
  * Background job queue on Postgres (pg-boss); the worker sends email via `mailer`, cancels orders whose reservation

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ScriptedLlm } from '../src/core/adapters/llm.ts'
-import { deleteExpiredRecords } from '../src/core/jobs/cleanup.ts'
+import { deleteExpiredRecords } from '../src/jobs/cleanup.ts'
 import { CUSTOMER, customerLogin, publishPrivacyPolicy, register, tokenFromMail } from './support/customer.ts'
 import { OWNER, appWithOwner, bearer, createStaff, login, type Request } from './support/staff.ts'
 

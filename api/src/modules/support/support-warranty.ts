@@ -2,7 +2,7 @@ import type { RecordWarrantyMilestone, RecordWarrantyOutcome, WarrantyView } fro
 import type { Audit } from '../../core/audit/audited.ts'
 import type { DbClient } from '../../core/db.ts'
 import { invalidField } from '../../core/errors.ts'
-import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import type { CustomerMail } from '../../core/jobs/queues.ts'
 import { stockLedger } from '../stock/index.ts'
 import { heldVariants } from './support-exchange.ts'
 import { returnWindowSnapshot, returnableQuantities } from './support-return.ts'

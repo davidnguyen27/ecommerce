@@ -10,7 +10,7 @@ import { audited } from '../../core/audit/audited.ts'
 import type { RequestContext } from '../../core/context/request-context.ts'
 import type { Db } from '../../core/db.ts'
 import { AppError } from '../../core/errors.ts'
-import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import type { CustomerMail } from '../../core/jobs/queues.ts'
 import type { StockReceiptPorts } from './stock-receipt.interface.ts'
 import type { StockReceiptRepository } from './stock-receipt.repository.ts'
 

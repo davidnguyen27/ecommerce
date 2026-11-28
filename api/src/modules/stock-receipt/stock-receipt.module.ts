@@ -1,6 +1,5 @@
 import type { AppDeps } from '../../app.ts'
 import { BaseModule, type IRoute } from '../../core/module/base.module.ts'
-// Adapter to code not moved into modules yet (pre-order arrivals).
 import { preorderApi } from '../preorder-campaign/index.ts'
 import type { IStockLedger } from '../stock/index.ts'
 import { StockReceiptController } from './stock-receipt.controller.ts'

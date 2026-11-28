@@ -22,9 +22,3 @@ export class CategoryModule extends BaseModule {
     this.query = query
   }
 }
-
-/**
- * The category query for code outside `modules/` that has no module wiring yet (old product and sitemap routes). It
- * reads only through the `db` it is given, so one shared instance is safe. Removed once those move (ticket 04, 09).
- */
-export const categoryQuery: ICategoryQuery = new CategoryQuery(new CategoryRepository())

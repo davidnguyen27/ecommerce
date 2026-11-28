@@ -5,7 +5,7 @@ import type { PaymentGateway } from '../../core/adapters/payment/gateway.ts'
 import { audited } from '../../core/audit/audited.ts'
 import type { RequestContext } from '../../core/context/request-context.ts'
 import type { Db } from '../../core/db.ts'
-import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import type { CustomerMail } from '../../core/jobs/queues.ts'
 import { executeGatewayRefund } from './refund-gateway.ts'
 import { executeManualRefund, retryRefund, settleRefund } from './refund-record.ts'
 

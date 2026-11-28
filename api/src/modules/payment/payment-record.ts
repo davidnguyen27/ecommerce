@@ -5,7 +5,7 @@ import {
   type PaymentSource,
   type ReconciliationReason,
 } from '../../generated/prisma/client.ts'
-import type { EmailQueue } from '../../core/jobs/jobs.ts'
+import type { EmailQueue } from '../../core/jobs/queues.ts'
 import { dayVN, isoDay, vnd, voucherLines } from '../../core/utils/format.ts'
 import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../order/index.ts'
 import type { PaymentGateway } from '../../core/adapters/payment/gateway.ts'

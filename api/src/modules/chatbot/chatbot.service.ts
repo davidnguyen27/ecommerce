@@ -10,14 +10,12 @@ import {
 } from '@ecommerce/shared'
 import type { Logger } from 'pino'
 import type { LlmClient } from '../../core/adapters/llm.ts'
-import type { Storage } from '../../core/adapters/storage.ts'
 import { hashOpaqueToken } from '../../core/auth/opaque-token.ts'
 import type { Db } from '../../core/db.ts'
 import { AppError, invalidField } from '../../core/errors.ts'
-import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import type { CustomerMail } from '../../core/jobs/queues.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../../core/middleware/rate-limit.ts'
 import { isUuid } from '../../core/middleware/validation.ts'
-import type { IProductQuery } from '../product/index.ts'
 import { createSupportRequest, findSupportCustomer } from '../support/index.ts'
 import {
   appendCustomerMessage,
@@ -29,7 +27,7 @@ import {
 } from './chatbot-conversation.ts'
 import { asksForStaff, dropSentClaims, looksEnglish, relativeShopLinks, stripToolLabels } from './chatbot-intent.ts'
 import { PROMPT_VERSION, promptMessages } from './chatbot-prompt.ts'
-import { policySlugs, productForModel } from './chatbot-tools.ts'
+import { policySlugs, productForModel, type ToolDeps } from './chatbot-tools.ts'
 import { TurnFailedError, runTurn } from './chatbot-turn.ts'
 import type { ChatbotRepository } from './chatbot.repository.ts'
 
@@ -43,11 +41,11 @@ export class ChatbotService {
   constructor(
     private readonly prisma: Db,
     private readonly repo: ChatbotRepository,
-    private readonly storage: Storage,
     private readonly llm: LlmClient | undefined,
     private readonly mail: CustomerMail,
     private readonly logger: Logger,
-    private readonly products: Pick<IProductQuery, 'findPublicProduct'>,
+    /** Product and schema reads for the model's tools and the viewed product. */
+    private readonly reads: Omit<ToolDeps, 'prisma'>,
   ) {}
 
   async status(): Promise<ChatStatus> {
@@ -88,7 +86,7 @@ export class ChatbotService {
     try {
       const result = await runTurn(
         llm,
-        { prisma, storage: this.storage },
+        { prisma, ...this.reads },
         promptMessages(turn.history, viewing, await policySlugs(prisma)),
       )
       // Do not log what the customer typed; tools and arguments are enough to explain the answer.
@@ -195,7 +193,7 @@ export class ChatbotService {
    * ignored.
    */
   private async viewingProduct(slug: string | undefined) {
-    const product = slug ? await this.products.findPublicProduct(slug) : null
+    const product = slug ? await this.reads.products.findPublicProduct(slug) : null
     return product ? { slug: product.slug, product: productForModel(product) } : undefined
   }
 }

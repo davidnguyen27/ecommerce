@@ -9,7 +9,7 @@ import {
 } from '../../core/adapters/payment/vnpay.ts'
 import type { Db } from '../../core/db.ts'
 import { AppError } from '../../core/errors.ts'
-import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import type { CustomerMail } from '../../core/jobs/queues.ts'
 import type { PaymentSource } from '../../generated/prisma/client.ts'
 import { assertCancellable, type IOrderService } from '../order/index.ts'
 import { recordPayment } from './payment-record.ts'

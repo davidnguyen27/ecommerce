@@ -1,6 +1,6 @@
 import type { ProductCard, ProductSort, PublicProduct } from '@ecommerce/shared'
 import type { DbClient } from '../../core/db.ts'
-// Ports to code not moved into modules yet: typed by the current functions, wired in product.module.ts.
+// Ports to other modules, wired in product.module.ts.
 import type { IPreorderApi } from '../preorder-campaign/index.ts'
 import type { IStockLedger } from '../stock/index.ts'
 import type { ProductSnapshot } from './product.model.ts'

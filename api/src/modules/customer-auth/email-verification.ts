@@ -1,5 +1,5 @@
 import type { Db, DbClient } from '../../core/db.ts'
-import type { EmailQueue } from '../../core/jobs/jobs.ts'
+import type { EmailQueue } from '../../core/jobs/queues.ts'
 import { claimCustomerToken, issueCustomerToken } from './customer-token.ts'
 
 const VERIFICATION_TTL_MS = 48 * 60 * 60 * 1000

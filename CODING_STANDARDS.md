@@ -19,6 +19,19 @@ Reviewer đọc file này khi chạy `/code-review`. Chỉ ghi các judgement ca
 - Input đi qua `parse(Schema, …)` với schema trong `@ecommerce/shared`; body trả về được gán kiểu bằng schema đó (`const body: X = …; res.json(body)`).
 - Lỗi có chủ đích ném `AppError` với một `ErrorCode`; lỗi theo từng trường kèm `fields`.
 
+## Module
+
+Backend chia theo module nhiều lớp (ADR 0018, spec `docs/specs/kien-truc-module-nhieu-lop/`). `api/src` gồm `app.ts` (gắn route của mọi module), `server.ts`, `jobs/` (worker pg-boss và dọn dữ liệu hết hạn), `core/` (lớp nền dùng chung), `modules/`, `cli/`, `generated/`.
+
+- **Cấu trúc:** `modules/<tên>/` có `<tên>.module.ts` (lắp repository → service → controller → route), `.route.ts` (đường dẫn, `access`, quyền), `.controller.ts` (đọc input, gọi service, trả body), `.service.ts` (nghiệp vụ, mở transaction, ghi audit), `.repository.ts` (truy vấn, luôn nhận `db`), `.mapper.ts`, `.interface.ts`, `dto/index.ts` (export lại schema zod từ `@ecommerce/shared`), `index.ts`. Thiếu lớp nào thì không tạo file rỗng; module ghép file nghiệp vụ có sẵn thì đặt tên `<tên>-<việc>.ts` hoặc `<tên>.<việc>.ts`.
+- **Module mới:** `pnpm --filter @ecommerce/api gen:module` sinh khung, rồi thêm module vào `createModules` (`modules/index.ts`) đúng thứ tự phụ thuộc. Thứ tự đó cũng là thứ tự gắn route: router có guard chung (`/stock`, `/reports`, `/products`) gắn sau route con có quyền riêng, và route `customer` ở `/account` gắn sau các route `/account/…` khác.
+- **Transaction do service mở.** Repository không tự mở transaction. Gọi sang module khác trong transaction thì truyền `tx`; tham số `db`/`tx` là bắt buộc.
+- **Audit trong transaction** qua `audited(prisma, ctx, fn)`, với `ctx` là `RequestContext` (`contextOf(req)`). Service không nhận `req`; cần IP hay logger thì nhận riêng.
+- **Chuyển trạng thái phải khóa:** `lockById` (`FOR UPDATE`) hoặc `updateMany` kèm điều kiện trạng thái nguồn, rồi mới kiểm. Cấu hình một dòng (phí giao, hạn đổi trả, thông tin pháp lý, cài đặt chatbot) khóa bằng `pg_advisory_xact_lock`.
+- **Ranh giới module:** module chỉ import module khác qua `index.ts` của nó; `core/` không import `modules/`. ESLint chặn cả hai. Module nhận module khác qua constructor (`query`, `service`, `ledger`) hoặc qua kiểu port trong `.interface.ts`. Hàm và đối tượng không trạng thái, chỉ làm việc trong `db` được truyền (`stockLedger`, `preorderApi`, `cartVariants`, hàm ghi tiền và hoàn tiền), thì được export từ `index.ts` để file nghiệp vụ của module khác gọi trong transaction của mình.
+- **Thứ tự export trong `index.ts`:** file lá trước, file `.module.ts` sau cùng. Hai module import lẫn nhau (đơn hàng với đặt trước, hỗ trợ, thanh toán) thì thứ tự này tránh lỗi dùng hằng trước khi khởi tạo lúc nạp ESM.
+- **Controller** không `try/catch` (Express 5 chuyển lỗi async); parse input theo đúng thứ tự route cũ, vì thứ tự đó quyết định lỗi nào trả trước.
+
 ## Test
 
 - Test đi qua HTTP (supertest trên Postgres thật). `prisma` trong test chỉ dùng để dựng trạng thái ban đầu, không dùng để kiểm kết quả.

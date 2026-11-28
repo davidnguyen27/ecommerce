@@ -22,4 +22,4 @@ export type {
   OrderEventActor,
   OrderEventKind,
 } from './order.interface.ts'
-export { OrderModule, createOrderQuery, createOrderService, expireOverdueOrders } from './order.module.ts'
+export { OrderModule, createOrderService, expireOverdueOrders } from './order.module.ts'

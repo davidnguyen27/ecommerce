@@ -1,6 +1,6 @@
 import type { Db, DbClient } from '../../core/db.ts'
 import type { Prisma } from '../../generated/prisma/client.ts'
-import type { EmailQueue } from '../../core/jobs/jobs.ts'
+import type { EmailQueue } from '../../core/jobs/queues.ts'
 import { dateVN, vnd, voucherLines } from '../../core/utils/format.ts'
 import { DEPOSITED_PREORDER, issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../order/index.ts'
 

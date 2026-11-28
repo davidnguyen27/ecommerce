@@ -12,7 +12,7 @@ import {
 } from '@ecommerce/shared'
 import type { DbClient } from '../../core/db.ts'
 import { fileError } from '../../core/media/upload.ts'
-import { attributeSchemaQuery } from '../attribute-schema/index.ts'
+import type { IAttributeSchemaQuery } from '../attribute-schema/index.ts'
 
 /** Sheet name for each product type in the import file. */
 const SHEET_NAMES: Record<ProductType, string> = {
@@ -93,11 +93,11 @@ function addName(index: NameIndex, name: string, id: string) {
 }
 
 /** Categories by path from the type root, e.g. `Sneaker > Chạy bộ`, since names can repeat in other branches. */
-export async function loadReference(db: DbClient) {
+export async function loadReference(db: DbClient, schemaQuery: Pick<IAttributeSchemaQuery, 'load'>) {
   const [brands, categories, schemas] = await Promise.all([
     db.brand.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     db.category.findMany({ select: { id: true, name: true, parentId: true, productType: true } }),
-    Promise.all(ProductType.options.map((type) => attributeSchemaQuery.load(db, type))),
+    Promise.all(ProductType.options.map((type) => schemaQuery.load(db, type))),
   ])
   const byId = new Map(categories.map((c) => [c.id, c]))
   const pathOf = (id: string): string => {

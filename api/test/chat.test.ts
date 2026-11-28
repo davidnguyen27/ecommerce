@@ -7,7 +7,7 @@ import {
   type LlmMessage,
 } from '../src/core/adapters/llm.ts'
 import { ENGLISH_REMINDER, HISTORY_LIMIT, SYSTEM_PROMPT } from '../src/modules/chatbot/chatbot-prompt.ts'
-import { deleteExpiredRecords } from '../src/core/jobs/cleanup.ts'
+import { deleteExpiredRecords } from '../src/jobs/cleanup.ts'
 import { OWNER, appWithOwner, bearer, createStaff, login, type Request } from './support/staff.ts'
 
 const DAY = 24 * 60 * 60_000

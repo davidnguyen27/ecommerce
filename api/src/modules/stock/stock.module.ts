@@ -22,9 +22,9 @@ export class StockModule extends BaseModule {
 }
 
 /**
- * The stock ledger for code outside `modules/` with no module wiring yet (checkout, pre-orders, support,
- * reconciliation). It works only in the `db` or transaction it is given, so one shared instance is safe. Removed once
- * those move.
+ * The stock ledger for business functions that run in another module's transaction (checkout, pre-orders, support,
+ * reconciliation, products). It works only in the `db` or transaction it is given, so one shared instance is safe
+ * (CODING_STANDARDS "Module").
  */
 export const stockLedger: IStockLedger = new StockLedger(new StockRepository())
 

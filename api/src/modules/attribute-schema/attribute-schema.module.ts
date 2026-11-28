@@ -21,9 +21,3 @@ export class AttributeSchemaModule extends BaseModule {
     this.query = query
   }
 }
-
-/**
- * The schema query for code outside `modules/` with no module wiring yet (products, import, chatbot). It reads only
- * through the `db` it is given, so one shared instance is safe. Removed once those move.
- */
-export const attributeSchemaQuery: IAttributeSchemaQuery = new AttributeSchemaQuery(new AttributeSchemaRepository())

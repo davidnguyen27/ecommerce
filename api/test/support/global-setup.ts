@@ -5,7 +5,7 @@ import pino from 'pino'
 import type { TestProject } from 'vitest/node'
 import { InMemoryMailer } from '../../src/core/adapters/mailer.ts'
 import { createPrisma } from '../../src/core/db.ts'
-import { Jobs } from '../../src/core/jobs/jobs.ts'
+import { Jobs } from '../../src/jobs/worker.ts'
 import { InMemoryPaymentGateway } from '../../src/core/adapters/payment/gateway.ts'
 
 const TEMPLATE_DB = 'app_template'

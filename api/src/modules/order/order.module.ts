@@ -1,19 +1,19 @@
 import type { AppDeps } from '../../app.ts'
 import { BaseModule, type IRoute } from '../../core/module/base.module.ts'
-// Adapters to code not moved into modules yet; each port moves to its module's interface when that module moves.
 import { recordGatewayPayments } from '../payment/index.ts'
 import { createRefund, refundTotals, refundedViaGateway, summarizeRefunds } from '../refund/index.ts'
 import { preorderApi } from '../preorder-campaign/index.ts'
 import { resolveCancelRequests } from '../support/index.ts'
 import { stockLedger } from '../stock/index.ts'
 import { OrderController } from './order.controller.ts'
-import type { IOrderQuery, IOrderService, OrderDeps, OrderPorts, OrderQueryDeps } from './order.interface.ts'
+import type { IOrderQuery, IOrderService, OrderDeps, OrderPorts } from './order.interface.ts'
 import { OrderQuery } from './order.query.ts'
 import { OrderRepository } from './order.repository.ts'
 import { OrderAccountRoute, OrderAdminRoute, OrderPublicRoute } from './order.route.ts'
 import { OrderService } from './order.service.ts'
 
-function legacyPorts(): OrderPorts {
+/** Other modules' functions the order commands call in their own transactions; all stateless. */
+function modulePorts(): OrderPorts {
   return {
     stock: stockLedger,
     gatewayPayments: { record: recordGatewayPayments },
@@ -38,7 +38,7 @@ export class OrderModule extends BaseModule {
   constructor(deps: AppDeps) {
     super()
     const repo = new OrderRepository()
-    const ports = legacyPorts()
+    const ports = modulePorts()
     const service = new OrderService(deps, repo, ports)
     const query = new OrderQuery(deps, repo, ports.refunds)
     const controller = new OrderController(deps, service, query, repo, ports)
@@ -49,16 +49,11 @@ export class OrderModule extends BaseModule {
 }
 
 /**
- * Order commands for code outside `modules/` that has no module wiring yet (jobs, gateway callbacks, pre-order
- * campaigns). Stateless besides `deps`, so building one per call is fine. Removed once those move.
+ * Order commands for the job worker (`src/jobs/worker.ts`), which runs without the HTTP modules. Stateless besides
+ * `deps`, so building one per call is fine.
  */
 export function createOrderService(deps: OrderDeps): IOrderService {
-  return new OrderService(deps, new OrderRepository(), legacyPorts())
-}
-
-/** Order views for code outside `modules/` (reconciliation, refunds, support). Removed once those move. */
-export function createOrderQuery(deps: OrderQueryDeps): IOrderQuery {
-  return new OrderQuery(deps, new OrderRepository(), legacyPorts().refunds)
+  return new OrderService(deps, new OrderRepository(), modulePorts())
 }
 
 /** The sweep job's entry point (also called directly by tests, as job code is): cancels every overdue pending order. */

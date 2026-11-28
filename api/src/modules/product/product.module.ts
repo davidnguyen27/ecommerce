@@ -2,7 +2,6 @@ import type { AppDeps } from '../../app.ts'
 import type { Db } from '../../core/db.ts'
 import type { Storage } from '../../core/adapters/storage.ts'
 import { BaseModule, type IRoute } from '../../core/module/base.module.ts'
-// Adapters to code not moved into modules yet.
 import { preorderApi } from '../preorder-campaign/index.ts'
 import type { IAttributeSchemaQuery } from '../attribute-schema/index.ts'
 import type { ICategoryQuery } from '../category/index.ts'
@@ -27,7 +26,8 @@ import {
 } from './product.route.ts'
 import { ProductService } from './product.service.ts'
 
-const legacyPorts = (): ProductPorts => ({ stock: stockLedger, preorders: { offers: preorderApi.preorderOffers } })
+/** Stock and pre-order offers come from those modules' stateless exports. */
+const ports = (): ProductPorts => ({ stock: stockLedger, preorders: { offers: preorderApi.preorderOffers } })
 
 /** What the product module needs from other modules. */
 export type ProductModuleDeps = { schemas: IAttributeSchemaQuery; categories: ICategoryQuery }
@@ -63,13 +63,5 @@ export class ProductModule extends BaseModule {
 }
 
 function createQuery(deps: { prisma: Db; storage: Storage }, repo: ProductRepository, modules: ProductModuleDeps) {
-  return new ProductQuery(deps, repo, new ProductSearchRepository(), modules.schemas, modules.categories, legacyPorts())
-}
-
-/**
- * The product query for code outside `modules/` with no module wiring yet (chatbot). Removed once that moves
- * (ticket 09).
- */
-export function createProductQuery(deps: { prisma: Db; storage: Storage }, modules: ProductModuleDeps): IProductQuery {
-  return createQuery(deps, new ProductRepository(), modules)
+  return new ProductQuery(deps, repo, new ProductSearchRepository(), modules.schemas, modules.categories, ports())
 }

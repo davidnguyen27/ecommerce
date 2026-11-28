@@ -8,7 +8,7 @@ import { createPrisma } from '../../src/core/db.ts'
 import type { LlmClient } from '../../src/core/adapters/llm.ts'
 import { InMemoryMailer } from '../../src/core/adapters/mailer.ts'
 import { InMemoryStorage } from '../../src/core/adapters/storage.ts'
-import { Jobs } from '../../src/core/jobs/jobs.ts'
+import { Jobs } from '../../src/jobs/worker.ts'
 import {
   InMemoryPaymentGateway,
   SimulatorPaymentGateway,

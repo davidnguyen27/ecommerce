@@ -1,4 +1,3 @@
-// Port to code not moved into modules yet (pre-order arrivals; moves with the pre-order campaign module).
 import type { IPreorderApi } from '../preorder-campaign/index.ts'
 import type { IStockLedger } from '../stock/index.ts'
 

@@ -4,7 +4,7 @@ import type { AppDeps } from '../../app.ts'
 import type { Audit, AuditEntry } from '../../core/audit/audited.ts'
 import type { DbClient } from '../../core/db.ts'
 import type { Prisma } from '../../generated/prisma/client.ts'
-// Ports to code not moved into modules yet: typed by the current functions, wired in order.module.ts.
+// Ports to other modules: typed by the functions they export, wired in order.module.ts.
 import type { recordGatewayPayments } from '../payment/index.ts'
 import type { createRefund, refundTotals, refundedViaGateway, summarizeRefunds } from '../refund/index.ts'
 import type { IPreorderApi } from '../preorder-campaign/index.ts'
@@ -84,7 +84,7 @@ export type CancelOutcome = 'cancelled' | 'already_cancelled' | 'not_pending' | 
 /** Audit entry of one fulfillment transition; the transition knows its source and target, so it declares them. */
 export type FulfillmentAudit = Pick<AuditEntry, 'action' | 'before' | 'after'>
 
-/** What the module needs from code not moved into modules yet (stock, payments, refunds, pre-orders, support). */
+/** What the module needs from other modules (stock, payments, refunds, pre-orders, support). */
 export type OrderPorts = {
   stock: Pick<IStockLedger, 'release' | 'change' | 'reserve'>
   gatewayPayments: { record: typeof recordGatewayPayments }

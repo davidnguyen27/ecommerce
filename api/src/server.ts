@@ -4,7 +4,7 @@ import { llmFromEnv } from './core/adapters/llm.ts'
 import { mailerFromEnv } from './core/adapters/mailer.ts'
 import { storageFromEnv } from './core/adapters/storage.ts'
 import { createPrisma } from './core/db.ts'
-import { Jobs } from './core/jobs/jobs.ts'
+import { Jobs } from './jobs/worker.ts'
 import { paymentGatewayFromEnv, vnpayKeysFromEnv } from './core/adapters/payment/gateway-from-env.ts'
 
 const databaseUrl = process.env.DATABASE_URL

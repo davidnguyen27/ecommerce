@@ -1,7 +1,7 @@
 import type { Logger } from 'pino'
 import { audited } from '../../core/audit/audited.ts'
 import type { Db } from '../../core/db.ts'
-import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import type { CustomerMail } from '../../core/jobs/queues.ts'
 import { vnd } from '../../core/utils/format.ts'
 import { recordOrderEvent } from '../order/index.ts'
 import {

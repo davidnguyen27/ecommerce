@@ -46,7 +46,7 @@ export function createModules(deps: AppDeps): BaseModule[] {
     new BrandModule(deps),
     new CommitmentTypeModule(deps),
     products,
-    new ProductImportModule(deps, stock.ledger),
+    new ProductImportModule(deps, { stock: stock.ledger, schemas: schemas.query }),
     // Before `stock`: receipts have their own permission, the stock router guards everything under it.
     new StockReceiptModule(deps, stock.ledger),
     stock,
@@ -70,7 +70,7 @@ export function createModules(deps: AppDeps): BaseModule[] {
     new LegalInfoModule(deps),
     new SitemapModule(deps, categories.query),
     // Before `report`: the chatbot report has its own permission, the report router guards everything under it.
-    new ChatbotModule(deps, products.query),
+    new ChatbotModule(deps, { products: products.query, schemas: schemas.query }),
     new ReportModule(deps),
   ]
 }
