@@ -1,10 +1,14 @@
 import type { AppDeps } from '../app.ts'
 import type { BaseModule } from '../core/module/base.module.ts'
 import { AttributeSchemaModule } from './attribute-schema/index.ts'
+import { AuditLogModule } from './audit-log/index.ts'
+import { AuthModule } from './auth/index.ts'
 import { BrandModule } from './brand/index.ts'
 import { CategoryModule } from './category/index.ts'
 import { CheckoutModule } from './checkout/index.ts'
 import { CommitmentTypeModule } from './commitment-type/index.ts'
+import { CustomerModule } from './customer/index.ts'
+import { CustomerAuthModule } from './customer-auth/index.ts'
 import { OrderModule } from './order/index.ts'
 import { PaymentModule } from './payment/index.ts'
 import { PreorderCampaignModule } from './preorder-campaign/index.ts'
@@ -14,6 +18,7 @@ import { ReconciliationModule } from './reconciliation/index.ts'
 import { RefundModule } from './refund/index.ts'
 import { ReturnWindowModule } from './return-window/index.ts'
 import { ShippingFeeModule } from './shipping-fee/index.ts'
+import { StaffModule } from './staff/index.ts'
 import { StockModule } from './stock/index.ts'
 import { StockReceiptModule } from './stock-receipt/index.ts'
 import { SupportModule } from './support/index.ts'
@@ -28,6 +33,7 @@ export function createModules(deps: AppDeps): BaseModule[] {
   const categories = new CategoryModule(deps)
   const stock = new StockModule(deps)
   const orders = new OrderModule(deps)
+  const customerAuth = new CustomerAuthModule(deps)
   return [
     schemas,
     categories,
@@ -48,5 +54,11 @@ export function createModules(deps: AppDeps): BaseModule[] {
     new ShippingFeeModule(deps),
     new ReturnWindowModule(deps),
     new SupportModule(deps, orders.query),
+    new AuthModule(deps),
+    new StaffModule(deps),
+    new AuditLogModule(deps),
+    customerAuth,
+    // After the other `/account/…` routes; its customer sign-in check runs for every path under `/account`.
+    new CustomerModule(deps, customerAuth.sessions),
   ]
 }

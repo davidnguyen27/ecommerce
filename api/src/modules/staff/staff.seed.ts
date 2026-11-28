@@ -1,11 +1,8 @@
-import type { Db } from '../core/db.ts'
-import { hashPassword } from './password.ts'
+import type { Db } from '../../core/db.ts'
+import { normalizeEmail } from '../../core/auth/email.ts'
+import { hashPassword } from '../../core/auth/password.ts'
 
 export type NewStaff = { email: string; password: string; name: string }
-
-export function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase()
-}
 
 /** Creates the first owner. An existing email keeps its account, password included. */
 export async function seedOwner(prisma: Db, owner: NewStaff): Promise<{ created: boolean }> {

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import type { Db, DbClient } from '../core/db.ts'
-import type { AuthAudience } from '../generated/prisma/client.ts'
-import { hashOpaqueToken, newOpaqueToken } from '../core/auth/opaque-token.ts'
+import type { Db, DbClient } from '../../core/db.ts'
+import type { AuthAudience } from '../../generated/prisma/client.ts'
+import { hashOpaqueToken, newOpaqueToken } from '../../core/auth/opaque-token.ts'
 
 export type IssuedRefreshToken = { subjectId: string; refreshToken: string; expiresAt: Date }
 

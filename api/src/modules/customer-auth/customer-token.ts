@@ -1,6 +1,6 @@
-import { hashOpaqueToken, newOpaqueToken } from '../core/auth/opaque-token.ts'
-import type { DbClient } from '../core/db.ts'
-import type { CustomerTokenPurpose, Prisma } from '../generated/prisma/client.ts'
+import { hashOpaqueToken, newOpaqueToken } from '../../core/auth/opaque-token.ts'
+import type { DbClient } from '../../core/db.ts'
+import type { CustomerTokenPurpose, Prisma } from '../../generated/prisma/client.ts'
 
 /** Creates a one-time customer token in `db` and returns the website link `path?token=…` for email. */
 export async function issueCustomerToken(

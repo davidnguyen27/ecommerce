@@ -1,6 +1,6 @@
 import type { StaffRole } from '@ecommerce/shared'
 import { expect } from 'vitest'
-import { seedOwner } from '../../src/auth/staff.ts'
+import { seedOwner } from '../../src/modules/staff/index.ts'
 import { createTestApp } from './test-app.ts'
 
 export const OWNER = { email: 'chu@example.com', password: 'mat-khau-dai-du-manh', name: 'Chủ Cửa Hàng' }

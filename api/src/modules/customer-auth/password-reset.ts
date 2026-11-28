@@ -1,8 +1,8 @@
-import { hashPassword } from '../auth/password.ts'
-import { revokeAllRefreshTokens } from '../auth/refresh-tokens.ts'
-import type { Db, DbClient } from '../core/db.ts'
-import type { EmailQueue } from '../core/jobs/jobs.ts'
-import { claimCustomerToken, issueCustomerToken } from './customer-tokens.ts'
+import { hashPassword } from '../../core/auth/password.ts'
+import { revokeAllRefreshTokens } from '../auth/index.ts'
+import type { Db, DbClient } from '../../core/db.ts'
+import type { EmailQueue } from '../../core/jobs/jobs.ts'
+import { claimCustomerToken, issueCustomerToken } from './customer-token.ts'
 
 const RESET_TTL_MS = 60 * 60 * 1000
 

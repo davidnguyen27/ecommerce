@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify } from 'jose'
-import type { AuthAudience } from '../generated/prisma/client.ts'
+import type { AuthAudience } from '../../generated/prisma/client.ts'
 
 const ACCESS_TOKEN_TTL = '15m'
 
