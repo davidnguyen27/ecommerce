@@ -6,7 +6,7 @@ import type { OrderLine } from '../generated/prisma/client.ts'
 import { vnd } from '../core/utils/format.ts'
 import { recordOrderEvent } from '../modules/order/index.ts'
 import { usedAllocations } from '../preorders/campaigns.ts'
-import { reserveStock } from '../stock/stock.ts'
+import { stockLedger } from '../modules/stock/index.ts'
 import { queueDepositReceivedEmail, queuePaymentReceivedEmail, type RecordPaymentDeps } from './record-payment.ts'
 import { createRefund } from './refunds.ts'
 import { usedRedemptions } from '../vouchers/vouchers.ts'
@@ -80,7 +80,7 @@ export async function restoreOrder(
 
   if (preorder) await retakeAllocation(tx, order)
   else {
-    const reservation = await reserveStock(
+    const reservation = await stockLedger.reserve(
       tx,
       order.lines.map((line) => ({ variantId: line.variantId, quantity: line.quantity })),
     )

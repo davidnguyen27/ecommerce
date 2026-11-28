@@ -3,7 +3,7 @@ import type { Audit } from '../core/audit/audited.ts'
 import type { DbClient } from '../core/db.ts'
 import { invalidField } from '../core/errors.ts'
 import type { CustomerMail } from '../core/jobs/jobs.ts'
-import { reserveStock } from '../stock/stock.ts'
+import { stockLedger } from '../modules/stock/index.ts'
 import { heldVariants } from './exchanges.ts'
 import { returnWindowSnapshot, returnableQuantities } from './returns.ts'
 import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest, notFound, type SupportForView } from './support.ts'
@@ -204,7 +204,7 @@ async function createFollowUp(tx: DbClient, warranty: SupportForView, kind: 'exc
     throw conflict(`${line.orderLine.sku}: chỉ còn trả hay đổi được ${available} cái (đã nằm trong yêu cầu khác)`)
   }
   if (kind === 'exchange') {
-    const reservation = await reserveStock(tx, [{ variantId: line.heldVariantId, quantity: line.quantity }])
+    const reservation = await stockLedger.reserve(tx, [{ variantId: line.heldVariantId, quantity: line.quantity }])
     if (!reservation.ok) throw conflict(`${line.heldVariant.sku} không còn đủ hàng để đổi mới; có thể chọn hoàn tiền`)
   }
   const window = await returnWindowSnapshot(tx, orderId, [{ orderLineId: line.orderLineId }])

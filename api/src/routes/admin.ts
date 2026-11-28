@@ -16,8 +16,6 @@ import { adminReturnWindowRoutes } from './admin-return-windows.ts'
 import { adminReportRoutes } from './admin-reports.ts'
 import { adminLegalInfoRoutes } from './legal-info.ts'
 import { adminStaffRoutes } from './admin-staff.ts'
-import { adminStockRoutes } from './admin-stock.ts'
-import { adminStockReceiptRoutes } from './admin-stock-receipts.ts'
 import { adminShippingFeeRoutes } from './admin-shipping-fees.ts'
 
 /** Admin routes; behind `requireAuth` for the staff audience and `loadStaff`. */
@@ -38,8 +36,6 @@ export function adminRoutes(
       .use('/audit', adminAuditRoutes(prisma))
       .use('/pages', adminPageRoutes(prisma))
       .use('/legal-info', adminLegalInfoRoutes(prisma))
-      .use('/stock/receipts', adminStockReceiptRoutes(prisma, mail))
-      .use('/stock', adminStockRoutes(prisma))
       .use('/shipping-fees', adminShippingFeeRoutes(prisma))
       .use('/reconciliation', adminReconciliationRoutes(prisma, storage, payments, mail))
       .use('/refunds', adminRefundRoutes(prisma, storage, payments, mail))

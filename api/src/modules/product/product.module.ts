@@ -4,9 +4,9 @@ import type { Storage } from '../../core/adapters/storage.ts'
 import { BaseModule, type IRoute } from '../../core/module/base.module.ts'
 // Adapters to code not moved into modules yet.
 import { preorderOffers } from '../../preorders/campaigns.ts'
-import { inStockIds } from '../../stock/stock.ts'
 import type { IAttributeSchemaQuery } from '../attribute-schema/index.ts'
 import type { ICategoryQuery } from '../category/index.ts'
+import { stockLedger } from '../stock/index.ts'
 import { ProductCommitmentController } from './product-commitment.controller.ts'
 import { ProductCommitmentService } from './product-commitment.service.ts'
 import { ProductMediaController } from './product-media.controller.ts'
@@ -27,7 +27,7 @@ import {
 } from './product.route.ts'
 import { ProductService } from './product.service.ts'
 
-const legacyPorts = (): ProductPorts => ({ stock: { inStockIds }, preorders: { offers: preorderOffers } })
+const legacyPorts = (): ProductPorts => ({ stock: stockLedger, preorders: { offers: preorderOffers } })
 
 /** What the product module needs from other modules. */
 export type ProductModuleDeps = { schemas: IAttributeSchemaQuery; categories: ICategoryQuery }

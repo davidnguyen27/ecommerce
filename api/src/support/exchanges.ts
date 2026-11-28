@@ -4,7 +4,7 @@ import { cartVariants } from '../modules/product/index.ts'
 import type { DbClient } from '../core/db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import type { CustomerMail } from '../core/jobs/jobs.ts'
-import { releaseStock, reserveStock, changeStock } from '../stock/stock.ts'
+import { stockLedger } from '../modules/stock/index.ts'
 import { keptQuantities, returnableQuantities } from './returns.ts'
 import { queueSupportEmail } from './emails.ts'
 import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest } from './support.ts'
@@ -135,7 +135,7 @@ export async function reserveExchange(tx: DbClient, request: { id: string; lines
       line.quantity,
     )
   }
-  const reservation = await reserveStock(
+  const reservation = await stockLedger.reserve(
     tx,
     request.lines.map((l) => ({ variantId: l.exchangeVariantId!, quantity: l.quantity })),
   )
@@ -161,7 +161,7 @@ export async function releaseExchange(tx: DbClient, requestId: string) {
     select: { id: true, exchangeVariantId: true, reservedQuantity: true },
   })
   if (lines.length === 0) return
-  await releaseStock(
+  await stockLedger.release(
     tx,
     lines.map((l) => ({ variantId: l.exchangeVariantId!, quantity: l.reservedQuantity })),
   )
@@ -186,7 +186,7 @@ export async function shipExchange(
   if (isClosed(request.status)) throw conflict('Yêu cầu đã kết thúc')
   if (!request.receivedAt) throw conflict('Chưa nhận hàng khách gửi về, chưa giao hàng đổi được (ADR 0015)')
   const lines = request.lines.filter((l) => l.exchangeVariantId)
-  await changeStock(
+  await stockLedger.change(
     tx,
     staffId,
     lines.map((l) => l.exchangeVariantId!),

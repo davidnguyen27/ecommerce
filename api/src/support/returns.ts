@@ -14,7 +14,7 @@ import { invalidField } from '../core/errors.ts'
 import type { CustomerMail } from '../core/jobs/jobs.ts'
 import { vnd } from '../core/utils/format.ts'
 import { createRefund, lockOrderForRefund, refundTotals } from '../payments/refunds.ts'
-import { changeStock } from '../stock/stock.ts'
+import { stockLedger } from '../modules/stock/index.ts'
 import { ORDER_LINE_FOR_EXCHANGE, assertExchangeable, heldVariants, reserveExchange } from './exchanges.ts'
 import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest, notFound, type SupportForView } from './support.ts'
 import { queueSupportEmail } from './emails.ts'
@@ -271,7 +271,7 @@ export async function receiveSupportReturn(
 
   const restocking = plan.filter((p) => p.entry.restocked > 0)
   if (restocking.length > 0) {
-    await changeStock(
+    await stockLedger.change(
       tx,
       staffId,
       restocking.map((p) => p.variantId),

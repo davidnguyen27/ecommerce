@@ -2,7 +2,7 @@ import type { ProductCard, ProductSort, PublicProduct } from '@ecommerce/shared'
 import type { DbClient } from '../../core/db.ts'
 // Ports to code not moved into modules yet: typed by the current functions, wired in product.module.ts.
 import type { preorderOffers } from '../../preorders/campaigns.ts'
-import type { inStockIds } from '../../stock/stock.ts'
+import type { IStockLedger } from '../stock/index.ts'
 import type { ProductSnapshot } from './product.model.ts'
 import type { SearchCriteria } from './product-search.repository.ts'
 
@@ -17,7 +17,7 @@ export type CartVariant = { snapshot: ProductSnapshot | null; variant: ProductSn
 
 /** What the product module needs from stock and pre-orders. */
 export type ProductPorts = {
-  stock: { inStockIds: typeof inStockIds }
+  stock: Pick<IStockLedger, 'inStockIds'>
   preorders: { offers: typeof preorderOffers }
 }
 

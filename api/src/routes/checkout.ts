@@ -16,7 +16,7 @@ import { imageRenditions } from '../core/media/images.ts'
 import { orderPlacement } from '../placement/place-order.ts'
 import { priceOrder } from '../placement/price-order.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
-import { enoughStockIds } from '../stock/stock.ts'
+import { stockLedger } from '../modules/stock/index.ts'
 import { quoteVoucher, type VoucherLine } from '../vouchers/apply.ts'
 
 /** Customer checkout, no sign-in needed; a customer access token links the order to the account. */
@@ -29,7 +29,10 @@ export function checkoutRoutes(deps: AppDeps) {
       const input = parse(CheckoutQuoteRequest, req.body)
       const config = await requireShippingFeeConfig(prisma)
       const ids = input.lines.map((l) => l.variantId)
-      const [variants, stocked] = await Promise.all([cartVariants(prisma, ids), enoughStockIds(prisma, input.lines)])
+      const [variants, stocked] = await Promise.all([
+        cartVariants(prisma, ids),
+        stockLedger.enoughStockIds(prisma, input.lines),
+      ])
       const policies = await livePolicyVersions(prisma, variants.values())
 
       const lines = input.lines.map(({ variantId, quantity }): QuoteLine => {

@@ -9,8 +9,8 @@ import type { recordGatewayPayments } from '../../payments/record-payment.ts'
 import type { createRefund, refundTotals, refundedViaGateway, summarizeRefunds } from '../../payments/refunds.ts'
 import type { applyArrivals, planArrivals } from '../../preorders/arrivals.ts'
 import type { createRemainderLink } from '../../preorders/remainder.ts'
-import type { changeStock, releaseStock, reserveStock } from '../../stock/stock.ts'
 import type { resolveCancelRequests } from '../../support/support.ts'
+import type { IStockLedger } from '../stock/index.ts'
 import type { OrderForView } from './order.constant.ts'
 
 /**
@@ -87,7 +87,7 @@ export type FulfillmentAudit = Pick<AuditEntry, 'action' | 'before' | 'after'>
 
 /** What the module needs from code not moved into modules yet (stock, payments, refunds, pre-orders, support). */
 export type OrderPorts = {
-  stock: { release: typeof releaseStock; change: typeof changeStock; reserve: typeof reserveStock }
+  stock: Pick<IStockLedger, 'release' | 'change' | 'reserve'>
   gatewayPayments: { record: typeof recordGatewayPayments }
   refunds: {
     totals: typeof refundTotals

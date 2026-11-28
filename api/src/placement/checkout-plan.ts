@@ -3,7 +3,7 @@ import type { z } from 'zod'
 import { cartVariants } from '../modules/product/index.ts'
 import { storedImageOf } from './order-snapshot.ts'
 import { AppError } from '../core/errors.ts'
-import { reserveStock } from '../stock/stock.ts'
+import { stockLedger } from '../modules/stock/index.ts'
 import type { Plan } from './placement-plan.ts'
 
 /**
@@ -27,7 +27,7 @@ export const checkoutPlan: Plan<z.output<typeof CheckoutRequest>> = {
         problems.push({ variantId: line.variantId, change: { kind: 'price', from: line.price, to: variant.price } })
       }
     }
-    const reserved = await reserveStock(
+    const reserved = await stockLedger.reserve(
       tx,
       input.lines.filter((line) => !problems.some((p) => p.variantId === line.variantId)),
     )

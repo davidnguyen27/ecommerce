@@ -3,7 +3,7 @@ import { Prisma } from '../generated/prisma/client.ts'
 import type { EmailQueue } from '../core/jobs/jobs.ts'
 import { dateVN, vnd, voucherLines } from '../core/utils/format.ts'
 import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../modules/order/index.ts'
-import { reserveStock } from '../stock/stock.ts'
+import { stockLedger } from '../modules/stock/index.ts'
 
 /** Part of a variant's arrived stock reserved for one pre-order line. */
 export type Allocation = {
@@ -90,7 +90,7 @@ export async function applyArrivals(
     if (reserved === 0) continue
     // Through the stock module, on the same lock path as `changeStock`. Stock was just increased by the arrival, so
     // allocations never exceed it.
-    const reservation = await reserveStock(tx, [{ variantId: plan.variantId, quantity: reserved }])
+    const reservation = await stockLedger.reserve(tx, [{ variantId: plan.variantId, quantity: reserved }])
     if (!reservation.ok) throw new Error(`Không giữ được ${reserved} cho đơn đặt trước của biến thể ${plan.variantId}`)
     for (const allocation of plan.allocations) {
       await tx.orderLine.update({

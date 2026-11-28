@@ -5,8 +5,8 @@ import { recordGatewayPayments } from '../../payments/record-payment.ts'
 import { createRefund, refundTotals, refundedViaGateway, summarizeRefunds } from '../../payments/refunds.ts'
 import { applyArrivals, planArrivals } from '../../preorders/arrivals.ts'
 import { createRemainderLink } from '../../preorders/remainder.ts'
-import { changeStock, releaseStock, reserveStock } from '../../stock/stock.ts'
 import { resolveCancelRequests } from '../../support/support.ts'
+import { stockLedger } from '../stock/index.ts'
 import { OrderController } from './order.controller.ts'
 import type { IOrderQuery, IOrderService, OrderDeps, OrderPorts, OrderQueryDeps } from './order.interface.ts'
 import { OrderQuery } from './order.query.ts'
@@ -16,7 +16,7 @@ import { OrderService } from './order.service.ts'
 
 function legacyPorts(): OrderPorts {
   return {
-    stock: { release: releaseStock, change: changeStock, reserve: reserveStock },
+    stock: stockLedger,
     gatewayPayments: { record: recordGatewayPayments },
     refunds: {
       totals: refundTotals,
