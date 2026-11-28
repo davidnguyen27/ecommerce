@@ -9,7 +9,6 @@ import { adminRefundRoutes } from './admin-refunds.ts'
 import { adminAttributeSchemaRoutes } from './admin-attribute-schemas.ts'
 import { adminAuditRoutes } from './admin-audit.ts'
 import { adminChatbotReportRoutes, adminChatbotRoutes } from './admin-chatbot.ts'
-import { adminCommitmentTypeRoutes } from './admin-commitment-types.ts'
 import { adminImportRoutes } from './admin-import.ts'
 import { adminPageRoutes } from './admin-pages.ts'
 import { adminProductCommitmentRoutes } from './admin-product-commitments.ts'
@@ -47,7 +46,6 @@ export function adminRoutes(
       .use('/pages', adminPageRoutes(prisma))
       .use('/legal-info', adminLegalInfoRoutes(prisma))
       .use('/attribute-schemas', adminAttributeSchemaRoutes(prisma))
-      .use('/commitment-types', adminCommitmentTypeRoutes(prisma))
       // Before `/products`: images, documents and commitments have their own permissions (`media.upload`), not the
       // product router's shared guard.
       .use('/products/:id/images', adminProductImageRoutes(prisma, storage))
