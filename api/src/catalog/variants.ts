@@ -5,7 +5,7 @@ import type { Audit } from '../core/audit/audited.ts'
 import { forbidden } from '../core/middleware/staff-context.ts'
 import type { Prisma, ProductVariant } from '../generated/prisma/client.ts'
 import { AppError, conflictField, invalidField, rethrowUnique } from '../core/errors.ts'
-import { assertAttributes, lockAttributeSchema } from './attribute-schemas.ts'
+import { attributeSchemaQuery, assertAttributes } from '../modules/attribute-schema/index.ts'
 import {
   lockProduct,
   priceAuditFields,
@@ -128,7 +128,7 @@ async function resolveFields(
   input: VariantInput,
 ) {
   const others = product.variants.filter((v) => v.id !== before?.id)
-  const schema = await lockAttributeSchema(tx, product.productType, 'share')
+  const schema = await attributeSchemaQuery.lock(tx, product.productType, 'share')
   const fields: VariantFields = {
     sku: input.sku,
     attributes: assertAttributes(schema.attributes, 'variant', input.attributes),

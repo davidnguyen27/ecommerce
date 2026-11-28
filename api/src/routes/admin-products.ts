@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { ProductRequest, VariantRequest, type AdminProductList, type PolicyPageOptionList } from '@ecommerce/shared'
 import { audited } from '../core/audit/audited.ts'
 import { currentStaff, hasPermission, requirePermission } from '../core/middleware/staff-context.ts'
-import { assertAttributes, lockAttributeSchema } from '../catalog/attribute-schemas.ts'
+import { attributeSchemaQuery, assertAttributes } from '../modules/attribute-schema/index.ts'
 import { ProductParams, lockProduct, productAuditFields, toAdminProduct } from '../catalog/products.ts'
 import { loadDraft, toAdminProductDetail } from '../catalog/publication.ts'
 import { createVariant, updateVariant, type VariantActor } from '../catalog/variants.ts'
@@ -80,7 +80,7 @@ export function adminProductRoutes(prisma: Db) {
         const created = await audited(prisma, contextOf(req), async (tx, audit) => {
           const category = await lockCategory(tx, input.categoryId)
           await assertBrandExists(tx, input.brandId)
-          const schema = await lockAttributeSchema(tx, category.productType, 'share')
+          const schema = await attributeSchemaQuery.lock(tx, category.productType, 'share')
           const product = await tx.product.create({
             data: {
               ...input,
@@ -113,7 +113,7 @@ export function adminProductRoutes(prisma: Db) {
             }
           }
           if (input.brandId !== before.brandId) await assertBrandExists(tx, input.brandId)
-          const schema = await lockAttributeSchema(tx, before.productType, 'share')
+          const schema = await attributeSchemaQuery.lock(tx, before.productType, 'share')
           const attributes = assertAttributes(schema.attributes, 'product', input.attributes)
 
           const { productType, status } = before

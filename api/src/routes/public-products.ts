@@ -11,7 +11,7 @@ import {
   type PublicProduct,
 } from '@ecommerce/shared'
 import type { Storage } from '../core/adapters/storage.ts'
-import { loadAttributeSchema } from '../catalog/attribute-schemas.ts'
+import { attributeSchemaQuery } from '../modules/attribute-schema/index.ts'
 import { findPublicProduct, searchProductCards, subtreeIds } from '../catalog/public-products.ts'
 import { searchFacets, type SearchCriteria } from '../catalog/search.ts'
 import type { Db } from '../core/db.ts'
@@ -31,7 +31,7 @@ export function publicProductRoutes(prisma: Db, storage: Storage) {
           : await prisma.category.findUnique({ where: { slug: query.category }, select: { productType: true } })
       // The product type in view decides filters and facets; when unknown, only gender, shared by all types.
       const productType = category?.productType ?? query.type ?? null
-      const schema = await loadAttributeSchema(prisma, productType ?? ProductType.enum.footwear)
+      const schema = await attributeSchemaQuery.load(prisma, productType ?? ProductType.enum.footwear)
       const filterable = schema.attributes.filter((a) => a.filterable && (productType || a.key === GENDER_KEY))
 
       const criteria: SearchCriteria = {

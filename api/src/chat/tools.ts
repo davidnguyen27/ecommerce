@@ -9,7 +9,7 @@ import {
 } from '@ecommerce/shared'
 import type { LlmTool, LlmToolCall } from '../core/adapters/llm.ts'
 import type { Storage } from '../core/adapters/storage.ts'
-import { loadAttributeSchema } from '../catalog/attribute-schemas.ts'
+import { attributeSchemaQuery } from '../modules/attribute-schema/index.ts'
 import { findPublicProduct, searchProductCards } from '../catalog/public-products.ts'
 import type { SearchCriteria } from '../catalog/search.ts'
 import { findPublishedVersion, listPublishedPages } from '../content/pages.ts'
@@ -181,7 +181,7 @@ async function attributeFilters(prisma: Db, type: ProductType | undefined, args:
   if (!gender && !(color && type)) return []
   // With no product type, filter only by gender, which every type defines the same way (ADR 0004): any type's schema
   // works, as on the website search page.
-  const schema = await loadAttributeSchema(prisma, type ?? ProductType.enum.footwear)
+  const schema = await attributeSchemaQuery.load(prisma, type ?? ProductType.enum.footwear)
   const filters: SearchCriteria['attributes'] = []
   const genderDefinition = schema.attributes.find((a) => a.key === GENDER_KEY)
   if (gender && genderDefinition) filters.push({ definition: genderDefinition, values: [gender] })

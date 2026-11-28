@@ -6,7 +6,6 @@ import type { CustomerMail } from '../core/jobs/jobs.ts'
 import { createOrderService } from '../modules/order/index.ts'
 import { adminReconciliationRoutes, type ReconciliationDeps } from './admin-reconciliation.ts'
 import { adminRefundRoutes } from './admin-refunds.ts'
-import { adminAttributeSchemaRoutes } from './admin-attribute-schemas.ts'
 import { adminAuditRoutes } from './admin-audit.ts'
 import { adminChatbotReportRoutes, adminChatbotRoutes } from './admin-chatbot.ts'
 import { adminImportRoutes } from './admin-import.ts'
@@ -45,7 +44,6 @@ export function adminRoutes(
       .use('/audit', adminAuditRoutes(prisma))
       .use('/pages', adminPageRoutes(prisma))
       .use('/legal-info', adminLegalInfoRoutes(prisma))
-      .use('/attribute-schemas', adminAttributeSchemaRoutes(prisma))
       // Before `/products`: images, documents and commitments have their own permissions (`media.upload`), not the
       // product router's shared guard.
       .use('/products/:id/images', adminProductImageRoutes(prisma, storage))

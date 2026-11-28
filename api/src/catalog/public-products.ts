@@ -12,7 +12,7 @@ import type { Brand, ProductVersion } from '../generated/prisma/client.ts'
 import { imageRenditions } from '../core/media/images.ts'
 import { preorderOffers } from '../preorders/campaigns.ts'
 import { inStockIds } from '../stock/stock.ts'
-import { loadAttributeSchema } from './attribute-schemas.ts'
+import { attributeSchemaQuery } from '../modules/attribute-schema/index.ts'
 import { categoryQuery } from '../modules/category/index.ts'
 import { ProductSnapshot, cheapestVariant } from './publication.ts'
 import { searchPage, type SearchCriteria } from './search.ts'
@@ -90,7 +90,7 @@ export async function findPublicProduct(prisma: Db, storage: Storage, slug: stri
   const variantIds = snapshot.variants.map((v) => v.id)
 
   const [schema, tree, pages, stocked, offers] = await Promise.all([
-    loadAttributeSchema(prisma, snapshot.productType),
+    attributeSchemaQuery.load(prisma, snapshot.productType),
     categoryQuery.loadVisibleTree(prisma),
     prisma.contentPage.findMany({
       where: { id: { in: snapshot.policyPageIds }, kind: 'policy', versions: { some: {} } },
