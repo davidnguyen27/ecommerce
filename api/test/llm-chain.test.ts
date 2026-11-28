@@ -8,7 +8,7 @@ import {
   llmEndpointsFromEnv,
   llmFromEnv,
   type LlmRequest,
-} from '../src/adapters/llm.ts'
+} from '../src/core/adapters/llm.ts'
 
 // No route used the model chain yet (ticket 02 added the chat API), and tests must not call real providers: call
 // `LlmChain` directly with a fake `fetch` answering per model.

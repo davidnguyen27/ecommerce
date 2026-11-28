@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { changeStock } from '../src/stock/stock.ts'
+import { changeStock } from '../src/modules/stock/index.ts'
 import { OWNER, bearer, createStaff } from './support/staff.ts'
 import { adjust, movementsOf, onHandOf, warehouse } from './support/stock.ts'
 

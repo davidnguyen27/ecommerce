@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { returnWindowSnapshot } from '../src/support/returns.ts'
+import { returnWindowSnapshot } from '../src/modules/support/support-return.ts'
 import { ADDRESS, shop } from './support/shop.ts'
 import { bearer, createStaff } from './support/staff.ts'
 

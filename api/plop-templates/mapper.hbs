@@ -1,0 +1,8 @@
+import type { {{pascalCase name}} } from '../../generated/prisma/client.ts'
+
+/** Response body of one row: list the fields clients see (the shared response schema's shape). */
+export type {{pascalCase name}}Body = { id: string }
+
+export function to{{pascalCase name}}Body({ id }: {{pascalCase name}}): {{pascalCase name}}Body {
+  return { id }
+}

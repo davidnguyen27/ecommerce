@@ -1,0 +1,21 @@
+import { Router } from 'express'
+import type { IRoute } from '../../core/module/base.module.ts'
+import { requirePermission } from '../../core/middleware/staff-context.ts'
+import { validate } from '../../core/middleware/validation.ts'
+import type { {{pascalCase name}}Controller } from './{{kebabCase name}}.controller.ts'
+import { Create{{pascalCase name}}Dto, Update{{pascalCase name}}Dto } from './dto/index.ts'
+
+/** Admin routes under `/api/admin{{path}}`; every route needs `{{permission}}`. */
+export class {{pascalCase name}}AdminRoute implements IRoute {
+  readonly path = '{{path}}'
+  readonly access = 'staff'
+  readonly router = Router()
+
+  constructor(controller: {{pascalCase name}}Controller) {
+    this.router
+      .use(requirePermission('{{permission}}'))
+      .get('/:id', controller.getItem)
+      .post('/', validate(Create{{pascalCase name}}Dto), controller.createItem)
+      .put('/:id', validate(Update{{pascalCase name}}Dto), controller.updateItem)
+  }
+}

@@ -1,0 +1,7 @@
+import type { DbClient } from '../../core/db.ts'
+import type { {{pascalCase name}} } from '../../generated/prisma/client.ts'
+
+/** What other modules may ask of this one. */
+export interface I{{pascalCase name}}Query {
+  getItem(id: string, db?: DbClient): Promise<{{pascalCase name}}>
+}

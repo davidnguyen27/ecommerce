@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { InMemoryMailer } from '../src/adapters/mailer.ts'
+import type { InMemoryMailer } from '../src/core/adapters/mailer.ts'
 import { CUSTOMER, appReadyForSignUp, customerLogin, register, tokenFromMail } from './support/customer.ts'
 import { bearer, type Request } from './support/staff.ts'
 

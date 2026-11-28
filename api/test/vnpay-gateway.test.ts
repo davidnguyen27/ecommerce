@@ -8,7 +8,7 @@ import {
   parseVnDateTime,
   txnRef,
   vnDateTime,
-} from '../src/payments/vnpay.ts'
+} from '../src/core/adapters/payment/vnpay.ts'
 import { shop } from './support/shop.ts'
 import { signedIpn } from './support/vnpay.ts'
 

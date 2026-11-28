@@ -1,6 +1,6 @@
 import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
-import type { InMemoryStorage } from '../src/adapters/storage.ts'
+import type { InMemoryStorage } from '../src/core/adapters/storage.ts'
 import { OWNER, appWithOwner, bearer, createStaff, login, type Request } from './support/staff.ts'
 
 async function post(request: Request, token: string, path: string, body: Record<string, unknown>) {

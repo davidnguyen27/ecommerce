@@ -1,4 +1,4 @@
-import type { Db } from '../../src/db.ts'
+import type { Db } from '../../src/core/db.ts'
 
 const APPEND_ONLY = {
   order_event: { trigger: 'order_event_no_update_delete', column: 'created_at' },

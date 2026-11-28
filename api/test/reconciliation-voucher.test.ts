@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PaymentInfo } from '../src/payments/gateway.ts'
+import type { PaymentInfo } from '../src/core/adapters/payment/gateway.ts'
 import { preorderShop } from './support/preorder.ts'
 import { ADDRESS } from './support/shop.ts'
 import { bearer } from './support/staff.ts'

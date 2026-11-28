@@ -1,6 +1,6 @@
 import { PREORDER_POLICY_SLUG } from '@ecommerce/shared'
 import { expect } from 'vitest'
-import type { PaymentInfo } from '../../src/payments/gateway.ts'
+import type { PaymentInfo } from '../../src/core/adapters/payment/gateway.ts'
 import { register } from './customer.ts'
 import { ADDRESS, shop } from './shop.ts'
 import { bearer } from './staff.ts'

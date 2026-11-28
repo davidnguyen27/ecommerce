@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { expireOverdueOrders } from '../src/orders/cancel-order.ts'
+import { expireOverdueOrders } from '../src/modules/order/index.ts'
 import { CUSTOMER, register } from './support/customer.ts'
 import { ipnParams, signedIpn } from './support/vnpay.ts'
 import { shop } from './support/shop.ts'

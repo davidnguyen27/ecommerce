@@ -1,11 +1,11 @@
 import pino from 'pino'
 import { createApp, trustProxyFromEnv } from './app.ts'
-import { llmFromEnv } from './adapters/llm.ts'
-import { mailerFromEnv } from './adapters/mailer.ts'
-import { storageFromEnv } from './adapters/storage.ts'
-import { createPrisma } from './db.ts'
-import { Jobs } from './jobs/jobs.ts'
-import { paymentGatewayFromEnv, vnpayKeysFromEnv } from './payments/gateway-from-env.ts'
+import { llmFromEnv } from './core/adapters/llm.ts'
+import { mailerFromEnv } from './core/adapters/mailer.ts'
+import { storageFromEnv } from './core/adapters/storage.ts'
+import { createPrisma } from './core/db.ts'
+import { Jobs } from './jobs/worker.ts'
+import { paymentGatewayFromEnv, vnpayKeysFromEnv } from './core/adapters/payment/gateway-from-env.ts'
 
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) throw new Error('Thiếu biến môi trường DATABASE_URL')

@@ -1,6 +1,6 @@
 import type { Response } from 'supertest'
 import { describe, expect, it } from 'vitest'
-import type { InMemoryMailer } from '../src/adapters/mailer.ts'
+import type { InMemoryMailer } from '../src/core/adapters/mailer.ts'
 import { CUSTOMER, appReadyForSignUp, publishPrivacyPolicy, register, tokenFromMail } from './support/customer.ts'
 import { OWNER, appWithOwner, bearer, login, type Request } from './support/staff.ts'
 

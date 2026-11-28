@@ -1,8 +1,8 @@
 // Creates the first owner at install. Rerunning with the same email creates nothing and keeps the password.
 // OWNER_EMAIL=... OWNER_PASSWORD=... OWNER_NAME=... pnpm seed:owner
 import { z } from 'zod'
-import { seedOwner } from '../auth/staff.ts'
-import { createPrisma } from '../db.ts'
+import { seedOwner } from '../modules/staff/index.ts'
+import { createPrisma } from '../core/db.ts'
 
 const Env = z.object({
   DATABASE_URL: z.string().min(1),

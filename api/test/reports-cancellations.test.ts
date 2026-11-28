@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { expireOverdueOrders } from '../src/orders/cancel-order.ts'
+import { expireOverdueOrders } from '../src/modules/order/index.ts'
 import { DEPOSIT, depositedPreorder, paid } from './support/preorder.ts'
 import { ADDRESS, shop } from './support/shop.ts'
 import { bearer, createStaff, type Request } from './support/staff.ts'

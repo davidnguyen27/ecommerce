@@ -2,9 +2,9 @@ import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { SimulatorPaymentGateway } from '../src/payments/gateway.ts'
-import { paymentGatewayFromEnv, vnpayKeysFromEnv } from '../src/payments/gateway-from-env.ts'
-import { VnpayPaymentGateway } from '../src/payments/vnpay.ts'
+import { SimulatorPaymentGateway } from '../src/core/adapters/payment/gateway.ts'
+import { paymentGatewayFromEnv, vnpayKeysFromEnv } from '../src/core/adapters/payment/gateway-from-env.ts'
+import { VnpayPaymentGateway } from '../src/core/adapters/payment/vnpay.ts'
 
 // Gateway selection runs at startup with no HTTP path: call the function directly, and run the real server for
 // production.

@@ -1,6 +1,6 @@
-import { deleteOldConversations } from '../chat/chat.ts'
-import type { DbClient } from '../db.ts'
-import { RATE_LIMITS } from '../http/rate-limit.ts'
+import { deleteOldConversations } from '../modules/chatbot/index.ts'
+import type { DbClient } from '../core/db.ts'
+import { RATE_LIMITS } from '../core/middleware/rate-limit.ts'
 
 const LONGEST_RATE_LIMIT_WINDOW_MS = Math.max(...Object.values(RATE_LIMITS).map((limit) => limit.windowMs))
 

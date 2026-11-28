@@ -1,32 +1,18 @@
 import { randomUUID } from 'node:crypto'
-import express from 'express'
+import express, { type RequestHandler } from 'express'
 import type { Logger } from 'pino'
 import { pinoHttp } from 'pino-http'
-import type { LlmClient } from './adapters/llm.ts'
-import type { Storage } from './adapters/storage.ts'
-import { requireAuth } from './auth/require-auth.ts'
-import { loadStaff } from './auth/staff-context.ts'
-import type { Db } from './db.ts'
-import type { EmailQueue, OrderExpiryQueue } from './jobs/jobs.ts'
-import type { PaymentGateway } from './payments/gateway.ts'
-import { errorHandler, notFound } from './http/errors.ts'
-import { accountOrderRoutes } from './routes/account-orders.ts'
-import { accountRoutes } from './routes/account.ts'
-import { accountSupportRoutes, contactSupportRoutes, orderSupportRoutes } from './routes/support-customer.ts'
-import { adminRoutes } from './routes/admin.ts'
-import { adminAuthRoutes } from './routes/admin-auth.ts'
-import { customerAuthRoutes, customerSessions } from './routes/customer-auth.ts'
-import { publicLegalInfoRoutes } from './routes/legal-info.ts'
-import { publicAttributeSchemaRoutes, publicBrandRoutes, publicCategoryRoutes } from './routes/public-catalog.ts'
-import { publicPageRoutes } from './routes/public-pages.ts'
-import { publicProductRoutes } from './routes/public-products.ts'
-import { publicSitemapRoutes } from './routes/public-sitemap.ts'
-import { chatRoutes } from './routes/chat.ts'
-import { checkoutRoutes } from './routes/checkout.ts'
-import { preorderRoutes } from './routes/preorders.ts'
-import { publicOrderRoutes } from './routes/public-orders.ts'
-import { paymentRoutes } from './routes/payments.ts'
-import { healthRoutes } from './routes/health.ts'
+import type { LlmClient } from './core/adapters/llm.ts'
+import type { Storage } from './core/adapters/storage.ts'
+import { requireAuth } from './core/middleware/require-auth.ts'
+import { loadStaff } from './core/middleware/staff-context.ts'
+import type { Db } from './core/db.ts'
+import type { EmailQueue, OrderExpiryQueue } from './core/jobs/queues.ts'
+import type { PaymentGateway } from './core/adapters/payment/gateway.ts'
+import { errorHandler, notFound } from './core/errors.ts'
+import { HealthModule } from './modules/health/index.ts'
+import type { RouteAccess } from './core/module/base.module.ts'
+import { createModules } from './modules/index.ts'
 
 /** Every external dependency enters the app here, so tests can swap in fakes. */
 export type AppDeps = {
@@ -96,7 +82,8 @@ export function createApp(deps: AppDeps) {
   )
   app.use(express.json({ limit: '1mb' }))
 
-  app.use(healthRoutes(deps.prisma))
+  // Outside `/api`, before the API router: the host's health check.
+  for (const route of new HealthModule(deps).routes) app.use(route.path, route.router)
 
   const secret = new TextEncoder().encode(deps.jwtSecret)
   const api = express.Router()
@@ -106,32 +93,25 @@ export function createApp(deps: AppDeps) {
     res.set('Cache-Control', 'no-store')
     next()
   })
-  api.use('/pages', publicPageRoutes(deps.prisma))
-  api.use('/legal-info', publicLegalInfoRoutes(deps.prisma))
-  api.use('/brands', publicBrandRoutes(deps.prisma, deps.storage))
-  api.use('/products', publicProductRoutes(deps.prisma, deps.storage))
-  api.use('/categories', publicCategoryRoutes(deps.prisma))
-  api.use('/attribute-schemas', publicAttributeSchemaRoutes(deps.prisma))
-  api.use('/sitemap', publicSitemapRoutes(deps.prisma))
-  api.use('/checkout', checkoutRoutes(deps))
-  api.use('/preorders', preorderRoutes(deps))
-  api.use('/orders/:code/support-requests', orderSupportRoutes(deps))
-  api.use('/orders', publicOrderRoutes(deps))
-  api.use('/payments', paymentRoutes(deps))
-  api.use('/chat', chatRoutes({ ...deps, secret }))
-  api.use('/support-requests', contactSupportRoutes(deps))
-  const customerDeps = {
-    prisma: deps.prisma,
-    emails: deps.emails,
-    siteUrl: deps.siteUrl,
-    sessions: customerSessions(deps.prisma, secret, '/api/auth'),
+  // Every route comes from a module, mounted in `createModules` order.
+  // Nested module paths (`/products/:id/images`, `/products`) pass through several mounts: sign in once per request.
+  const staffAuth = requireAuth(secret, 'staff')
+  const staffLoad = loadStaff(deps.prisma)
+  const signIn: Record<RouteAccess, RequestHandler[]> = {
+    public: [],
+    customer: [requireAuth(secret, 'customer')],
+    staff: [
+      (req, res, next) => (req.staff ? next() : staffAuth(req, res, next)),
+      (req, res, next) => (req.staff ? next() : staffLoad(req, res, next)),
+    ],
   }
-  api.use('/auth', customerAuthRoutes(customerDeps))
-  api.use('/account/orders', requireAuth(secret, 'customer'), accountOrderRoutes(deps))
-  api.use('/account/support-requests', requireAuth(secret, 'customer'), accountSupportRoutes(deps))
-  api.use('/account', requireAuth(secret, 'customer'), accountRoutes(customerDeps))
-  api.use('/admin/auth', adminAuthRoutes(deps.prisma, secret, '/api/admin/auth'))
-  api.use('/admin', requireAuth(secret, 'staff'), loadStaff(deps.prisma), adminRoutes(deps))
+  for (const module of createModules(deps)) {
+    for (const route of module.routes) {
+      api.use(route.access === 'staff' ? `/admin${route.path}` : route.path, ...signIn[route.access], route.router)
+    }
+  }
+  // Unknown admin paths need sign-in too: 401 before 404, so they reveal nothing to the signed-out.
+  api.use('/admin', ...signIn.staff)
   app.use('/api', api)
 
   app.use(notFound)

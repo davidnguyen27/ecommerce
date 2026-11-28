@@ -1,0 +1,8 @@
+import type { z } from 'zod'
+import * as shared from '@ecommerce/shared'
+
+// Request schemas come from @ecommerce/shared, so web and API share one contract (ADR 0018).
+export const Create{{pascalCase name}}Dto = shared.{{createSchema}}
+export const Update{{pascalCase name}}Dto = shared.{{updateSchema}}
+export type Create{{pascalCase name}}Input = z.output<typeof Create{{pascalCase name}}Dto>
+export type Update{{pascalCase name}}Input = z.output<typeof Update{{pascalCase name}}Dto>

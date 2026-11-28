@@ -4,12 +4,16 @@ import pino from 'pino'
 import supertest from 'supertest'
 import { inject, onTestFinished } from 'vitest'
 import { createApp } from '../../src/app.ts'
-import { createPrisma } from '../../src/db.ts'
-import type { LlmClient } from '../../src/adapters/llm.ts'
-import { InMemoryMailer } from '../../src/adapters/mailer.ts'
-import { InMemoryStorage } from '../../src/adapters/storage.ts'
-import { Jobs } from '../../src/jobs/jobs.ts'
-import { InMemoryPaymentGateway, SimulatorPaymentGateway, type PaymentGateway } from '../../src/payments/gateway.ts'
+import { createPrisma } from '../../src/core/db.ts'
+import type { LlmClient } from '../../src/core/adapters/llm.ts'
+import { InMemoryMailer } from '../../src/core/adapters/mailer.ts'
+import { InMemoryStorage } from '../../src/core/adapters/storage.ts'
+import { Jobs } from '../../src/jobs/worker.ts'
+import {
+  InMemoryPaymentGateway,
+  SimulatorPaymentGateway,
+  type PaymentGateway,
+} from '../../src/core/adapters/payment/gateway.ts'
 
 /** Website base URL in links of emails sent from tests. */
 export const SITE_URL = 'https://shop.test'

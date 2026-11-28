@@ -12,7 +12,7 @@ import {
   llmEndpointsFromEnv,
   type LlmMessage,
   type LlmTool,
-} from '../api/src/adapters/llm.ts'
+} from '../api/src/core/adapters/llm.ts'
 import { promptMessages } from '../api/src/chat/prompt.ts'
 
 type Product = {

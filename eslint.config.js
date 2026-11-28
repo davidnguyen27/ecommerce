@@ -32,6 +32,34 @@ export default tseslint.config(
     },
   },
   {
+    // ADR 0018: a module reaches another only through that module's index.ts (its Module and query interfaces).
+    files: ['api/src/modules/**/*.ts'],
+    ignores: ['api/src/modules/index.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^\\.\\./(?!\\.\\.)[^/]+/(?!index\\.ts$).+',
+              message: 'Import another module only from its index.ts.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // ADR 0018: core is the shared base under every module, so it never imports one.
+    files: ['api/src/core/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [{ regex: '/modules/', message: 'core/ must not import modules; pass what it needs in.' }] },
+      ],
+    },
+  },
+  {
     // Nuxt auto-imports composables like useRuntimeConfig, defineNuxtConfig.
     files: ['web/**/*.{ts,vue}'],
     rules: { 'no-undef': 'off' },

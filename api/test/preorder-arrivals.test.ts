@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { InMemoryMailer } from '../src/adapters/mailer.ts'
+import type { InMemoryMailer } from '../src/core/adapters/mailer.ts'
 import { preorderShop } from './support/preorder.ts'
 import { ADDRESS } from './support/shop.ts'
 import { bearer } from './support/staff.ts'
