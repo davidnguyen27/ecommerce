@@ -1,9 +1,9 @@
 import { ErrorCode, type CheckoutConflictDetails, type CheckoutRequest } from '@ecommerce/shared'
 import type { z } from 'zod'
-import { cartVariants } from '../modules/product/index.ts'
+import { cartVariants } from '../product/index.ts'
 import { storedImageOf } from './order-snapshot.ts'
-import { AppError } from '../core/errors.ts'
-import { stockLedger } from '../modules/stock/index.ts'
+import { AppError } from '../../core/errors.ts'
+import { stockLedger } from '../stock/index.ts'
 import type { Plan } from './placement-plan.ts'
 
 /**

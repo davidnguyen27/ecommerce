@@ -9,7 +9,11 @@ import type { LlmClient } from '../../src/core/adapters/llm.ts'
 import { InMemoryMailer } from '../../src/core/adapters/mailer.ts'
 import { InMemoryStorage } from '../../src/core/adapters/storage.ts'
 import { Jobs } from '../../src/core/jobs/jobs.ts'
-import { InMemoryPaymentGateway, SimulatorPaymentGateway, type PaymentGateway } from '../../src/payments/gateway.ts'
+import {
+  InMemoryPaymentGateway,
+  SimulatorPaymentGateway,
+  type PaymentGateway,
+} from '../../src/core/adapters/payment/gateway.ts'
 
 /** Website base URL in links of emails sent from tests. */
 export const SITE_URL = 'https://shop.test'

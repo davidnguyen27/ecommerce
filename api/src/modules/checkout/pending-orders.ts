@@ -1,6 +1,6 @@
 import { ErrorCode } from '@ecommerce/shared'
-import type { DbClient } from '../core/db.ts'
-import { AppError } from '../core/errors.ts'
+import type { DbClient } from '../../core/db.ts'
+import { AppError } from '../../core/errors.ts'
 
 /** Max pending orders per email and per phone. Provisional, pending owner confirmation. */
 export const MAX_PENDING_ORDERS_PER_CONTACT = 3

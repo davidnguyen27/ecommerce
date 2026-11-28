@@ -1,10 +1,10 @@
 import { ErrorCode } from '@ecommerce/shared'
 import type { Logger } from 'pino'
-import type { DbClient } from '../core/db.ts'
-import type { PaymentPurpose } from '../generated/prisma/client.ts'
-import { AppError } from '../core/errors.ts'
-import { paymentResultUrl } from '../modules/order/index.ts'
-import type { PaymentGateway } from './gateway.ts'
+import type { DbClient } from '../../core/db.ts'
+import type { PaymentPurpose } from '../../generated/prisma/client.ts'
+import { AppError } from '../../core/errors.ts'
+import { paymentResultUrl } from '../order/index.ts'
+import type { PaymentGateway } from '../../core/adapters/payment/gateway.ts'
 
 /**
  * Creates the gateway payment link and stores its reference. Call last in the transaction: a gateway error is logged,

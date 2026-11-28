@@ -6,7 +6,7 @@ import type { TestProject } from 'vitest/node'
 import { InMemoryMailer } from '../../src/core/adapters/mailer.ts'
 import { createPrisma } from '../../src/core/db.ts'
 import { Jobs } from '../../src/core/jobs/jobs.ts'
-import { InMemoryPaymentGateway } from '../../src/payments/gateway.ts'
+import { InMemoryPaymentGateway } from '../../src/core/adapters/payment/gateway.ts'
 
 const TEMPLATE_DB = 'app_template'
 

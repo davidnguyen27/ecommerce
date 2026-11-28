@@ -3,11 +3,15 @@ import type { BaseModule } from '../core/module/base.module.ts'
 import { AttributeSchemaModule } from './attribute-schema/index.ts'
 import { BrandModule } from './brand/index.ts'
 import { CategoryModule } from './category/index.ts'
+import { CheckoutModule } from './checkout/index.ts'
 import { CommitmentTypeModule } from './commitment-type/index.ts'
 import { OrderModule } from './order/index.ts'
+import { PaymentModule } from './payment/index.ts'
 import { PreorderCampaignModule } from './preorder-campaign/index.ts'
 import { ProductModule } from './product/index.ts'
 import { ProductImportModule } from './product-import/index.ts'
+import { ReconciliationModule } from './reconciliation/index.ts'
+import { RefundModule } from './refund/index.ts'
 import { StockModule } from './stock/index.ts'
 import { StockReceiptModule } from './stock-receipt/index.ts'
 
@@ -32,5 +36,9 @@ export function createModules(deps: AppDeps): BaseModule[] {
     stock,
     orders,
     new PreorderCampaignModule(deps, orders.service),
+    new CheckoutModule(deps, stock.ledger),
+    new PaymentModule(deps, orders.service),
+    new RefundModule(deps, orders.query),
+    new ReconciliationModule(deps, orders.query),
   ]
 }

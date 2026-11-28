@@ -5,7 +5,7 @@ import type { DbClient } from '../../core/db.ts'
 import { pageWindow } from '../../core/pagination.ts'
 import type { Prisma } from '../../generated/prisma/client.ts'
 // Payment links are the payments module's table; the select shape stays there until it moves (ticket 06).
-import { PAYMENT_LINK_REFERENCES } from '../../payments/record-payment.ts'
+import { PAYMENT_LINK_REFERENCES } from '../payment/index.ts'
 import { ORDER_VIEW_INCLUDE, orderLookupUrl, parseOrderCode } from './order.constant.ts'
 import type { OrderEventActor, OrderEventKind } from './order.interface.ts'
 

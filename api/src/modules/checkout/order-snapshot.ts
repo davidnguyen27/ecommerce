@@ -1,6 +1,6 @@
-import type { DbClient } from '../core/db.ts'
-import type { OrderLineImage } from '../modules/order/index.ts'
-import type { CartVariant } from '../modules/product/index.ts'
+import type { DbClient } from '../../core/db.ts'
+import type { OrderLineImage } from '../order/index.ts'
+import type { CartVariant } from '../product/index.ts'
 
 /** The variant's image, else the product's first image. */
 export function storedImageOf({ snapshot, variant }: CartVariant): OrderLineImage | null {

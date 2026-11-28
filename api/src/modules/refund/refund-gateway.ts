@@ -1,10 +1,15 @@
-import type { Request } from 'express'
-import { audited } from '../core/audit/audited.ts'
-import type { Db } from '../core/db.ts'
-import type { CustomerMail } from '../core/jobs/jobs.ts'
-import { vnd } from '../core/utils/format.ts'
-import { recordOrderEvent } from '../modules/order/index.ts'
-import { PaymentGatewayError, type PaymentGateway, type RefundResult, type StoredTransaction } from './gateway.ts'
+import type { Logger } from 'pino'
+import { audited } from '../../core/audit/audited.ts'
+import type { Db } from '../../core/db.ts'
+import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import { vnd } from '../../core/utils/format.ts'
+import { recordOrderEvent } from '../order/index.ts'
+import {
+  PaymentGatewayError,
+  type PaymentGateway,
+  type RefundResult,
+  type StoredTransaction,
+} from '../../core/adapters/payment/gateway.ts'
 import {
   conflict,
   joinNotes,
@@ -12,8 +17,8 @@ import {
   lockRefund,
   queueRefundSucceededEmail,
   refundedViaGateway,
-} from './refunds.ts'
-import { contextOf } from '../core/context/request-context.ts'
+} from './refund-record.ts'
+import type { RequestContext } from '../../core/context/request-context.ts'
 
 /** One part of a refund sent to the gateway: one original transaction, one refund command. */
 type Piece = { refundId: string; amount: number; full: boolean; transaction: StoredTransaction }
@@ -30,10 +35,16 @@ export type GatewayRefundDeps = { prisma: Db; payments: PaymentGateway; mail: Cu
  * 3. In a new transaction: record each part's result (refunded: email; rejected: failed, can be recreated).
  * Returns the order code.
  */
-export async function executeGatewayRefund(deps: GatewayRefundDeps, req: Request, refundId: string, staffId: string) {
+export async function executeGatewayRefund(
+  deps: GatewayRefundDeps,
+  ctx: RequestContext,
+  log: Pick<Logger, 'error'>,
+  refundId: string,
+  staffId: string,
+) {
   const { prisma, payments, mail } = deps
 
-  const { orderCode, orderId, pieces } = await audited(prisma, contextOf(req), async (tx, audit) => {
+  const { orderCode, orderId, pieces } = await audited(prisma, ctx, async (tx, audit) => {
     const refund = await lockRefund(tx, refundId)
     if (refund.status !== 'pending') throw conflict('Khoản hoàn này đã được thực hiện')
 
@@ -121,12 +132,12 @@ export async function executeGatewayRefund(deps: GatewayRefundDeps, req: Request
     } catch (err) {
       // No reply or untrustworthy data: we cannot know whether the command arrived, so accounting checks and settles.
       const message = err instanceof PaymentGatewayError ? err.message : 'Lỗi khi gọi cổng'
-      req.log?.error({ err, orderCode, refundId: piece.refundId }, 'Không gửi được lệnh hoàn tới cổng')
+      log.error({ err, orderCode, refundId: piece.refundId }, 'Không gửi được lệnh hoàn tới cổng')
       results.push({ piece, result: { status: 'processing', message, payload: { error: message } } })
     }
   }
 
-  await audited(prisma, contextOf(req), async (tx, audit) => {
+  await audited(prisma, ctx, async (tx, audit) => {
     await lockOrderForRefund(tx, orderId)
     const applied: typeof results = []
     for (const { piece, result } of results) {

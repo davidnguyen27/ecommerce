@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { PaymentPurpose, PaymentSource } from '../generated/prisma/client.ts'
+import type { PaymentPurpose, PaymentSource } from '../../../generated/prisma/client.ts'
 
 /** Request to create a payment link for an order. */
 export type PaymentLinkRequest = {

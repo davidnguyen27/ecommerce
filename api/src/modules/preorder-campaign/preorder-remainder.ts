@@ -1,12 +1,12 @@
 import { ErrorCode, RESERVATION_MINUTES, type PayRemainderResult } from '@ecommerce/shared'
 import type { Request } from 'express'
 import { hashOpaqueToken, newOpaqueToken } from '../../core/auth/opaque-token.ts'
-import { createOrderPaymentLink } from '../../payments/payment-link.ts'
+import { createOrderPaymentLink } from '../payment/index.ts'
 import type { Db } from '../../core/db.ts'
 import { AppError, isUniqueViolation } from '../../core/errors.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../../core/middleware/rate-limit.ts'
 import { remainingOf } from '../order/index.ts'
-import type { PaymentGateway } from '../../payments/gateway.ts'
+import type { PaymentGateway } from '../../core/adapters/payment/gateway.ts'
 
 const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, message)
 

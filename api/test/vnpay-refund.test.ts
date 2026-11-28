@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { PaymentGatewayError, type RefundRequest } from '../src/payments/gateway.ts'
-import { VnpayPaymentGateway, refundOutcome } from '../src/payments/vnpay.ts'
+import { PaymentGatewayError, type RefundRequest } from '../src/core/adapters/payment/gateway.ts'
+import { VnpayPaymentGateway, refundOutcome } from '../src/core/adapters/payment/vnpay.ts'
 
 // Fake test key, not a sandbox or real key.
 const KEYS = { tmnCode: 'TESTTMN1', hashSecret: 'test-secret', env: 'sandbox' as const }

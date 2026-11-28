@@ -5,7 +5,7 @@ import { mailerFromEnv } from './core/adapters/mailer.ts'
 import { storageFromEnv } from './core/adapters/storage.ts'
 import { createPrisma } from './core/db.ts'
 import { Jobs } from './core/jobs/jobs.ts'
-import { paymentGatewayFromEnv, vnpayKeysFromEnv } from './payments/gateway-from-env.ts'
+import { paymentGatewayFromEnv, vnpayKeysFromEnv } from './core/adapters/payment/gateway-from-env.ts'
 
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) throw new Error('Thiếu biến môi trường DATABASE_URL')

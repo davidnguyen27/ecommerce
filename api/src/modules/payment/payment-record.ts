@@ -1,14 +1,14 @@
-import type { Db, DbClient } from '../core/db.ts'
+import type { Db, DbClient } from '../../core/db.ts'
 import {
   Prisma,
   type PaymentPurpose,
   type PaymentSource,
   type ReconciliationReason,
-} from '../generated/prisma/client.ts'
-import type { EmailQueue } from '../core/jobs/jobs.ts'
-import { dayVN, isoDay, vnd, voucherLines } from '../core/utils/format.ts'
-import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../modules/order/index.ts'
-import type { PaymentGateway } from './gateway.ts'
+} from '../../generated/prisma/client.ts'
+import type { EmailQueue } from '../../core/jobs/jobs.ts'
+import { dayVN, isoDay, vnd, voucherLines } from '../../core/utils/format.ts'
+import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../order/index.ts'
+import type { PaymentGateway } from '../../core/adapters/payment/gateway.ts'
 
 /** Money the gateway reports, from a callback (`webhook` source), a query or the simulator. */
 export type PaymentReceipt = {
