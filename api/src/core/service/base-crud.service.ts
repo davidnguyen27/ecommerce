@@ -59,21 +59,38 @@ export abstract class BaseCrudService<Row extends { id: string }, Create, Update
     })
   }
 
-  /** `action` overrides the update action, e.g. `catalog.category.hide` for a hide that is an update underneath. */
-  async update(id: string, input: Update, ctx: RequestContext, action = this.actions.update): Promise<Row> {
-    return audited(this.prisma, ctx, (tx, audit) => this.updateLocked(tx, audit, id, input, action))
+  async update(id: string, input: Update, ctx: RequestContext): Promise<Row> {
+    return this.updateWith(id, ctx, this.actions.update, (tx, current) => this.beforeUpdate(tx, current, input))
   }
 
-  protected async updateLocked(
+  /**
+   * An update with its own rule and audit action (e.g. hide), on the same path as `update`: lock, `change` decides
+   * from the locked row (`null` = nothing changes, nothing written), write, audit.
+   */
+  protected async updateWith(
+    id: string,
+    ctx: RequestContext,
+    action: string,
+    change: (tx: Prisma.TransactionClient, current: Row) => Promise<Update | null>,
+  ): Promise<Row> {
+    return audited(this.prisma, ctx, (tx, audit) => this.updateLocked(tx, audit, id, action, change))
+  }
+
+  /** Locks the row to update. Override to take other locks first when another path takes them in that order. */
+  protected async lockForUpdate(tx: Prisma.TransactionClient, id: string): Promise<Row | null> {
+    return this.repo.lockById(tx, id)
+  }
+
+  private async updateLocked(
     tx: Prisma.TransactionClient,
     audit: Audit,
     id: string,
-    input: Update,
     action: string,
+    decide: (tx: Prisma.TransactionClient, current: Row) => Promise<Update | null>,
   ): Promise<Row> {
-    const current = await this.repo.lockById(tx, id)
+    const current = await this.lockForUpdate(tx, id)
     if (!current) throw this.notFound()
-    const change = await this.beforeUpdate(tx, current, input)
+    const change = await decide(tx, current)
     if (change === null) return current
     const row = await this.repo.update(tx, id, change)
     await audit({

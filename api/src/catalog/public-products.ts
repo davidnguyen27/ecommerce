@@ -13,7 +13,7 @@ import { imageRenditions } from '../core/media/images.ts'
 import { preorderOffers } from '../preorders/campaigns.ts'
 import { inStockIds } from '../stock/stock.ts'
 import { loadAttributeSchema } from './attribute-schemas.ts'
-import { findVisible, loadVisibleTree } from './categories.ts'
+import { categoryQuery } from '../modules/category/index.ts'
 import { ProductSnapshot, cheapestVariant } from './publication.ts'
 import { searchPage, type SearchCriteria } from './search.ts'
 
@@ -91,7 +91,7 @@ export async function findPublicProduct(prisma: Db, storage: Storage, slug: stri
 
   const [schema, tree, pages, stocked, offers] = await Promise.all([
     loadAttributeSchema(prisma, snapshot.productType),
-    loadVisibleTree(prisma),
+    categoryQuery.loadVisibleTree(prisma),
     prisma.contentPage.findMany({
       where: { id: { in: snapshot.policyPageIds }, kind: 'policy', versions: { some: {} } },
       include: { versions: LATEST_VERSION },
@@ -101,7 +101,7 @@ export async function findPublicProduct(prisma: Db, storage: Storage, slug: stri
     preorderOffers(prisma, variantIds),
   ])
   const skuOf = new Map(snapshot.variants.map((v) => [v.id, v.sku]))
-  const category = findVisible(tree, version.category.slug)?.category
+  const category = categoryQuery.findVisible(tree, version.category.slug)?.category
 
   return {
     slug: snapshot.slug,

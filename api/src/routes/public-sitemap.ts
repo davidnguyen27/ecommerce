@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import type { Sitemap } from '@ecommerce/shared'
-import { loadVisibleTree, type VisibleCategory } from '../catalog/categories.ts'
+import { categoryQuery, type VisibleCategory } from '../modules/category/index.ts'
 import { listPublishedPages } from '../content/pages.ts'
 import type { Db } from '../core/db.ts'
 
@@ -17,7 +17,7 @@ export function publicSitemapRoutes(prisma: Db) {
         select: { slug: true, publishedAt: true },
         orderBy: { publishedAt: 'desc' },
       }),
-      loadVisibleTree(prisma),
+      categoryQuery.loadVisibleTree(prisma),
       prisma.brand.findMany({
         where: { hidden: false },
         select: { slug: true, updatedAt: true },

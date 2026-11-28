@@ -1,16 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import {
-  ErrorCode,
-  type AttributeSchema,
-  type CategoryNode,
-  type CategoryTree,
-  type PublicBrand,
-  type PublicBrandList,
-  type PublicCategory,
-} from '@ecommerce/shared'
+import { ErrorCode, type AttributeSchema, type PublicBrand, type PublicBrandList } from '@ecommerce/shared'
 import { ProductTypeParams, loadAttributeSchema } from '../catalog/attribute-schemas.ts'
-import { findVisible, loadVisibleTree, type VisibleCategory } from '../catalog/categories.ts'
 import type { Storage } from '../core/adapters/storage.ts'
 import type { Db } from '../core/db.ts'
 import { StoredImage, imageRenditions } from '../core/media/images.ts'
@@ -18,36 +9,6 @@ import { AppError } from '../core/errors.ts'
 import { parse } from '../core/middleware/validation.ts'
 
 const SlugParams = z.object({ slug: z.string() })
-
-function toNode(category: VisibleCategory): CategoryNode {
-  return { slug: category.slug, name: category.name, children: category.children.map(toNode) }
-}
-
-/** Customers browse the category tree; hidden categories and everything under them count as missing. */
-export function publicCategoryRoutes(prisma: Db) {
-  return Router()
-    .get('/', async (_req, res) => {
-      const tree = await loadVisibleTree(prisma)
-      const body: CategoryTree = {
-        items: tree.map((root) => ({ productType: root.productType, children: root.children.map(toNode) })),
-      }
-      res.json(body)
-    })
-    .get('/:slug', async (req, res) => {
-      const { slug } = parse(SlugParams, req.params)
-      const found = findVisible(await loadVisibleTree(prisma), slug)
-      if (!found) throw new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy danh mục')
-      const { category, ancestors } = found
-      const body: PublicCategory = {
-        slug: category.slug,
-        name: category.name,
-        productType: category.productType,
-        ancestors,
-        children: category.children.map(({ slug, name }) => ({ slug, name })),
-      }
-      res.json(body)
-    })
-}
 
 /** A product type's attribute schema, for website labels and filters. */
 export function publicAttributeSchemaRoutes(prisma: Db) {
