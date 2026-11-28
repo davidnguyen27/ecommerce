@@ -1,4 +1,5 @@
 import type { Request } from 'express'
+import type { Logger } from 'pino'
 import sharp from 'sharp'
 import { z } from 'zod'
 import { IMAGE_CONTENT_TYPES, MAX_IMAGE_BYTES, type ImageRenditions } from '@ecommerce/shared'
@@ -89,7 +90,12 @@ export async function deleteImageFiles(storage: Storage, image: StoredImage) {
  * Deletes files after the DB commit or rollback. Storage errors are only logged: the data is right, and leftover public
  * files are referenced by nothing.
  */
-export async function deleteImageFilesQuietly(storage: Storage, req: Request, image: StoredImage) {
+/** Deletes an image's files; a storage error is only logged (`req` or a service's `{ log }`). */
+export async function deleteImageFilesQuietly(
+  storage: Storage,
+  req: { log: Pick<Logger, 'warn'> },
+  image: StoredImage,
+) {
   await deleteImageFiles(storage, image).catch((err: unknown) => {
     req.log.warn({ err, key: image.key }, 'Không xóa được file ảnh trên storage')
   })
