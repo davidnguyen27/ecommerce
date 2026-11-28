@@ -23,6 +23,11 @@ import { StockModule } from './stock/index.ts'
 import { StockReceiptModule } from './stock-receipt/index.ts'
 import { SupportModule } from './support/index.ts'
 import { VoucherModule } from './voucher/index.ts'
+import { ChatbotModule } from './chatbot/index.ts'
+import { ContentPageModule } from './content-page/index.ts'
+import { LegalInfoModule } from './legal-info/index.ts'
+import { ReportModule } from './report/index.ts'
+import { SitemapModule } from './sitemap/index.ts'
 
 /**
  * Builds every module in dependency order: a module that needs another's query interface is built after it and gets
@@ -34,12 +39,13 @@ export function createModules(deps: AppDeps): BaseModule[] {
   const stock = new StockModule(deps)
   const orders = new OrderModule(deps)
   const customerAuth = new CustomerAuthModule(deps)
+  const products = new ProductModule(deps, { schemas: schemas.query, categories: categories.query })
   return [
     schemas,
     categories,
     new BrandModule(deps),
     new CommitmentTypeModule(deps),
-    new ProductModule(deps, { schemas: schemas.query, categories: categories.query }),
+    products,
     new ProductImportModule(deps, stock.ledger),
     // Before `stock`: receipts have their own permission, the stock router guards everything under it.
     new StockReceiptModule(deps, stock.ledger),
@@ -60,5 +66,11 @@ export function createModules(deps: AppDeps): BaseModule[] {
     customerAuth,
     // After the other `/account/…` routes; its customer sign-in check runs for every path under `/account`.
     new CustomerModule(deps, customerAuth.sessions),
+    new ContentPageModule(deps),
+    new LegalInfoModule(deps),
+    new SitemapModule(deps, categories.query),
+    // Before `report`: the chatbot report has its own permission, the report router guards everything under it.
+    new ChatbotModule(deps, products.query),
+    new ReportModule(deps),
   ]
 }

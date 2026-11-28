@@ -6,7 +6,7 @@ import {
   relativeShopLinks,
   stripToolLabels,
   suggestsSize,
-} from '../src/chat/intent.ts'
+} from '../src/modules/chatbot/chatbot-intent.ts'
 
 describe('link sản phẩm, chính sách có tên miền bịa', () => {
   it('đổi thành đường dẫn của shop, kể cả dạng <…> và link markdown (câu thật của gpt-oss, 2026-11-23)', () => {

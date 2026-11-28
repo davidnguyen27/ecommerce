@@ -6,7 +6,7 @@ import {
   type LlmClient,
   type LlmMessage,
 } from '../src/core/adapters/llm.ts'
-import { ENGLISH_REMINDER, HISTORY_LIMIT, SYSTEM_PROMPT } from '../src/chat/prompt.ts'
+import { ENGLISH_REMINDER, HISTORY_LIMIT, SYSTEM_PROMPT } from '../src/modules/chatbot/chatbot-prompt.ts'
 import { deleteExpiredRecords } from '../src/core/jobs/cleanup.ts'
 import { OWNER, appWithOwner, bearer, createStaff, login, type Request } from './support/staff.ts'
 

@@ -5,7 +5,7 @@ import type { AuthAudience } from '../../generated/prisma/client.ts'
 import { SessionController } from './auth.controller.ts'
 import type { SessionAccounts } from './auth.interface.ts'
 import { StaffAccountRepository } from './auth.repository.ts'
-import { StaffSessionRoute } from './auth.route.ts'
+import { StaffProfileRoute, StaffSessionRoute } from './auth.route.ts'
 import { SessionService } from './auth.service.ts'
 
 const STAFF_SESSION_TTL_MS = 12 * 60 * 60 * 1000
@@ -28,7 +28,10 @@ export function createSessions(o: SessionOptions) {
   )
 }
 
-/** Staff sessions. Customer sessions live in `customer-auth`, which builds them with `createSessions`. */
+/**
+ * Staff sessions and the signed-in profile. Customer sessions live in `customer-auth`, which builds them with
+ * `createSessions`.
+ */
 export class AuthModule extends BaseModule {
   readonly routes: readonly IRoute[]
 
@@ -47,6 +50,6 @@ export class AuthModule extends BaseModule {
         isActive: (id) => repo.isActive(prisma, id),
       },
     })
-    this.routes = [new StaffSessionRoute(sessions)]
+    this.routes = [new StaffSessionRoute(sessions), new StaffProfileRoute()]
   }
 }

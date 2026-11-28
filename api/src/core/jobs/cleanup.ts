@@ -1,4 +1,4 @@
-import { deleteOldConversations } from '../../chat/chat.ts'
+import { deleteOldConversations } from '../../modules/chatbot/index.ts'
 import type { DbClient } from '../db.ts'
 import { RATE_LIMITS } from '../middleware/rate-limit.ts'
 

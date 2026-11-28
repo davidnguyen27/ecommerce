@@ -1,6 +1,6 @@
 import type { DbClient } from '../../core/db.ts'
 import type { Prisma } from '../../generated/prisma/client.ts'
-import { LATEST_VERSION } from '../../content/pages.ts'
+import { LATEST_VERSION } from '../content-page/index.ts'
 import {
   COMMITMENTS_WITH_TYPE,
   COMMITMENT_ORDER_BY,

@@ -10,12 +10,7 @@ import type { Db } from './core/db.ts'
 import type { EmailQueue, OrderExpiryQueue } from './core/jobs/jobs.ts'
 import type { PaymentGateway } from './core/adapters/payment/gateway.ts'
 import { errorHandler, notFound } from './core/errors.ts'
-import { adminRoutes } from './routes/admin.ts'
-import { publicLegalInfoRoutes } from './routes/legal-info.ts'
-import { publicPageRoutes } from './routes/public-pages.ts'
-import { publicSitemapRoutes } from './routes/public-sitemap.ts'
-import { chatRoutes } from './routes/chat.ts'
-import { healthRoutes } from './routes/health.ts'
+import { HealthModule } from './modules/health/index.ts'
 import type { RouteAccess } from './core/module/base.module.ts'
 import { createModules } from './modules/index.ts'
 
@@ -87,7 +82,8 @@ export function createApp(deps: AppDeps) {
   )
   app.use(express.json({ limit: '1mb' }))
 
-  app.use(healthRoutes(deps.prisma))
+  // Outside `/api`, before the API router: the host's health check.
+  for (const route of new HealthModule(deps).routes) app.use(route.path, route.router)
 
   const secret = new TextEncoder().encode(deps.jwtSecret)
   const api = express.Router()
@@ -97,7 +93,7 @@ export function createApp(deps: AppDeps) {
     res.set('Cache-Control', 'no-store')
     next()
   })
-  // Modules first, in `createModules` order; the old routers below still serve paths not moved yet.
+  // Every route comes from a module, mounted in `createModules` order.
   // Nested module paths (`/products/:id/images`, `/products`) pass through several mounts: sign in once per request.
   const staffAuth = requireAuth(secret, 'staff')
   const staffLoad = loadStaff(deps.prisma)
@@ -114,11 +110,8 @@ export function createApp(deps: AppDeps) {
       api.use(route.access === 'staff' ? `/admin${route.path}` : route.path, ...signIn[route.access], route.router)
     }
   }
-  api.use('/pages', publicPageRoutes(deps.prisma))
-  api.use('/legal-info', publicLegalInfoRoutes(deps.prisma))
-  api.use('/sitemap', publicSitemapRoutes(deps.prisma))
-  api.use('/chat', chatRoutes({ ...deps, secret }))
-  api.use('/admin', requireAuth(secret, 'staff'), loadStaff(deps.prisma), adminRoutes(deps))
+  // Unknown admin paths need sign-in too: 401 before 404, so they reveal nothing to the signed-out.
+  api.use('/admin', ...signIn.staff)
   app.use('/api', api)
 
   app.use(notFound)

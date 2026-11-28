@@ -1,5 +1,7 @@
 import cookieParser from 'cookie-parser'
 import { Router } from 'express'
+import type { StaffProfile } from '@ecommerce/shared'
+import { currentStaff } from '../../core/middleware/staff-context.ts'
 import type { IRoute } from '../../core/module/base.module.ts'
 import type { SessionController } from './auth.controller.ts'
 
@@ -16,5 +18,19 @@ export class StaffSessionRoute implements IRoute {
 
   constructor(c: SessionController) {
     this.router = sessionRouter(c)
+  }
+}
+
+/** The signed-in staff member, with permissions, under `/api/admin/me`. */
+export class StaffProfileRoute implements IRoute {
+  readonly path = '/me'
+  readonly access = 'staff'
+  readonly router = Router()
+
+  constructor() {
+    this.router.get('/', (req, res) => {
+      const body: StaffProfile = currentStaff(req)
+      res.json(body)
+    })
   }
 }

@@ -1,7 +1,7 @@
 import { ErrorCode, type PreorderChange, type PreorderConflictDetails, type PreorderRequest } from '@ecommerce/shared'
 import type { z } from 'zod'
 import { storedImageOf } from './order-snapshot.ts'
-import { findCurrentPreorderPolicy } from '../../content/pages.ts'
+import { findCurrentPreorderPolicy } from '../content-page/index.ts'
 import { AppError, invalidField } from '../../core/errors.ts'
 import { checkPreorder } from '../preorder-campaign/index.ts'
 import type { Plan } from './placement-plan.ts'

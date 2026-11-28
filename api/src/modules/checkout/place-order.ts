@@ -14,7 +14,7 @@ import { hashOpaqueToken, newOpaqueToken } from '../../core/auth/opaque-token.ts
 import { createOrderPaymentLink } from '../payment/index.ts'
 import { livePolicyVersions } from './order-snapshot.ts'
 import { enforcePendingOrderLimit } from './pending-orders.ts'
-import { findCurrentPrivacyPolicy } from '../../content/pages.ts'
+import { findCurrentPrivacyPolicy } from '../content-page/index.ts'
 import { AppError, invalidField } from '../../core/errors.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../../core/middleware/rate-limit.ts'
 import { requireShippingFeeConfig } from '../shipping-fee/index.ts'

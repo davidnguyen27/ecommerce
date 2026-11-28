@@ -16,7 +16,7 @@ import {
 } from '@ecommerce/shared'
 import type { Logger } from 'pino'
 import type { z } from 'zod'
-import { toMessageView } from '../../chat/chat.ts'
+import { toMessageView } from '../chatbot/index.ts'
 import type { Storage } from '../../core/adapters/storage.ts'
 import { audited, type Audit } from '../../core/audit/audited.ts'
 import type { RequestContext } from '../../core/context/request-context.ts'

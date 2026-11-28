@@ -1,5 +1,5 @@
 import { ErrorCode, type RegisterRequest } from '@ecommerce/shared'
-import { findCurrentPrivacyPolicy } from '../../content/pages.ts'
+import { findCurrentPrivacyPolicy } from '../content-page/index.ts'
 import { normalizeEmail } from '../../core/auth/email.ts'
 import { hashPassword } from '../../core/auth/password.ts'
 import type { Db } from '../../core/db.ts'
