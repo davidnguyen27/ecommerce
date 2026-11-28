@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { ErrorCode, type HealthResponse } from '@ecommerce/shared'
-import type { Db } from '../db.ts'
-import { AppError } from '../http/errors.ts'
+import type { Db } from '../core/db.ts'
+import { AppError } from '../core/errors.ts'
 
 export function healthRoutes(prisma: Db) {
   return Router().get('/healthz', async (req, res) => {

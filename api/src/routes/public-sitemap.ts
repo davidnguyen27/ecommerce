@@ -2,7 +2,7 @@ import { Router } from 'express'
 import type { Sitemap } from '@ecommerce/shared'
 import { loadVisibleTree, type VisibleCategory } from '../catalog/categories.ts'
 import { listPublishedPages } from '../content/pages.ts'
-import type { Db } from '../db.ts'
+import type { Db } from '../core/db.ts'
 
 /**
  * What customers can open, for the website sitemap.xml. Read on each call, so it changes as soon as something is

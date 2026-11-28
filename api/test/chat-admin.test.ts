@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LlmUnavailableError, ScriptedLlm, type LlmClient } from '../src/adapters/llm.ts'
+import { LlmUnavailableError, ScriptedLlm, type LlmClient } from '../src/core/adapters/llm.ts'
 import { PROMPT_VERSION } from '../src/chat/prompt.ts'
 import { publishPrivacyPolicy } from './support/customer.ts'
 import { OWNER, appWithOwner, bearer, createStaff, login } from './support/staff.ts'

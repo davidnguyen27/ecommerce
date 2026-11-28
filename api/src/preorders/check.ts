@@ -1,6 +1,6 @@
 import type { PreorderChange } from '@ecommerce/shared'
 import { cartVariants, type CartVariant } from '../catalog/live-variants.ts'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { usedAllocations } from './campaigns.ts'
 

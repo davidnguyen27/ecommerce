@@ -11,11 +11,11 @@ import {
 } from '@ecommerce/shared'
 import { ProductTypeParams, loadAttributeSchema } from '../catalog/attribute-schemas.ts'
 import { findVisible, loadVisibleTree, type VisibleCategory } from '../catalog/categories.ts'
-import type { Storage } from '../adapters/storage.ts'
-import type { Db } from '../db.ts'
-import { StoredImage, imageRenditions } from '../media/images.ts'
-import { AppError } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
+import type { Storage } from '../core/adapters/storage.ts'
+import type { Db } from '../core/db.ts'
+import { StoredImage, imageRenditions } from '../core/media/images.ts'
+import { AppError } from '../core/errors.ts'
+import { parse } from '../core/middleware/validation.ts'
 
 const SlugParams = z.object({ slug: z.string() })
 

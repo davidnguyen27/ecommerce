@@ -1,7 +1,7 @@
 import { ErrorCode, ProductType, type CategoryLink } from '@ecommerce/shared'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 import type { Category, Prisma } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError } from '../core/errors.ts'
 
 /**
  * Serializes tree-shape changes (create, reparent, delete) in the transaction, so two concurrent reparents cannot both

@@ -1,5 +1,5 @@
 import { ProductSnapshot } from './publication.ts'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 
 /**
  * A cart line's variant as the customer sees it. `snapshot` is the product's live version (`null` when unpublished);

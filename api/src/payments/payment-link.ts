@@ -1,8 +1,8 @@
 import { ErrorCode } from '@ecommerce/shared'
 import type { Logger } from 'pino'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 import type { PaymentPurpose } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError } from '../core/errors.ts'
 import { paymentResultUrl } from '../orders/orders.ts'
 import type { PaymentGateway } from './gateway.ts'
 

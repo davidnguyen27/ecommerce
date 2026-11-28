@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { Router, type Request } from 'express'
 import { ErrorCode, type ImportIssue, type ImportPreview, type ImportResult } from '@ecommerce/shared'
-import { audited, type AuditEntry } from '../audit/audited.ts'
-import { currentStaff, hasPermission, requirePermission } from '../auth/staff-context.ts'
+import { audited, type AuditEntry } from '../core/audit/audited.ts'
+import { currentStaff, hasPermission, requirePermission } from '../core/middleware/staff-context.ts'
 import {
   ALREADY_LEDGERED,
   type PlannedOpening,
@@ -15,10 +15,10 @@ import {
   readWorkbook,
 } from '../catalog/import.ts'
 import { productAuditFields, variantCreatedAudits } from '../catalog/products.ts'
-import type { Db } from '../db.ts'
+import type { Db } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
-import { AppError, conflictField, rethrowUnique } from '../http/errors.ts'
-import { receiveFile, requiredFile } from '../media/upload.ts'
+import { AppError, conflictField, rethrowUnique } from '../core/errors.ts'
+import { receiveFile, requiredFile } from '../core/media/upload.ts'
 import { changeStock } from '../stock/stock.ts'
 
 const MAX_BYTES = 5 * 1024 * 1024

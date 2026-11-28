@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import type { PayRemainderResult, PublicOrder } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
-import { RATE_LIMITS, withinRateLimit } from '../http/rate-limit.ts'
+import { RATE_LIMITS, withinRateLimit } from '../core/middleware/rate-limit.ts'
 import { createRemainderLink } from '../preorders/remainder.ts'
 import { assertCancellable, cancelOrder } from '../orders/cancel-order.ts'
 import { findOrderByToken, toPublicOrder } from '../orders/orders.ts'

@@ -1,6 +1,6 @@
 import { PRIVACY_POLICY_SLUG } from '@ecommerce/shared'
 import { expect, vi } from 'vitest'
-import type { InMemoryMailer } from '../../src/adapters/mailer.ts'
+import type { InMemoryMailer } from '../../src/core/adapters/mailer.ts'
 import { OWNER, appWithOwner, bearer, login, type Request } from './staff.ts'
 
 export const CUSTOMER = { email: 'khach@example.com', password: 'mat-khau-cua-khach' }

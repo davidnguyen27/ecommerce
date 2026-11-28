@@ -6,12 +6,12 @@ import {
   type CommitmentType as CommitmentTypeBody,
   type CommitmentTypeList,
 } from '@ecommerce/shared'
-import { audited } from '../audit/audited.ts'
-import { requirePermission } from '../auth/staff-context.ts'
-import type { Db } from '../db.ts'
+import { audited } from '../core/audit/audited.ts'
+import { requirePermission } from '../core/middleware/staff-context.ts'
+import type { Db } from '../core/db.ts'
 import type { CommitmentType } from '../generated/prisma/client.ts'
-import { AppError, conflictField, rethrowUnique } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
+import { AppError, conflictField, rethrowUnique } from '../core/errors.ts'
+import { parse } from '../core/middleware/validation.ts'
 
 const TypeParams = z.object({ id: z.uuid() })
 

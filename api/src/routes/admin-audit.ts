@@ -1,11 +1,11 @@
 import { Router } from 'express'
 import { AuditQuery, type AuditActors, type AuditPage } from '@ecommerce/shared'
-import { ACTOR_SELECT } from '../audit/audited.ts'
-import { requirePermission } from '../auth/staff-context.ts'
-import type { Db } from '../db.ts'
+import { ACTOR_SELECT } from '../core/audit/audited.ts'
+import { requirePermission } from '../core/middleware/staff-context.ts'
+import type { Db } from '../core/db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { pageWindow } from '../http/pagination.ts'
-import { parse } from '../http/validation.ts'
+import { pageWindow } from '../core/pagination.ts'
+import { parse } from '../core/middleware/validation.ts'
 
 /** Read-only: the audit log cannot be edited or deleted through the API. */
 export function adminAuditRoutes(prisma: Db) {

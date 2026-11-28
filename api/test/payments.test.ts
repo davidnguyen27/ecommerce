@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { InMemoryMailer } from '../src/adapters/mailer.ts'
+import type { InMemoryMailer } from '../src/core/adapters/mailer.ts'
 import type { PaymentInfo } from '../src/payments/gateway.ts'
 import { ipnParams, signedIpn, transactionNoOf } from './support/vnpay.ts'
 import { shop } from './support/shop.ts'

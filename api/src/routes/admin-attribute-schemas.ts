@@ -9,8 +9,8 @@ import {
   type AdminAttributeSchemaList,
   type ValidateAttributesResponse,
 } from '@ecommerce/shared'
-import { audited } from '../audit/audited.ts'
-import { requirePermission } from '../auth/staff-context.ts'
+import { audited } from '../core/audit/audited.ts'
+import { requirePermission } from '../core/middleware/staff-context.ts'
 import {
   ProductTypeParams,
   assertAttributes,
@@ -18,9 +18,9 @@ import {
   loadAttributeSchema,
   lockAttributeSchema,
 } from '../catalog/attribute-schemas.ts'
-import type { Db } from '../db.ts'
-import { AppError } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
+import type { Db } from '../core/db.ts'
+import { AppError } from '../core/errors.ts'
+import { parse } from '../core/middleware/validation.ts'
 
 type LoadedSchema = Awaited<ReturnType<typeof loadAttributeSchema>>
 

@@ -1,9 +1,9 @@
 import { Router } from 'express'
 import { EMPTY_LEGAL_INFO, LegalInfo } from '@ecommerce/shared'
-import { audited } from '../audit/audited.ts'
-import { requirePermission } from '../auth/staff-context.ts'
-import type { Db, DbClient } from '../db.ts'
-import { parse } from '../http/validation.ts'
+import { audited } from '../core/audit/audited.ts'
+import { requirePermission } from '../core/middleware/staff-context.ts'
+import type { Db, DbClient } from '../core/db.ts'
+import { parse } from '../core/middleware/validation.ts'
 
 const KEY = 'legal_info'
 

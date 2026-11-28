@@ -2,8 +2,8 @@ import { isDeepStrictEqual } from 'node:util'
 import { Router } from 'express'
 import { z } from 'zod'
 import { CommitmentRequest, ErrorCode, type AdminCommitment, type AdminCommitmentList } from '@ecommerce/shared'
-import { audited } from '../audit/audited.ts'
-import { requirePermission } from '../auth/staff-context.ts'
+import { audited } from '../core/audit/audited.ts'
+import { requirePermission } from '../core/middleware/staff-context.ts'
 import {
   WITH_TYPE_AND_DOCUMENTS,
   commitmentsOf,
@@ -12,10 +12,10 @@ import {
   type CommitmentWithEvidence,
 } from '../catalog/commitments.ts'
 import { ProductParams, loadProduct, lockProduct } from '../catalog/products.ts'
-import type { Db } from '../db.ts'
+import type { Db } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
-import { AppError, conflictField, invalidField, rethrowUnique } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
+import { AppError, conflictField, invalidField, rethrowUnique } from '../core/errors.ts'
+import { parse } from '../core/middleware/validation.ts'
 
 const CommitmentParams = z.object({ id: z.uuid(), commitmentId: z.uuid() })
 

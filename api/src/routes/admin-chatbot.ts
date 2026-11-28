@@ -10,14 +10,14 @@ import {
   type AdminChatConversationPage,
   type ChatbotModelStatus,
 } from '@ecommerce/shared'
-import type { LlmClient } from '../adapters/llm.ts'
-import { audited } from '../audit/audited.ts'
-import { requirePermission } from '../auth/staff-context.ts'
+import type { LlmClient } from '../core/adapters/llm.ts'
+import { audited } from '../core/audit/audited.ts'
+import { requirePermission } from '../core/middleware/staff-context.ts'
 import { readChatbotSettings, toMessageView } from '../chat/chat.ts'
-import type { Db } from '../db.ts'
+import type { Db } from '../core/db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
-import { isUuid, parse } from '../http/validation.ts'
+import { AppError } from '../core/errors.ts'
+import { isUuid, parse } from '../core/middleware/validation.ts'
 import { chatbotReport } from '../reports/chatbot.ts'
 import { periodOf, startOfDay } from '../reports/period.ts'
 

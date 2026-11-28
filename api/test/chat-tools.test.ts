@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ScriptedLlm, type LlmMessage, type LlmToolCall } from '../src/adapters/llm.ts'
+import { ScriptedLlm, type LlmMessage, type LlmToolCall } from '../src/core/adapters/llm.ts'
 import { SYSTEM_PROMPT, VIETNAMESE_REMINDER } from '../src/chat/prompt.ts'
 import { MAX_TOOL_ROUNDS } from '../src/chat/turn.ts'
 import { preorderShop } from './support/preorder.ts'

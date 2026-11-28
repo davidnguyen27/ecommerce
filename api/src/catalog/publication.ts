@@ -1,10 +1,10 @@
 import { isDeepStrictEqual } from 'node:util'
 import { z } from 'zod'
 import { ProductType, PublicCommitment, SizeChart, type AdminProductDetail, type FieldError } from '@ecommerce/shared'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 import { COMMITMENTS_WITH_TYPE, toPublicCommitment } from './commitments.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { StoredImage } from '../media/images.ts'
+import { StoredImage } from '../core/media/images.ts'
 import { SORT_ORDER, productNotFound, toAdminProduct, toAdminVariant, toNumber } from './products.ts'
 
 const Values = z.record(z.string(), z.union([z.string(), z.array(z.string()), z.number(), z.boolean()]))

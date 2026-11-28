@@ -6,7 +6,7 @@ import {
   type RefundStatus,
   type ReportRefundOrigin,
 } from '@ecommerce/shared'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { REFUND_ROOTS } from './sql.ts'
 import { inPeriod, type Period } from './period.ts'

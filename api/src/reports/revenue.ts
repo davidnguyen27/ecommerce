@@ -1,5 +1,5 @@
 import { REVENUE_TOP_SKUS, type ProductType, type RevenueFigures, type RevenueReport } from '@ecommerce/shared'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { bucketOf, inPeriod, type Period } from './period.ts'
 import { REFUND_ROOTS, deliveredInPeriod } from './sql.ts'

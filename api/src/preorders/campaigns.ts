@@ -1,8 +1,8 @@
 import { ErrorCode, type PreorderCampaign } from '@ecommerce/shared'
-import { ACTOR_SELECT } from '../audit/audited.ts'
-import type { DbClient } from '../db.ts'
+import { ACTOR_SELECT } from '../core/audit/audited.ts'
+import type { DbClient } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError } from '../core/errors.ts'
 import { isoDay } from '../orders/format.ts'
 
 /** An open campaign (GLOSSARY "Đợt đặt trước"): not closed by hand and not past its closing time. */

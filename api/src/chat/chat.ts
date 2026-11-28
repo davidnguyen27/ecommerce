@@ -7,10 +7,10 @@ import {
   type ChatUnavailableReason,
   type ChatbotSettings,
 } from '@ecommerce/shared'
-import type { LlmAttempt, LlmClient } from '../adapters/llm.ts'
-import type { DbClient } from '../db.ts'
+import type { LlmAttempt, LlmClient } from '../core/adapters/llm.ts'
+import type { DbClient } from '../core/db.ts'
 import type { ChatMessage } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError } from '../core/errors.ts'
 import { vnDate } from '../reports/period.ts'
 import { HISTORY_LIMIT } from './prompt.ts'
 

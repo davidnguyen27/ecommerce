@@ -1,4 +1,4 @@
-import type { LlmMessage } from '../adapters/llm.ts'
+import type { LlmMessage } from '../core/adapters/llm.ts'
 import { looksEnglish } from './intent.ts'
 
 // Chatbot system prompt (spec M8 "Vòng lặp gọi công cụ"). Imports only types and `intent.ts` (dependency-free):

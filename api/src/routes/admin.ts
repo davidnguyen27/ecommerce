@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import type { StaffProfile } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
-import { currentStaff } from '../auth/staff-context.ts'
+import { currentStaff } from '../core/middleware/staff-context.ts'
 import type { FulfillmentMail } from '../orders/fulfill-order.ts'
 import { adminOrderRoutes } from './admin-orders.ts'
 import { adminReconciliationRoutes, type ReconciliationDeps } from './admin-reconciliation.ts'

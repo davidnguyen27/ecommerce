@@ -1,10 +1,10 @@
 import pino from 'pino'
 import { createApp, trustProxyFromEnv } from './app.ts'
-import { llmFromEnv } from './adapters/llm.ts'
-import { mailerFromEnv } from './adapters/mailer.ts'
-import { storageFromEnv } from './adapters/storage.ts'
-import { createPrisma } from './db.ts'
-import { Jobs } from './jobs/jobs.ts'
+import { llmFromEnv } from './core/adapters/llm.ts'
+import { mailerFromEnv } from './core/adapters/mailer.ts'
+import { storageFromEnv } from './core/adapters/storage.ts'
+import { createPrisma } from './core/db.ts'
+import { Jobs } from './core/jobs/jobs.ts'
 import { paymentGatewayFromEnv, vnpayKeysFromEnv } from './payments/gateway-from-env.ts'
 
 const databaseUrl = process.env.DATABASE_URL

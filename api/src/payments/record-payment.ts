@@ -1,11 +1,11 @@
-import type { Db, DbClient } from '../db.ts'
+import type { Db, DbClient } from '../core/db.ts'
 import {
   Prisma,
   type PaymentPurpose,
   type PaymentSource,
   type ReconciliationReason,
 } from '../generated/prisma/client.ts'
-import type { EmailQueue } from '../jobs/jobs.ts'
+import type { EmailQueue } from '../core/jobs/jobs.ts'
 import { dayVN, isoDay, vnd, voucherLines } from '../orders/format.ts'
 import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../orders/orders.ts'
 import type { PaymentGateway } from './gateway.ts'

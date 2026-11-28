@@ -1,6 +1,6 @@
 import { createSessions } from '../auth/session-routes.ts'
 import { normalizeEmail } from '../auth/staff.ts'
-import type { Db } from '../db.ts'
+import type { Db } from '../core/db.ts'
 
 const STAFF_SESSION_TTL_MS = 12 * 60 * 60 * 1000
 

@@ -1,5 +1,5 @@
 import type { ExceptionsReport } from '@ecommerce/shared'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { DEPOSITED_PREORDER, remainingOf } from '../orders/orders.ts'
 import { REPORT_TIME_ZONE } from './period.ts'

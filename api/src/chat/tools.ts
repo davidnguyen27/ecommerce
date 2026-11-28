@@ -7,13 +7,13 @@ import {
   type PublicProduct,
   type VariantAvailability,
 } from '@ecommerce/shared'
-import type { LlmTool, LlmToolCall } from '../adapters/llm.ts'
-import type { Storage } from '../adapters/storage.ts'
+import type { LlmTool, LlmToolCall } from '../core/adapters/llm.ts'
+import type { Storage } from '../core/adapters/storage.ts'
 import { loadAttributeSchema } from '../catalog/attribute-schemas.ts'
 import { findPublicProduct, searchProductCards } from '../catalog/public-products.ts'
 import type { SearchCriteria } from '../catalog/search.ts'
 import { findPublishedVersion, listPublishedPages } from '../content/pages.ts'
-import type { Db } from '../db.ts'
+import type { Db } from '../core/db.ts'
 
 // Chatbot tools (spec M8 "Công cụ"): read-only, and only what the customer website already shows. Products go through
 // the public product page functions, so drafts, stock counts, costs and documents never leak. Results sent to the

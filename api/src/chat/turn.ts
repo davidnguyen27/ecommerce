@@ -1,5 +1,5 @@
 import type { ProductCard } from '@ecommerce/shared'
-import { LlmUnavailableError, type LlmAttempt, type LlmClient, type LlmMessage } from '../adapters/llm.ts'
+import { LlmUnavailableError, type LlmAttempt, type LlmClient, type LlmMessage } from '../core/adapters/llm.ts'
 import type { ModelUsage } from './chat.ts'
 import { suggestsSize } from './intent.ts'
 import { isLanguageReminder } from './prompt.ts'

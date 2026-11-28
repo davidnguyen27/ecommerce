@@ -17,16 +17,16 @@ import {
   type ExchangeOptions,
   type AdminSupportRequest,
 } from '@ecommerce/shared'
-import type { Storage } from '../adapters/storage.ts'
-import { audited } from '../audit/audited.ts'
-import { currentStaff, hasPermission, requirePermission } from '../auth/staff-context.ts'
-import type { Db } from '../db.ts'
+import type { Storage } from '../core/adapters/storage.ts'
+import { audited } from '../core/audit/audited.ts'
+import { currentStaff, hasPermission, requirePermission } from '../core/middleware/staff-context.ts'
+import type { Db } from '../core/db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { AppError, invalidField } from '../http/errors.ts'
-import { pageWindow } from '../http/pagination.ts'
-import { parse } from '../http/validation.ts'
-import type { CustomerMail } from '../jobs/jobs.ts'
-import { deleteSupportImageQuietly, receiveSupportImage, storeSupportImage } from '../media/support-images.ts'
+import { AppError, invalidField } from '../core/errors.ts'
+import { pageWindow } from '../core/pagination.ts'
+import { parse } from '../core/middleware/validation.ts'
+import type { CustomerMail } from '../core/jobs/jobs.ts'
+import { deleteSupportImageQuietly, receiveSupportImage, storeSupportImage } from '../core/media/support-images.ts'
 import {
   SUPPORT_INCLUDE,
   assignSupportRequest,

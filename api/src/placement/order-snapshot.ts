@@ -1,4 +1,4 @@
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 import type { OrderLineImage } from '../orders/orders.ts'
 import type { CartVariant } from '../catalog/live-variants.ts'
 

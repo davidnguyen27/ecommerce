@@ -5,11 +5,11 @@ import {
   type PublicProduct,
   type VariantAvailability,
 } from '@ecommerce/shared'
-import type { Storage } from '../adapters/storage.ts'
+import type { Storage } from '../core/adapters/storage.ts'
 import { LATEST_VERSION } from '../content/pages.ts'
-import type { Db } from '../db.ts'
+import type { Db } from '../core/db.ts'
 import type { Brand, ProductVersion } from '../generated/prisma/client.ts'
-import { imageRenditions } from '../media/images.ts'
+import { imageRenditions } from '../core/media/images.ts'
 import { preorderOffers } from '../preorders/campaigns.ts'
 import { inStockIds } from '../stock/stock.ts'
 import { loadAttributeSchema } from './attribute-schemas.ts'

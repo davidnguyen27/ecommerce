@@ -2,13 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { Router, type Request } from 'express'
 import { z } from 'zod'
 import { BrandRequest, ErrorCode, type AdminBrand, type AdminBrandList } from '@ecommerce/shared'
-import type { Storage } from '../adapters/storage.ts'
-import { audited } from '../audit/audited.ts'
-import { requirePermission } from '../auth/staff-context.ts'
-import type { Db } from '../db.ts'
+import type { Storage } from '../core/adapters/storage.ts'
+import { audited } from '../core/audit/audited.ts'
+import { requirePermission } from '../core/middleware/staff-context.ts'
+import type { Db } from '../core/db.ts'
 import { Prisma, type Brand } from '../generated/prisma/client.ts'
-import { AppError, rethrowUnique } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
+import { AppError, rethrowUnique } from '../core/errors.ts'
+import { parse } from '../core/middleware/validation.ts'
 import {
   LOGO_WIDTHS,
   StoredImage,
@@ -17,7 +17,7 @@ import {
   receiveImage,
   storeImage,
   uploadedFile,
-} from '../media/images.ts'
+} from '../core/media/images.ts'
 
 const logoOf = (brand: Brand) => (brand.logo === null ? null : StoredImage.parse(brand.logo))
 

@@ -1,9 +1,9 @@
 import { Router } from 'express'
 import { ReturnWindowList } from '@ecommerce/shared'
-import { audited } from '../audit/audited.ts'
-import { requirePermission } from '../auth/staff-context.ts'
-import type { Db } from '../db.ts'
-import { parse } from '../http/validation.ts'
+import { audited } from '../core/audit/audited.ts'
+import { requirePermission } from '../core/middleware/staff-context.ts'
+import type { Db } from '../core/db.ts'
+import { parse } from '../core/middleware/validation.ts'
 import { loadReturnWindows, saveReturnWindows } from '../support/returns.ts'
 
 /**

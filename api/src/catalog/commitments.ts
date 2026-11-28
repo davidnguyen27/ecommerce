@@ -1,5 +1,5 @@
 import type { AdminCommitment, PublicCommitment } from '@ecommerce/shared'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 import type { CommitmentType, Prisma, ProductCommitment } from '../generated/prisma/client.ts'
 
 export const WITH_TYPE_AND_DOCUMENTS = {

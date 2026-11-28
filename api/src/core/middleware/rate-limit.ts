@@ -1,7 +1,7 @@
 import { ErrorCode } from '@ecommerce/shared'
 import { hashOpaqueToken } from '../auth/opaque-token.ts'
 import type { DbClient } from '../db.ts'
-import { AppError } from './errors.ts'
+import { AppError } from '../errors.ts'
 
 /** At most `max` hits per fixed `windowMs` window. */
 export type RateLimit = { name: string; max: number; windowMs: number }

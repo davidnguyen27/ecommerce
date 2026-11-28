@@ -12,11 +12,11 @@ import { normalizeEmail } from '../auth/staff.ts'
 import { findCurrentPrivacyPolicy } from '../content/pages.ts'
 import { sendVerificationEmail, verifyEmail } from '../customers/email-verification.ts'
 import { resetPassword, sendPasswordResetEmail } from '../customers/password-reset.ts'
-import type { Db } from '../db.ts'
-import { AppError, isUniqueViolation } from '../http/errors.ts'
-import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
-import { parse } from '../http/validation.ts'
-import type { EmailQueue } from '../jobs/jobs.ts'
+import type { Db } from '../core/db.ts'
+import { AppError, isUniqueViolation } from '../core/errors.ts'
+import { RATE_LIMITS, enforceRateLimits } from '../core/middleware/rate-limit.ts'
+import { parse } from '../core/middleware/validation.ts'
+import type { EmailQueue } from '../core/jobs/jobs.ts'
 
 const CUSTOMER_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 

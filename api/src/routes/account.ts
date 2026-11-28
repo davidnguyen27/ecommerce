@@ -7,14 +7,14 @@ import {
   type LastShippingAddress,
 } from '@ecommerce/shared'
 import { hashPassword, verifyPassword } from '../auth/password.ts'
-import { authSubject } from '../auth/require-auth.ts'
+import { authSubject } from '../core/middleware/require-auth.ts'
 import { clientOf } from '../auth/session-routes.ts'
 import { sendVerificationEmail } from '../customers/email-verification.ts'
 import { setCustomerPassword } from '../customers/password-reset.ts'
-import type { Db } from '../db.ts'
-import { AppError } from '../http/errors.ts'
-import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
-import { parse } from '../http/validation.ts'
+import type { Db } from '../core/db.ts'
+import { AppError } from '../core/errors.ts'
+import { RATE_LIMITS, enforceRateLimits } from '../core/middleware/rate-limit.ts'
+import { parse } from '../core/middleware/validation.ts'
 import type { CustomerAuthDeps } from './customer-auth.ts'
 
 const signedOut = () => new AppError(401, ErrorCode.UNAUTHORIZED, 'Cần đăng nhập')

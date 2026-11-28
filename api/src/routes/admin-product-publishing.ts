@@ -1,9 +1,9 @@
 import { isDeepStrictEqual } from 'node:util'
 import { Router } from 'express'
 import { ChangeProductStatusRequest, ErrorCode, ProductPoliciesRequest, type ProductStatus } from '@ecommerce/shared'
-import type { Storage } from '../adapters/storage.ts'
-import { audited } from '../audit/audited.ts'
-import { currentStaff, requirePermission } from '../auth/staff-context.ts'
+import type { Storage } from '../core/adapters/storage.ts'
+import { audited } from '../core/audit/audited.ts'
+import { currentStaff, requirePermission } from '../core/middleware/staff-context.ts'
 import { ProductParams, lockProduct } from '../catalog/products.ts'
 import {
   buildSnapshot,
@@ -15,11 +15,11 @@ import {
   toAdminProductDetail,
   type Draft,
 } from '../catalog/publication.ts'
-import type { Db } from '../db.ts'
+import type { Db } from '../core/db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { AppError, conflictField } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
-import { deleteImageFilesQuietly, type StoredImage } from '../media/images.ts'
+import { AppError, conflictField } from '../core/errors.ts'
+import { parse } from '../core/middleware/validation.ts'
+import { deleteImageFilesQuietly, type StoredImage } from '../core/media/images.ts'
 
 const ACTIONS: Record<ProductStatus, string> = {
   published: 'catalog.product.publish',

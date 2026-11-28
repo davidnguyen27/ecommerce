@@ -1,6 +1,6 @@
 import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
-import type { InMemoryStorage } from '../src/adapters/storage.ts'
+import type { InMemoryStorage } from '../src/core/adapters/storage.ts'
 import { ADDRESS, shop } from './support/shop.ts'
 import { bearer, createStaff } from './support/staff.ts'
 

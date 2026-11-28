@@ -1,8 +1,8 @@
 import type { Request, RequestHandler } from 'express'
 import { ErrorCode } from '@ecommerce/shared'
-import type { AuthAudience } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
-import { verifyAccessToken } from './access-token.ts'
+import type { AuthAudience } from '../../generated/prisma/client.ts'
+import { AppError } from '../errors.ts'
+import { verifyAccessToken } from '../../auth/access-token.ts'
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace

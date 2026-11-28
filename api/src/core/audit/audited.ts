@@ -1,7 +1,7 @@
 import type { Request } from 'express'
-import { currentStaff } from '../auth/staff-context.ts'
+import { currentStaff } from '../middleware/staff-context.ts'
 import type { Db } from '../db.ts'
-import type { Prisma } from '../generated/prisma/client.ts'
+import type { Prisma } from '../../generated/prisma/client.ts'
 
 /** The acting staff member, matching the `AuditActor` fields sent to clients. */
 export const ACTOR_SELECT = { id: true, name: true, email: true } as const

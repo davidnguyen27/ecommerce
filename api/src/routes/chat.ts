@@ -9,12 +9,12 @@ import {
   type ChatStatus,
   type ChatTurnResponse,
 } from '@ecommerce/shared'
-import type { LlmClient } from '../adapters/llm.ts'
-import type { Storage } from '../adapters/storage.ts'
+import type { LlmClient } from '../core/adapters/llm.ts'
+import type { Storage } from '../core/adapters/storage.ts'
 import type { AppDeps } from '../app.ts'
-import { hashOpaqueToken } from '../auth/opaque-token.ts'
-import { optionalAuth } from '../auth/require-auth.ts'
-import { AppError, invalidField } from '../http/errors.ts'
+import { hashOpaqueToken } from '../core/auth/opaque-token.ts'
+import { optionalAuth } from '../core/middleware/require-auth.ts'
+import { AppError, invalidField } from '../core/errors.ts'
 import { createSupportRequest, findSupportCustomer } from '../support/support.ts'
 import {
   appendCustomerMessage,
@@ -29,9 +29,9 @@ import { asksForStaff, dropSentClaims, looksEnglish, relativeShopLinks, stripToo
 import { policySlugs, productForModel } from '../chat/tools.ts'
 import { TurnFailedError, runTurn } from '../chat/turn.ts'
 import { findPublicProduct } from '../catalog/public-products.ts'
-import type { Db } from '../db.ts'
-import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
-import { isUuid, parse } from '../http/validation.ts'
+import type { Db } from '../core/db.ts'
+import { RATE_LIMITS, enforceRateLimits } from '../core/middleware/rate-limit.ts'
+import { isUuid, parse } from '../core/middleware/validation.ts'
 
 /** Request title when the chatbot has nothing to summarize (the customer pressed "Gặp nhân viên" before asking). */
 const HANDOFF_SUBJECT = 'Khách cần nhân viên hỗ trợ (từ trợ lý tư vấn)'

@@ -11,13 +11,13 @@ import {
   type ContentPageVersionList,
   type ContentPageVersionSummary,
 } from '@ecommerce/shared'
-import { audited } from '../audit/audited.ts'
-import { currentStaff, requirePermission } from '../auth/staff-context.ts'
+import { audited } from '../core/audit/audited.ts'
+import { currentStaff, requirePermission } from '../core/middleware/staff-context.ts'
 import { LATEST_VERSION, findPageWithLatest, listPagesWithLatest } from '../content/pages.ts'
-import type { Db } from '../db.ts'
+import type { Db } from '../core/db.ts'
 import type { ContentPage, ContentPageVersion as Version } from '../generated/prisma/client.ts'
-import { AppError, rethrowUnique } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
+import { AppError, rethrowUnique } from '../core/errors.ts'
+import { parse } from '../core/middleware/validation.ts'
 
 type PageWithLatest = ContentPage & { versions: Version[] }
 

@@ -1,11 +1,11 @@
 import { Router } from 'express'
 import { AccountOrderQuery, type AccountOrderPage, type PayRemainderResult, type PublicOrder } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
-import { authSubject } from '../auth/require-auth.ts'
+import { authSubject } from '../core/middleware/require-auth.ts'
 import { createRemainderLink } from '../preorders/remainder.ts'
 import { assertCancellable, cancelOrder } from '../orders/cancel-order.ts'
-import { pageWindow } from '../http/pagination.ts'
-import { parse } from '../http/validation.ts'
+import { pageWindow } from '../core/pagination.ts'
+import { parse } from '../core/middleware/validation.ts'
 import { findCustomerOrder, toPublicOrder } from '../orders/orders.ts'
 
 /** Orders of the signed-in customer (`customer_id` is theirs); behind `requireAuth` for the customer audience. */

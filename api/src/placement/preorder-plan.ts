@@ -2,7 +2,7 @@ import { ErrorCode, type PreorderChange, type PreorderConflictDetails, type Preo
 import type { z } from 'zod'
 import { storedImageOf } from './order-snapshot.ts'
 import { findCurrentPreorderPolicy } from '../content/pages.ts'
-import { AppError, invalidField } from '../http/errors.ts'
+import { AppError, invalidField } from '../core/errors.ts'
 import { checkPreorder } from '../preorders/check.ts'
 import type { Plan } from './placement-plan.ts'
 

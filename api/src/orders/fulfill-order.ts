@@ -1,8 +1,8 @@
 import { ErrorCode, type FulfillmentStatus, type HandoverRequest, type ReturnToStockRequest } from '@ecommerce/shared'
-import type { AuditEntry } from '../audit/audited.ts'
+import type { AuditEntry } from '../core/audit/audited.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { AppError, invalidField } from '../http/errors.ts'
-import type { EmailQueue } from '../jobs/jobs.ts'
+import { AppError, invalidField } from '../core/errors.ts'
+import type { EmailQueue } from '../core/jobs/jobs.ts'
 import { changeStock, reserveStock } from '../stock/stock.ts'
 import { issueOrderLookupUrl, recordOrderEvent } from './orders.ts'
 

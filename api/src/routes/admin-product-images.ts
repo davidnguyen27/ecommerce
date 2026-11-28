@@ -11,16 +11,16 @@ import {
   type AdminProductImageList,
   type BulkImageResult,
 } from '@ecommerce/shared'
-import type { Storage } from '../adapters/storage.ts'
-import { audited } from '../audit/audited.ts'
-import { requirePermission } from '../auth/staff-context.ts'
+import type { Storage } from '../core/adapters/storage.ts'
+import { audited } from '../core/audit/audited.ts'
+import { requirePermission } from '../core/middleware/staff-context.ts'
 import { ProductParams, SORT_ORDER, loadProduct, lockProduct } from '../catalog/products.ts'
 import { liveImages, loadDraft } from '../catalog/publication.ts'
-import type { Db, DbClient } from '../db.ts'
+import type { Db, DbClient } from '../core/db.ts'
 import type { ProductImage } from '../generated/prisma/client.ts'
-import { AppError, conflictField, invalidField } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
-import { fileError } from '../media/upload.ts'
+import { AppError, conflictField, invalidField } from '../core/errors.ts'
+import { parse } from '../core/middleware/validation.ts'
+import { fileError } from '../core/media/upload.ts'
 import {
   PRODUCT_IMAGE_WIDTHS,
   deleteImageFilesQuietly,
@@ -29,7 +29,7 @@ import {
   storeImage,
   uploadedFile,
   type StoredImage,
-} from '../media/images.ts'
+} from '../core/media/images.ts'
 
 const ImageParams = z.object({ id: z.uuid(), imageId: z.uuid() })
 

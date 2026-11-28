@@ -8,13 +8,13 @@ import {
   type PublicSupportRequest,
 } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
-import { hashOpaqueToken } from '../auth/opaque-token.ts'
-import { authSubject } from '../auth/require-auth.ts'
+import { hashOpaqueToken } from '../core/auth/opaque-token.ts'
+import { authSubject } from '../core/middleware/require-auth.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { AppError, invalidField } from '../http/errors.ts'
-import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
-import { parse } from '../http/validation.ts'
-import { deleteSupportImageQuietly, receiveSupportImage, storeSupportImage } from '../media/support-images.ts'
+import { AppError, invalidField } from '../core/errors.ts'
+import { RATE_LIMITS, enforceRateLimits } from '../core/middleware/rate-limit.ts'
+import { parse } from '../core/middleware/validation.ts'
+import { deleteSupportImageQuietly, receiveSupportImage, storeSupportImage } from '../core/media/support-images.ts'
 import { findCustomerOrder, findOrderByToken } from '../orders/orders.ts'
 import {
   SUPPORT_INCLUDE,

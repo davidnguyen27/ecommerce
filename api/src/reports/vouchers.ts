@@ -1,5 +1,5 @@
 import type { VoucherFigures, VoucherKind, VoucherReport } from '@ecommerce/shared'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { inPeriod, type Period } from './period.ts'
 

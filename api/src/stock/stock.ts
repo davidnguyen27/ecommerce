@@ -1,7 +1,7 @@
 import type { StockAdjustmentReason, StockMovementKind } from '@ecommerce/shared'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { conflictField } from '../http/errors.ts'
+import { conflictField } from '../core/errors.ts'
 
 /**
  * Variants in `variantIds` that are in stock. Customers only see in/out of stock, read straight from stock rather than

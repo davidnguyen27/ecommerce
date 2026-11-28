@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deleteExpiredRecords } from '../src/jobs/cleanup.ts'
+import { deleteExpiredRecords } from '../src/core/jobs/cleanup.ts'
 import { CUSTOMER, appReadyForSignUp, register, tokenFromMail } from './support/customer.ts'
 import { OWNER, login } from './support/staff.ts'
 

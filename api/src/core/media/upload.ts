@@ -1,7 +1,7 @@
 import type { Request, RequestHandler } from 'express'
 import multer from 'multer'
 import { ErrorCode } from '@ecommerce/shared'
-import { AppError } from '../http/errors.ts'
+import { AppError } from '../errors.ts'
 
 /** Error on the multipart field `file`. */
 export const fileError = (status: number, message: string) =>

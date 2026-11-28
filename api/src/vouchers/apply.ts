@@ -6,10 +6,10 @@ import {
   type VoucherReason,
 } from '@ecommerce/shared'
 import type { Request } from 'express'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 import type { Voucher } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
-import { RATE_LIMITS, enforceRateLimits } from '../http/rate-limit.ts'
+import { AppError } from '../core/errors.ts'
+import { RATE_LIMITS, enforceRateLimits } from '../core/middleware/rate-limit.ts'
 import { computeDiscount, type DiscountLine, type DiscountRule } from './discount.ts'
 import { customerRedemptions, usedRedemptions, voucherStatus } from './vouchers.ts'
 

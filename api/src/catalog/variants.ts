@@ -1,10 +1,10 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { z } from 'zod'
 import { ErrorCode, VariantRequest, type AdminVariant, type AttributeValues } from '@ecommerce/shared'
-import type { Audit } from '../audit/audited.ts'
-import { forbidden } from '../auth/staff-context.ts'
+import type { Audit } from '../core/audit/audited.ts'
+import { forbidden } from '../core/middleware/staff-context.ts'
 import type { Prisma, ProductVariant } from '../generated/prisma/client.ts'
-import { AppError, conflictField, invalidField, rethrowUnique } from '../http/errors.ts'
+import { AppError, conflictField, invalidField, rethrowUnique } from '../core/errors.ts'
 import { assertAttributes, lockAttributeSchema } from './attribute-schemas.ts'
 import {
   lockProduct,

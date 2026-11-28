@@ -1,6 +1,6 @@
-import { deleteOldConversations } from '../chat/chat.ts'
+import { deleteOldConversations } from '../../chat/chat.ts'
 import type { DbClient } from '../db.ts'
-import { RATE_LIMITS } from '../http/rate-limit.ts'
+import { RATE_LIMITS } from '../middleware/rate-limit.ts'
 
 const LONGEST_RATE_LIMIT_WINDOW_MS = Math.max(...Object.values(RATE_LIMITS).map((limit) => limit.windowMs))
 

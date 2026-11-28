@@ -10,13 +10,13 @@ import {
   type ProductSearchResult,
   type PublicProduct,
 } from '@ecommerce/shared'
-import type { Storage } from '../adapters/storage.ts'
+import type { Storage } from '../core/adapters/storage.ts'
 import { loadAttributeSchema } from '../catalog/attribute-schemas.ts'
 import { findPublicProduct, searchProductCards, subtreeIds } from '../catalog/public-products.ts'
 import { searchFacets, type SearchCriteria } from '../catalog/search.ts'
-import type { Db } from '../db.ts'
-import { AppError } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
+import type { Db } from '../core/db.ts'
+import { AppError } from '../core/errors.ts'
+import { parse } from '../core/middleware/validation.ts'
 
 const SlugParams = z.object({ slug: z.string() })
 

@@ -5,7 +5,7 @@ import {
   type StockReport,
   type StockReportQuery,
 } from '@ecommerce/shared'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { inPeriod, utcBound, type Period } from './period.ts'
 

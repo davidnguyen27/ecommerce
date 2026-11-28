@@ -1,9 +1,9 @@
 import { ErrorCode, SizeChart, type AdminProduct, type AdminVariant, type AttributeValues } from '@ecommerce/shared'
 import { z } from 'zod'
-import type { AuditEntry } from '../audit/audited.ts'
-import type { DbClient } from '../db.ts'
+import type { AuditEntry } from '../core/audit/audited.ts'
+import type { DbClient } from '../core/db.ts'
 import type { Prisma, Product, ProductVariant } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError } from '../core/errors.ts'
 
 export const ProductParams = z.object({ id: z.uuid() })
 

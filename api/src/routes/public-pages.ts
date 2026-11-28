@@ -2,9 +2,9 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { ErrorCode, type PublishedPage, type PublishedPageList } from '@ecommerce/shared'
 import { findPublishedVersion, listPublishedPages } from '../content/pages.ts'
-import type { Db } from '../db.ts'
-import { AppError } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
+import type { Db } from '../core/db.ts'
+import { AppError } from '../core/errors.ts'
+import { parse } from '../core/middleware/validation.ts'
 
 const SlugParams = z.object({ slug: z.string() })
 

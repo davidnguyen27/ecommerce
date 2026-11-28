@@ -7,7 +7,7 @@ import {
   type AttributeFacet,
   type ProductSort,
 } from '@ecommerce/shared'
-import type { Db } from '../db.ts'
+import type { Db } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 
 /** One attribute filter: a product matches with at least one of the values. */

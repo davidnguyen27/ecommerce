@@ -11,13 +11,13 @@ import {
   type StockMovementPage,
   type StockPage,
 } from '@ecommerce/shared'
-import { ACTOR_SELECT, audited } from '../audit/audited.ts'
-import { currentStaff, requirePermission } from '../auth/staff-context.ts'
-import type { Db, DbClient } from '../db.ts'
+import { ACTOR_SELECT, audited } from '../core/audit/audited.ts'
+import { currentStaff, requirePermission } from '../core/middleware/staff-context.ts'
+import type { Db, DbClient } from '../core/db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { conflictField, invalidField } from '../http/errors.ts'
-import { pageWindow } from '../http/pagination.ts'
-import { parse } from '../http/validation.ts'
+import { conflictField, invalidField } from '../core/errors.ts'
+import { pageWindow } from '../core/pagination.ts'
+import { parse } from '../core/middleware/validation.ts'
 import { changeStock } from '../stock/stock.ts'
 
 const STOCK_INCLUDE = {

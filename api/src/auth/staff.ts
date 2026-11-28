@@ -1,4 +1,4 @@
-import type { Db } from '../db.ts'
+import type { Db } from '../core/db.ts'
 import { hashPassword } from './password.ts'
 
 export type NewStaff = { email: string; password: string; name: string }

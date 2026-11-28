@@ -1,10 +1,10 @@
 import { isDeepStrictEqual } from 'node:util'
 import { Router } from 'express'
 import { ShippingFeeConfigRequest, type ShippingFeeConfig } from '@ecommerce/shared'
-import { audited } from '../audit/audited.ts'
-import { requirePermission } from '../auth/staff-context.ts'
-import type { Db } from '../db.ts'
-import { parse } from '../http/validation.ts'
+import { audited } from '../core/audit/audited.ts'
+import { requirePermission } from '../core/middleware/staff-context.ts'
+import type { Db } from '../core/db.ts'
+import { parse } from '../core/middleware/validation.ts'
 import { readShippingFeeConfig } from '../shipping/shipping-fees.ts'
 
 /** Shipping fees use the existing `price.edit`: a fee is a price the customer pays (spec "Phí giao"). */

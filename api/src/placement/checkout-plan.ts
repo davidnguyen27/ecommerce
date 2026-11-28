@@ -2,7 +2,7 @@ import { ErrorCode, type CheckoutConflictDetails, type CheckoutRequest } from '@
 import type { z } from 'zod'
 import { cartVariants } from '../catalog/live-variants.ts'
 import { storedImageOf } from './order-snapshot.ts'
-import { AppError } from '../http/errors.ts'
+import { AppError } from '../core/errors.ts'
 import { reserveStock } from '../stock/stock.ts'
 import type { Plan } from './placement-plan.ts'
 

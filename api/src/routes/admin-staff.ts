@@ -9,15 +9,15 @@ import {
   type StaffSummary,
   UpdateStaffRequest,
 } from '@ecommerce/shared'
-import { audited } from '../audit/audited.ts'
+import { audited } from '../core/audit/audited.ts'
 import { hashPassword } from '../auth/password.ts'
 import { revokeAllRefreshTokens } from '../auth/refresh-tokens.ts'
-import { requirePermission } from '../auth/staff-context.ts'
+import { requirePermission } from '../core/middleware/staff-context.ts'
 import { normalizeEmail } from '../auth/staff.ts'
-import type { Db } from '../db.ts'
+import type { Db } from '../core/db.ts'
 import { Prisma, type Staff } from '../generated/prisma/client.ts'
-import { AppError, isUniqueViolation } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
+import { AppError, isUniqueViolation } from '../core/errors.ts'
+import { parse } from '../core/middleware/validation.ts'
 
 function toSummary(staff: Staff): StaffSummary {
   return {

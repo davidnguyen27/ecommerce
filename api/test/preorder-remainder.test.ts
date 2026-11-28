@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { InMemoryMailer } from '../src/adapters/mailer.ts'
+import type { InMemoryMailer } from '../src/core/adapters/mailer.ts'
 import { expireOverdueOrders } from '../src/orders/cancel-order.ts'
 import { register } from './support/customer.ts'
 import { REMAINING, depositedPreorder } from './support/preorder.ts'

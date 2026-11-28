@@ -1,8 +1,8 @@
 import type { Request, RequestHandler } from 'express'
 import { ErrorCode, type Permission, type StaffProfile } from '@ecommerce/shared'
 import type { Db } from '../db.ts'
-import { AppError } from '../http/errors.ts'
-import { permissionsOf } from './permissions.ts'
+import { AppError } from '../errors.ts'
+import { permissionsOf } from '../auth/permissions.ts'
 import { authSubject } from './require-auth.ts'
 
 export type CurrentStaff = StaffProfile

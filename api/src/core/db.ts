@@ -1,5 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg'
-import { PrismaClient, type Prisma } from './generated/prisma/client.ts'
+import { PrismaClient, type Prisma } from '../generated/prisma/client.ts'
 
 export type Db = PrismaClient
 /** Client inside `$transaction`, or the plain client when no transaction is needed. */

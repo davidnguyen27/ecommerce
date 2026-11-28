@@ -1,5 +1,5 @@
 import { PREORDER_POLICY_SLUG, PRIVACY_POLICY_SLUG } from '@ecommerce/shared'
-import type { DbClient } from '../db.ts'
+import type { DbClient } from '../core/db.ts'
 
 /** `include` for the page's latest version. */
 export const LATEST_VERSION = { orderBy: { version: 'desc' }, take: 1 } as const

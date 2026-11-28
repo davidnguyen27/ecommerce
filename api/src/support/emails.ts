@@ -1,7 +1,7 @@
 import type { SupportRequestKind } from '@ecommerce/shared'
-import { hashOpaqueToken, newOpaqueToken } from '../auth/opaque-token.ts'
-import type { DbClient } from '../db.ts'
-import type { CustomerMail } from '../jobs/jobs.ts'
+import { hashOpaqueToken, newOpaqueToken } from '../core/auth/opaque-token.ts'
+import type { DbClient } from '../core/db.ts'
+import type { CustomerMail } from '../core/jobs/jobs.ts'
 import { EXCHANGE_SEND_DAYS } from './exchanges.ts'
 import type { SupportForView } from './support.ts'
 

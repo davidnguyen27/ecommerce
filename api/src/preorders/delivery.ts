@@ -1,5 +1,5 @@
-import type { DbClient } from '../db.ts'
-import type { EmailQueue } from '../jobs/jobs.ts'
+import type { DbClient } from '../core/db.ts'
+import type { EmailQueue } from '../core/jobs/jobs.ts'
 import { dayVN } from '../orders/format.ts'
 import { DEPOSITED_PREORDER, issueOrderLookupUrl, recordOrderEvent } from '../orders/orders.ts'
 

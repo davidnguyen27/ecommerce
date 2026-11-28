@@ -7,20 +7,20 @@ import {
   type AdminProductDocumentList,
   type DocumentUrl,
 } from '@ecommerce/shared'
-import type { Storage } from '../adapters/storage.ts'
-import { audited } from '../audit/audited.ts'
-import { requirePermission } from '../auth/staff-context.ts'
+import type { Storage } from '../core/adapters/storage.ts'
+import { audited } from '../core/audit/audited.ts'
+import { requirePermission } from '../core/middleware/staff-context.ts'
 import { ProductParams, loadProduct, lockProduct } from '../catalog/products.ts'
-import type { Db, DbClient } from '../db.ts'
+import type { Db, DbClient } from '../core/db.ts'
 import type { ProductDocument } from '../generated/prisma/client.ts'
-import { AppError } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
+import { AppError } from '../core/errors.ts'
+import { parse } from '../core/middleware/validation.ts'
 import {
   DOCUMENT_URL_TTL_SECONDS,
   deleteDocumentFileQuietly,
   receiveDocument,
   uploadedDocument,
-} from '../media/documents.ts'
+} from '../core/media/documents.ts'
 
 const DocumentParams = z.object({ id: z.uuid(), documentId: z.uuid() })
 

@@ -7,13 +7,13 @@ import {
   type AdminCategory,
   type AdminCategoryList,
 } from '@ecommerce/shared'
-import { audited } from '../audit/audited.ts'
-import { requirePermission } from '../auth/staff-context.ts'
+import { audited } from '../core/audit/audited.ts'
+import { requirePermission } from '../core/middleware/staff-context.ts'
 import { assertValidParent, lockTree } from '../catalog/categories.ts'
-import type { Db } from '../db.ts'
+import type { Db } from '../core/db.ts'
 import { Prisma, type Category } from '../generated/prisma/client.ts'
-import { AppError, rethrowUnique } from '../http/errors.ts'
-import { parse } from '../http/validation.ts'
+import { AppError, rethrowUnique } from '../core/errors.ts'
+import { parse } from '../core/middleware/validation.ts'
 
 function toAdmin({ id, productType, parentId, slug, name, hidden }: Category): AdminCategory {
   return { id, productType, parentId, slug, name, hidden }
