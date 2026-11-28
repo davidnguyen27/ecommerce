@@ -1,13 +1,13 @@
 import { ErrorCode, PreorderCampaignCreate, PreorderCampaignUpdate, type FieldError } from '@ecommerce/shared'
 import type { z } from 'zod'
-import type { Audit } from '../core/audit/audited.ts'
-import type { DbClient } from '../core/db.ts'
-import type { Prisma } from '../generated/prisma/client.ts'
-import { AppError, invalidField } from '../core/errors.ts'
-import type { CustomerMail } from '../core/jobs/jobs.ts'
-import { isoDay } from '../core/utils/format.ts'
-import { isCampaignOpen, openCampaignWhere, usedAllocations } from './campaigns.ts'
-import { notifyDeliveryChange } from './delivery.ts'
+import type { Audit } from '../../core/audit/audited.ts'
+import type { DbClient } from '../../core/db.ts'
+import type { Prisma } from '../../generated/prisma/client.ts'
+import { AppError, invalidField } from '../../core/errors.ts'
+import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import { isoDay } from '../../core/utils/format.ts'
+import { isCampaignOpen, openCampaignWhere, usedAllocations } from './preorder-campaign.query.ts'
+import { notifyDeliveryChange } from './preorder-delivery.ts'
 
 // Admin pre-order campaign writes (GLOSSARY "Đợt đặt trước"), run inside `audited()`. The route reloads the campaign
 // with `loadCampaign` for the response.

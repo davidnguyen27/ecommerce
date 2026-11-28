@@ -1,8 +1,8 @@
-import type { Db, DbClient } from '../core/db.ts'
-import type { Prisma } from '../generated/prisma/client.ts'
-import type { EmailQueue } from '../core/jobs/jobs.ts'
-import { dateVN, vnd, voucherLines } from '../core/utils/format.ts'
-import { DEPOSITED_PREORDER, issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../modules/order/index.ts'
+import type { Db, DbClient } from '../../core/db.ts'
+import type { Prisma } from '../../generated/prisma/client.ts'
+import type { EmailQueue } from '../../core/jobs/jobs.ts'
+import { dateVN, vnd, voucherLines } from '../../core/utils/format.ts'
+import { DEPOSITED_PREORDER, issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../order/index.ts'
 
 /** Remind when this much or less remains before the remaining-balance deadline. */
 export const REMINDER_WINDOW_MS = 2 * 24 * 60 * 60_000

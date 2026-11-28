@@ -3,8 +3,7 @@ import { BaseModule, type IRoute } from '../../core/module/base.module.ts'
 // Adapters to code not moved into modules yet; each port moves to its module's interface when that module moves.
 import { recordGatewayPayments } from '../../payments/record-payment.ts'
 import { createRefund, refundTotals, refundedViaGateway, summarizeRefunds } from '../../payments/refunds.ts'
-import { applyArrivals, planArrivals } from '../../preorders/arrivals.ts'
-import { createRemainderLink } from '../../preorders/remainder.ts'
+import { preorderApi } from '../preorder-campaign/index.ts'
 import { resolveCancelRequests } from '../../support/support.ts'
 import { stockLedger } from '../stock/index.ts'
 import { OrderController } from './order.controller.ts'
@@ -24,9 +23,9 @@ function legacyPorts(): OrderPorts {
       summarize: summarizeRefunds,
       viaGateway: refundedViaGateway,
     },
-    arrivals: { plan: planArrivals, apply: applyArrivals },
+    arrivals: { plan: preorderApi.planArrivals, apply: preorderApi.applyArrivals },
     support: { resolveCancelRequests },
-    remainder: { createLink: createRemainderLink },
+    remainder: { createLink: preorderApi.createRemainderLink },
   }
 }
 

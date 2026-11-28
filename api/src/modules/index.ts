@@ -5,6 +5,7 @@ import { BrandModule } from './brand/index.ts'
 import { CategoryModule } from './category/index.ts'
 import { CommitmentTypeModule } from './commitment-type/index.ts'
 import { OrderModule } from './order/index.ts'
+import { PreorderCampaignModule } from './preorder-campaign/index.ts'
 import { ProductModule } from './product/index.ts'
 import { ProductImportModule } from './product-import/index.ts'
 import { StockModule } from './stock/index.ts'
@@ -18,6 +19,7 @@ export function createModules(deps: AppDeps): BaseModule[] {
   const schemas = new AttributeSchemaModule(deps)
   const categories = new CategoryModule(deps)
   const stock = new StockModule(deps)
+  const orders = new OrderModule(deps)
   return [
     schemas,
     categories,
@@ -28,6 +30,7 @@ export function createModules(deps: AppDeps): BaseModule[] {
     // Before `stock`: receipts have their own permission, the stock router guards everything under it.
     new StockReceiptModule(deps, stock.ledger),
     stock,
-    new OrderModule(deps),
+    orders,
+    new PreorderCampaignModule(deps, orders.service),
   ]
 }

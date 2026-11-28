@@ -3,7 +3,7 @@ import type { z } from 'zod'
 import { storedImageOf } from './order-snapshot.ts'
 import { findCurrentPreorderPolicy } from '../content/pages.ts'
 import { AppError, invalidField } from '../core/errors.ts'
-import { checkPreorder } from '../preorders/check.ts'
+import { checkPreorder } from '../modules/preorder-campaign/index.ts'
 import type { Plan } from './placement-plan.ts'
 
 const preorderConflict = (change: PreorderChange) => {

@@ -4,7 +4,7 @@ import type { Mail, Mailer } from '../adapters/mailer.ts'
 import type { Db, DbClient } from '../db.ts'
 import { createOrderService } from '../../modules/order/index.ts'
 import type { PaymentGateway } from '../../payments/gateway.ts'
-import { processRemainderDeadlines } from '../../preorders/deadlines.ts'
+import { processRemainderDeadlines } from '../../modules/preorder-campaign/index.ts'
 import { flagOverdueExchanges } from '../../support/exchanges.ts'
 import { deleteExpiredRecords } from './cleanup.ts'
 

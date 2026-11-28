@@ -7,8 +7,7 @@ import type { Prisma } from '../../generated/prisma/client.ts'
 // Ports to code not moved into modules yet: typed by the current functions, wired in order.module.ts.
 import type { recordGatewayPayments } from '../../payments/record-payment.ts'
 import type { createRefund, refundTotals, refundedViaGateway, summarizeRefunds } from '../../payments/refunds.ts'
-import type { applyArrivals, planArrivals } from '../../preorders/arrivals.ts'
-import type { createRemainderLink } from '../../preorders/remainder.ts'
+import type { IPreorderApi } from '../preorder-campaign/index.ts'
 import type { resolveCancelRequests } from '../../support/support.ts'
 import type { IStockLedger } from '../stock/index.ts'
 import type { OrderForView } from './order.constant.ts'
@@ -95,9 +94,9 @@ export type OrderPorts = {
     summarize: typeof summarizeRefunds
     viaGateway: typeof refundedViaGateway
   }
-  arrivals: { plan: typeof planArrivals; apply: typeof applyArrivals }
+  arrivals: { plan: IPreorderApi['planArrivals']; apply: IPreorderApi['applyArrivals'] }
   support: { resolveCancelRequests: typeof resolveCancelRequests }
-  remainder: { createLink: typeof createRemainderLink }
+  remainder: { createLink: IPreorderApi['createRemainderLink'] }
 }
 
 /** Dependencies of the order commands: DB, gateway, mail queue, website URL, logger for after-commit errors. */

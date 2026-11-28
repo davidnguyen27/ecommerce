@@ -1,7 +1,7 @@
-import type { DbClient } from '../core/db.ts'
-import type { EmailQueue } from '../core/jobs/jobs.ts'
-import { dayVN } from '../core/utils/format.ts'
-import { DEPOSITED_PREORDER, issueOrderLookupUrl, recordOrderEvent } from '../modules/order/index.ts'
+import type { DbClient } from '../../core/db.ts'
+import type { EmailQueue } from '../../core/jobs/jobs.ts'
+import { dayVN } from '../../core/utils/format.ts'
+import { DEPOSITED_PREORDER, issueOrderLookupUrl, recordOrderEvent } from '../order/index.ts'
 
 /** Expected delivery, `YYYY-MM-DD`. */
 export type DeliveryWindow = { from: string; to: string }

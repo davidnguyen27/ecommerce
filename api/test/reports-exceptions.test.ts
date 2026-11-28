@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { processRemainderDeadlines } from '../src/preorders/deadlines.ts'
+import { processRemainderDeadlines } from '../src/modules/preorder-campaign/index.ts'
 import { REMAINING, depositedPreorder, inDays } from './support/preorder.ts'
 import { shop } from './support/shop.ts'
 import { bearer, createStaff, type Request } from './support/staff.ts'

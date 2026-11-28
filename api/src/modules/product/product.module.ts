@@ -3,7 +3,7 @@ import type { Db } from '../../core/db.ts'
 import type { Storage } from '../../core/adapters/storage.ts'
 import { BaseModule, type IRoute } from '../../core/module/base.module.ts'
 // Adapters to code not moved into modules yet.
-import { preorderOffers } from '../../preorders/campaigns.ts'
+import { preorderApi } from '../preorder-campaign/index.ts'
 import type { IAttributeSchemaQuery } from '../attribute-schema/index.ts'
 import type { ICategoryQuery } from '../category/index.ts'
 import { stockLedger } from '../stock/index.ts'
@@ -27,7 +27,7 @@ import {
 } from './product.route.ts'
 import { ProductService } from './product.service.ts'
 
-const legacyPorts = (): ProductPorts => ({ stock: stockLedger, preorders: { offers: preorderOffers } })
+const legacyPorts = (): ProductPorts => ({ stock: stockLedger, preorders: { offers: preorderApi.preorderOffers } })
 
 /** What the product module needs from other modules. */
 export type ProductModuleDeps = { schemas: IAttributeSchemaQuery; categories: ICategoryQuery }

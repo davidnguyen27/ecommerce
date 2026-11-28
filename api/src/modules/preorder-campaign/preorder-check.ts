@@ -1,8 +1,8 @@
 import type { PreorderChange } from '@ecommerce/shared'
-import { cartVariants, type CartVariant } from '../modules/product/index.ts'
-import type { DbClient } from '../core/db.ts'
-import { Prisma } from '../generated/prisma/client.ts'
-import { usedAllocations } from './campaigns.ts'
+import { cartVariants, type CartVariant } from '../product/index.ts'
+import type { DbClient } from '../../core/db.ts'
+import { Prisma } from '../../generated/prisma/client.ts'
+import { usedAllocations } from './preorder-campaign.query.ts'
 
 /** The variant's open campaign, with the fields snapshotted onto pre-orders. */
 export type OpenCampaign = {

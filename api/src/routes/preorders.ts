@@ -15,7 +15,7 @@ import { imageRenditions } from '../core/media/images.ts'
 import { isoDay } from '../core/utils/format.ts'
 import { orderPlacement } from '../placement/place-order.ts'
 import { priceOrder } from '../placement/price-order.ts'
-import { checkPreorder } from '../preorders/check.ts'
+import { checkPreorder } from '../modules/preorder-campaign/index.ts'
 import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
 import { quoteVoucher } from '../vouchers/apply.ts'
 
