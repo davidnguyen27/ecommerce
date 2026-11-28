@@ -1,6 +1,6 @@
 import { ErrorCode, type CheckoutConflictDetails, type CheckoutRequest } from '@ecommerce/shared'
 import type { z } from 'zod'
-import { cartVariants } from '../catalog/live-variants.ts'
+import { cartVariants } from '../modules/product/index.ts'
 import { storedImageOf } from './order-snapshot.ts'
 import { AppError } from '../core/errors.ts'
 import { reserveStock } from '../stock/stock.ts'

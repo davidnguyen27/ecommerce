@@ -1,6 +1,6 @@
 import type { CheckoutRequest, VoucherConflict } from '@ecommerce/shared'
 import type { z } from 'zod'
-import type { CartVariant } from '../catalog/live-variants.ts'
+import type { CartVariant } from '../modules/product/index.ts'
 import type { PaymentPurpose, Prisma } from '../generated/prisma/client.ts'
 import type { VoucherLine } from '../vouchers/apply.ts'
 

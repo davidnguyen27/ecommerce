@@ -10,8 +10,8 @@ import {
 import type { LlmTool, LlmToolCall } from '../core/adapters/llm.ts'
 import type { Storage } from '../core/adapters/storage.ts'
 import { attributeSchemaQuery } from '../modules/attribute-schema/index.ts'
-import { findPublicProduct, searchProductCards } from '../catalog/public-products.ts'
-import type { SearchCriteria } from '../catalog/search.ts'
+import { categoryQuery } from '../modules/category/index.ts'
+import { createProductQuery, type SearchCriteria } from '../modules/product/index.ts'
 import { findPublishedVersion, listPublishedPages } from '../content/pages.ts'
 import type { Db } from '../core/db.ts'
 
@@ -96,6 +96,10 @@ function labelled(product: PublicProduct, values: Record<string, unknown>) {
 /**
  * Terse product for the model: no images, variant ids or URLs (the prompt says how to build links); short description.
  */
+/** Customer product reads; the chatbot has no module wiring yet (ticket 09). */
+const productsOf = (prisma: Db, storage: Storage) =>
+  createProductQuery({ prisma, storage }, { schemas: attributeSchemaQuery, categories: categoryQuery })
+
 export function productForModel(product: PublicProduct) {
   return {
     slug: product.slug,
@@ -143,15 +147,16 @@ async function searchProducts({ prisma, storage }: ToolDeps, args: Args): Promis
     maxPrice: int(args.maxPrice),
     attributes: await attributeFilters(prisma, type, args),
   }
-  let { items } = await searchProductCards(prisma, storage, criteria, undefined, 1, SEARCH_LIMIT)
+  let { items } = await productsOf(prisma, storage).searchProductCards(criteria, undefined, 1, SEARCH_LIMIT)
   let note: string | undefined
   // Keywords only match name, brand and code (names are mostly English): with no match but other filters, drop the
   // keyword so "túi đi làm dưới 7 triệu" still finds bags in budget instead of nothing.
   const otherFilters =
     criteria.brandSlug || type || criteria.minPrice || criteria.maxPrice || criteria.attributes.length
   if (items.length === 0 && text && otherFilters) {
-    items = (await searchProductCards(prisma, storage, { ...criteria, text: undefined }, undefined, 1, SEARCH_LIMIT))
-      .items
+    items = (
+      await productsOf(prisma, storage).searchProductCards({ ...criteria, text: undefined }, undefined, 1, SEARCH_LIMIT)
+    ).items
     note = 'No match for text; these match the other filters.'
   }
   return {
@@ -199,10 +204,12 @@ async function attributeFilters(prisma: Db, type: ProductType | undefined, args:
 async function getProduct({ prisma, storage }: ToolDeps, args: Args): Promise<ToolOutcome> {
   const slug = str(args.slug)
   const name = str(args.name)
-  let product = slug ? await findPublicProduct(prisma, storage, slug) : null
+  let product = slug ? await productsOf(prisma, storage).findPublicProduct(slug) : null
   if (!product && name) {
-    const [best] = (await searchProductCards(prisma, storage, { text: name, attributes: [] }, undefined, 1, 1)).items
-    product = best ? await findPublicProduct(prisma, storage, best.slug) : null
+    const [best] = (
+      await productsOf(prisma, storage).searchProductCards({ text: name, attributes: [] }, undefined, 1, 1)
+    ).items
+    product = best ? await productsOf(prisma, storage).findPublicProduct(best.slug) : null
   }
   return { output: product ? productForModel(product) : { error: 'Not found; try search_products' } }
 }

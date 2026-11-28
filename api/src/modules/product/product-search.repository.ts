@@ -7,8 +7,8 @@ import {
   type AttributeFacet,
   type ProductSort,
 } from '@ecommerce/shared'
-import type { Db } from '../core/db.ts'
-import { Prisma } from '../generated/prisma/client.ts'
+import type { Db } from '../../core/db.ts'
+import { Prisma } from '../../generated/prisma/client.ts'
 
 /** One attribute filter: a product matches with at least one of the values. */
 type AttributeFilter = { definition: AttributeDefinition; values: string[] }
@@ -119,7 +119,7 @@ function orderBy(c: SearchCriteria, sort: ProductSort | undefined) {
 }
 
 /** One page of matching live version ids in display order, with the total. */
-export async function searchPage(
+async function searchPage(
   db: Db,
   c: SearchCriteria,
   sort: ProductSort | undefined,
@@ -172,7 +172,7 @@ function sortValues(definition: AttributeDefinition, rows: { value: string; coun
 }
 
 /** Result facets: product types, filterable attributes, price range. */
-export async function searchFacets(db: Db, c: SearchCriteria, definitions: AttributeDefinition[]) {
+async function searchFacets(db: Db, c: SearchCriteria, definitions: AttributeDefinition[]) {
   const [types, price, attributes] = await Promise.all([
     db.$queryRaw<{ productType: ProductType; count: number }[]>`
       SELECT v."product_type"::text AS "productType", count(*)::int AS count ${FROM}
@@ -192,4 +192,10 @@ export async function searchFacets(db: Db, c: SearchCriteria, definitions: Attri
     attributes,
     price: min === null || max === null ? null : { min: Number(min), max: Number(max) },
   }
+}
+
+/** Product search over the published versions (`product_search`): one page of version ids, and facet counts. */
+export class ProductSearchRepository {
+  page = searchPage
+  facets = searchFacets
 }

@@ -9,7 +9,7 @@ import {
 } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
 import { optionalAuth } from '../core/middleware/require-auth.ts'
-import { cartVariants } from '../catalog/live-variants.ts'
+import { cartVariants } from '../modules/product/index.ts'
 import { livePolicyVersions, storedImageOf } from '../placement/order-snapshot.ts'
 import { parse } from '../core/middleware/validation.ts'
 import { imageRenditions } from '../core/media/images.ts'

@@ -28,10 +28,16 @@ import { PROMPT_VERSION, promptMessages } from '../chat/prompt.ts'
 import { asksForStaff, dropSentClaims, looksEnglish, relativeShopLinks, stripToolLabels } from '../chat/intent.ts'
 import { policySlugs, productForModel } from '../chat/tools.ts'
 import { TurnFailedError, runTurn } from '../chat/turn.ts'
-import { findPublicProduct } from '../catalog/public-products.ts'
+import { attributeSchemaQuery } from '../modules/attribute-schema/index.ts'
+import { categoryQuery } from '../modules/category/index.ts'
+import { createProductQuery } from '../modules/product/index.ts'
 import type { Db } from '../core/db.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../core/middleware/rate-limit.ts'
 import { isUuid, parse } from '../core/middleware/validation.ts'
+
+/** Customer product reads; the chatbot has no module wiring yet (ticket 09). */
+const productsOf = (prisma: Db, storage: Storage) =>
+  createProductQuery({ prisma, storage }, { schemas: attributeSchemaQuery, categories: categoryQuery })
 
 /** Request title when the chatbot has nothing to summarize (the customer pressed "Gặp nhân viên" before asking). */
 const HANDOFF_SUBJECT = 'Khách cần nhân viên hỗ trợ (từ trợ lý tư vấn)'
@@ -230,6 +236,6 @@ export function chatRoutes({ prisma, logger, storage, llm, emails, siteUrl, secr
  * The product being viewed, so customers can ask about "cái này" (spec M8). Unknown or unpublished slugs are ignored.
  */
 async function viewingProduct(prisma: Db, storage: Storage, slug: string | undefined) {
-  const product = slug ? await findPublicProduct(prisma, storage, slug) : null
+  const product = slug ? await productsOf(prisma, storage).findPublicProduct(slug) : null
   return product ? { slug: product.slug, product: productForModel(product) } : undefined
 }

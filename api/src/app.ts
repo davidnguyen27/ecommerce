@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import express from 'express'
+import express, { type RequestHandler } from 'express'
 import type { Logger } from 'pino'
 import { pinoHttp } from 'pino-http'
 import type { LlmClient } from './core/adapters/llm.ts'
@@ -17,13 +17,13 @@ import { adminAuthRoutes } from './routes/admin-auth.ts'
 import { customerAuthRoutes, customerSessions } from './routes/customer-auth.ts'
 import { publicLegalInfoRoutes } from './routes/legal-info.ts'
 import { publicPageRoutes } from './routes/public-pages.ts'
-import { publicProductRoutes } from './routes/public-products.ts'
 import { publicSitemapRoutes } from './routes/public-sitemap.ts'
 import { chatRoutes } from './routes/chat.ts'
 import { checkoutRoutes } from './routes/checkout.ts'
 import { preorderRoutes } from './routes/preorders.ts'
 import { paymentRoutes } from './routes/payments.ts'
 import { healthRoutes } from './routes/health.ts'
+import type { RouteAccess } from './core/module/base.module.ts'
 import { createModules } from './modules/index.ts'
 
 /** Every external dependency enters the app here, so tests can swap in fakes. */
@@ -105,10 +105,16 @@ export function createApp(deps: AppDeps) {
     next()
   })
   // Modules first, in `createModules` order; the old routers below still serve paths not moved yet.
-  const signIn = {
+  // Nested module paths (`/products/:id/images`, `/products`) pass through several mounts: sign in once per request.
+  const staffAuth = requireAuth(secret, 'staff')
+  const staffLoad = loadStaff(deps.prisma)
+  const signIn: Record<RouteAccess, RequestHandler[]> = {
     public: [],
     customer: [requireAuth(secret, 'customer')],
-    staff: [requireAuth(secret, 'staff'), loadStaff(deps.prisma)],
+    staff: [
+      (req, res, next) => (req.staff ? next() : staffAuth(req, res, next)),
+      (req, res, next) => (req.staff ? next() : staffLoad(req, res, next)),
+    ],
   }
   for (const module of createModules(deps)) {
     for (const route of module.routes) {
@@ -117,7 +123,6 @@ export function createApp(deps: AppDeps) {
   }
   api.use('/pages', publicPageRoutes(deps.prisma))
   api.use('/legal-info', publicLegalInfoRoutes(deps.prisma))
-  api.use('/products', publicProductRoutes(deps.prisma, deps.storage))
   api.use('/sitemap', publicSitemapRoutes(deps.prisma))
   api.use('/checkout', checkoutRoutes(deps))
   api.use('/preorders', preorderRoutes(deps))

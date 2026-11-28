@@ -1,3 +1,4 @@
+import type { Logger } from 'pino'
 import type { Request } from 'express'
 import { MAX_DOCUMENT_BYTES } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
@@ -39,7 +40,7 @@ function cleanFileName(name: string) {
 }
 
 /** Deletes the file after the DB commit or rollback; storage errors are only logged (orphan in the private bucket). */
-export async function deleteDocumentFileQuietly(storage: Storage, req: Request, key: string) {
+export async function deleteDocumentFileQuietly(storage: Storage, req: { log: Pick<Logger, 'warn'> }, key: string) {
   await storage.delete('private', key).catch((err: unknown) => {
     req.log.warn({ err, key }, 'Không xóa được file chứng từ trên storage')
   })

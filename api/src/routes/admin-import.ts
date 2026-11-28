@@ -14,7 +14,7 @@ import {
   planImport,
   readWorkbook,
 } from '../catalog/import.ts'
-import { productAuditFields, variantCreatedAudits } from '../catalog/products.ts'
+import { productAuditFields, variantCreatedAudits } from '../modules/product/index.ts'
 import type { Db } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { AppError, conflictField, rethrowUnique } from '../core/errors.ts'
