@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { flagOverdueExchanges } from '../src/support/exchanges.ts'
+import { flagOverdueExchanges } from '../src/modules/support/support-exchange.ts'
 import { ADDRESS, shop } from './support/shop.ts'
 import { adjust } from './support/stock.ts'
 import { bearer, createStaff } from './support/staff.ts'

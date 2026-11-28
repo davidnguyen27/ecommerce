@@ -5,7 +5,7 @@ import type { Db, DbClient } from '../db.ts'
 import { createOrderService } from '../../modules/order/index.ts'
 import type { PaymentGateway } from '../adapters/payment/gateway.ts'
 import { processRemainderDeadlines } from '../../modules/preorder-campaign/index.ts'
-import { flagOverdueExchanges } from '../../support/exchanges.ts'
+import { flagOverdueExchanges } from '../../modules/support/index.ts'
 import { deleteExpiredRecords } from './cleanup.ts'
 
 const SEND_EMAIL = 'send-email'

@@ -1,6 +1,6 @@
 import { ErrorCode, type ShippingFeeConfig } from '@ecommerce/shared'
-import type { DbClient } from '../core/db.ts'
-import { AppError } from '../core/errors.ts'
+import type { DbClient } from '../../core/db.ts'
+import { AppError } from '../../core/errors.ts'
 
 /** Current shipping fee config; `defaultFee` is `null` when unset. */
 export async function readShippingFeeConfig(db: DbClient): Promise<ShippingFeeConfig> {

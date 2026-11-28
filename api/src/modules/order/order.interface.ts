@@ -8,7 +8,7 @@ import type { Prisma } from '../../generated/prisma/client.ts'
 import type { recordGatewayPayments } from '../payment/index.ts'
 import type { createRefund, refundTotals, refundedViaGateway, summarizeRefunds } from '../refund/index.ts'
 import type { IPreorderApi } from '../preorder-campaign/index.ts'
-import type { resolveCancelRequests } from '../../support/support.ts'
+import type { resolveCancelRequests } from '../support/index.ts'
 import type { IStockLedger } from '../stock/index.ts'
 import type { OrderForView } from './order.constant.ts'
 

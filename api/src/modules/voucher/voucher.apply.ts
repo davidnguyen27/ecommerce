@@ -5,13 +5,12 @@ import {
   type VoucherQuote,
   type VoucherReason,
 } from '@ecommerce/shared'
-import type { Request } from 'express'
-import type { DbClient } from '../core/db.ts'
-import type { Voucher } from '../generated/prisma/client.ts'
-import { AppError } from '../core/errors.ts'
-import { RATE_LIMITS, enforceRateLimits } from '../core/middleware/rate-limit.ts'
-import { computeDiscount, type DiscountLine, type DiscountRule } from './discount.ts'
-import { customerRedemptions, usedRedemptions, voucherStatus } from './vouchers.ts'
+import type { DbClient } from '../../core/db.ts'
+import type { Voucher } from '../../generated/prisma/client.ts'
+import { AppError } from '../../core/errors.ts'
+import { RATE_LIMITS, enforceRateLimits } from '../../core/middleware/rate-limit.ts'
+import { computeDiscount, type DiscountLine, type DiscountRule } from './voucher.discount.ts'
+import { customerRedemptions, usedRedemptions, voucherStatus } from './voucher.query.ts'
 
 /** A line of the order being placed: variant, brand and category from the live snapshot, price, quantity. */
 export type VoucherLine = { variantId: string; brandId: string; categoryId: string; price: number; quantity: number }
@@ -109,16 +108,19 @@ type VoucherInput = {
   customer: { email?: string | null; phone?: string | null }
 }
 
-/** Quote with a voucher: counts one hit against the per-IP guessing limit, then checks. Writes only the counter. */
+/**
+ * Quote with a voucher: counts one hit against the guessing limit of the caller's IP, then checks. Writes only the
+ * counter.
+ */
 export async function quoteVoucher(
   db: DbClient,
-  req: Request,
+  clientIp: string,
   code: string,
   input: VoucherInput,
 ): Promise<VoucherQuote> {
   await enforceRateLimits(
     db,
-    [{ limit: RATE_LIMITS.voucherCheckPerIp, subject: String(req.ip) }],
+    [{ limit: RATE_LIMITS.voucherCheckPerIp, subject: clientIp }],
     'Bạn đã thử mã giảm giá quá nhiều lần, vui lòng thử lại sau',
   )
   return toVoucherQuote(await checkVoucher(db, code, input))

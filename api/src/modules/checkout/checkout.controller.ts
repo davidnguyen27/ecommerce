@@ -15,7 +15,7 @@ export class CheckoutController {
   ) {}
 
   quote = async (req: Request, res: Response) => {
-    const body: CheckoutQuote = await this.service.quote(parse(CheckoutQuoteDto, req.body), req)
+    const body: CheckoutQuote = await this.service.quote(parse(CheckoutQuoteDto, req.body), String(req.ip))
     res.json(body)
   }
 
@@ -26,7 +26,7 @@ export class CheckoutController {
   }
 
   preorderQuote = async (req: Request, res: Response) => {
-    const body: PreorderQuote = await this.service.preorderQuote(parse(PreorderQuoteDto, req.body), req)
+    const body: PreorderQuote = await this.service.preorderQuote(parse(PreorderQuoteDto, req.body), String(req.ip))
     res.json(body)
   }
 

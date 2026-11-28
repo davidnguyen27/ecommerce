@@ -1,4 +1,3 @@
-import type { Request } from 'express'
 import type { z } from 'zod'
 import type {
   CheckoutQuote,
@@ -13,8 +12,8 @@ import type { Db } from '../../core/db.ts'
 import { imageRenditions } from '../../core/media/images.ts'
 import { isoDay } from '../../core/utils/format.ts'
 import { findCurrentPreorderPolicy } from '../../content/pages.ts'
-import { requireShippingFeeConfig } from '../../shipping/shipping-fees.ts'
-import { quoteVoucher, type VoucherLine } from '../../vouchers/apply.ts'
+import { requireShippingFeeConfig } from '../shipping-fee/index.ts'
+import { quoteVoucher, type VoucherLine } from '../voucher/index.ts'
 import { checkPreorder } from '../preorder-campaign/index.ts'
 import { cartVariants } from '../product/index.ts'
 import type { IStockLedger } from '../stock/index.ts'
@@ -23,8 +22,7 @@ import { priceOrder } from './price-order.ts'
 
 /**
  * Quotes for the cart and for a pre-order: what the customer sees before placing. Nothing is reserved; placing goes
- * through `orderPlacement`. `voucherCaller` is the request, which voucher quoting uses for its rate limit (the voucher
- * module takes it until it moves, ticket 07).
+ * through `orderPlacement`. `clientIp` counts voucher guesses against that IP's limit.
  */
 export class CheckoutService {
   constructor(
@@ -33,7 +31,7 @@ export class CheckoutService {
     private readonly stock: Pick<IStockLedger, 'enoughStockIds'>,
   ) {}
 
-  async quote(input: z.output<typeof CheckoutQuoteRequest>, voucherCaller: Request): Promise<CheckoutQuote> {
+  async quote(input: z.output<typeof CheckoutQuoteRequest>, clientIp: string): Promise<CheckoutQuote> {
     const { prisma, storage } = this
     const config = await requireShippingFeeConfig(prisma)
     const ids = input.lines.map((l) => l.variantId)
@@ -73,7 +71,7 @@ export class CheckoutService {
           ? []
           : [{ variantId, brandId: snapshot.brandId, categoryId: snapshot.categoryId, price, quantity }]
       })
-      voucher = await quoteVoucher(prisma, voucherCaller, input.voucherCode, {
+      voucher = await quoteVoucher(prisma, clientIp, input.voucherCode, {
         saleType: 'standard',
         lines: buyable,
         customer: { email: input.email, phone: input.phone },
@@ -99,7 +97,7 @@ export class CheckoutService {
   }
 
   /** Pre-order quote (ADR 0012, 0013): deposit, remaining balance, the campaign's offer or why there is none. */
-  async preorderQuote(input: z.output<typeof PreorderQuoteRequest>, voucherCaller: Request): Promise<PreorderQuote> {
+  async preorderQuote(input: z.output<typeof PreorderQuoteRequest>, clientIp: string): Promise<PreorderQuote> {
     const { prisma, storage } = this
     const [config, preorderPolicy, check] = await Promise.all([
       requireShippingFeeConfig(prisma),
@@ -114,7 +112,7 @@ export class CheckoutService {
 
     let voucher: VoucherQuote | null = null
     if (input.voucherCode !== undefined) {
-      voucher = await quoteVoucher(prisma, voucherCaller, input.voucherCode, {
+      voucher = await quoteVoucher(prisma, clientIp, input.voucherCode, {
         saleType: 'preorder',
         lines:
           variant && snapshot

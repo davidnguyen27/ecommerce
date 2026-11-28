@@ -1,7 +1,7 @@
 // The discount function is pure logic with many branches and no HTTP path of its own: tests call it directly
 // (CODING_STANDARDS exception). Behavior through quote and placement is tested in tickets 03 and 04.
 import { describe, expect, it } from 'vitest'
-import { computeDiscount, type DiscountLine, type DiscountRule } from '../src/vouchers/discount.ts'
+import { computeDiscount, type DiscountLine, type DiscountRule } from '../src/modules/voucher/voucher.discount.ts'
 
 const line = (
   variantId: string,

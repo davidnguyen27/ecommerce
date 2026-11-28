@@ -12,8 +12,12 @@ import { ProductModule } from './product/index.ts'
 import { ProductImportModule } from './product-import/index.ts'
 import { ReconciliationModule } from './reconciliation/index.ts'
 import { RefundModule } from './refund/index.ts'
+import { ReturnWindowModule } from './return-window/index.ts'
+import { ShippingFeeModule } from './shipping-fee/index.ts'
 import { StockModule } from './stock/index.ts'
 import { StockReceiptModule } from './stock-receipt/index.ts'
+import { SupportModule } from './support/index.ts'
+import { VoucherModule } from './voucher/index.ts'
 
 /**
  * Builds every module in dependency order: a module that needs another's query interface is built after it and gets
@@ -40,5 +44,9 @@ export function createModules(deps: AppDeps): BaseModule[] {
     new PaymentModule(deps, orders.service),
     new RefundModule(deps, orders.query),
     new ReconciliationModule(deps, orders.query),
+    new VoucherModule(deps),
+    new ShippingFeeModule(deps),
+    new ReturnWindowModule(deps),
+    new SupportModule(deps, orders.query),
   ]
 }

@@ -11,7 +11,6 @@ import type { EmailQueue, OrderExpiryQueue } from './core/jobs/jobs.ts'
 import type { PaymentGateway } from './core/adapters/payment/gateway.ts'
 import { errorHandler, notFound } from './core/errors.ts'
 import { accountRoutes } from './routes/account.ts'
-import { accountSupportRoutes, contactSupportRoutes, orderSupportRoutes } from './routes/support-customer.ts'
 import { adminRoutes } from './routes/admin.ts'
 import { adminAuthRoutes } from './routes/admin-auth.ts'
 import { customerAuthRoutes, customerSessions } from './routes/customer-auth.ts'
@@ -121,9 +120,7 @@ export function createApp(deps: AppDeps) {
   api.use('/pages', publicPageRoutes(deps.prisma))
   api.use('/legal-info', publicLegalInfoRoutes(deps.prisma))
   api.use('/sitemap', publicSitemapRoutes(deps.prisma))
-  api.use('/orders/:code/support-requests', orderSupportRoutes(deps))
   api.use('/chat', chatRoutes({ ...deps, secret }))
-  api.use('/support-requests', contactSupportRoutes(deps))
   const customerDeps = {
     prisma: deps.prisma,
     emails: deps.emails,
@@ -131,7 +128,6 @@ export function createApp(deps: AppDeps) {
     sessions: customerSessions(deps.prisma, secret, '/api/auth'),
   }
   api.use('/auth', customerAuthRoutes(customerDeps))
-  api.use('/account/support-requests', requireAuth(secret, 'customer'), accountSupportRoutes(deps))
   api.use('/account', requireAuth(secret, 'customer'), accountRoutes(customerDeps))
   api.use('/admin/auth', adminAuthRoutes(deps.prisma, secret, '/api/admin/auth'))
   api.use('/admin', requireAuth(secret, 'staff'), loadStaff(deps.prisma), adminRoutes(deps))

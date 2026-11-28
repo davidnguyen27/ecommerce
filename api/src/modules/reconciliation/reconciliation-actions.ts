@@ -9,7 +9,7 @@ import { usedAllocations } from '../preorder-campaign/index.ts'
 import { stockLedger } from '../stock/index.ts'
 import { queueDepositReceivedEmail, queuePaymentReceivedEmail, type RecordPaymentDeps } from '../payment/index.ts'
 import { createRefund } from '../refund/index.ts'
-import { usedRedemptions } from '../../vouchers/vouchers.ts'
+import { usedRedemptions } from '../voucher/index.ts'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy mục cần đối soát')

@@ -1,13 +1,20 @@
 import type { RecordWarrantyMilestone, RecordWarrantyOutcome, WarrantyView } from '@ecommerce/shared'
-import type { Audit } from '../core/audit/audited.ts'
-import type { DbClient } from '../core/db.ts'
-import { invalidField } from '../core/errors.ts'
-import type { CustomerMail } from '../core/jobs/jobs.ts'
-import { stockLedger } from '../modules/stock/index.ts'
-import { heldVariants } from './exchanges.ts'
-import { returnWindowSnapshot, returnableQuantities } from './returns.ts'
-import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest, notFound, type SupportForView } from './support.ts'
-import { queueSupportEmail } from './emails.ts'
+import type { Audit } from '../../core/audit/audited.ts'
+import type { DbClient } from '../../core/db.ts'
+import { invalidField } from '../../core/errors.ts'
+import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import { stockLedger } from '../stock/index.ts'
+import { heldVariants } from './support-exchange.ts'
+import { returnWindowSnapshot, returnableQuantities } from './support-return.ts'
+import {
+  SUPPORT_INCLUDE,
+  conflict,
+  isClosed,
+  lockSupportRequest,
+  notFound,
+  type SupportForView,
+} from './support-request.ts'
+import { queueSupportEmail } from './support-email.ts'
 
 /**
  * Warranty (spec M6b ticket 06): the customer reports a defect on a delivered line. Staff record milestones: item

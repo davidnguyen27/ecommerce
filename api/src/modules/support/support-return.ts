@@ -1,23 +1,27 @@
 import {
   type DecideSupportRequest,
-  type ProductType,
   type ProposeReturnRefund,
   type ReceiveSupportReturn,
-  type ReturnWindowItem,
   SUPPORT_CLOSED_STATUSES,
   type SupportReturnReason,
 } from '@ecommerce/shared'
-import { ProductType as ProductTypes } from '@ecommerce/shared'
-import type { Audit } from '../core/audit/audited.ts'
-import type { DbClient } from '../core/db.ts'
-import { invalidField } from '../core/errors.ts'
-import type { CustomerMail } from '../core/jobs/jobs.ts'
-import { vnd } from '../core/utils/format.ts'
-import { createRefund, lockOrderForRefund, refundTotals } from '../modules/refund/index.ts'
-import { stockLedger } from '../modules/stock/index.ts'
-import { ORDER_LINE_FOR_EXCHANGE, assertExchangeable, heldVariants, reserveExchange } from './exchanges.ts'
-import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest, notFound, type SupportForView } from './support.ts'
-import { queueSupportEmail } from './emails.ts'
+import type { Audit } from '../../core/audit/audited.ts'
+import type { DbClient } from '../../core/db.ts'
+import { invalidField } from '../../core/errors.ts'
+import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import { vnd } from '../../core/utils/format.ts'
+import { createRefund, lockOrderForRefund, refundTotals } from '../refund/index.ts'
+import { stockLedger } from '../stock/index.ts'
+import { ORDER_LINE_FOR_EXCHANGE, assertExchangeable, heldVariants, reserveExchange } from './support-exchange.ts'
+import {
+  SUPPORT_INCLUDE,
+  conflict,
+  isClosed,
+  lockSupportRequest,
+  notFound,
+  type SupportForView,
+} from './support-request.ts'
+import { queueSupportEmail } from './support-email.ts'
 
 /**
  * Returns (GLOSSARY "Trả hàng", spec M6b ticket 04): the customer submits lines of a delivered order to return; staff
@@ -379,38 +383,4 @@ export async function proposeReturnRefund(
   const updated = await tx.supportRequest.findUniqueOrThrow({ where: { id: request.id }, include: SUPPORT_INCLUDE })
   await queueSupportEmail(tx, mail, updated, 'resolved', message)
   return code
-}
-
-/** Return windows of all five product types; unconfigured types are `null`. */
-export async function loadReturnWindows(db: DbClient): Promise<ReturnWindowItem[]> {
-  const rows = await db.returnWindow.findMany()
-  return ProductTypes.options.map((productType: ProductType) => ({
-    productType,
-    days: rows.find((r) => r.productType === productType)?.days ?? null,
-  }))
-}
-
-/** Saves return windows: `null` clears that type. No change, no audit. */
-export async function saveReturnWindows(tx: DbClient, audit: Audit, items: readonly ReturnWindowItem[]) {
-  const before = await loadReturnWindows(tx)
-  const changed = items.filter((i) => before.find((b) => b.productType === i.productType)?.days !== i.days)
-  if (changed.length === 0) return
-  for (const item of changed) {
-    if (item.days === null) await tx.returnWindow.deleteMany({ where: { productType: item.productType } })
-    else {
-      await tx.returnWindow.upsert({
-        where: { productType: item.productType },
-        create: { productType: item.productType, days: item.days },
-        update: { days: item.days },
-      })
-    }
-  }
-  await audit({
-    action: 'return_window.update',
-    entityType: 'return_window',
-    // One shared config row, like shipping fees: fixed id.
-    entityId: 'return_window',
-    before: { items: before },
-    after: { items: await loadReturnWindows(tx) },
-  })
 }

@@ -1,13 +1,13 @@
 import { SUPPORT_CLOSED_STATUSES, type ExchangeOptions, type ShipExchangeRequest } from '@ecommerce/shared'
-import type { Audit } from '../core/audit/audited.ts'
-import { cartVariants } from '../modules/product/index.ts'
-import type { DbClient } from '../core/db.ts'
-import type { Prisma } from '../generated/prisma/client.ts'
-import type { CustomerMail } from '../core/jobs/jobs.ts'
-import { stockLedger } from '../modules/stock/index.ts'
-import { keptQuantities, returnableQuantities } from './returns.ts'
-import { queueSupportEmail } from './emails.ts'
-import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest } from './support.ts'
+import type { Audit } from '../../core/audit/audited.ts'
+import { cartVariants } from '../product/index.ts'
+import type { DbClient } from '../../core/db.ts'
+import type { Prisma } from '../../generated/prisma/client.ts'
+import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import { stockLedger } from '../stock/index.ts'
+import { keptQuantities, returnableQuantities } from './support-return.ts'
+import { queueSupportEmail } from './support-email.ts'
+import { SUPPORT_INCLUDE, conflict, isClosed, lockSupportRequest } from './support-request.ts'
 
 /**
  * Exchanges (GLOSSARY "Đổi hàng", ADR 0015): the customer swaps to another variant of the same product at the same

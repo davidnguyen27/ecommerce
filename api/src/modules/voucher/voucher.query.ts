@@ -1,8 +1,7 @@
-import { ErrorCode, type Voucher, type VoucherStatus } from '@ecommerce/shared'
-import { ACTOR_SELECT } from '../core/audit/audited.ts'
-import type { DbClient } from '../core/db.ts'
-import { Prisma } from '../generated/prisma/client.ts'
-import { AppError } from '../core/errors.ts'
+import { ErrorCode, type VoucherStatus } from '@ecommerce/shared'
+import type { DbClient } from '../../core/db.ts'
+import type { Prisma } from '../../generated/prisma/client.ts'
+import { AppError } from '../../core/errors.ts'
 
 /** A voucher's display status; disabled beats everything else. */
 export function voucherStatus(
@@ -61,45 +60,4 @@ export async function customerRedemptions(
   return db.order.count({ where: { voucherId, status: { not: 'cancelled' }, OR: or } })
 }
 
-export const VOUCHER_INCLUDE = {
-  createdBy: { select: ACTOR_SELECT },
-  brands: { include: { brand: { select: { id: true, name: true } } } },
-  categories: { include: { category: { select: { id: true, name: true } } } },
-} satisfies Prisma.VoucherInclude
-
-type VoucherRow = Prisma.VoucherGetPayload<{ include: typeof VOUCHER_INCLUDE }>
-
-const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)
-
-export function toVoucher(row: VoucherRow, used: number, now = new Date()): Voucher {
-  return {
-    id: row.id,
-    code: row.code,
-    description: row.description,
-    kind: row.kind,
-    amount: row.amount === null ? null : Number(row.amount),
-    percent: row.percent,
-    maxDiscount: row.maxDiscount === null ? null : Number(row.maxDiscount),
-    minSubtotal: Number(row.minSubtotal),
-    startsAt: row.startsAt.toISOString(),
-    endsAt: row.endsAt.toISOString(),
-    saleTypes: [...row.saleTypes].sort(),
-    totalLimit: row.totalLimit,
-    perCustomerLimit: row.perCustomerLimit,
-    brands: row.brands.map((b) => b.brand).sort(byName),
-    categories: row.categories.map((c) => c.category).sort(byName),
-    status: voucherStatus(row, now),
-    used,
-    disabledAt: row.disabledAt?.toISOString() ?? null,
-    createdAt: row.createdAt.toISOString(),
-    createdBy: row.createdBy,
-  }
-}
-
 export const voucherNotFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy mã giảm giá')
-
-export async function loadVoucher(db: DbClient, id: string): Promise<Voucher> {
-  const row = await db.voucher.findUnique({ where: { id }, include: VOUCHER_INCLUDE })
-  if (!row) throw voucherNotFound()
-  return toVoucher(row, (await usedRedemptions(db, [id])).get(id) ?? 0)
-}

@@ -7,12 +7,13 @@ import {
   VoucherUpdate,
   type FieldError,
 } from '@ecommerce/shared'
-import type { Audit } from '../core/audit/audited.ts'
-import type { DbClient } from '../core/db.ts'
-import type { Prisma } from '../generated/prisma/client.ts'
-import { AppError, conflictField, isUniqueViolation } from '../core/errors.ts'
-import { parse } from '../core/middleware/validation.ts'
-import { usedRedemptions, VOUCHER_INCLUDE, voucherNotFound as notFound, toVoucher } from './vouchers.ts'
+import type { Audit } from '../../core/audit/audited.ts'
+import type { DbClient } from '../../core/db.ts'
+import type { Prisma } from '../../generated/prisma/client.ts'
+import { AppError, conflictField, isUniqueViolation } from '../../core/errors.ts'
+import { parse } from '../../core/middleware/validation.ts'
+import { VOUCHER_INCLUDE, toVoucher } from './voucher.mapper.ts'
+import { usedRedemptions, voucherNotFound as notFound } from './voucher.query.ts'
 
 // Admin voucher writes (GLOSSARY "Mã giảm giá"), run inside `audited()`. The route reloads the voucher with
 // `loadVoucher` for the response.

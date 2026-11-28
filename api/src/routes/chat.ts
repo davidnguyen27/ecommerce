@@ -15,7 +15,7 @@ import type { AppDeps } from '../app.ts'
 import { hashOpaqueToken } from '../core/auth/opaque-token.ts'
 import { optionalAuth } from '../core/middleware/require-auth.ts'
 import { AppError, invalidField } from '../core/errors.ts'
-import { createSupportRequest, findSupportCustomer } from '../support/support.ts'
+import { createSupportRequest, findSupportCustomer } from '../modules/support/index.ts'
 import {
   appendCustomerMessage,
   conversationView,

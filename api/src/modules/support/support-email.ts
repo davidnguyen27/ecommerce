@@ -1,9 +1,9 @@
 import type { SupportRequestKind } from '@ecommerce/shared'
-import { hashOpaqueToken, newOpaqueToken } from '../core/auth/opaque-token.ts'
-import type { DbClient } from '../core/db.ts'
-import type { CustomerMail } from '../core/jobs/jobs.ts'
-import { EXCHANGE_SEND_DAYS } from './exchanges.ts'
-import type { SupportForView } from './support.ts'
+import { hashOpaqueToken, newOpaqueToken } from '../../core/auth/opaque-token.ts'
+import type { DbClient } from '../../core/db.ts'
+import type { CustomerMail } from '../../core/jobs/jobs.ts'
+import { EXCHANGE_SEND_DAYS } from './support-exchange.ts'
+import type { SupportForView } from './support-request.ts'
 
 /**
  * Customer emails about support requests (spec M6b), per moment and request type. The owner left the wording to the

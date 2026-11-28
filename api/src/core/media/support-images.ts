@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import type { Request } from 'express'
+import type { Logger } from 'pino'
 import sharp from 'sharp'
 import { IMAGE_CONTENT_TYPES, SUPPORT_IMAGE_MAX_BYTES } from '@ecommerce/shared'
 import type { Storage } from '../adapters/storage.ts'
-import { fileError, receiveFile, requiredFile } from './upload.ts'
+import { fileError, receiveFile } from './upload.ts'
 
 /** Images with too many pixels ("decompression bombs") are rejected before decoding, as for product images. */
 const MAX_INPUT_PIXELS = 50_000_000
@@ -27,10 +27,11 @@ export type StoredSupportImage = { key: string; contentType: string; sizeBytes: 
  */
 export async function storeSupportImage(
   storage: Storage,
-  req: Request,
+  upload: Express.Multer.File | undefined,
   requestId: string,
 ): Promise<StoredSupportImage> {
-  const file = requiredFile(req, 'Chưa chọn file ảnh').buffer
+  if (!upload) throw fileError(400, 'Chưa chọn file ảnh')
+  const file = upload.buffer
   const meta = await sharp(file, { limitInputPixels: MAX_INPUT_PIXELS })
     .metadata()
     .catch(() => null)
@@ -53,8 +54,8 @@ export async function storeSupportImage(
 }
 
 /** Deletes the image after the record's transaction rolled back; storage errors are only logged (private orphan). */
-export async function deleteSupportImageQuietly(storage: Storage, req: Request, key: string) {
+export async function deleteSupportImageQuietly(storage: Storage, log: Logger, key: string) {
   await storage.delete('private', key).catch((err: unknown) => {
-    req.log.warn({ err, key }, 'Không xóa được ảnh đính kèm trên storage')
+    log.warn({ err, key }, 'Không xóa được ảnh đính kèm trên storage')
   })
 }
