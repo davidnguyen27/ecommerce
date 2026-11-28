@@ -24,6 +24,7 @@ import {
   voucherNotFound as notFound,
   voucherStatusWhere,
 } from '../vouchers/vouchers.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const VoucherParams = z.object({ id: z.uuid() })
 
@@ -99,20 +100,22 @@ export function adminVoucherRoutes(prisma: Db) {
       })
       .post('/', requirePermission('voucher.manage'), async (req, res) => {
         const input = parse(VoucherCreate, req.body)
-        const id = await audited(prisma, req, (tx, audit) => createVoucher(tx, audit, currentStaff(req).id, input))
+        const id = await audited(prisma, contextOf(req), (tx, audit) =>
+          createVoucher(tx, audit, currentStaff(req).id, input),
+        )
         const body: Voucher = await loadVoucher(prisma, id)
         res.status(201).json(body)
       })
       .patch('/:id', requirePermission('voucher.manage'), async (req, res) => {
         const { id } = parse(VoucherParams, req.params)
         const input = parse(VoucherUpdate, req.body)
-        await audited(prisma, req, (tx, audit) => updateVoucher(tx, audit, id, input))
+        await audited(prisma, contextOf(req), (tx, audit) => updateVoucher(tx, audit, id, input))
         const body: Voucher = await loadVoucher(prisma, id)
         res.json(body)
       })
       .post('/:id/disable', requirePermission('voucher.manage'), async (req, res) => {
         const { id } = parse(VoucherParams, req.params)
-        await audited(prisma, req, (tx, audit) => disableVoucher(tx, audit, id))
+        await audited(prisma, contextOf(req), (tx, audit) => disableVoucher(tx, audit, id))
         const body: Voucher = await loadVoucher(prisma, id)
         res.json(body)
       })

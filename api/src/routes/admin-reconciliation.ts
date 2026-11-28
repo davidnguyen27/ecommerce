@@ -16,6 +16,7 @@ import type { EmailQueue } from '../core/jobs/jobs.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 import { loadAdminOrder } from '../orders/admin-order.ts'
 import { refundReconciliationItem, resolveExternally, restoreOrder } from '../payments/reconciliation.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 export type ReconciliationDeps = { emails: EmailQueue; siteUrl: string }
 
@@ -86,7 +87,7 @@ export function adminReconciliationRoutes(
     })
     .post('/:id/restore', requirePermission('payment.reconcile'), async (req, res) => {
       const staffId = currentStaff(req).id
-      const code = await audited(prisma, req, (tx, audit) =>
+      const code = await audited(prisma, contextOf(req), (tx, audit) =>
         restoreOrder(tx, deps, audit, String(req.params.id), staffId),
       )
       const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, String(code))
@@ -94,7 +95,7 @@ export function adminReconciliationRoutes(
     })
     .post('/:id/refund', requirePermission('payment.reconcile'), async (req, res) => {
       const staffId = currentStaff(req).id
-      const code = await audited(prisma, req, (tx, audit) =>
+      const code = await audited(prisma, contextOf(req), (tx, audit) =>
         refundReconciliationItem(tx, audit, String(req.params.id), staffId),
       )
       const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, String(code))
@@ -103,7 +104,7 @@ export function adminReconciliationRoutes(
     .post('/:id/resolve', requirePermission('payment.reconcile'), async (req, res) => {
       const { note } = parse(ResolveReconciliationRequest, req.body)
       const staffId = currentStaff(req).id
-      const code = await audited(prisma, req, (tx, audit) =>
+      const code = await audited(prisma, contextOf(req), (tx, audit) =>
         resolveExternally(tx, audit, String(req.params.id), staffId, note),
       )
       const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, String(code))

@@ -21,6 +21,7 @@ import {
 import type { Db } from '../core/db.ts'
 import { AppError } from '../core/errors.ts'
 import { parse } from '../core/middleware/validation.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 type LoadedSchema = Awaited<ReturnType<typeof loadAttributeSchema>>
 
@@ -44,7 +45,7 @@ export function adminAttributeSchemaRoutes(prisma: Db) {
     .put('/:productType', async (req, res) => {
       const { productType } = parse(ProductTypeParams, req.params)
       const { attributes } = parse(UpdateAttributeSchemaRequest, req.body)
-      const updated = await audited(prisma, req, async (tx, audit) => {
+      const updated = await audited(prisma, contextOf(req), async (tx, audit) => {
         const before = await lockAttributeSchema(tx, productType, 'update')
         if (isDeepStrictEqual(before.attributes, attributes)) return before
 

@@ -6,6 +6,7 @@ import { requirePermission } from '../core/middleware/staff-context.ts'
 import type { Db } from '../core/db.ts'
 import { parse } from '../core/middleware/validation.ts'
 import { readShippingFeeConfig } from '../shipping/shipping-fees.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 /** Shipping fees use the existing `price.edit`: a fee is a price the customer pays (spec "Phí giao"). */
 export function adminShippingFeeRoutes(prisma: Db) {
@@ -21,7 +22,7 @@ export function adminShippingFeeRoutes(prisma: Db) {
         ...input,
         provinceFees: [...input.provinceFees].sort((a, b) => a.provinceCode.localeCompare(b.provinceCode)),
       }
-      const body: ShippingFeeConfig = await audited(prisma, req, async (tx, audit) => {
+      const body: ShippingFeeConfig = await audited(prisma, contextOf(req), async (tx, audit) => {
         // Two concurrent edits do not mix their per-province fees, and the audit's `before` is exactly what was
         // replaced.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('shipping_fee'))`

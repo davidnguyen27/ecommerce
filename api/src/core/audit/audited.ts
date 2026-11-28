@@ -1,5 +1,4 @@
-import type { Request } from 'express'
-import { currentStaff } from '../middleware/staff-context.ts'
+import type { RequestContext } from '../context/request-context.ts'
 import type { Db } from '../db.ts'
 import type { Prisma } from '../../generated/prisma/client.ts'
 
@@ -19,25 +18,21 @@ export type Audit = (entry: AuditEntry | readonly AuditEntry[]) => Promise<void>
 
 /**
  * An `audited()` transaction already bound to the request, for modules that must also act after commit (e.g. cancel
- * payment links) without taking `req`. Route: `const run: AuditedRun = (fn) => audited(prisma, req, fn)`.
+ * payment links) without taking `req`. Route: `const run: AuditedRun = (fn) => audited(prisma, contextOf(req), fn)`.
  */
 export type AuditedRun = <T>(fn: (tx: Prisma.TransactionClient, audit: Audit) => Promise<T>) => Promise<T>
 
 /**
  * Runs a business change in a transaction and writes the audit in that same transaction, so a rollback drops the
- * audit too. Actor, IP and user agent come from the request. `timeout` (ms) is only for bulk work like import;
+ * audit too. Actor, IP and user agent come from `ctx` (`contextOf(req)`). `timeout` (ms) is only for bulk work like import;
  * Prisma's default is 5 s.
  */
 export function audited<T>(
   prisma: Db,
-  req: Request,
+  { staffId: actorId, ip, userAgent }: RequestContext,
   fn: (tx: Prisma.TransactionClient, audit: Audit) => Promise<T>,
   options: { timeout?: number } = {},
 ): Promise<T> {
-  const actorId = currentStaff(req).id
-  const ip = req.ip ?? null
-  const userAgent = req.get('user-agent') ?? null
-
   return prisma.$transaction(
     (tx) =>
       fn(tx, async (entry) => {

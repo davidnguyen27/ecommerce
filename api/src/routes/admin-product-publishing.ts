@@ -20,6 +20,7 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, conflictField } from '../core/errors.ts'
 import { parse } from '../core/middleware/validation.ts'
 import { deleteImageFilesQuietly, type StoredImage } from '../core/media/images.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const ACTIONS: Record<ProductStatus, string> = {
   published: 'catalog.product.publish',
@@ -39,7 +40,7 @@ export function adminProductPublishingRoutes(prisma: Db, storage: Storage) {
     .put('/status', requirePermission('catalog.edit'), async (req, res) => {
       const { id } = parse(ProductParams, req.params)
       const { status } = parse(ChangeProductStatusRequest, req.body)
-      const { draft, unused } = await audited(prisma, req, async (tx, audit) => {
+      const { draft, unused } = await audited(prisma, contextOf(req), async (tx, audit) => {
         await lockProduct(tx, id)
         const before = await loadDraft(tx, id)
         const unchanged = { draft: before, unused: [] as StoredImage[] }
@@ -89,7 +90,7 @@ export function adminProductPublishingRoutes(prisma: Db, storage: Storage) {
       const { id } = parse(ProductParams, req.params)
       const { pageIds } = parse(ProductPoliciesRequest, req.body)
       const wanted = [...new Set(pageIds)].sort()
-      const draft = await audited(prisma, req, async (tx, audit) => {
+      const draft = await audited(prisma, contextOf(req), async (tx, audit) => {
         await lockProduct(tx, id)
         const before = await loadDraft(tx, id)
         const pages = await tx.contentPage.findMany({ where: { id: { in: wanted } } })

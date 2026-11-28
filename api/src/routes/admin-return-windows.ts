@@ -5,6 +5,7 @@ import { requirePermission } from '../core/middleware/staff-context.ts'
 import type { Db } from '../core/db.ts'
 import { parse } from '../core/middleware/validation.ts'
 import { loadReturnWindows, saveReturnWindows } from '../support/returns.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 /**
  * Return windows per product type (GLOSSARY "Hạn đổi trả", spec M6b), mounted at `/return-windows`. Viewable by
@@ -19,7 +20,7 @@ export function adminReturnWindowRoutes(prisma: Db) {
     })
     .put('/', requirePermission('content.edit'), async (req, res) => {
       const { items } = parse(ReturnWindowList, req.body)
-      await audited(prisma, req, (tx, audit) => saveReturnWindows(tx, audit, items))
+      await audited(prisma, contextOf(req), (tx, audit) => saveReturnWindows(tx, audit, items))
       const body: ReturnWindowList = { items: await loadReturnWindows(prisma) }
       res.json(body)
     })

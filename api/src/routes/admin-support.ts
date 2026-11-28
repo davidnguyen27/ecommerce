@@ -46,6 +46,7 @@ import {
 } from '../support/returns.ts'
 import { exchangeOptions, shipExchange } from '../support/exchanges.ts'
 import { hasWarrantyCommitment, recordWarrantyMilestone, recordWarrantyOutcome } from '../support/warranty.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const notFound = () => new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy yêu cầu')
 const requestCode = (code: string) => {
@@ -139,7 +140,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
       .post('/', requirePermission('support.handle'), async (req, res) => {
         const input = parse(AdminCreateSupportRequest, req.body)
         const staffId = currentStaff(req).id
-        const code = await audited(prisma, req, async (tx, audit) => {
+        const code = await audited(prisma, contextOf(req), async (tx, audit) => {
           const order =
             input.orderCode === undefined
               ? undefined
@@ -172,13 +173,13 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         const input = parse(AdminSupportReply, req.body)
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
-        await audited(prisma, req, (tx, audit) => staffReply(tx, mail, audit, code, staffId, input))
+        await audited(prisma, contextOf(req), (tx, audit) => staffReply(tx, mail, audit, code, staffId, input))
         res.json(await load(code, req))
       })
       .post('/:code/claim', requirePermission('support.handle'), async (req, res) => {
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
-        await audited(prisma, req, (tx, audit) => claimSupportRequest(tx, audit, code, staffId))
+        await audited(prisma, contextOf(req), (tx, audit) => claimSupportRequest(tx, audit, code, staffId))
         res.json(await load(code, req))
       })
       // Images attach to the staff member's own message (spec M6b ticket 02).
@@ -193,7 +194,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
           const staffId = currentStaff(req).id
           const image = await storeSupportImage(storage, req, found.id)
           try {
-            await audited(prisma, req, async (tx, audit) => {
+            await audited(prisma, contextOf(req), async (tx, audit) => {
               const requestId = await recordAttachment(
                 tx,
                 { code },
@@ -220,14 +221,16 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         const input = parse(DecideSupportRequest, req.body)
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
-        await audited(prisma, req, (tx, audit) => decideSupportRequest(tx, mail, audit, code, staffId, input))
+        await audited(prisma, contextOf(req), (tx, audit) =>
+          decideSupportRequest(tx, mail, audit, code, staffId, input),
+        )
         res.json(await load(code, req))
       })
       .post('/:code/receive', requirePermission('order.fulfill'), async (req, res) => {
         const input = parse(ReceiveSupportReturn, req.body)
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
-        await audited(prisma, req, (tx, audit) => receiveSupportReturn(tx, audit, code, staffId, input))
+        await audited(prisma, contextOf(req), (tx, audit) => receiveSupportReturn(tx, audit, code, staffId, input))
         res.json(await load(code, req))
       })
       // Exchanges: the warehouse hands over the new variant after receiving the old one (ADR 0015).
@@ -235,7 +238,7 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         const input = parse(ShipExchangeRequest, req.body)
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
-        await audited(prisma, req, (tx, audit) => shipExchange(tx, mail, audit, code, staffId, input))
+        await audited(prisma, contextOf(req), (tx, audit) => shipExchange(tx, mail, audit, code, staffId, input))
         res.json(await load(code, req))
       })
       // Warranty: milestones and outcome (spec M6b ticket 06). No milestone touches stock.
@@ -243,27 +246,31 @@ export function adminSupportRoutes(prisma: Db, storage: Storage, mail: CustomerM
         const input = parse(RecordWarrantyMilestone, req.body)
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
-        await audited(prisma, req, (tx, audit) => recordWarrantyMilestone(tx, mail, audit, code, staffId, input))
+        await audited(prisma, contextOf(req), (tx, audit) =>
+          recordWarrantyMilestone(tx, mail, audit, code, staffId, input),
+        )
         res.json(await load(code, req))
       })
       .post('/:code/warranty-outcome', requirePermission('support.handle'), async (req, res) => {
         const input = parse(RecordWarrantyOutcome, req.body)
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
-        await audited(prisma, req, (tx, audit) => recordWarrantyOutcome(tx, mail, audit, code, staffId, input))
+        await audited(prisma, contextOf(req), (tx, audit) =>
+          recordWarrantyOutcome(tx, mail, audit, code, staffId, input),
+        )
         res.json(await load(code, req))
       })
       .post('/:code/refund', requirePermission('support.handle'), async (req, res) => {
         const input = parse(ProposeReturnRefund, req.body)
         const code = requestCode(String(req.params.code))
         const staffId = currentStaff(req).id
-        await audited(prisma, req, (tx, audit) => proposeReturnRefund(tx, mail, audit, code, staffId, input))
+        await audited(prisma, contextOf(req), (tx, audit) => proposeReturnRefund(tx, mail, audit, code, staffId, input))
         res.json(await load(code, req))
       })
       .post('/:code/assign', requirePermission('staff.manage'), async (req, res) => {
         const { staffId } = parse(AssignSupportRequest, req.body)
         const code = requestCode(String(req.params.code))
-        await audited(prisma, req, (tx, audit) => assignSupportRequest(tx, audit, code, staffId))
+        await audited(prisma, contextOf(req), (tx, audit) => assignSupportRequest(tx, audit, code, staffId))
         res.json(await load(code, req))
       })
   )

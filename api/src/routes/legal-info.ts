@@ -4,6 +4,7 @@ import { audited } from '../core/audit/audited.ts'
 import { requirePermission } from '../core/middleware/staff-context.ts'
 import type { Db, DbClient } from '../core/db.ts'
 import { parse } from '../core/middleware/validation.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const KEY = 'legal_info'
 
@@ -29,7 +30,7 @@ export function adminLegalInfoRoutes(prisma: Db) {
     })
     .put('/', async (req, res) => {
       const input = parse(LegalInfo, req.body)
-      const saved = await audited(prisma, req, async (tx, audit) => {
+      const saved = await audited(prisma, contextOf(req), async (tx, audit) => {
         const before = await readLegalInfo(tx)
         // Both go through the same schema, so the same lock order.
         if (JSON.stringify(before) === JSON.stringify(input)) return before

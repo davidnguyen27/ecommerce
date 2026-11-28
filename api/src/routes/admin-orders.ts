@@ -30,6 +30,7 @@ import {
 } from '../orders/fulfill-order.ts'
 import { orderNotFound, parseOrderCode } from '../orders/orders.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 /** Admin orders: viewing needs `order.view`, fulfillment `order.fulfill`. */
 export function adminOrderRoutes(prisma: Db, storage: Storage, payments: PaymentGateway, mail: FulfillmentMail) {
@@ -44,7 +45,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
   const auditedRun =
     (req: Request): AuditedRun =>
     (fn) =>
-      audited(prisma, req, fn)
+      audited(prisma, contextOf(req), fn)
   const cancelDeps = (req: Request) => ({ prisma, payments, logger: req.log })
 
   /** Fulfillment transition route: runs in `audited()`, writes the returned audit entry, returns the order detail. */
@@ -55,7 +56,7 @@ export function adminOrderRoutes(prisma: Db, storage: Storage, payments: Payment
     async (req: Request, res: Response) => {
       const code = String(req.params.code)
       const order = await findOrder(code)
-      await audited(prisma, req, async (tx, audit) => {
+      await audited(prisma, contextOf(req), async (tx, audit) => {
         const entry = await run(tx, order.id, currentStaff(req).id, req)
         await audit({ ...entry, entityType: 'order', entityId: order.id })
       })

@@ -21,6 +21,7 @@ import {
   receiveDocument,
   uploadedDocument,
 } from '../core/media/documents.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const DocumentParams = z.object({ id: z.uuid(), documentId: z.uuid() })
 
@@ -70,7 +71,7 @@ export function adminProductDocumentRoutes(prisma: Db, storage: Storage) {
         const documentId = randomUUID()
         const storageKey = `products/${id}/documents/${documentId}`
         await storage.put({ bucket: 'private', key: storageKey, body: file.body, contentType: file.contentType })
-        const created = await audited(prisma, req, async (tx, audit) => {
+        const created = await audited(prisma, contextOf(req), async (tx, audit) => {
           await lockProduct(tx, id)
           const row = await tx.productDocument.create({
             data: {
@@ -102,7 +103,7 @@ export function adminProductDocumentRoutes(prisma: Db, storage: Storage) {
         const document = await findDocument(prisma, id, documentId)
         const expiresAt = new Date(Date.now() + DOCUMENT_URL_TTL_SECONDS * 1000)
         const url = await storage.signedUrl(document.storageKey, DOCUMENT_URL_TTL_SECONDS)
-        await audited(prisma, req, (_tx, audit) =>
+        await audited(prisma, contextOf(req), (_tx, audit) =>
           audit({
             action: 'document.view',
             entityType: 'product_document',
@@ -115,7 +116,7 @@ export function adminProductDocumentRoutes(prisma: Db, storage: Storage) {
       })
       .delete('/:documentId', async (req, res) => {
         const { id, documentId } = parse(DocumentParams, req.params)
-        const deleted = await audited(prisma, req, async (tx, audit) => {
+        const deleted = await audited(prisma, contextOf(req), async (tx, audit) => {
           // Same lock as creating and editing commitments: a document cannot be deleted while a commitment points to
           // it.
           await lockProduct(tx, id)

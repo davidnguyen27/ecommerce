@@ -22,6 +22,7 @@ import { parse } from '../core/middleware/validation.ts'
 import type { EmailQueue } from '../core/jobs/jobs.ts'
 import { applyArrivals, planArrivals } from '../preorders/arrivals.ts'
 import { changeStock } from '../stock/stock.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const ReceiptParams = z.object({ id: z.uuid() })
 
@@ -143,7 +144,7 @@ export function adminStockReceiptRoutes(prisma: Db, mail: { emails: EmailQueue; 
       const idOf = await resolveLines(prisma, input.lines)
 
       const actorId = currentStaff(req).id
-      const id = await audited(prisma, req, async (tx, audit) => {
+      const id = await audited(prisma, contextOf(req), async (tx, audit) => {
         const receipt = await tx.stockReceipt.create({
           data: {
             supplierName: input.supplierName,

@@ -20,6 +20,7 @@ import { Prisma } from '../generated/prisma/client.ts'
 import { AppError, conflictField, rethrowUnique } from '../core/errors.ts'
 import { receiveFile, requiredFile } from '../core/media/upload.ts'
 import { changeStock } from '../stock/stock.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const receiveImportFile = receiveFile(MAX_BYTES, 'File import tối đa 5 MB')
@@ -136,7 +137,7 @@ export function adminImportRoutes(prisma: Db) {
     .post('/commit', receiveImportFile, async (req, res) => {
       const result = await audited(
         prisma,
-        req,
+        contextOf(req),
         async (tx, audit) => {
           // Keep attribute schemas, brands and categories still until the transaction ends, as for single product
           // writes.

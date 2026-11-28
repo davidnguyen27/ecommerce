@@ -27,6 +27,7 @@ import { preorderRoutes } from './routes/preorders.ts'
 import { publicOrderRoutes } from './routes/public-orders.ts'
 import { paymentRoutes } from './routes/payments.ts'
 import { healthRoutes } from './routes/health.ts'
+import { createModules } from './modules/index.ts'
 
 /** Every external dependency enters the app here, so tests can swap in fakes. */
 export type AppDeps = {
@@ -106,6 +107,17 @@ export function createApp(deps: AppDeps) {
     res.set('Cache-Control', 'no-store')
     next()
   })
+  // Modules first, in `createModules` order; the old routers below still serve paths not moved yet.
+  const signIn = {
+    public: [],
+    customer: [requireAuth(secret, 'customer')],
+    staff: [requireAuth(secret, 'staff'), loadStaff(deps.prisma)],
+  }
+  for (const module of createModules(deps)) {
+    for (const route of module.routes) {
+      api.use(route.access === 'staff' ? `/admin${route.path}` : route.path, ...signIn[route.access], route.router)
+    }
+  }
   api.use('/pages', publicPageRoutes(deps.prisma))
   api.use('/legal-info', publicLegalInfoRoutes(deps.prisma))
   api.use('/brands', publicBrandRoutes(deps.prisma, deps.storage))

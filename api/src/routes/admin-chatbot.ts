@@ -20,6 +20,7 @@ import { AppError } from '../core/errors.ts'
 import { isUuid, parse } from '../core/middleware/validation.ts'
 import { chatbotReport } from '../reports/chatbot.ts'
 import { periodOf, startOfDay } from '../reports/period.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const DAY_MS = 24 * 60 * 60_000
 const FIRST_QUESTION_LENGTH = 120
@@ -38,7 +39,7 @@ export function adminChatbotRoutes(prisma: Db, llm: LlmClient | undefined) {
       })
       .put('/settings', async (req, res) => {
         const after = parse(ChatbotSettings, req.body)
-        const body: ChatbotSettings = await audited(prisma, req, async (tx, audit) => {
+        const body: ChatbotSettings = await audited(prisma, contextOf(req), async (tx, audit) => {
           // With two concurrent edits, the second's `before` is exactly what the first wrote.
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('chatbot_setting'))`
           const before = await readChatbotSettings(tx)

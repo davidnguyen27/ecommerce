@@ -13,6 +13,7 @@ import {
   queueRefundSucceededEmail,
   refundedViaGateway,
 } from './refunds.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 /** One part of a refund sent to the gateway: one original transaction, one refund command. */
 type Piece = { refundId: string; amount: number; full: boolean; transaction: StoredTransaction }
@@ -32,7 +33,7 @@ export type GatewayRefundDeps = { prisma: Db; payments: PaymentGateway; mail: Cu
 export async function executeGatewayRefund(deps: GatewayRefundDeps, req: Request, refundId: string, staffId: string) {
   const { prisma, payments, mail } = deps
 
-  const { orderCode, orderId, pieces } = await audited(prisma, req, async (tx, audit) => {
+  const { orderCode, orderId, pieces } = await audited(prisma, contextOf(req), async (tx, audit) => {
     const refund = await lockRefund(tx, refundId)
     if (refund.status !== 'pending') throw conflict('Khoản hoàn này đã được thực hiện')
 
@@ -125,7 +126,7 @@ export async function executeGatewayRefund(deps: GatewayRefundDeps, req: Request
     }
   }
 
-  await audited(prisma, req, async (tx, audit) => {
+  await audited(prisma, contextOf(req), async (tx, audit) => {
     await lockOrderForRefund(tx, orderId)
     const applied: typeof results = []
     for (const { piece, result } of results) {

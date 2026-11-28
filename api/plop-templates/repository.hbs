@@ -1,0 +1,12 @@
+import type { DbClient } from '../../core/db.ts'
+import { BaseRepository, type ModelDelegate } from '../../core/repository/base.repository.ts'
+import type { {{pascalCase name}} } from '../../generated/prisma/client.ts'
+import type { Create{{pascalCase name}}Input, Update{{pascalCase name}}Input } from './dto/index.ts'
+
+export class {{pascalCase name}}Repository extends BaseRepository<{{pascalCase name}}, Create{{pascalCase name}}Input, Update{{pascalCase name}}Input> {
+  protected readonly table = '{{snakeCase name}}'
+
+  protected model(db: DbClient): ModelDelegate<{{pascalCase name}}, Create{{pascalCase name}}Input, Update{{pascalCase name}}Input> {
+    return db.{{camelCase name}}
+  }
+}

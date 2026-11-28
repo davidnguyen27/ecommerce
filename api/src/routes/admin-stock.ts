@@ -19,6 +19,7 @@ import { conflictField, invalidField } from '../core/errors.ts'
 import { pageWindow } from '../core/pagination.ts'
 import { parse } from '../core/middleware/validation.ts'
 import { changeStock } from '../stock/stock.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const STOCK_INCLUDE = {
   product: {
@@ -132,7 +133,7 @@ export function adminStockRoutes(prisma: Db) {
     })
     .post('/adjustments', requirePermission('stock.adjust'), async (req, res) => {
       const input = parse(StockAdjustmentRequest, req.body)
-      const changed = await audited(prisma, req, async (tx, audit) => {
+      const changed = await audited(prisma, contextOf(req), async (tx, audit) => {
         const { locked, movements } = await changeStock(tx, currentStaff(req).id, [input.variantId], (variants) => {
           const variant = variants.get(input.variantId)
           if (!variant) throw invalidField('variantId', 'Biến thể không tồn tại')

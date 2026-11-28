@@ -16,6 +16,7 @@ import type { Db } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { AppError, conflictField, invalidField, rethrowUnique } from '../core/errors.ts'
 import { parse } from '../core/middleware/validation.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const CommitmentParams = z.object({ id: z.uuid(), commitmentId: z.uuid() })
 
@@ -60,7 +61,7 @@ export function adminProductCommitmentRoutes(prisma: Db) {
     .post('/', requirePermission('commitment.edit'), async (req, res) => {
       const { id } = parse(ProductParams, req.params)
       const input = parse(CommitmentRequest, req.body)
-      const created = await audited(prisma, req, async (tx, audit) => {
+      const created = await audited(prisma, contextOf(req), async (tx, audit) => {
         await lockProduct(tx, id)
         const documentIds = await assertEvidence(tx, id, input)
         const row = await tx.productCommitment.create({
@@ -86,7 +87,7 @@ export function adminProductCommitmentRoutes(prisma: Db) {
     .put('/:commitmentId', requirePermission('commitment.edit'), async (req, res) => {
       const { id, commitmentId } = parse(CommitmentParams, req.params)
       const input = parse(CommitmentRequest, req.body)
-      const updated = await audited(prisma, req, async (tx, audit) => {
+      const updated = await audited(prisma, contextOf(req), async (tx, audit) => {
         await lockProduct(tx, id)
         const before = await findCommitment(tx, id, commitmentId)
         const documentIds = await assertEvidence(tx, id, input)
@@ -120,7 +121,7 @@ export function adminProductCommitmentRoutes(prisma: Db) {
     })
     .delete('/:commitmentId', requirePermission('commitment.edit'), async (req, res) => {
       const { id, commitmentId } = parse(CommitmentParams, req.params)
-      await audited(prisma, req, async (tx, audit) => {
+      await audited(prisma, contextOf(req), async (tx, audit) => {
         await lockProduct(tx, id)
         const commitment = await findCommitment(tx, id, commitmentId)
         await tx.productCommitment.delete({ where: { id: commitmentId } })

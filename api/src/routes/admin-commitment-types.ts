@@ -12,6 +12,7 @@ import type { Db } from '../core/db.ts'
 import type { CommitmentType } from '../generated/prisma/client.ts'
 import { AppError, conflictField, rethrowUnique } from '../core/errors.ts'
 import { parse } from '../core/middleware/validation.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const TypeParams = z.object({ id: z.uuid() })
 
@@ -37,7 +38,7 @@ export function adminCommitmentTypeRoutes(prisma: Db) {
     )
     .post('/', requirePermission('commitment.edit'), async (req, res) => {
       const input = parse(CommitmentTypeRequest, req.body)
-      const created = await audited(prisma, req, async (tx, audit) => {
+      const created = await audited(prisma, contextOf(req), async (tx, audit) => {
         const row = await tx.commitmentType.create({ data: input })
         await audit({
           action: 'commitment_type.create',
@@ -52,7 +53,7 @@ export function adminCommitmentTypeRoutes(prisma: Db) {
     .put('/:id', requirePermission('commitment.edit'), async (req, res) => {
       const { id } = parse(TypeParams, req.params)
       const input = parse(CommitmentTypeRequest, req.body)
-      const updated = await audited(prisma, req, async (tx, audit) => {
+      const updated = await audited(prisma, contextOf(req), async (tx, audit) => {
         const [locked] = await tx.$queryRaw<{ id: string }[]>`
           SELECT "id" FROM "commitment_type" WHERE "id" = ${id}::uuid FOR UPDATE`
         if (!locked) throw new AppError(404, ErrorCode.NOT_FOUND, 'Không tìm thấy loại cam kết')

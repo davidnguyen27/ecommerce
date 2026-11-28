@@ -1,0 +1,16 @@
+import { BaseCrudController } from '../../core/controller/base-crud.controller.ts'
+import type { {{pascalCase name}} } from '../../generated/prisma/client.ts'
+import { Create{{pascalCase name}}Dto, Update{{pascalCase name}}Dto } from './dto/index.ts'
+import { to{{pascalCase name}}Body, type {{pascalCase name}}Body } from './{{kebabCase name}}.mapper.ts'
+import type { {{pascalCase name}}Service } from './{{kebabCase name}}.service.ts'
+
+export class {{pascalCase name}}Controller extends BaseCrudController<
+  {{pascalCase name}},
+  typeof Create{{pascalCase name}}Dto,
+  typeof Update{{pascalCase name}}Dto,
+  {{pascalCase name}}Body
+> {
+  constructor(service: {{pascalCase name}}Service) {
+    super(service, { create: Create{{pascalCase name}}Dto, update: Update{{pascalCase name}}Dto }, to{{pascalCase name}}Body)
+  }
+}

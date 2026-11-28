@@ -18,6 +18,7 @@ import {
   storeImage,
   uploadedFile,
 } from '../core/media/images.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const logoOf = (brand: Brand) => (brand.logo === null ? null : StoredImage.parse(brand.logo))
 
@@ -71,7 +72,7 @@ export function adminBrandRoutes(prisma: Db, storage: Storage) {
       })
       .post('/', async (req, res) => {
         const input = parse(BrandRequest, req.body)
-        const brand = await audited(prisma, req, async (tx, audit) => {
+        const brand = await audited(prisma, contextOf(req), async (tx, audit) => {
           const created = await tx.brand.create({ data: input })
           await audit({
             action: 'catalog.brand.create',
@@ -122,7 +123,7 @@ async function updateBrand(
   change: (before: Brand) => Prisma.BrandUpdateInput | null,
 ) {
   const { id } = parse(BrandParams, req.params)
-  return audited(prisma, req, async (tx, audit) => {
+  return audited(prisma, contextOf(req), async (tx, audit) => {
     const before = await tx.brand.findUnique({ where: { id } })
     if (!before) throw brandNotFound()
     const data = change(before)
@@ -139,7 +140,7 @@ async function updateBrand(
  * row so two concurrent logo changes never leave a replaced file behind.
  */
 async function setLogo(prisma: Db, storage: Storage, req: Request, id: string, logo: StoredImage | null) {
-  const { before, after } = await audited(prisma, req, async (tx, audit) => {
+  const { before, after } = await audited(prisma, contextOf(req), async (tx, audit) => {
     await tx.$executeRaw`SELECT 1 FROM "brand" WHERE "id" = ${id}::uuid FOR UPDATE`
     const before = await tx.brand.findUnique({ where: { id } })
     if (!before) throw brandNotFound()

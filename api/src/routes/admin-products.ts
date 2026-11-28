@@ -12,6 +12,7 @@ import type { Db } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { conflictField, invalidField, rethrowUnique } from '../core/errors.ts'
 import { parse } from '../core/middleware/validation.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const VariantParams = z.object({ id: z.uuid(), variantId: z.uuid() })
 
@@ -76,7 +77,7 @@ export function adminProductRoutes(prisma: Db) {
       })
       .post('/', requirePermission('catalog.edit'), async (req, res) => {
         const input = parse(ProductRequest, req.body)
-        const created = await audited(prisma, req, async (tx, audit) => {
+        const created = await audited(prisma, contextOf(req), async (tx, audit) => {
           const category = await lockCategory(tx, input.categoryId)
           await assertBrandExists(tx, input.brandId)
           const schema = await lockAttributeSchema(tx, category.productType, 'share')
@@ -102,7 +103,7 @@ export function adminProductRoutes(prisma: Db) {
       .put('/:id', requirePermission('catalog.edit'), async (req, res) => {
         const { id } = parse(ProductParams, req.params)
         const input = parse(ProductRequest, req.body)
-        const updated = await audited(prisma, req, async (tx, audit) => {
+        const updated = await audited(prisma, contextOf(req), async (tx, audit) => {
           const before = await lockProduct(tx, id)
           if (input.categoryId !== before.categoryId) {
             const category = await lockCategory(tx, input.categoryId)
@@ -137,7 +138,7 @@ export function adminProductRoutes(prisma: Db) {
       .post('/:id/variants', requirePermission('catalog.edit'), async (req, res) => {
         const { id } = parse(ProductParams, req.params)
         const input = parse(VariantRequest, req.body)
-        const created = await audited(prisma, req, (tx, audit) =>
+        const created = await audited(prisma, contextOf(req), (tx, audit) =>
           createVariant(tx, audit, variantActor(req), id, input),
         )
         res.status(201).json(created)
@@ -146,7 +147,7 @@ export function adminProductRoutes(prisma: Db) {
       .put('/:id/variants/:variantId', requirePermission('catalog.edit', 'price.edit'), async (req, res) => {
         const { id, variantId } = parse(VariantParams, req.params)
         const input = parse(VariantRequest, req.body)
-        const updated = await audited(prisma, req, (tx, audit) =>
+        const updated = await audited(prisma, contextOf(req), (tx, audit) =>
           updateVariant(tx, audit, variantActor(req), id, variantId, input),
         )
         res.json(updated)

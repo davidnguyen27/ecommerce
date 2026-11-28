@@ -1,3 +1,4 @@
+import type { RequestHandler, Response } from 'express'
 import type { z } from 'zod'
 import { ErrorCode } from '@ecommerce/shared'
 import { AppError } from '../errors.ts'
@@ -17,4 +18,20 @@ export function parse<T extends z.ZodType>(schema: T, input: unknown): z.output<
     message: issue.message,
   }))
   throw new AppError(400, ErrorCode.VALIDATION_ERROR, 'Dữ liệu không hợp lệ', fields)
+}
+
+/**
+ * Route middleware: parses `req[part]` with the schema (400 with per-field errors otherwise) and keeps the result for
+ * the controller, which reads it with `dtoOf`. Put it after `requirePermission`, as routes parsed after the check.
+ */
+export function validate<T extends z.ZodType>(schema: T, part: 'body' | 'query' = 'body'): RequestHandler {
+  return (req, res, next) => {
+    res.locals.dto = parse(schema, req[part])
+    next()
+  }
+}
+
+/** The input `validate(schema)` parsed for this request; `schema` only types the result. */
+export function dtoOf<T extends z.ZodType>(res: Response, _schema: T): z.output<T> {
+  return res.locals.dto as z.output<T>
 }

@@ -18,6 +18,7 @@ import type { Db } from '../core/db.ts'
 import { Prisma, type Staff } from '../generated/prisma/client.ts'
 import { AppError, isUniqueViolation } from '../core/errors.ts'
 import { parse } from '../core/middleware/validation.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 function toSummary(staff: Staff): StaffSummary {
   return {
@@ -48,7 +49,7 @@ export function adminStaffRoutes(prisma: Db) {
       const passwordHash = await hashPassword(input.password)
 
       const emailTaken = emailTakenError()
-      const staff = await audited(prisma, req, async (tx, audit) => {
+      const staff = await audited(prisma, contextOf(req), async (tx, audit) => {
         if (await tx.staff.findUnique({ where: { email } })) throw emailTaken
         const created = await tx.staff.create({ data: { email, name: input.name, passwordHash, roles: input.roles } })
         await audit({ action: 'staff.create', entityType: 'staff', entityId: created.id, after: toSummary(created) })
@@ -126,7 +127,7 @@ async function updateStaff(
   change: (before: Staff) => Prisma.StaffUpdateInput | null,
 ) {
   const { id } = parse(StaffParams, req.params)
-  const updated = await audited(prisma, req, async (tx, audit) => {
+  const updated = await audited(prisma, contextOf(req), async (tx, audit) => {
     // Serialize role/lock changes, so two owners cannot demote each other and leave nobody.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('staff.owners'))`
     const before = await tx.staff.findUnique({ where: { id } })

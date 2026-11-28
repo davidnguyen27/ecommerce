@@ -14,6 +14,7 @@ import type { Db } from '../core/db.ts'
 import { Prisma, type Category } from '../generated/prisma/client.ts'
 import { AppError, rethrowUnique } from '../core/errors.ts'
 import { parse } from '../core/middleware/validation.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 function toAdmin({ id, productType, parentId, slug, name, hidden }: Category): AdminCategory {
   return { id, productType, parentId, slug, name, hidden }
@@ -35,7 +36,7 @@ export function adminCategoryRoutes(prisma: Db) {
     })
     .post('/', async (req, res) => {
       const input = parse(CreateCategoryRequest, req.body)
-      const category = await audited(prisma, req, async (tx, audit) => {
+      const category = await audited(prisma, contextOf(req), async (tx, audit) => {
         await lockTree(tx)
         await assertValidParent(tx, input, input.parentId)
         const created = await tx.category.create({ data: input })
@@ -80,7 +81,7 @@ export function adminCategoryRoutes(prisma: Db) {
     })
     .delete('/:id', async (req, res) => {
       const { id } = parse(CategoryParams, req.params)
-      await audited(prisma, req, async (tx, audit) => {
+      await audited(prisma, contextOf(req), async (tx, audit) => {
         // Same lock as create and reparent, so no child is attached between the check and the delete.
         await lockTree(tx)
         // Lock the category row: products being attached to it (`FOR KEY SHARE`) wait, so none slips past the count.
@@ -123,7 +124,7 @@ async function updateCategory(
   change: (tx: Prisma.TransactionClient, before: Category) => Promise<Prisma.CategoryUncheckedUpdateInput | null>,
 ) {
   const { id } = parse(CategoryParams, req.params)
-  const updated = await audited(prisma, req, async (tx, audit) => {
+  const updated = await audited(prisma, contextOf(req), async (tx, audit) => {
     const before = await tx.category.findUnique({ where: { id } })
     if (!before) throw categoryNotFound()
     const data = await change(tx, before)

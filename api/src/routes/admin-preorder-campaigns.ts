@@ -29,6 +29,7 @@ import {
   toCampaignVariants,
 } from '../preorders/campaigns.ts'
 import { cancelUnsupplied, previewUnsupplied } from '../preorders/unsupplied.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const CampaignParams = z.object({ id: z.uuid() })
 
@@ -128,7 +129,9 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: CustomerMail) {
       .post('/', requirePermission('preorder.manage'), async (req, res) => {
         const input = parse(PreorderCampaignCreate, req.body)
         const staffId = currentStaff(req).id
-        const id = await audited(prisma, req, (tx, audit) => openCampaign(tx, audit, staffId, input, new Date()))
+        const id = await audited(prisma, contextOf(req), (tx, audit) =>
+          openCampaign(tx, audit, staffId, input, new Date()),
+        )
         const body: PreorderCampaign = await loadCampaign(prisma, id)
         res.status(201).json(body)
       })
@@ -136,13 +139,15 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: CustomerMail) {
         const { id } = parse(CampaignParams, req.params)
         const input = parse(PreorderCampaignUpdate, req.body)
         const staffId = currentStaff(req).id
-        await audited(prisma, req, (tx, audit) => updateCampaign(tx, audit, mail, staffId, id, input, new Date()))
+        await audited(prisma, contextOf(req), (tx, audit) =>
+          updateCampaign(tx, audit, mail, staffId, id, input, new Date()),
+        )
         const body: PreorderCampaign = await loadCampaign(prisma, id)
         res.json(body)
       })
       .post('/:id/close', requirePermission('preorder.manage'), async (req, res) => {
         const { id } = parse(CampaignParams, req.params)
-        await audited(prisma, req, (tx, audit) => closeCampaign(tx, audit, id))
+        await audited(prisma, contextOf(req), (tx, audit) => closeCampaign(tx, audit, id))
         const body: PreorderCampaign = await loadCampaign(prisma, id)
         res.json(body)
       })
@@ -160,7 +165,7 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: CustomerMail) {
           const { id } = parse(CampaignParams, req.params)
           const { note } = parse(CancelUnsuppliedRequest, req.body)
           const staffId = currentStaff(req).id
-          const cancelledOrderCodes = await audited(prisma, req, (tx, audit) =>
+          const cancelledOrderCodes = await audited(prisma, contextOf(req), (tx, audit) =>
             cancelUnsupplied(tx, mail, audit, id, staffId, note),
           )
           const body: CancelUnsuppliedResult = { cancelledOrderCodes, campaign: await loadCampaign(prisma, id) }

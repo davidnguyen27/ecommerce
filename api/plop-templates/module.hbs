@@ -1,0 +1,20 @@
+import type { AppDeps } from '../../app.ts'
+import { BaseModule, type IRoute } from '../../core/module/base.module.ts'
+import { {{pascalCase name}}Controller } from './{{kebabCase name}}.controller.ts'
+import type { I{{pascalCase name}}Query } from './{{kebabCase name}}.interface.ts'
+import { {{pascalCase name}}Repository } from './{{kebabCase name}}.repository.ts'
+import { {{pascalCase name}}AdminRoute } from './{{kebabCase name}}.route.ts'
+import { {{pascalCase name}}Service } from './{{kebabCase name}}.service.ts'
+
+/** Wires repository → service → controller → routes. Other modules use `query`. */
+export class {{pascalCase name}}Module extends BaseModule {
+  readonly routes: readonly IRoute[]
+  readonly query: I{{pascalCase name}}Query
+
+  constructor(deps: Pick<AppDeps, 'prisma'>) {
+    super()
+    const service = new {{pascalCase name}}Service(deps.prisma, new {{pascalCase name}}Repository())
+    this.routes = [new {{pascalCase name}}AdminRoute(new {{pascalCase name}}Controller(service))]
+    this.query = service
+  }
+}

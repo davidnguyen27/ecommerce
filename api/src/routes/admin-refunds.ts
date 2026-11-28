@@ -10,6 +10,7 @@ import type { PaymentGateway } from '../payments/gateway.ts'
 import { executeGatewayRefund } from '../payments/gateway-refund.ts'
 import { executeManualRefund, retryRefund, settleRefund } from '../payments/refunds.ts'
 import type { CustomerMail } from '../core/jobs/jobs.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 /**
  * Refund execution (ADR 0014), mounted at `/refunds`; everything needs `payment.refund`. Each action returns the order
@@ -25,7 +26,7 @@ export function adminRefundRoutes(prisma: Db, storage: Storage, payments: Paymen
     .post('/:id/manual', async (req, res) => {
       const input = parse(ManualRefundRequest, req.body)
       const staffId = currentStaff(req).id
-      const code = await audited(prisma, req, (tx, audit) =>
+      const code = await audited(prisma, contextOf(req), (tx, audit) =>
         executeManualRefund(tx, mail, audit, String(req.params.id), staffId, input),
       )
       await respond(res, code)
@@ -38,7 +39,7 @@ export function adminRefundRoutes(prisma: Db, storage: Storage, payments: Paymen
     .post('/:id/settle', async (req, res) => {
       const input = parse(SettleRefundRequest, req.body)
       const staffId = currentStaff(req).id
-      const code = await audited(prisma, req, (tx, audit) =>
+      const code = await audited(prisma, contextOf(req), (tx, audit) =>
         settleRefund(tx, mail, audit, String(req.params.id), staffId, input),
       )
       await respond(res, code)
@@ -46,7 +47,7 @@ export function adminRefundRoutes(prisma: Db, storage: Storage, payments: Paymen
     .post('/:id/retry', async (req, res) => {
       const input = parse(RetryRefundRequest, req.body)
       const staffId = currentStaff(req).id
-      const code = await audited(prisma, req, (tx, audit) =>
+      const code = await audited(prisma, contextOf(req), (tx, audit) =>
         retryRefund(tx, audit, String(req.params.id), staffId, input),
       )
       await respond(res, code)

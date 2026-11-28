@@ -30,6 +30,7 @@ import {
   uploadedFile,
   type StoredImage,
 } from '../core/media/images.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 const ImageParams = z.object({ id: z.uuid(), imageId: z.uuid() })
 
@@ -81,7 +82,7 @@ async function appendImage(
   const { productId } = input
   const imageId = randomUUID()
   const image = await storeImage(storage, `products/${productId}/${imageId}`, input.file, PRODUCT_IMAGE_WIDTHS)
-  return audited(prisma, req, async (tx, audit) => {
+  return audited(prisma, contextOf(req), async (tx, audit) => {
     await lockProduct(tx, productId)
     const last = await tx.productImage.findFirst({ where: { productId }, orderBy: { sortOrder: 'desc' } })
     const row = await tx.productImage.create({
@@ -174,7 +175,7 @@ export function adminProductImageRoutes(prisma: Db, storage: Storage) {
       .put('/order', requirePermission('media.upload'), async (req, res) => {
         const { id } = parse(ProductParams, req.params)
         const { imageIds } = parse(ReorderProductImagesRequest, req.body)
-        const images = await audited(prisma, req, async (tx, audit) => {
+        const images = await audited(prisma, contextOf(req), async (tx, audit) => {
           await lockProduct(tx, id)
           const current = await imagesOf(tx, id)
           const before = current.map((i) => i.id)
@@ -207,7 +208,7 @@ export function adminProductImageRoutes(prisma: Db, storage: Storage) {
         const { id, imageId } = parse(ImageParams, req.params)
         const input = parse(UpdateProductImageRequest, req.body)
         const variantIds = [...new Set(input.variantIds)].sort()
-        const updated = await audited(prisma, req, async (tx, audit) => {
+        const updated = await audited(prisma, contextOf(req), async (tx, audit) => {
           const product = await lockProduct(tx, id)
           const before = await findImage(tx, id, imageId)
           const own = new Set(product.variants.map((v) => v.id))
@@ -237,7 +238,7 @@ export function adminProductImageRoutes(prisma: Db, storage: Storage) {
       })
       .delete('/:imageId', requirePermission('media.upload'), async (req, res) => {
         const { id, imageId } = parse(ImageParams, req.params)
-        const { deleted, live } = await audited(prisma, req, async (tx, audit) => {
+        const { deleted, live } = await audited(prisma, contextOf(req), async (tx, audit) => {
           await lockProduct(tx, id)
           const draft = await loadDraft(tx, id)
           const image = await findImage(tx, id, imageId)

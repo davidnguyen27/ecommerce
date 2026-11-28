@@ -18,6 +18,7 @@ import type { Db } from '../core/db.ts'
 import type { ContentPage, ContentPageVersion as Version } from '../generated/prisma/client.ts'
 import { AppError, rethrowUnique } from '../core/errors.ts'
 import { parse } from '../core/middleware/validation.ts'
+import { contextOf } from '../core/context/request-context.ts'
 
 type PageWithLatest = ContentPage & { versions: Version[] }
 
@@ -79,7 +80,7 @@ export function adminPageRoutes(prisma: Db) {
     })
     .post('/', async (req, res) => {
       const input = parse(CreateContentPageRequest, req.body)
-      const page = await audited(prisma, req, async (tx, audit) => {
+      const page = await audited(prisma, contextOf(req), async (tx, audit) => {
         const created = await tx.contentPage.create({ data: input, include: { versions: true } })
         await audit({ action: 'content.page.create', entityType: 'content_page', entityId: created.id, after: input })
         return created
@@ -95,7 +96,7 @@ export function adminPageRoutes(prisma: Db) {
     .put('/:id', async (req, res) => {
       const { id } = parse(PageParams, req.params)
       const input = parse(UpdateContentPageRequest, req.body)
-      const page = await audited(prisma, req, async (tx, audit) => {
+      const page = await audited(prisma, contextOf(req), async (tx, audit) => {
         const before = await findPageWithLatest(tx, id)
         if (!before) throw pageNotFound()
         if (sameContent(before, input)) return before
@@ -115,7 +116,7 @@ export function adminPageRoutes(prisma: Db) {
     })
     .post('/:id/publish', async (req, res) => {
       const { id } = parse(PageParams, req.params)
-      const version = await audited(prisma, req, async (tx, audit) => {
+      const version = await audited(prisma, contextOf(req), async (tx, audit) => {
         // Lock the page row so two concurrent publishes do not race for the version number.
         const locked = await tx.$queryRaw<unknown[]>`SELECT 1 FROM content_page WHERE id = ${id}::uuid FOR UPDATE`
         if (locked.length === 0) throw pageNotFound()
