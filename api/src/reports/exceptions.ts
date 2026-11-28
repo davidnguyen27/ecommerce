@@ -1,7 +1,7 @@
 import type { ExceptionsReport } from '@ecommerce/shared'
 import type { DbClient } from '../core/db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
-import { DEPOSITED_PREORDER, remainingOf } from '../orders/orders.ts'
+import { DEPOSITED_PREORDER, remainingOf } from '../modules/order/index.ts'
 import { REPORT_TIME_ZONE } from './period.ts'
 
 /** Refunds unfinished after this many days count as stuck (pending owner confirmation). */

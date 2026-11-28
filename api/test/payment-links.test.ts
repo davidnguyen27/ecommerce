@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { expireOverdueOrders } from '../src/orders/cancel-order.ts'
+import { expireOverdueOrders } from '../src/modules/order/index.ts'
 import type { PaymentInfo } from '../src/payments/gateway.ts'
 import { shop } from './support/shop.ts'
 import { bearer } from './support/staff.ts'

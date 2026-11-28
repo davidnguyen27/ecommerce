@@ -1,4 +1,4 @@
-// Shared formatting for order and pre-order responses and emails.
+// Shared formatting for money and dates in responses and emails.
 
 const VND = new Intl.NumberFormat('vi-VN')
 

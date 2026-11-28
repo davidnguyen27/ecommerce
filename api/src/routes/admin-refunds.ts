@@ -5,7 +5,7 @@ import { audited } from '../core/audit/audited.ts'
 import { currentStaff, requirePermission } from '../core/middleware/staff-context.ts'
 import type { Db } from '../core/db.ts'
 import { parse } from '../core/middleware/validation.ts'
-import { loadAdminOrder } from '../orders/admin-order.ts'
+import { createOrderQuery } from '../modules/order/index.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 import { executeGatewayRefund } from '../payments/gateway-refund.ts'
 import { executeManualRefund, retryRefund, settleRefund } from '../payments/refunds.ts'
@@ -18,7 +18,7 @@ import { contextOf } from '../core/context/request-context.ts'
  */
 export function adminRefundRoutes(prisma: Db, storage: Storage, payments: PaymentGateway, mail: CustomerMail) {
   const respond = async (res: Response, code: number) => {
-    const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, String(code))
+    const body: AdminOrder = await createOrderQuery({ prisma, storage, payments }).loadAdminOrder(String(code))
     res.json(body)
   }
   return Router()

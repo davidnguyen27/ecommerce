@@ -2,8 +2,8 @@ import type { Request } from 'express'
 import { audited } from '../core/audit/audited.ts'
 import type { Db } from '../core/db.ts'
 import type { CustomerMail } from '../core/jobs/jobs.ts'
-import { vnd } from '../orders/format.ts'
-import { recordOrderEvent } from '../orders/orders.ts'
+import { vnd } from '../core/utils/format.ts'
+import { recordOrderEvent } from '../modules/order/index.ts'
 import { PaymentGatewayError, type PaymentGateway, type RefundResult, type StoredTransaction } from './gateway.ts'
 import {
   conflict,

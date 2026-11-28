@@ -1,7 +1,7 @@
 import type { CollectionsFigures, CollectionsReport, CollectionsSnapshot } from '@ecommerce/shared'
 import type { DbClient } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
-import { DEPOSITED_PREORDER } from '../orders/orders.ts'
+import { DEPOSITED_PREORDER } from '../modules/order/index.ts'
 import { bucketOf, inPeriod, type Period } from './period.ts'
 import { REFUND_ROOTS } from './sql.ts'
 

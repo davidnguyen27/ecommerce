@@ -3,7 +3,7 @@ import type { Logger } from 'pino'
 import type { DbClient } from '../core/db.ts'
 import type { PaymentPurpose } from '../generated/prisma/client.ts'
 import { AppError } from '../core/errors.ts'
-import { paymentResultUrl } from '../orders/orders.ts'
+import { paymentResultUrl } from '../modules/order/index.ts'
 import type { PaymentGateway } from './gateway.ts'
 
 /**

@@ -15,7 +15,7 @@ import { AppError, invalidField } from '../core/errors.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../core/middleware/rate-limit.ts'
 import { parse } from '../core/middleware/validation.ts'
 import { deleteSupportImageQuietly, receiveSupportImage, storeSupportImage } from '../core/media/support-images.ts'
-import { findCustomerOrder, findOrderByToken } from '../orders/orders.ts'
+import { createOrderQuery } from '../modules/order/index.ts'
 import {
   SUPPORT_INCLUDE,
   addCustomerMessage,
@@ -28,7 +28,7 @@ import {
 } from '../support/support.ts'
 import { exchangeOptions } from '../support/exchanges.ts'
 
-type Deps = Pick<AppDeps, 'prisma' | 'emails' | 'siteUrl' | 'storage'>
+type Deps = Pick<AppDeps, 'prisma' | 'emails' | 'siteUrl' | 'storage' | 'payments'>
 
 /** Which requests the customer may see, and where new requests attach. */
 type Scope = {
@@ -146,7 +146,7 @@ export function accountSupportRoutes(deps: Deps) {
       where: { OR: [{ customerId }, { order: { customerId } }] },
       owner: async ({ orderCode }) => {
         if (orderCode !== undefined) {
-          const order = await findCustomerOrder(deps.prisma, String(orderCode), customerId)
+          const order = await createOrderQuery(deps).findCustomerOrder(deps.prisma, String(orderCode), customerId)
           return {
             order: {
               id: order.id,
@@ -169,7 +169,7 @@ export function accountSupportRoutes(deps: Deps) {
 export function orderSupportRoutes(deps: Deps) {
   return customerSupportRoutes(deps, async (req) => {
     const token = typeof req.query.token === 'string' ? req.query.token : undefined
-    const order = await findOrderByToken(deps.prisma, String(req.params.code), token)
+    const order = await createOrderQuery(deps).findByToken(deps.prisma, String(req.params.code), token)
     const selected = { id: order.id, code: order.code, email: order.email, recipientName: order.recipientName }
     return {
       where: { orderId: order.id },

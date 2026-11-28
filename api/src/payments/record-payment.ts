@@ -6,8 +6,8 @@ import {
   type ReconciliationReason,
 } from '../generated/prisma/client.ts'
 import type { EmailQueue } from '../core/jobs/jobs.ts'
-import { dayVN, isoDay, vnd, voucherLines } from '../orders/format.ts'
-import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../orders/orders.ts'
+import { dayVN, isoDay, vnd, voucherLines } from '../core/utils/format.ts'
+import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../modules/order/index.ts'
 import type { PaymentGateway } from './gateway.ts'
 
 /** Money the gateway reports, from a callback (`webhook` source), a query or the simulator. */

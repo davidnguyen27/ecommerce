@@ -12,7 +12,7 @@ import { livePolicyVersions, storedImageOf } from '../placement/order-snapshot.t
 import { findCurrentPreorderPolicy } from '../content/pages.ts'
 import { parse } from '../core/middleware/validation.ts'
 import { imageRenditions } from '../core/media/images.ts'
-import { isoDay } from '../orders/format.ts'
+import { isoDay } from '../core/utils/format.ts'
 import { orderPlacement } from '../placement/place-order.ts'
 import { priceOrder } from '../placement/price-order.ts'
 import { checkPreorder } from '../preorders/check.ts'

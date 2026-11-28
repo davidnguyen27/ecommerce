@@ -21,7 +21,7 @@ import { requireShippingFeeConfig } from '../shipping/shipping-fees.ts'
 import { applyVoucherToOrder, voucherSnapshot } from '../vouchers/apply.ts'
 import { checkoutPlan } from './checkout-plan.ts'
 import { preorderPlan } from './preorder-plan.ts'
-import { recordOrderEvent } from '../orders/orders.ts'
+import { recordOrderEvent } from '../modules/order/index.ts'
 import type { Plan, PlacementInput } from './placement-plan.ts'
 import { priceOrder } from './price-order.ts'
 

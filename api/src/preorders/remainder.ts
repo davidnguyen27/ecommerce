@@ -5,7 +5,7 @@ import { createOrderPaymentLink } from '../payments/payment-link.ts'
 import type { Db } from '../core/db.ts'
 import { AppError, isUniqueViolation } from '../core/errors.ts'
 import { RATE_LIMITS, enforceRateLimits } from '../core/middleware/rate-limit.ts'
-import { remainingOf } from '../orders/orders.ts'
+import { remainingOf } from '../modules/order/index.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
 
 const conflict = (message: string) => new AppError(409, ErrorCode.CONFLICT, message)

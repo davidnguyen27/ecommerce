@@ -1,5 +1,5 @@
 import type { DbClient } from '../core/db.ts'
-import type { OrderLineImage } from '../orders/orders.ts'
+import type { OrderLineImage } from '../modules/order/index.ts'
 import type { CartVariant } from '../catalog/live-variants.ts'
 
 /** The variant's image, else the product's first image. */

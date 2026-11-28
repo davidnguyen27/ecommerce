@@ -11,7 +11,7 @@ import type { AppDeps } from '../app.ts'
 import type { PaymentSource } from '../generated/prisma/client.ts'
 import { AppError } from '../core/errors.ts'
 import { parse } from '../core/middleware/validation.ts'
-import { assertCancellable, expireOrder } from '../orders/cancel-order.ts'
+import { assertCancellable, createOrderService } from '../modules/order/index.ts'
 import { SimulatorPaymentGateway } from '../payments/gateway.ts'
 import { recordPayment } from '../payments/record-payment.ts'
 import { isValidVnpaySignature, isVnpaySuccess, parseTxnRef, parseVnDateTime } from '../payments/vnpay.ts'
@@ -115,7 +115,7 @@ export function paymentRoutes({ prisma, emails, siteUrl, payments, vnpayHashSecr
       const { orderCode } = parse(SimulatedExpiryRequest, req.body)
       const order = await prisma.order.findUnique({ where: { code: orderCode }, select: { id: true } })
       if (!order) throw notFound()
-      assertCancellable(await expireOrder({ ...recordDeps, payments, logger }, order.id))
+      assertCancellable(await createOrderService({ ...recordDeps, payments, logger }).expire(order.id))
       res.status(204).end()
     })
   }

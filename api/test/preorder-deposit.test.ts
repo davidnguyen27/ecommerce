@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { InMemoryMailer } from '../src/core/adapters/mailer.ts'
-import { expireOverdueOrders } from '../src/orders/cancel-order.ts'
+import { expireOverdueOrders } from '../src/modules/order/index.ts'
 import type { PaymentInfo } from '../src/payments/gateway.ts'
 import { depositedPreorder, preorderShop } from './support/preorder.ts'
 import { ADDRESS } from './support/shop.ts'

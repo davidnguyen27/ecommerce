@@ -2,7 +2,7 @@ import { PgBoss, fromPrisma } from 'pg-boss'
 import type { Logger } from 'pino'
 import type { Mail, Mailer } from '../adapters/mailer.ts'
 import type { Db, DbClient } from '../db.ts'
-import { expireOrder, expireOverdueOrders } from '../../orders/cancel-order.ts'
+import { createOrderService } from '../../modules/order/index.ts'
 import type { PaymentGateway } from '../../payments/gateway.ts'
 import { processRemainderDeadlines } from '../../preorders/deadlines.ts'
 import { flagOverdueExchanges } from '../../support/exchanges.ts'
@@ -91,15 +91,16 @@ export class Jobs implements EmailQueue, OrderExpiryQueue {
       emails: this,
       siteUrl: this.#siteUrl,
     }
+    const orders = createOrderService(expireDeps)
     await this.#boss.createQueue(EXPIRE_ORDER, { notify: true })
     await this.#boss.work<{ orderId: string }>(EXPIRE_ORDER, async ([job]) => {
-      if (job) await expireOrder(expireDeps, job.data.orderId, new Date())
+      if (job) await orders.expire(job.data.orderId, new Date())
     })
     // Safety net when a per-order job is lost or runs early: sweep overdue orders every minute.
     await this.#boss.createQueue(EXPIRE_OVERDUE_ORDERS)
     await this.#boss.schedule(EXPIRE_OVERDUE_ORDERS, '* * * * *')
     await this.#boss.work(EXPIRE_OVERDUE_ORDERS, async () => {
-      const expired = await expireOverdueOrders(expireDeps)
+      const expired = await orders.expireOverdue()
       if (expired > 0) this.#logger.info({ expired }, 'Đã hủy đơn hết hạn giữ hàng')
     })
     // Arrived pre-orders: remind before the remaining-balance deadline and flag overdue ones, hourly.

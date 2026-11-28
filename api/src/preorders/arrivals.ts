@@ -1,8 +1,8 @@
 import type { DbClient } from '../core/db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import type { EmailQueue } from '../core/jobs/jobs.ts'
-import { dateVN, vnd, voucherLines } from '../orders/format.ts'
-import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../orders/orders.ts'
+import { dateVN, vnd, voucherLines } from '../core/utils/format.ts'
+import { issueOrderLookupUrl, recordOrderEvent, remainingOf } from '../modules/order/index.ts'
 import { reserveStock } from '../stock/stock.ts'
 
 /** Part of a variant's arrived stock reserved for one pre-order line. */

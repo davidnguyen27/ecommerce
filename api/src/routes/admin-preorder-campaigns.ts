@@ -17,7 +17,7 @@ import type { Db } from '../core/db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { pageWindow } from '../core/pagination.ts'
 import type { CustomerMail } from '../core/jobs/jobs.ts'
-import { DEPOSITED_PREORDER, remainingOf } from '../orders/orders.ts'
+import { DEPOSITED_PREORDER, remainingOf, type IOrderService } from '../modules/order/index.ts'
 import { parse } from '../core/middleware/validation.ts'
 import { closeCampaign, openCampaign, updateCampaign } from '../preorders/campaign-admin.ts'
 import {
@@ -37,7 +37,11 @@ const CampaignParams = z.object({ id: z.uuid() })
  * Pre-order campaigns, mounted at `/preorder-campaigns`. Viewing needs `order.view`; open, edit, close need
  * `preorder.manage`. No delete: an opened campaign is a promise to customers and can only be closed.
  */
-export function adminPreorderCampaignRoutes(prisma: Db, mail: CustomerMail) {
+export function adminPreorderCampaignRoutes(
+  prisma: Db,
+  mail: CustomerMail,
+  orders: Pick<IOrderService, 'cancelPaidInTransaction'>,
+) {
   return (
     Router()
       .use(requirePermission('order.view', 'preorder.manage'))
@@ -166,7 +170,7 @@ export function adminPreorderCampaignRoutes(prisma: Db, mail: CustomerMail) {
           const { note } = parse(CancelUnsuppliedRequest, req.body)
           const staffId = currentStaff(req).id
           const cancelledOrderCodes = await audited(prisma, contextOf(req), (tx, audit) =>
-            cancelUnsupplied(tx, mail, audit, id, staffId, note),
+            cancelUnsupplied(tx, orders, audit, id, staffId, note),
           )
           const body: CancelUnsuppliedResult = { cancelledOrderCodes, campaign: await loadCampaign(prisma, id) }
           res.json(body)

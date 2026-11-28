@@ -5,7 +5,7 @@ import type { DbClient } from '../core/db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError, invalidField } from '../core/errors.ts'
 import type { CustomerMail } from '../core/jobs/jobs.ts'
-import { isoDay } from '../orders/format.ts'
+import { isoDay } from '../core/utils/format.ts'
 import { isCampaignOpen, openCampaignWhere, usedAllocations } from './campaigns.ts'
 import { notifyDeliveryChange } from './delivery.ts'
 

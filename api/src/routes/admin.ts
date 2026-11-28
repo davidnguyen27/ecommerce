@@ -2,8 +2,8 @@ import { Router } from 'express'
 import type { StaffProfile } from '@ecommerce/shared'
 import type { AppDeps } from '../app.ts'
 import { currentStaff } from '../core/middleware/staff-context.ts'
-import type { FulfillmentMail } from '../orders/fulfill-order.ts'
-import { adminOrderRoutes } from './admin-orders.ts'
+import type { CustomerMail } from '../core/jobs/jobs.ts'
+import { createOrderService } from '../modules/order/index.ts'
 import { adminReconciliationRoutes, type ReconciliationDeps } from './admin-reconciliation.ts'
 import { adminRefundRoutes } from './admin-refunds.ts'
 import { adminAttributeSchemaRoutes } from './admin-attribute-schemas.ts'
@@ -30,10 +30,13 @@ import { adminStockReceiptRoutes } from './admin-stock-receipts.ts'
 import { adminShippingFeeRoutes } from './admin-shipping-fees.ts'
 
 /** Admin routes; behind `requireAuth` for the staff audience and `loadStaff`. */
-export function adminRoutes(deps: Pick<AppDeps, 'prisma' | 'storage' | 'payments' | 'emails' | 'siteUrl' | 'llm'>) {
+export function adminRoutes(
+  deps: Pick<AppDeps, 'prisma' | 'storage' | 'payments' | 'emails' | 'siteUrl' | 'llm' | 'logger'>,
+) {
   const { prisma, storage, payments, llm } = deps
   // Mail queue and website URL: delivery emails (ticket 09) and reconciliation restores (ticket 10).
-  const mail: FulfillmentMail & ReconciliationDeps = { emails: deps.emails, siteUrl: deps.siteUrl }
+  const mail: CustomerMail & ReconciliationDeps = { emails: deps.emails, siteUrl: deps.siteUrl }
+  const orders = createOrderService(deps)
   return (
     Router()
       .get('/me', (req, res) => {
@@ -59,10 +62,9 @@ export function adminRoutes(deps: Pick<AppDeps, 'prisma' | 'storage' | 'payments
       .use('/import', adminImportRoutes(prisma))
       .use('/images', adminBulkImageRoutes(prisma, storage))
       .use('/shipping-fees', adminShippingFeeRoutes(prisma))
-      .use('/orders', adminOrderRoutes(prisma, storage, payments, mail))
       .use('/reconciliation', adminReconciliationRoutes(prisma, storage, payments, mail))
       .use('/refunds', adminRefundRoutes(prisma, storage, payments, mail))
-      .use('/preorder-campaigns', adminPreorderCampaignRoutes(prisma, mail))
+      .use('/preorder-campaigns', adminPreorderCampaignRoutes(prisma, mail, orders))
       .use('/vouchers', adminVoucherRoutes(prisma))
       .use('/support-requests', adminSupportRoutes(prisma, storage, mail))
       .use('/return-windows', adminReturnWindowRoutes(prisma))

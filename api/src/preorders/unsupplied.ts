@@ -3,9 +3,8 @@ import type { Audit } from '../core/audit/audited.ts'
 import type { DbClient } from '../core/db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { AppError } from '../core/errors.ts'
-import type { CustomerMail } from '../core/jobs/jobs.ts'
-import { cancelPaidOrder } from '../orders/cancel-paid-order.ts'
-import { DEPOSITED_PREORDER } from '../orders/orders.ts'
+import type { IOrderService } from '../modules/order/index.ts'
+import { DEPOSITED_PREORDER } from '../modules/order/index.ts'
 import { lockOrderForRefund, refundTotals } from '../payments/refunds.ts'
 import { isCampaignOpen } from './campaigns.ts'
 
@@ -43,7 +42,7 @@ export async function previewUnsupplied(db: DbClient, campaignId: string): Promi
  */
 export async function cancelUnsupplied(
   tx: Prisma.TransactionClient,
-  mail: CustomerMail,
+  orderService: Pick<IOrderService, 'cancelPaidInTransaction'>,
   audit: Audit,
   campaignId: string,
   staffId: string,
@@ -64,13 +63,12 @@ export async function cancelUnsupplied(
   })
   const cancelled: number[] = []
   for (const { id } of orders) {
-    // Lock the order before reading the refundable amount, so it matches what `cancelPaidOrder` rechecks under that
+    // Lock the order before reading the refundable amount, so it matches what `cancelPaidInTransaction` rechecks under that
     // lock.
     await lockOrderForRefund(tx, id)
     const { refundable } = await refundTotals(tx, id)
-    const code = await cancelPaidOrder(
+    const code = await orderService.cancelPaidInTransaction(
       tx,
-      mail,
       audit,
       id,
       staffId,

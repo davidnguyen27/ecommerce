@@ -10,7 +10,6 @@ import type { Db } from './core/db.ts'
 import type { EmailQueue, OrderExpiryQueue } from './core/jobs/jobs.ts'
 import type { PaymentGateway } from './payments/gateway.ts'
 import { errorHandler, notFound } from './core/errors.ts'
-import { accountOrderRoutes } from './routes/account-orders.ts'
 import { accountRoutes } from './routes/account.ts'
 import { accountSupportRoutes, contactSupportRoutes, orderSupportRoutes } from './routes/support-customer.ts'
 import { adminRoutes } from './routes/admin.ts'
@@ -24,7 +23,6 @@ import { publicSitemapRoutes } from './routes/public-sitemap.ts'
 import { chatRoutes } from './routes/chat.ts'
 import { checkoutRoutes } from './routes/checkout.ts'
 import { preorderRoutes } from './routes/preorders.ts'
-import { publicOrderRoutes } from './routes/public-orders.ts'
 import { paymentRoutes } from './routes/payments.ts'
 import { healthRoutes } from './routes/health.ts'
 import { createModules } from './modules/index.ts'
@@ -127,7 +125,6 @@ export function createApp(deps: AppDeps) {
   api.use('/checkout', checkoutRoutes(deps))
   api.use('/preorders', preorderRoutes(deps))
   api.use('/orders/:code/support-requests', orderSupportRoutes(deps))
-  api.use('/orders', publicOrderRoutes(deps))
   api.use('/payments', paymentRoutes(deps))
   api.use('/chat', chatRoutes({ ...deps, secret }))
   api.use('/support-requests', contactSupportRoutes(deps))
@@ -138,7 +135,6 @@ export function createApp(deps: AppDeps) {
     sessions: customerSessions(deps.prisma, secret, '/api/auth'),
   }
   api.use('/auth', customerAuthRoutes(customerDeps))
-  api.use('/account/orders', requireAuth(secret, 'customer'), accountOrderRoutes(deps))
   api.use('/account/support-requests', requireAuth(secret, 'customer'), accountSupportRoutes(deps))
   api.use('/account', requireAuth(secret, 'customer'), accountRoutes(customerDeps))
   api.use('/admin/auth', adminAuthRoutes(deps.prisma, secret, '/api/admin/auth'))

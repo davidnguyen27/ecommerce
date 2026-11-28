@@ -14,7 +14,7 @@ import { pageWindow } from '../core/pagination.ts'
 import { parse } from '../core/middleware/validation.ts'
 import type { EmailQueue } from '../core/jobs/jobs.ts'
 import type { PaymentGateway } from '../payments/gateway.ts'
-import { loadAdminOrder } from '../orders/admin-order.ts'
+import { createOrderQuery } from '../modules/order/index.ts'
 import { refundReconciliationItem, resolveExternally, restoreOrder } from '../payments/reconciliation.ts'
 import { contextOf } from '../core/context/request-context.ts'
 
@@ -90,7 +90,7 @@ export function adminReconciliationRoutes(
       const code = await audited(prisma, contextOf(req), (tx, audit) =>
         restoreOrder(tx, deps, audit, String(req.params.id), staffId),
       )
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, String(code))
+      const body: AdminOrder = await createOrderQuery({ prisma, storage, payments }).loadAdminOrder(String(code))
       res.json(body)
     })
     .post('/:id/refund', requirePermission('payment.reconcile'), async (req, res) => {
@@ -98,7 +98,7 @@ export function adminReconciliationRoutes(
       const code = await audited(prisma, contextOf(req), (tx, audit) =>
         refundReconciliationItem(tx, audit, String(req.params.id), staffId),
       )
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, String(code))
+      const body: AdminOrder = await createOrderQuery({ prisma, storage, payments }).loadAdminOrder(String(code))
       res.json(body)
     })
     .post('/:id/resolve', requirePermission('payment.reconcile'), async (req, res) => {
@@ -107,7 +107,7 @@ export function adminReconciliationRoutes(
       const code = await audited(prisma, contextOf(req), (tx, audit) =>
         resolveExternally(tx, audit, String(req.params.id), staffId, note),
       )
-      const body: AdminOrder = await loadAdminOrder(prisma, storage, payments, String(code))
+      const body: AdminOrder = await createOrderQuery({ prisma, storage, payments }).loadAdminOrder(String(code))
       res.json(body)
     })
 }
