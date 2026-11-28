@@ -6,6 +6,7 @@ import { CategoryModule } from './category/index.ts'
 import { CommitmentTypeModule } from './commitment-type/index.ts'
 import { OrderModule } from './order/index.ts'
 import { ProductModule } from './product/index.ts'
+import { ProductImportModule } from './product-import/index.ts'
 
 /**
  * Builds every module in dependency order: a module that needs another's query interface is built after it and gets
@@ -20,6 +21,7 @@ export function createModules(deps: AppDeps): BaseModule[] {
     new BrandModule(deps),
     new CommitmentTypeModule(deps),
     new ProductModule(deps, { schemas: schemas.query, categories: categories.query }),
+    new ProductImportModule(deps),
     new OrderModule(deps),
   ]
 }

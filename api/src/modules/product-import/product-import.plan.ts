@@ -10,9 +10,9 @@ import {
   type AttributeValues,
   type ImportIssue,
 } from '@ecommerce/shared'
-import type { DbClient } from '../core/db.ts'
-import { fileError } from '../core/media/upload.ts'
-import { attributeSchemaQuery } from '../modules/attribute-schema/index.ts'
+import type { DbClient } from '../../core/db.ts'
+import { fileError } from '../../core/media/upload.ts'
+import { attributeSchemaQuery } from '../attribute-schema/index.ts'
 
 /** Sheet name for each product type in the import file. */
 const SHEET_NAMES: Record<ProductType, string> = {

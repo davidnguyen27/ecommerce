@@ -8,7 +8,6 @@ import { adminReconciliationRoutes, type ReconciliationDeps } from './admin-reco
 import { adminRefundRoutes } from './admin-refunds.ts'
 import { adminAuditRoutes } from './admin-audit.ts'
 import { adminChatbotReportRoutes, adminChatbotRoutes } from './admin-chatbot.ts'
-import { adminImportRoutes } from './admin-import.ts'
 import { adminPageRoutes } from './admin-pages.ts'
 import { adminPreorderCampaignRoutes } from './admin-preorder-campaigns.ts'
 import { adminVoucherRoutes } from './admin-vouchers.ts'
@@ -41,7 +40,6 @@ export function adminRoutes(
       .use('/legal-info', adminLegalInfoRoutes(prisma))
       .use('/stock/receipts', adminStockReceiptRoutes(prisma, mail))
       .use('/stock', adminStockRoutes(prisma))
-      .use('/import', adminImportRoutes(prisma))
       .use('/shipping-fees', adminShippingFeeRoutes(prisma))
       .use('/reconciliation', adminReconciliationRoutes(prisma, storage, payments, mail))
       .use('/refunds', adminRefundRoutes(prisma, storage, payments, mail))
